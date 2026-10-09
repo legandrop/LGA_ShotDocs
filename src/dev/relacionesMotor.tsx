@@ -143,7 +143,12 @@ async function main() {
     for (let n = 1; n <= 60; n++) {
       const id = await t.create(epId, `${pad(n)} | Escena ${n} del episodio ${ep - 100}`, project);
       scenes.push({ code: `${ep}_${pad(n)}`, id });
-      await t.create(id, `SDP_${ep}_${pad(n)}_010`, project);
+      const ficha = await t.create(id, `SDP_${ep}_${pad(n)}_010`, project);
+      // Una ficha con el lugar escrito con otro nombre de la locación (D526, D530): «Puerto» es de Puerto Norte.
+      if (ep === 101 && n === 27) {
+        ids.ficha = ficha;
+        await write(A, ficha, [{ text: 'Locacion Real: Puerto' }, { text: 'Plates del muelle.' }]);
+      }
       await write(A, id, [{ text: `Desglose de ${ep}_${pad(n)}. Locación planeada: ${LOCATIONS[n % LOCATIONS.length]}.` }]);
     }
   }
@@ -154,6 +159,8 @@ async function main() {
   for (const name of LOCATIONS) {
     const id = await t.create(locs, name, project);
     ids[name] = id;
+    // Otros nombres (D526): «Muelle Norte» cuenta en todos lados; «Puerto», de una sola palabra, solo donde se espera un lugar.
+    if (name === 'Puerto Norte') await write(A, id, [{ text: 'Otros nombres: Muelle Norte, Puerto' }, { text: 'Muelle de carga, acceso por el portón 3.' }]);
     const scout = await t.create(id, `Tech scout | ${name}`, project);
     await write(A, scout, [{ heading: 1, text: 'Acceso' }, { text: `Sirve para la Escena ${scenes[LOCATIONS.indexOf(name)].code}.` }, { photo: true }]);
   }

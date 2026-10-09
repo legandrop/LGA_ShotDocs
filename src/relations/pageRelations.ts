@@ -69,6 +69,11 @@ export interface PageReadContext {
    * al releer la página abierta, solo se vuelve a leer lo que cambió. Vale mientras no cambie lo que existe.
    */
   scans?: { prev?: Map<string, Hit[]>; next: Map<string, Hit[]> };
+  /**
+   * Las unidades donde se espera un lugar: el valor de un campo de locación (*Locacion Real*, `placeUnits`, D530). Se
+   * leen como el título de un día (con los alias de lugar); la mención sigue siendo de texto.
+   */
+  place?: ReadonlySet<number>;
 }
 
 interface Block {
@@ -143,10 +148,12 @@ export function readPageRelations(
         if (target) found.push({ kind: target.kind, ref: target.ref, part: '', via: 'link', form: 'link', hidden: false });
       }
       const heading = lvl > 0 && unit.field === 'text';
+      const place = !heading && unit.field === 'text' && !!ctx.place?.has(index);
       const text = readable(unit.text, links);
-      const key = `${heading ? 'h' : 't'}\u0000${text}`;
+      // La clave separa el contexto: la misma frase en un título, en el texto o en un campo de lugar se lee distinto.
+      const key = `${heading ? 'h' : place ? 'p' : 't'}\u0000${text}`;
       let hits = ctx.scans?.next.get(key) ?? ctx.scans?.prev?.get(key);
-      if (!hits) hits = scan(R, text, { heading, ep: ctx.ep ?? null });
+      if (!hits) hits = scan(R, text, place ? { heading, ep: ctx.ep ?? null, dayTitle: true } : { heading, ep: ctx.ep ?? null });
       ctx.scans?.next.set(key, hits);
       for (const h of hits) {
         found.push({ kind: h.kind, ref: h.ref, part: h.part, via: heading ? 'heading' : 'text', form: h.form, hidden: !!h.hidden });

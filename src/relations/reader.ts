@@ -19,7 +19,9 @@
 //   Plaza`), o lo sigue INT/EXT (`12 - INT. COCINA`; D391). Nunca una letra pegada a 1–2 cifras («3D Tracking»,
 //   «4K Plates»), una lista numerada («1. General») ni un número suelto.
 // - Locaciones: por nombre o alias, palabra entera, sin tildes ni mayúsculas; los genéricos («Estudio», «Casa»…)
-//   y los alias de menos de 4 letras que no van en mayúsculas no se reconocen solos.
+//   y los alias de menos de 4 letras que no van en mayúsculas no se reconocen solos. Donde se espera un lugar (el título
+//   de un día, el valor de un campo de locación: `dayTitle`), valen además los alias de una palabra y los genéricos que
+//   alguien escribió en la locación, estos solo como parte entera del valor (D529–D531, `aliases.ts`).
 
 export type HitKind = 'scene' | 'pending' | 'loc';
 export type HitForm = 'shot' | 'canonical' | 'compact' | 'zero' | 'short' | 'episode' | 'flat' | 'list' | 'range' | 'name';
@@ -43,7 +45,10 @@ export interface ScanContext {
   heading?: boolean;
   /** El episodio de la página (la de una escena o lo que está adentro de una): «Esc 27» → `105_027`. */
   ep?: string | null;
-  /** El texto es el título de un día de rodaje (su lugar, D398): valen también los alias solo de título (D417). */
+  /**
+   * Se espera un lugar: el título de un día de rodaje (su lugar, D398) o el valor de un campo de locación (D530). Valen
+   * también los alias de lugar (D417) y los genéricos escritos, como parte entera (D531).
+   */
   dayTitle?: boolean;
 }
 
@@ -56,9 +61,23 @@ export interface SceneInput {
 export interface LocationInput {
   name: string;
   aliases?: string[];
-  /** Alias que valen solo en el título de un día de rodaje (D417): «Inquilinato» de `Inquilinato (Cachi 247)`. */
+  /** Alias que valen solo donde se espera un lugar (D417): «Inquilinato» de `Inquilinato (Cachi 247)`, «Arenera» escrito. */
   dayTitleAliases?: string[];
+  /** Alias escritos genéricos o cortos: solo donde se espera un lugar y como parte entera (D531): «Estudio», «Europa». */
+  wholeAliases?: string[];
   pageId?: string | null;
+}
+
+/** Un nombre escrito que no cuenta por un conflicto (D533, D534): lo comparte otra locación o es el nombre de otra. */
+export interface AliasNote {
+  /** La locación donde está escrito. */
+  loc: string;
+  /** El nombre como está escrito. */
+  alias: string;
+  /** `shared`: otra locación escribió el mismo; `name`: es el nombre de otra locación. */
+  kind: 'shared' | 'name';
+  /** Las otras locaciones. */
+  others: string[];
 }
 
 export interface SceneEntry {
@@ -73,7 +92,13 @@ export interface SceneEntry {
 
 export interface LocationEntry {
   name: string;
+  /**
+   * Todas las formas (D536): el nombre, las partes del título, el nombre sin paréntesis y lo escrito en «Otros nombres»,
+   * valgan en el texto o solo donde se espera un lugar. Es lo que muestran el Map, la lupa y la cabecera («also»).
+   */
   aliases: string[];
+  /** Lo mismo (el nombre que usa el plan de los alias): para comparar al crear una locación (D525). */
+  forms: string[];
   pageId: string | null;
 }
 
@@ -90,8 +115,13 @@ export interface Registry {
   locations: Map<string, LocationEntry>;
   /** Alias de locación ya normalizados, del más largo al más corto. */
   locAlias: { f: string; name: string }[];
-  /** Los mismos más los que valen solo en el título de un día (D417), del más largo al más corto. */
-  locDayTitleAlias: { f: string; name: string }[];
+  /**
+   * Los alias de lugar: los mismos más los que valen solo donde se espera un lugar (D417; el título de un día o un campo
+   * de locación), del más largo al más corto. `whole`: solo como parte entera del valor (D531).
+   */
+  locDayTitleAlias: { f: string; name: string; whole?: boolean }[];
+  /** Los nombres escritos que no cuentan por un conflicto (D534), para avisarlo en la cabecera de la locación. */
+  aliasNotes: AliasNote[];
   /** Cambia cuando cambia lo que se reconoce (para no volver a leer de más). */
   signature: string;
 }
@@ -139,7 +169,7 @@ function splitCode(code: string): { ep: string; n: string; letter: string } {
 }
 
 /** Las locaciones con estos nombres no se reconocen solas: son palabras comunes. */
-const GENERIC = new Set(['estudio', 'europa', 'abril', 'centro', 'casa']);
+const GENERIC = new Set(['estudio', 'europa', 'abril', 'centro', 'casa', 'studio', 'europe', 'center', 'centre', 'house']);
 
 /**
  * Si un nombre o alias de locación se reconoce solo en el texto: no es una palabra común (`Estudio`, `Casa`) ni tiene
@@ -150,7 +180,7 @@ export function recognizedAlone(alias: string): boolean {
   return !!f && !GENERIC.has(f) && !(f.length < 4 && alias !== alias.toUpperCase());
 }
 
-export function buildRegistry(input: { scenes: SceneInput[]; locations: LocationInput[] }): Registry {
+export function buildRegistry(input: { scenes: SceneInput[]; locations: LocationInput[]; notes?: AliasNote[] }): Registry {
   const scenes = new Map<string, SceneEntry>();
   for (const s of input.scenes) {
     const code = sceneCode(s.code);
@@ -175,23 +205,33 @@ export function buildRegistry(input: { scenes: SceneInput[]; locations: Location
   for (const l of input.locations) {
     const name = l.name.trim();
     if (!name || locations.has(name)) continue;
-    locations.set(name, { name, aliases: l.aliases?.length ? l.aliases : [name], pageId: l.pageId ?? null });
+    const forms = [...new Set([name, ...(l.aliases ?? []), ...(l.dayTitleAliases ?? []), ...(l.wholeAliases ?? [])].map((a) => a.trim()).filter(Boolean))];
+    locations.set(name, { name, aliases: forms, forms, pageId: l.pageId ?? null });
   }
   const usable = (a: string) => (recognizedAlone(a) ? fold(a).trim() : null);
   const longestFirst = (a: { f: string }, b: { f: string }) => b.f.length - a.f.length || (a.f < b.f ? -1 : a.f > b.f ? 1 : 0);
   const locAlias: Registry['locAlias'] = [];
   const locDayTitleAlias: Registry['locDayTitleAlias'] = [];
+  // Los de texto: el nombre y los alias de la primera entrada con ese nombre (no las formas de lugar).
+  const firstOf = new Map<string, LocationInput>();
+  for (const l of input.locations) if (!firstOf.has(l.name.trim())) firstOf.set(l.name.trim(), l);
   for (const l of locations.values()) {
-    for (const a of new Set([l.name, ...l.aliases])) {
+    for (const a of new Set([l.name, ...(firstOf.get(l.name)?.aliases ?? [])])) {
       const f = usable(a);
       if (f) locAlias.push({ f, name: l.name });
     }
   }
   for (const l of input.locations) {
     const name = l.name.trim();
+    if (!locations.has(name)) continue;
     for (const a of l.dayTitleAliases ?? []) {
       const f = usable(a);
-      if (f && locations.has(name) && !locAlias.some((x) => x.f === f)) locDayTitleAlias.push({ f, name });
+      if (f && !locAlias.some((x) => x.f === f) && !locDayTitleAlias.some((x) => x.f === f && x.name === name)) locDayTitleAlias.push({ f, name });
+    }
+    // Los genéricos escritos (D531): sin pasar por `recognizedAlone`, solo como parte entera de un lugar.
+    for (const a of l.wholeAliases ?? []) {
+      const f = fold(a).replace(/\s+/g, ' ').trim();
+      if (f && !locAlias.some((x) => x.f === f) && !locDayTitleAlias.some((x) => x.f === f && x.name === name)) locDayTitleAlias.push({ f, name, whole: true });
     }
   }
   locAlias.sort(longestFirst);
@@ -200,9 +240,9 @@ export function buildRegistry(input: { scenes: SceneInput[]; locations: Location
   const signature = [
     [...scenes.keys()].sort().join(','),
     locAlias.map((a) => `${a.f}=${a.name}`).join(','),
-    locDayTitleAlias.map((a) => `${a.f}=${a.name}`).join(','),
+    locDayTitleAlias.map((a) => `${a.f}=${a.name}${a.whole ? '!' : ''}`).join(','),
   ].join('|');
-  return { scenes, eps, bases, epByDigit, flat, locations, locAlias, locDayTitleAlias, signature };
+  return { scenes, eps, bases, epByDigit, flat, locations, locAlias, locDayTitleAlias, aliasNotes: input.notes ?? [], signature };
 }
 
 // Lo que va antes de un número para que cuente en el texto: «Escena», «Esc.», «Sc», «Scene», «plano», «toma»…
@@ -227,6 +267,19 @@ const RE_EP = new RegExp(`${SCENE_WORD}(\\d{1,3})${SUF}(?=_|\\b)`, 'giu');
 const RE_FLAT_WORD = new RegExp(`${SCENE_WORD}(\\d{1,3})${SUF}(?=_|\\b)`, 'giu');
 const RE_FLAT_HEAD = /^([\s(\[«"'·•:–-]*)(\d{1,3})([A-Za-z]?)(?=$|[^\w])/;
 const RE_FLAT_SHOT = /\b[A-Z]{2,6}_(\d{3})([A-Za-z]?)_\d{2,4}\b/g;
+
+/** Lo que separa las partes de un lugar (D531): `|`, `,`, `;`, `/`, `+`, `·`, paréntesis, `:` y « - » / « – ». */
+const PLACE_SEP = /[|,;/+·():]| [-–] /;
+
+/**
+ * Si lo que va de `i` a `j` es una parte entera del lugar (D531): entre el borde o un separador y eso, solo espacios o
+ * `?!.`. «Estudio | Autos», «Europa ?», «Locacion Real: Estudio» sí; «Estudio UnFilm», «el estudio de sonido» no.
+ */
+export function wholePart(text: string, i: number, j: number): boolean {
+  const before = text.slice(0, i).split(PLACE_SEP).pop() ?? '';
+  const after = text.slice(j).split(PLACE_SEP)[0] ?? '';
+  return /^[\s?!.]*$/.test(before) && /^[\s?!.]*$/.test(after);
+}
 
 /**
  * Dónde nombra un texto escenas, pendientes (escenas que no existen) y locaciones. Sin encimarse: gana lo que empieza
@@ -440,7 +493,7 @@ export function scan(R: Registry, text: string, ctx: ScanContext = {}): Hit[] {
     }
   }
   // 7) Locaciones por nombre o alias (palabra entera, sin tildes).
-  const aliases = ctx.dayTitle ? R.locDayTitleAlias : R.locAlias;
+  const aliases: { f: string; name: string; whole?: boolean }[] = ctx.dayTitle ? R.locDayTitleAlias : R.locAlias;
   if (aliases.length > 0) {
     const f = foldSameLength(masked);
     for (const a of aliases) {
@@ -449,7 +502,8 @@ export function scan(R: Registry, text: string, ctx: ScanContext = {}): Hit[] {
         const j = i + a.f.length;
         const okL = i === 0 || !/[\p{L}\p{N}]/u.test(f[i - 1]);
         const okR = j >= f.length || !/[\p{L}\p{N}]/u.test(f[j]);
-        if (okL && okR && free(i, j)) out.push({ s: i, e: j, kind: 'loc', ref: a.name, part: '', form: 'name' });
+        const whole = !a.whole || wholePart(f, i, j);
+        if (okL && okR && whole && free(i, j)) out.push({ s: i, e: j, kind: 'loc', ref: a.name, part: '', form: 'name' });
         i = j;
       }
     }

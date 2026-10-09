@@ -73,6 +73,18 @@ export const menus = {
   'type.nothing': { en: "Nothing in particular", es: "Nada en especial" },
   'type.part': { en: "Part", es: "Parte" },
   'type.byFolder': { en: "By folder", es: "Por carpeta" },
+  // Fuera de las relaciones (D540): la casilla debajo de *Type*.
+  'leaveOut.menu': { en: "Leave out of relations", es: "Dejar fuera de las relaciones" },
+  'leaveOut.tip': {
+    en: "Its pages stop counting for scenes, locations and the Map.\nFor archives and backups that repeat names.",
+    es: "Sus páginas dejan de contar para escenas, locaciones y el Mapa.\nPara archivos y copias que repiten nombres.",
+  },
+  'leaveOut.inheritedTip': {
+    en: "“{title}” is left out, with everything inside",
+    es: "“{title}” está fuera, con todo lo de adentro",
+  },
+  'leaveOut.tag': { en: "Left out", es: "Fuera" },
+  'leaveOut.tagTip': { en: "Left out of relations, with everything inside", es: "Fuera de las relaciones, con todo lo de adentro" },
   'pageMenu.stopDayReports': { en: "Stop using for day reports", es: "Dejar de usar para reportes del día" },
   'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
   'pageMenu.printTip': {

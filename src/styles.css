@@ -9258,6 +9258,11 @@ button.folder-row-main:hover {
   color: var(--accent-text);
 }
 
+/* *Leave out of relations* (D540): un rótulo largo en castellano que puede ir en dos renglones, alineado como los demás. */
+.menu .leave-out {
+  text-align: left;
+}
+
 /* *Type* en el menú de la página: la opción elegida lleva el tilde en el lugar del ícono. */
 .menu .type-mark {
   display: inline-flex;

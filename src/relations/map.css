@@ -615,3 +615,8 @@
     padding: 9px 12px 5px;
   }
 }
+
+/* *Link to a location…* (D539) al lado de lo que dice el título de un día sin locación. */
+.mp-ls .lh-addwrap {
+  margin-left: 6px;
+}

@@ -7,7 +7,7 @@ import { finishBlocks, prepareCodaHtml, type LooseBlock } from '../import/codaHt
 import { unitsFromYDoc, type BlockMeta } from '../search/extract';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from '../ui/editorSchema';
-import { coordsIn, emptyValue, fieldDate, fieldName, fieldValues, normLabel, readPageFields, type PageFields } from './fields';
+import { coordsIn, emptyValue, fieldDate, fieldName, fieldValues, normLabel, placeUnits, readPageFields, type PageFields } from './fields';
 
 // Los campos de una página («rótulo: valor», Docs/Doc_Relaciones.md, sección 3): con una ficha con la forma real de las
 // de BD Main de Coda (la tabla de campos y los títulos con texto, pasada por la importación de la app y escrita en el
@@ -214,5 +214,41 @@ describe('pregunta abierta sin texto (O11 de la auditoría de E7)', () => {
     expect(openQuestionText('Director: ¿cámara en mano?\nArte: ')).toBe('Director: ¿cámara en mano?');
     expect(openQuestionText('¿La sangre es práctica o se agrega?')).toBe('¿La sangre es práctica o se agrega?');
     expect(openQuestionText('Hora: 10:30 en el set')).toBe('Hora: 10:30 en el set');
+  });
+});
+
+describe('otros nombres y el contexto de lugar (D527, D530)', () => {
+  it('los rótulos de otros nombres en castellano e inglés, en tabla, renglón y título', () => {
+    expect(['Otros nombres', 'Also known as', 'AKA', 'a.k.a.', 'Other names', 'Alias', 'Aliases', 'También conocida como', 'Nombres alternativos'].map(fieldName)).toEqual(
+      Array(9).fill('aliases'),
+    );
+    const page = fieldsOf(written([table([['Also known as', 'Back lot']]), p('Otros nombres: Arenera'), h(2, 'Aliases'), p('Galpón')]))!;
+    expect(fieldValues(page, 'aliases').map((f) => [f.via, f.text])).toEqual([
+      ['table', 'Back lot'],
+      ['line', 'Arenera'],
+      ['heading', 'Galpón'],
+    ]);
+  });
+
+  it('cada campo sabe sus unidades: la celda del valor, el renglón entero, lo de abajo del título', () => {
+    const doc = written([table([['Locación', 'CENADE'], ['Notas', '']]), p('Locacion Real: Estudio | Autos'), h(2, 'Location'), p('Back lot'), p('Gate 3')]);
+    const meta: BlockMeta[] = [];
+    const units = unitsFromYDoc(doc, meta);
+    const page = readPageFields(units, meta)!;
+    const text = (us: number[]) => us.map((i) => units[i].text);
+    expect(page.fields.map((f) => [f.label, text(f.units)])).toEqual([
+      ['Locación', ['CENADE']],
+      ['Notas', []],
+      ['Locacion Real', ['Locacion Real: Estudio | Autos']],
+      ['Location', ['Back lot', 'Gate 3']],
+    ]);
+    expect(text([...placeUnits(units, meta)])).toEqual(['CENADE', 'Locacion Real: Estudio | Autos', 'Back lot', 'Gate 3']);
+  });
+
+  it('la ficha de BD Main: Locacion Real es un lugar; Locacion Guion (el decorado de la historia), no', async () => {
+    const doc = await imported(CARD_HTML);
+    const meta: BlockMeta[] = [];
+    const units = unitsFromYDoc(doc, meta);
+    expect([...placeUnits(units, meta)].map((i) => units[i].text)).toEqual(['Estudio | Autos']);
   });
 });

@@ -282,3 +282,46 @@ describe('locaciones', () => {
     expect(text.slice(hit.s, hit.e)).toBe('cenade');
   });
 });
+
+describe('los nombres escritos donde se espera un lugar (D529–D531, D535)', () => {
+  const R = buildRegistry({
+    scenes: [{ code: '105_027' }],
+    locations: [
+      { name: 'La Arenera (estudio)', aliases: ['La Arenera (estudio)', 'La Arenera', 'Pasaje Bar'], dayTitleAliases: ['Arenera'], wholeAliases: ['Estudio'] },
+      { name: 'Europa (plates)', aliases: ['Europa (plates)'], wholeAliases: ['Europa'] },
+      { name: 'Estudio UnFilm', aliases: ['Estudio UnFilm'] },
+      { name: 'Back Lot', aliases: ['Back Lot'], wholeAliases: ['studio'] },
+    ],
+  });
+  const place = (text: string) => read(R, text, { dayTitle: true });
+
+  it('un genérico escrito, como parte entera del lugar', () => {
+    expect(place('Estudio')).toBe('loc La Arenera (estudio)');
+    expect(place('Estudio | Autos')).toBe('loc La Arenera (estudio)');
+    expect(place('Europa ?')).toBe('loc Europa (plates)');
+    expect(place('Locacion Real: Estudio')).toBe('loc La Arenera (estudio)');
+    expect(place('Studio - Stage 2')).toBe('loc Back Lot');
+    expect(place('(Europa)')).toBe('loc Europa (plates)');
+  });
+
+  it('nunca adentro de otra cosa ni en el texto', () => {
+    expect(place('Estudio UnFilm')).toBe('loc Estudio UnFilm');
+    expect(place('Estudio Arenas')).toBe('—');
+    expect(place('el estudio de sonido')).toBe('—');
+    expect(place('Europa del Este')).toBe('—');
+    expect(read(R, 'Estudio | Autos')).toBe('—');
+    expect(read(R, 'Europa')).toBe('—');
+  });
+
+  it('una palabra, por palabra solo en un lugar; dos o más, también en el texto', () => {
+    expect(place('2026-03-01 | Día 34 | Arenera VA')).toBe('loc La Arenera (estudio)');
+    expect(read(R, 'La arenera va de nuevo')).toBe('loc La Arenera (estudio)');
+    expect(read(R, 'Arenera VA')).toBe('—');
+    expect(read(R, 'Cenamos en Pasaje Bar después de la 105_027')).toBe('loc La Arenera (estudio) 105_027');
+  });
+
+  it('los genéricos en inglés tampoco se reconocen solos (D535)', () => {
+    const en = buildRegistry({ scenes: [], locations: [{ name: 'Studio' }, { name: 'Europe' }, { name: 'House' }, { name: 'Centre' }] });
+    expect(['the studio', 'Europe', 'house', 'centre'].map((t) => read(en, t))).toEqual(['—', '—', '—', '—']);
+  });
+});

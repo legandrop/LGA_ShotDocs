@@ -10,10 +10,12 @@ import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession, useIndexProgress } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
 import type { Place } from './liveView';
-import { fold } from './reader';
+import { fold, type Registry } from './reader';
 import { mapCounts, mapJson, mapText, projectMap, sceneFilterText, titlePlace, type MapDay, type MapLocation, type MapScene, type ProjectMapData } from './projectMap';
 import { searchScenes } from './sceneSearch';
 import { AssignButton, CreateEntityButton } from './EntityActions';
+import { titleFragment } from './aliasAction';
+import { LinkLocationButton } from './LinkLocation';
 import './liveHeader.css';
 import './map.css';
 
@@ -225,7 +227,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
           ) : tab === 'scenes' ? (
             <Scenes data={data} fq={fq} codes={codes} complete={complete} partial={partial} />
           ) : tab === 'days' ? (
-            <Days data={data} fq={fq} codes={codes} />
+            <Days data={data} fq={fq} codes={codes} registry={snap?.registry ?? null} />
           ) : (
             <Pending data={data} complete={complete} partial={partial} session={session} snap={snap} projectId={projectId} onPlace={(p) => goToPlace(services, p)} />
           )}
@@ -472,7 +474,7 @@ function Scenes({ data, fq, codes, complete, partial }: { data: ProjectMapData; 
 
 // --- Shoot days ----------------------------------------------------------------------------------------------------
 
-function Days({ data, fq, codes }: { data: ProjectMapData; fq: string; codes: Set<string> | null }) {
+function Days({ data, fq, codes, registry }: { data: ProjectMapData; fq: string; codes: Set<string> | null; registry: Registry | null }) {
   const tr = useT();
   const rows = data.days.filter(
     (d) => !fq || (codes ? [...d.scenes, ...d.planned].some((c) => codes.has(c)) : fold(`${d.date ?? ''} ${d.title} ${d.locs.join(' ')} ${d.scenes.join(' ')}`).includes(fq)),
@@ -503,10 +505,14 @@ function Days({ data, fq, codes }: { data: ProjectMapData; fq: string; codes: Se
               {d.locs.length ? (
                 d.locs.join(', ')
               ) : titlePlace(d) ? (
-                // Lo que dice el título, apagado: no nombra una locación que exista (O7 de la auditoría).
-                <span className="mp-none" data-tip={tr('map.noLocationTip')}>
-                  {titlePlace(d)}
-                </span>
+                // Lo que dice el título, apagado: no nombra una locación que exista (O7 de la auditoría). Y escribirlo en una
+                // locación (D539).
+                <>
+                  <span className="mp-none" data-tip={tr('map.noLocationTip')}>
+                    {titlePlace(d)}
+                  </span>
+                  {registry && <LinkLocationButton R={registry} fragment={titleFragment(d)} className="mp-linkloc" />}
+                </>
               ) : (
                 <span className="mp-none">{tr('map.noLocation')}</span>
               )}

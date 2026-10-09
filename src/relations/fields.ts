@@ -31,6 +31,12 @@ export interface FieldValue {
   /** Un título: el bloque que cierra lo de abajo (`null`, hasta el final). Las otras formas no lo tienen. */
   endBlockId?: string | null;
   via: FieldVia;
+  /**
+   * Las unidades del valor (índices entre todas las de la página): las celdas de la columna del valor, lo de abajo del
+   * título o, en un renglón, la unidad del renglón entero (la del rótulo). Para leer el valor de un campo de lugar con su
+   * contexto (`placeUnits`, D530).
+   */
+  units: number[];
 }
 
 export interface PageFields {
@@ -58,11 +64,13 @@ export const FIELD_LABELS = {
   set: ['locacion guion', 'locacion de guion', 'decorado', 'decorados', 'set', 'sets', 'script location'],
   intExt: ['int ext dia noche', 'int ext', 'int ext day night', 'int ext dia', 'interior exterior'],
   shootDate: ['fecha rodaje', 'fecha de rodaje', 'shoot date', 'shooting date'],
-  location: ['locacion real', 'locacion', 'location', 'real location'],
+  location: ['locacion real', 'locacion', 'location', 'real location', 'location planned', 'locacion planeada'],
   coords: ['coordenadas', 'coordinates', 'coords', 'gps', 'ubicacion', 'where'],
   description: ['descripcion', 'description'],
   shot: ['shot name', 'shot', 'plano'],
   vfxCat: ['vfx cat', 'vfx category', 'categoria vfx'],
+  /** Los otros nombres de una locación (D526, D527): solo cuentan en la página de la locación misma (`aliases.ts`). */
+  aliases: ['also known as', 'aka', 'a k a', 'other names', 'alias', 'aliases', 'otros nombres', 'tambien conocida como', 'tambien conocido como', 'nombres alternativos'],
 } as const;
 
 export type FieldName = keyof typeof FIELD_LABELS;
@@ -221,6 +229,7 @@ export function readPageFields(units: readonly SearchUnit[], meta: readonly Bloc
           links: r.value.flatMap((i) => linksIn(b.meta, i)),
           blockId: b.blockId,
           via: 'table',
+          units: r.value.slice(),
         });
       }
       return;
@@ -233,6 +242,7 @@ export function readPageFields(units: readonly SearchUnit[], meta: readonly Bloc
       if (!fieldName(clean)) return;
       const value: string[] = [];
       const links: FieldValue['links'] = [];
+      const valueUnits: number[] = [];
       let end: string | null = null;
       for (let i = bi + 1; i < blocks.length; i++) {
         // Hasta el próximo título, o hasta un renglón que es otro campo («Open question: …»).
@@ -243,10 +253,11 @@ export function readPageFields(units: readonly SearchUnit[], meta: readonly Bloc
         for (const { unit, index } of blocks[i].units) {
           if (unit.field === 'name') continue;
           value.push(unit.text);
+          valueUnits.push(index);
           links.push(...linksIn(blocks[i].meta, index));
         }
       }
-      fields.push({ label: clean, key: normLabel(clean), text: clip(lines(value.join('\n'))), links, blockId: b.blockId, endBlockId: end, via: 'heading' });
+      fields.push({ label: clean, key: normLabel(clean), text: clip(lines(value.join('\n'))), links, blockId: b.blockId, endBlockId: end, via: 'heading', units: valueUnits });
       return;
     }
     // Un renglón que empieza con un rótulo conocido y dos puntos.
@@ -261,7 +272,29 @@ export function readPageFields(units: readonly SearchUnit[], meta: readonly Bloc
       links: [...linksIn(b.meta, first.index, m[0].length), ...textUnits.slice(1).flatMap((u) => linksIn(b.meta, u.index))],
       blockId: b.blockId,
       via: 'line',
+      units: textUnits.map((u) => u.index),
     });
   });
   return fields.length || coords ? { fields, coords } : null;
+}
+
+// --- Contexto de lugar (D530) ------------------------------------------------------------------------------------------
+
+const PLACE_KEYS = new Set(FIELD_LABELS.location.map(normLabel));
+
+/**
+ * Las unidades que son el valor de un campo de locación (*Locacion Real*, *Location*, *Locación*) en unos campos ya
+ * leídos: la celda del valor en una fila de tabla, el renglón «Locación: …» entero, lo de abajo de un título «Locación».
+ * Ahí «se espera un lugar», como en el título de un día: el lector las lee con ese contexto (los alias de una palabra y
+ * los genéricos como parte entera, D529–D531). *Locacion Guion* no: es el decorado de la historia.
+ */
+export function placeOf(page: PageFields | null | undefined): Set<number> {
+  const out = new Set<number>();
+  for (const f of page?.fields ?? []) if (PLACE_KEYS.has(f.key)) for (const u of f.units) out.add(u);
+  return out;
+}
+
+/** Lo mismo, desde lo leído de la página (las unidades y lo de cada bloque). Pura: la usan el índice y el subrayado. */
+export function placeUnits(units: readonly SearchUnit[], meta: readonly BlockMeta[]): Set<number> {
+  return placeOf(readPageFields(units, meta));
 }

@@ -163,6 +163,11 @@ export interface LocationLive {
   name: string;
   pageId: string | null;
   aliases: string[];
+  /**
+   * Los nombres escritos en su «Otros nombres» que no cuentan (D534): los escribió también otra locación (`shared`) o
+   * son el nombre de otra (`name`). Con las otras locaciones, para ir ahí.
+   */
+  aliasNotes: { alias: string; kind: 'shared' | 'name'; others: { name: string; pageId: string | null }[] }[];
   /** Escenas cuyo desglose nombra esta locación, con los días en que tienen sección. */
   planned: { code: string; pageId: string | null; title: string; days: DayRef[] }[];
   /** Las páginas de adentro (scoutings), con su cantidad de fotos. */
@@ -348,7 +353,8 @@ export function locationOf(R: Registry, text: string): string | null {
   const key = normLabel(text);
   if (!key) return null;
   for (const l of R.locations.values()) if (normLabel(l.name) === key) return l.name;
-  const f = fold(text).trim();
+  // «Europa ?»: lo de después de un nombre que solo duda no lo cambia (D531).
+  const f = fold(text).replace(/[\s?!.]+$/, '').replace(/\s+/g, ' ').trim();
   const names = new Set(R.locDayTitleAlias.filter((a) => a.f === f).map((a) => a.name));
   return names.size === 1 ? [...names][0] : null;
 }
@@ -781,6 +787,9 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
     name,
     pageId: entry?.pageId ?? rel.pageId,
     aliases: (entry?.aliases ?? []).filter((a) => a !== name),
+    aliasNotes: snap.registry.aliasNotes
+      .filter((n) => n.loc === name)
+      .map((n) => ({ alias: n.alias, kind: n.kind, others: n.others.map((o) => ({ name: o, pageId: snap.registry.locations.get(o)?.pageId ?? null })) })),
     planned,
     scouts,
     scouting,

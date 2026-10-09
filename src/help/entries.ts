@@ -170,6 +170,8 @@ const LIVE_MAP = '0.242';
 const LIVE_UNDERLINE = '0.244';
 /** El `/` de escenas y locaciones, *Create* con sus guardas y *Assign* (relaciones en vivo, E7). */
 const LINK_SCENES = '0.245';
+/** Otros nombres de una locación y Dejar fuera de las relaciones (D526–D545). */
+const LOCATION_NAMES = '0.247';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -378,6 +380,23 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['slashScene', 'slashLocation'],
     words: ['/e', '/l', 'slash', 'link', 'linkear', 'create scene', 'crear escena', 'create location', 'crear locación', 'assign', 'asignar', 'pending', 'pendiente', 'no scene number', 'sin número'],
     since: LINK_SCENES,
+  },
+  {
+    id: 'locationNames',
+    section: 'find',
+    title: 'help.locationNames.title',
+    text: 'help.locationNames.text',
+    words: ['other names', 'otros nombres', 'also known as', 'aka', 'alias', 'nickname', 'apodo', 'abbreviation', 'abreviatura', 'location', 'locación', 'studio', 'estudio', 'day title', 'título del día', 'link to a location', 'vincular'],
+    since: LOCATION_NAMES,
+  },
+  {
+    id: 'leaveOut',
+    section: 'pages',
+    title: 'help.leaveOut.title',
+    text: 'help.leaveOut.text',
+    showMe: 'page-menu',
+    words: ['leave out', 'dejar fuera', 'left out', 'fuera', 'archive', 'archivo', 'backup', 'copia', 'relations', 'relaciones', 'map', 'mapa', 'ignore', 'ignorar'],
+    since: LOCATION_NAMES,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

@@ -1,5 +1,6 @@
 import type { PageRow } from '../sync/types';
 import { kindReader, type EntityKind, type PageKind } from './kind';
+import { withBareNames } from './aliases';
 import { fold, sceneCode as canonicalCode, type LocationInput, type SceneInput } from './reader';
 
 // Qué escenas, locaciones y días existen en el proyecto y qué es cada página para las relaciones (Docs/Doc_Relaciones.md,
@@ -34,7 +35,13 @@ export interface PageRole {
 
 export interface Registration {
   scenes: SceneInput[];
+  /** Las locaciones con lo de su título (el nombre, sus partes y el nombre sin paréntesis, D416/D417). */
   locations: LocationInput[];
+  /**
+   * Las mismas, solo con el nombre y las partes del título: el índice les suma lo escrito en su página
+   * (`resolveLocationNames`, D526) antes de armar el registro.
+   */
+  titleLocations: LocationInput[];
   roles: Map<string, PageRole>;
   /** Escenas con el mismo código en dos páginas (gana la primera en el orden de la barra lateral). */
   duplicates: { code: string; pageIds: string[] }[];
@@ -51,7 +58,7 @@ export interface RegisterTree {
  * El nombre y los alias de una locación por su título: el título entero y, si lo parten ` / ` o ` | `, cada parte
  * («Aysa / Planta Bernal» → Aysa, Planta Bernal). Lo de adentro de un paréntesis nunca es alias (D416): en ERSO,
  * `Europa (plates)` volvía locación a la palabra «plates» de cualquier reporte y cinco «… (Europa)» compartían «Europa».
- * El nombre sin el paréntesis lo suma `registerProject`, que ve todas las locaciones (`bareLocationName`).
+ * El nombre sin el paréntesis lo suma `registerProject`, que ve todas las locaciones (`bareLocationName`, `aliases.ts`).
  */
 export function locationFromTitle(title: string): { name: string; aliases: string[] } {
   const name = title.trim();
@@ -60,39 +67,8 @@ export function locationFromTitle(title: string): { name: string; aliases: strin
   return { name, aliases: [...aliases].filter((a) => fold(a).trim().length > 0) };
 }
 
-/**
- * El nombre sin el paréntesis, si puede ser alias (D416): de dos palabras o más («La Arenera» de `La Arenera (estudio)`,
- * «Bar Berlin» de `Bar Berlin (Claridge)`). Una sola palabra suele ser la ciudad o el sustantivo que el guion usa para la
- * historia («Lübben» de `Lübben (Europa)`: «un auto que viene de Berlín hacia Lübben» es el decorado, no donde se
- * filmó), y no cuenta. Además, `registerProject` lo descarta si lo comparte otra locación.
- */
-export function bareLocationName(name: string): string | null {
-  const bare = withoutParens(name);
-  return bare && bare !== name.trim() && bare.split(' ').length >= 2 ? bare : null;
-}
-
-const withoutParens = (name: string): string => name.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-
-/**
- * Suma a cada locación su nombre sin el paréntesis cuando ninguna otra locación lo comparte (como nombre o igual). De
- * dos palabras o más es alias en todos lados (D416); de una sola, solo en el título de un día de rodaje (D417):
- * «2026-03-11 | Día 73 | Inquilinato» es el lugar del día, «…hacia Lübben» en un párrafo no nombra a `Lübben (Europa)`.
- */
-function withBareNames(locations: LocationInput[]): LocationInput[] {
-  const uses = new Map<string, number>();
-  const count = (s: string) => uses.set(fold(s).trim(), (uses.get(fold(s).trim()) ?? 0) + 1);
-  for (const l of locations) {
-    count(l.name);
-    const bare = withoutParens(l.name);
-    if (bare && bare !== l.name) count(bare);
-  }
-  return locations.map((l) => {
-    const bare = withoutParens(l.name);
-    if (!bare || bare === l.name.trim() || uses.get(fold(bare).trim()) !== 1) return l;
-    if (bareLocationName(l.name)) return { ...l, aliases: [...new Set([...(l.aliases ?? [l.name]), bare])] };
-    return { ...l, dayTitleAliases: [bare] };
-  });
-}
+// El nombre sin el paréntesis (D416, D417) y lo que escribe la gente en «Otros nombres» (D526): `aliases.ts`.
+export { bareLocationName } from './aliases';
 
 const stageOf = (kind: EntityKind | undefined, own: boolean): Stage =>
   kind === 'scene' ? 'breakdown' : kind === 'day' ? 'shoot' : kind === 'location' ? (own ? 'location' : 'scouting') : 'other';
@@ -139,7 +115,24 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
   };
   for (const root of tree.roots(projectId)) visit(root, false);
   const duplicates = [...byCode].filter(([, ids]) => ids.length > 1).map(([code, pageIds]) => ({ code, pageIds }));
-  return { scenes, locations: withBareNames(locations), roles, duplicates };
+  return { scenes, locations: withBareNames(locations), titleLocations: locations, roles, duplicates };
 }
 
 const epOf = (code: string | null): string | null => (code && /^\d{3}_/.test(code) ? code.slice(0, 3) : null);
+
+/**
+ * Si una página está fuera de las relaciones por `graph: false` (D387, D540): en una carpeta de arriba (la más alta que
+ * lo tiene: es donde se deshace, «by “90 | Archivo”») o en ella misma; `null` si no. Las plantillas no cuentan acá.
+ */
+export function leftOutBy(tree: Pick<RegisterTree, 'get'>, pageId: string): { pageId: string; own: boolean } | null {
+  let top: string | null = null;
+  let own = false;
+  const seen = new Set<string>();
+  for (let p = tree.get(pageId); p && !seen.has(p.id); p = p.parent_id ? tree.get(p.parent_id) : undefined) {
+    seen.add(p.id);
+    if (p.settings?.graph !== false) continue;
+    if (p.id === pageId) own = true;
+    else top = p.id;
+  }
+  return top ? { pageId: top, own: false } : own ? { pageId, own: true } : null;
+}

@@ -238,6 +238,17 @@ export function createGuard(ctx: GuardContext, want: CreateWant): GuardResult {
     if (!isLoc || !row.title.trim()) continue;
     if (locationForms(row.title).includes(wanted)) return { ok: false, ...placeOf(tree, row) };
   }
+  // Un nombre que ya es otro nombre escrito de una locación («Arenera» en «Otros nombres» de La Arenera, D526) tampoco se
+  // crea: también los que no cuentan por un conflicto (D533), que igual son de una locación existente.
+  const writtenBy = (pageId: string | null) => (pageId ? tree.get(pageId) : undefined);
+  for (const l of snap.registry.locations.values()) {
+    const row = writtenBy(l.pageId);
+    if (row && l.forms.some((f) => fold(f).replace(/\s+/g, ' ').trim() === wanted)) return { ok: false, ...placeOf(tree, row) };
+  }
+  for (const n of snap.registry.aliasNotes) {
+    const row = writtenBy(snap.registry.locations.get(n.loc)?.pageId ?? null);
+    if (row && fold(n.alias).replace(/\s+/g, ' ').trim() === wanted) return { ok: false, ...placeOf(tree, row) };
+  }
   const folder = locationFolder(tree, projectId, snap.registry);
   if ('reason' in folder) return { ok: false, reason: folder.reason };
   if (!perms.canCreateIn(folder.id, projectId)) return { ok: false, reason: 'cantCreate', pageId: folder.id };

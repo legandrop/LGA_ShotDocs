@@ -174,7 +174,7 @@ export const builtinEn: BuiltinTexts = {
     questionItems: ['Director: ', 'Production design: '],
   },
   location: {
-    facts: [['Address'], ['Map'], ['Contact'], ['Access · Permits'], ['Power · Parking']],
+    facts: [['Also known as'], ['Address'], ['Map'], ['Contact'], ['Access · Permits'], ['Power · Parking']],
     notes: 'Notes',
     artLinks: 'Art links',
     photos: 'Photos',

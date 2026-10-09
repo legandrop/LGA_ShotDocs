@@ -5,8 +5,9 @@ import { Plugin, type EditorState } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { ySyncPluginKey } from 'y-prosemirror';
 import { t } from '../i18n';
-import { linkedPageId, SEPARATOR, unitPos, unitsFromPM, type PMUnit } from '../search/extract';
+import { linkedPageId, SEPARATOR, unitPos, unitsFromPM, type BlockMeta, type PMUnit } from '../search/extract';
 import { sceneTitleOf } from './dayLive';
+import { placeUnits } from './fields';
 import type { LiveSource } from './liveView';
 import { scan, type Hit, type Registry } from './reader';
 import { underlineKey, UNDERLINE_NOW, type UnderlineSpec, type UnderlineState } from './relLink';
@@ -129,14 +130,18 @@ export function buildUnderlines(doc: PMNode, info: UnderlineInfo | null, memo?: 
   const next = new Map<string, Hit[]>();
   const decos: Decoration[] = [];
   const sig: string[] = [];
-  for (const unit of unitsFromPM(doc)) {
+  const units = unitsFromPM(doc);
+  // El valor de un campo de locación se lee como un lugar, igual que en el índice (D545): lo que cuenta se ve.
+  const place = placeUnits(units, metaFromPM(doc, units));
+  for (const [index, unit] of units.entries()) {
     if (unit.field !== 'text' || !unit.node) continue;
     const heading = unit.node.type.name === 'heading';
+    const inPlace = !heading && place.has(index);
     const links = linkRanges(unit);
     const text = readable(unit.text, links);
-    const mkey = `${heading ? 'h' : 't'}\u0000${text}`;
+    const mkey = `${heading ? 'h' : inPlace ? 'p' : 't'}\u0000${text}`;
     let hits = next.get(mkey) ?? prev?.get(mkey);
-    if (!hits) hits = scan(info.R, text, { heading, ep: info.ep });
+    if (!hits) hits = scan(info.R, text, inPlace ? { heading, ep: info.ep, dayTitle: true } : { heading, ep: info.ep });
     next.set(mkey, hits);
     for (const h of hits) {
       if (h.hidden) continue;
@@ -177,6 +182,49 @@ export function buildUnderlines(doc: PMNode, info: UnderlineInfo | null, memo?: 
     memo.map = next;
   }
   return { decos, sig: sig.join('|'), count: sig.length };
+}
+
+/**
+ * Lo que el índice sabe de cada bloque (`BlockMeta`: nivel de título y celdas de una tabla), sacado del documento del
+ * editor, en el mismo orden que `unitsFromPM`. Para leer los campos de la página abierta como los lee el índice.
+ */
+export function metaFromPM(doc: PMNode, units: readonly PMUnit[]): BlockMeta[] {
+  const meta: BlockMeta[] = [];
+  let ui = 0;
+  doc.descendants((node, pos) => {
+    if (node.type.name !== 'blockContainer') return true;
+    while (ui < units.length && units[ui].blockPos < pos) ui++;
+    const content = node.firstChild;
+    const level = content?.type.name === 'heading' ? Math.max(1, Number(content.attrs.level) || 1) : 0;
+    const extra: BlockMeta = { blockId: String(node.attrs.id ?? ''), at: ui, level };
+    if (content?.type.name === 'table') {
+      const cells: NonNullable<BlockMeta['cells']> = [];
+      let cols = 0;
+      for (let i = ui; i < units.length && units[i].blockPos === pos; i++) {
+        if (units[i].field !== 'text') continue;
+        const $p = doc.resolve(units[i].nodePos);
+        for (let d = $p.depth; d >= 2; d--) {
+          const name = $p.node(d).type.name;
+          if (name !== 'tableCell' && name !== 'tableHeader') continue;
+          const row = $p.node(d - 1);
+          let col = 0;
+          for (let k = 0; k < $p.index(d - 1); k++) col += Math.max(1, Number(row.child(k).attrs.colspan) || 1);
+          cells.push({ unit: i, row: $p.index(d - 2), col });
+          let width = 0;
+          row.forEach((c) => (width += Math.max(1, Number(c.attrs.colspan) || 1)));
+          cols = Math.max(cols, width);
+          break;
+        }
+      }
+      if (cells.length) {
+        extra.cells = cells;
+        extra.cols = cols;
+      }
+    }
+    if (extra.level || extra.cells) meta.push(extra);
+    return true;
+  });
+  return meta;
 }
 
 /** Lo que muestra el editor de una página, armado con la foto del índice de relaciones (o `null`: nada). */

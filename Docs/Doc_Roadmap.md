@@ -154,6 +154,24 @@ tanda y no de la suya (la escena equivocada pasa a «shot»); (9) O-b: lo que ot
 mientras se hace *Undo* (ventana de segundos) se pierde con el título. Hecho en la v0.244: la barra *Today* de (2), la
 ficha de (3) y (7) (el título en vivo va al final del título).
 
+**Anotado en la v0.247 (relaciones en vivo, otros nombres de una locación y *Leave out of relations*):** hechos, de
+«ERSO en vivo», el (1) (la casilla *Leave out of relations* en el menú ⋯, D540) y el (3) (los otros nombres que escribe la
+gente, D526–D537, y *Link to a location…* desde un día sin lugar, D539); de la v0.245, el (4) (el subtítulo del `/l`, D557);
+de la v0.242, el (2) queda resuelto en cuanto ERSO tenga sus nombres. Hecho el 2026-10-09: los 20 nombres cargados en ERSO
+(D542, D543, con copia antes; la meta de D544 se cumple entera). Queda: (2) el aviso de conflicto (D534)
+vive solo en la cabecera abierta, no en el renglón plegado; (3) un nombre escrito de dos palabras que también es el
+nombre de la historia (el decorado, como «Mansión Rosenberg») cuenta en el texto: hoy se evita escribiéndolo con una
+palabra (D562); una marca de «solo lugar» por nombre sería la salida general; (4) *Link to a location…* no está en el
+adelanto ni en la barra *Today*; (5) probar la casilla y la acción en un iPhone y un Android de verdad. De la auditoría:
+(6) el `data-tip` de la nota de conflicto dice lo mismo para los dos casos («cambialo en una de las dos»), y cuando el
+nombre es el de otra locación no aplica; (7) *Link to a location…* escribe el texto del título tal cual: con comas se
+parte en varios nombres, vincular dos veces el mismo día lo repite y con más de 60 caracteres el lector lo ignora aunque
+el aviso diga que se agregó (no ofrecerlo si el fragmento no pasa la limpieza de nombres); (8) «Dejar fuera de las
+relaciones» se parte en dos renglones en el menú en castellano; (9) *Leave out* con un link público no tiene prueba (lo
+corta el código); (10) la ayuda podría decir que se eviten nombres de dos palabras comunes («La Casa»), que cuentan en
+todo el texto (D529). Anterior a esta versión: un dispositivo nuevo muestra «41–52 cambios sin subir» durante la
+primera sincronización sin haber escrito nada (no sube nada; asusta a quien mira).
+
 **Anotado en la v0.245 (relaciones en vivo, el `/`, *Create* y *Assign*):** hechos el punto (2) de la v0.244 y el (1) de
 la v0.242. Queda: (1) un *Merge* de dos páginas de la misma escena que solo agregue (D520; hoy se resuelve a mano); (2)
 *Assign* no tiene *Undo* en su aviso (desde el adelanto, ⌘Z; desde la fila, borrar el link o « · 105_025» a mano);

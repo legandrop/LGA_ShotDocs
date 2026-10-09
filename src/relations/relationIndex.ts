@@ -1,7 +1,8 @@
 import type { IndexedContent, IndexInfo } from '../search/projectIndex';
 import type { PageRow } from '../sync/types';
 import { INDEX_PAGE_MIN, readPageRelations, type LinkTarget, type Mention, type PageRelations, type Section } from './pageRelations';
-import { fieldValues, readPageFields, type FieldName, type FieldValue, type PageFields } from './fields';
+import { aliasesFromFields, resolveLocationNames, type NameSource } from './aliases';
+import { fieldValues, placeOf, readPageFields, type FieldName, type FieldValue, type PageFields } from './fields';
 import { buildRegistry, type Hit, type Registry } from './reader';
 import { registerProject, type PageRole, type Registration, type RegisterTree, type Stage } from './register';
 
@@ -12,6 +13,9 @@ import { registerProject, type PageRole, type Registration, type RegisterTree, t
 //
 // La consulta (`entityRelations`, `pendingRelations`, `pageRelations`) es pura sobre una foto (`RelationSnapshot`), para
 // la cabecera de escena, locación y día (E3) y lo que venga después.
+
+/** Cuánto se espera, después del último cambio de «Otros nombres» en una locación, para aplicarlo (D537). */
+export const WRITTEN_WAIT_MS = 2000;
 
 export interface RelationSource {
   /** Las páginas del proyecto que la persona ve ahora (sin la papelera), en el orden de la barra lateral. */
@@ -61,7 +65,7 @@ export class RelationIndex {
   constructor(
     private readonly tree: RegisterTree,
     private readonly source: RelationSource,
-    private readonly options: { yieldMs?: number } = {},
+    private readonly options: { yieldMs?: number; writtenWaitMs?: number } = {},
   ) {}
 
   subscribe = (fn: () => void): (() => void) => {
@@ -78,6 +82,8 @@ export class RelationIndex {
 
   dispose(): void {
     this.disposed = true;
+    if (this.writtenTimer) clearTimeout(this.writtenTimer);
+    this.writtenTimer = null;
     this.memo.clear();
     this.snap = null;
     this.listeners.clear();
@@ -103,11 +109,76 @@ export class RelationIndex {
     return this.running;
   }
 
+  /**
+   * Lo escrito en «Otros nombres» de una locación que se está usando: lo aplicado y lo último visto con su hora (D537:
+   * mientras se escribe, lo nuevo se aplica 2 s después del último cambio).
+   */
+  private readonly written = new Map<string, { applied: string[]; akey: string; seen: string; since: number }>();
+  private writtenTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Los nombres escritos que se usan ahora en una página de locación (y si hay que esperar, cuánto). */
+  private writtenNow(pageId: string, names: string[], now: number, immediate: boolean): { use: string[]; wait: number } {
+    const key = names.join('\u0001');
+    const w = this.written.get(pageId);
+    // La primera vez que se lee (al abrir el proyecto, una locación recién bajada): enseguida.
+    if (!w || immediate) {
+      this.written.set(pageId, { applied: names, akey: key, seen: key, since: now });
+      return { use: names, wait: Infinity };
+    }
+    if (key === w.akey) {
+      w.seen = key;
+      return { use: w.applied, wait: Infinity };
+    }
+    if (key !== w.seen) {
+      w.seen = key;
+      w.since = now;
+    }
+    const left = w.since + (this.options.writtenWaitMs ?? WRITTEN_WAIT_MS) - now;
+    if (left <= 0) {
+      w.applied = names;
+      w.akey = key;
+      return { use: names, wait: Infinity };
+    }
+    return { use: w.applied, wait: left };
+  }
+
   private async run(projectId: string): Promise<void> {
     const yieldMs = this.options.yieldMs ?? 12;
-    if (this.snap && this.snap.projectId !== projectId) this.memo.clear();
-    const registration = registerProject(this.tree, projectId);
-    const registry = buildRegistry(registration);
+    const opening = !this.snap || this.snap.projectId !== projectId;
+    if (this.snap && this.snap.projectId !== projectId) {
+      this.memo.clear();
+      this.written.clear();
+    }
+    const base = registerProject(this.tree, projectId);
+    const visible = this.source.pagesOf(projectId);
+    const visibleIds = new Set(visible.map((p) => p.id));
+    // Los otros nombres de cada locación (D526–D528): solo de la página de la locación misma, si la persona la ve y ya
+    // está leída (una todavía sin leer aporta lo suyo en la pasada siguiente). Sus campos se leen una sola vez.
+    const preFields = new Map<string, PageFields | null>();
+    const now = Date.now();
+    let wait = Infinity;
+    const sources: NameSource[] = base.titleLocations.map((l) => {
+      const content = l.pageId && visibleIds.has(l.pageId) ? this.source.content(l.pageId) : undefined;
+      if (!l.pageId || !content) return l;
+      const memo = this.memo.get(l.pageId);
+      const pf = memo && memo.content === content ? memo.fields : readPageFields(content.units, content.meta);
+      preFields.set(l.pageId, pf);
+      const got = this.writtenNow(l.pageId, aliasesFromFields(pf, l.name), now, opening);
+      wait = Math.min(wait, got.wait);
+      return got.use.length ? { ...l, written: got.use } : l;
+    });
+    for (const id of this.written.keys()) if (!visibleIds.has(id)) this.written.delete(id);
+    if (this.writtenTimer) clearTimeout(this.writtenTimer);
+    this.writtenTimer = null;
+    if (wait !== Infinity) {
+      this.writtenTimer = setTimeout(() => {
+        this.writtenTimer = null;
+        void this.update(projectId);
+      }, wait);
+    }
+    const names = resolveLocationNames(sources);
+    const registration: Registration = { ...base, locations: names.inputs };
+    const registry = buildRegistry({ scenes: registration.scenes, locations: names.inputs, notes: names.notes });
     const targets = new Map<string, { kind: 'scene' | 'loc'; ref: string }>();
     for (const s of registration.scenes) if (s.pageId) targets.set(s.pageId, { kind: 'scene', ref: registry.scenes.get(s.code)?.code ?? s.code });
     for (const l of registration.locations) if (l.pageId) targets.set(l.pageId, { kind: 'loc', ref: l.name });
@@ -123,7 +194,6 @@ export class RelationIndex {
     const fields = new Map<string, PageFields>();
     let unread = 0;
     let since = Date.now();
-    const visible = this.source.pagesOf(projectId);
     for (const page of visible) {
       if (this.disposed) return;
       const role = registration.roles.get(page.id);
@@ -139,8 +209,16 @@ export class RelationIndex {
         const scans = new Map<string, Hit[]>();
         // Con lo mismo que existe, lo ya reconocido de esta página sirve (la clave incluye el episodio).
         const prev = memo && memo.key === key ? memo.scans : undefined;
-        const pageFields = memo && memo.content === content ? memo.fields : readPageFields(content.units, content.meta);
-        memo = { content, key, scans, fields: pageFields, rel: readPageRelations(registry, content.units, content.meta, { ep: role?.ep ?? null, scans: { prev, next: scans } }, linkTarget) };
+        const pageFields = memo && memo.content === content ? memo.fields : preFields.has(page.id) ? preFields.get(page.id)! : readPageFields(content.units, content.meta);
+        // El valor de un campo de locación se lee como un lugar (D530).
+        const place = placeOf(pageFields);
+        memo = {
+          content,
+          key,
+          scans,
+          fields: pageFields,
+          rel: readPageRelations(registry, content.units, content.meta, { ep: role?.ep ?? null, scans: { prev, next: scans }, place: place.size ? place : undefined }, linkTarget),
+        };
         this.memo.set(page.id, memo);
       }
       pages.set(page.id, memo.rel);
@@ -150,8 +228,7 @@ export class RelationIndex {
         since = Date.now();
       }
     }
-    const ids = new Set(visible.map((p) => p.id));
-    for (const id of this.memo.keys()) if (!ids.has(id)) this.memo.delete(id);
+    for (const id of this.memo.keys()) if (!visibleIds.has(id)) this.memo.delete(id);
     const info = this.source.info(projectId);
     this.snap = { projectId, registry, registration, pages, fields, unread, complete: unread === 0 && !info.building && info.missing === 0 };
     this.revision++;

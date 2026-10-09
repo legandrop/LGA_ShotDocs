@@ -8,7 +8,9 @@ import { goToPlace } from './goToPlace';
 import { useLiveOpen } from './liveFold';
 import { Badge, Chip, Ic, Line, LiveDot, useFoldFocus, useGo, type HeaderPhotos } from './LiveHeader';
 import { PhotoSources } from './PhotoSources';
+import { titleFragment } from './aliasAction';
 import { AssignButton, CreateEntityButton, ScenePicker } from './EntityActions';
+import { LinkLocationButton } from './LinkLocation';
 import type { DayRef, LiveSource } from './liveView';
 import { addToPlan, adjustedPlan, removeFromPlan, usePlanAdjust } from './tomorrowPlan';
 import type { PreparedSection } from './prepareDay';
@@ -397,6 +399,7 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
     setOpenRaw(next);
   };
   const reading = !v.complete;
+  const fragment = titleFragment({ title: src.title(v.day.pageId) ?? '', label: v.day.label, date: v.day.date });
   const scenePage = (code: string) => {
     const id = src.snap.registry.scenes.get(code)?.pageId ?? null;
     return id && src.title(id) !== undefined ? id : null;
@@ -440,6 +443,15 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
         <span className="lh-meta day">{v.day.date && longDate(v.day.date)}</span>
         <LocChips day={v.day} src={src} tr={tr} />
         {v.day.locs.length > 0 && <span className="lh-via">{tr('day.perTitle')}</span>}
+        {/* Sin locación por el título: lo que dice el título, apagado, y escribirlo en una locación (D539). */}
+        {v.day.locs.length === 0 && fragment && (
+          <>
+            <span className="lh-via" data-tip={tr('linkLoc.unrecognizedTip')}>
+              {fragment}
+            </span>
+            <LinkLocationButton R={src.snap.registry} fragment={fragment} />
+          </>
+        )}
         <span className="lh-tools">
           {nav(v.prev, -1)}
           {nav(v.next, 1)}

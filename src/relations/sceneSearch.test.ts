@@ -117,6 +117,32 @@ describe('searchLocations', () => {
   });
 });
 
+describe('searchLocations con los otros nombres escritos (D536, B1 de la auditoría de E10)', () => {
+  // Como en ERSO: «Arenera» escrito (una palabra: vale donde se espera un lugar) y «Estudio» (genérico: solo como parte
+  // entera). La lupa lee lo buscado como un lugar.
+  const registry = buildRegistry({
+    scenes: [],
+    locations: [
+      { name: 'La Arenera (estudio)', aliases: ['La Arenera'], dayTitleAliases: ['Arenera'], wholeAliases: ['Estudio'], pageId: 'p-arenera' },
+      { name: 'Estudio UnFilm', pageId: 'p-unfilm' },
+    ],
+  });
+  const pages: Record<string, string> = { 'p-arenera': 'La Arenera (estudio)', 'p-unfilm': 'Estudio UnFilm' };
+  const src: SearchSource = { snap: { registry }, title: (id) => pages[id] };
+  const names = (q: string) => searchLocations(src, q).map((l) => l.name);
+
+  it('un nombre de una palabra dentro de la búsqueda lleva a su locación', () => {
+    expect(names('Arenera VA')).toEqual(['La Arenera (estudio)']);
+    expect(findEntities(src, 'Arenera VA').map((e) => [e.kind, e.ref])).toEqual([['loc', 'La Arenera (estudio)']]);
+  });
+
+  it('el genérico cuenta solo como parte entera', () => {
+    expect(names('Estudio UnFilm')).toEqual(['Estudio UnFilm']);
+    expect(names('Estudio | Autos')).toEqual(['La Arenera (estudio)']);
+    expect(names('estudio de sonido')).not.toContain('La Arenera (estudio)');
+  });
+});
+
 describe('findEntities (la lupa ⌘K)', () => {
   const src = source();
   it('escenas, pendientes y locaciones, sin repetir, con la escena primero', () => {

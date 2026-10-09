@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.247 :
+
+Una locación no tenía dónde guardar cómo le dice el equipo, así que «Estudio | Autos» en una ficha, «Arenera VA» en el título de un día o un decorado «Estudio» no la nombraban, y dejar una carpeta fuera de las relaciones pedía un guion. Ahora el renglón «Otros nombres: …» (o la fila nueva de la plantilla *Location*) de la página de la locación cuenta con la regla de D416: dos palabras en todos lados, una sola o un genérico solo donde se espera un lugar (título del día o campo *Locación*, también en el subrayado), el genérico como parte entera. Un nombre escrito en dos locaciones no cuenta y la cabecera lo avisa; se aplica 2 s después de escribir. *Link to a location…* lo escribe desde un día sin lugar, con *Undo*. *Leave out of relations* en el menú ⋯, con rótulo y aviso. D526–D545, D556–D563.
+
+[Reconocer los otros nombres que la gente escribe en una locación, vincularlos desde un día sin lugar y dejar páginas fuera de las relaciones desde el menú]
+
 v0.246 :
 
 «Repartir por escenas» un reporte seguía en el roadmap con deshacer y prueba de conservación, pero venía de mover texto entre páginas, que D355 ya había descartado: mover pierde lo que otro dispositivo escribe sin red adentro de lo movido, y la escena ya muestra su parte en vivo. Se cierra sin escribir (D581–D588). Nueva `sectionCoverage.test.ts` sobre un Día 80 de casos raros (`coverage` en el fixture, apagado por defecto): cada sección de escena sale una vez por escena y con el mismo lugar que en el mapa; las fotos se comparan como conjunto, ninguna se pierde y ninguna de lo general cruza a una escena; el documento no cambia. La ayuda dice «los reportes quedan enteros» y se encuentra con *split* o *repartir*. Docs: ES8, ES9.6, R.6 y R.6b «Read here» (diseñado), sección 16 de Relaciones con cómo se cuentan 137, 138, 140 y 141.

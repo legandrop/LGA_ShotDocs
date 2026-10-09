@@ -173,7 +173,7 @@ export const builtinEs: BuiltinTexts = {
     questionItems: ['Director: ', 'Arte: '],
   },
   location: {
-    facts: [['Dirección'], ['Mapa'], ['Contacto'], ['Acceso · Permisos'], ['Energía · Estacionamiento']],
+    facts: [['Otros nombres'], ['Dirección'], ['Mapa'], ['Contacto'], ['Acceso · Permisos'], ['Energía · Estacionamiento']],
     notes: 'Notas',
     artLinks: 'Links de arte',
     photos: 'Fotos',

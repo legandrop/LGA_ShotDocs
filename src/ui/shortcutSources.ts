@@ -98,11 +98,12 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'TemplateDialogs.tsx',
     'RootReportDialog.tsx',
   ],
-  // El selector de escenas («Add scene» de Tomorrow y *Assign*, relations/EntityActions.tsx): Enter elige la primera,
+  // El selector de escenas («Add scene» de Tomorrow y *Assign*, relations/EntityActions.tsx) y el de locaciones (*Link to a
+  // location…*, relations/LinkLocation.tsx): Enter elige la primera,
   // Escape cierra.
-  listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx', 'EntityActions.tsx'],
+  listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx', 'EntityActions.tsx', 'LinkLocation.tsx'],
   // La confirmación de "Replace all" (ProjectReplace.tsx): Esc la cierra sin cerrar el panel.
-  listClose: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx', 'ProjectReplace.tsx', 'EntityActions.tsx'],
+  listClose: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx', 'ProjectReplace.tsx', 'EntityActions.tsx', 'LinkLocation.tsx'],
   versionName: ['HistoryPanel.tsx'],
   assistantApply: ['AssistantPanel.tsx', 'CaptionSection.tsx', 'DictationPanel.tsx'],
   dictationPlace: ['DictationPanel.tsx'],

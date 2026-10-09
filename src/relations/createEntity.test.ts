@@ -174,6 +174,17 @@ describe('las guardas (G1–G5)', () => {
     expect(createGuard(c, { kind: 'location', name: 'Casa' })).toMatchObject({ ok: true, generic: true });
     expect(createGuard(c, { kind: 'location', name: ' ' })).toEqual({ ok: false, reason: 'invalid' });
   });
+
+  it('D561: tampoco un nombre que ya está escrito en «Otros nombres» de una locación, aunque no cuente por un conflicto', async () => {
+    const { d, built, ctx } = await world();
+    await writeBlocks(d, built.ids.arenera, [{ p: 'Otros nombres: Galpón Sur, Estudio' }]);
+    await writeBlocks(d, built.ids.cenade, [{ p: 'Otros nombres: Estudio' }]);
+    const c = await ctx();
+    expect(createGuard(c, { kind: 'location', name: 'galpon sur' })).toEqual({ ok: false, reason: 'exists', pageId: built.ids.arenera });
+    // «Estudio» lo escribieron dos: no cuenta para ninguna (D533), pero es de una locación que existe.
+    expect(c.snap!.registry.aliasNotes.map((n) => n.alias)).toEqual(['Estudio', 'Estudio']);
+    expect(createGuard(c, { kind: 'location', name: 'Estudio' })).toMatchObject({ ok: false, reason: 'exists' });
+  });
 });
 
 describe('crear', () => {

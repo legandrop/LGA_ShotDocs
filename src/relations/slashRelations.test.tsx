@@ -9,7 +9,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { schema } from '../ui/editorSchema';
 import { disposeRelationsSession, relationsSession } from '../ui/relationsUi';
-import { buildProject, type Built } from './fixtures/proyectoSintetico';
+import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { buildRegistry } from './reader';
 import { parseSlashQuery, pendingCode, relationSlash } from './slashRelations';
 
@@ -221,6 +221,17 @@ describe('el / en el editor', () => {
     expect(slash.items('l cen')!.map((i) => i.title)).toEqual(['CENADE']);
     expect(slash.items('l planta bernal')!.map((i) => i.title)).toEqual(['Create location «Planta bernal»']);
     expect(slash.items('l casa')!.at(-1)!.subtext).toContain('won’t be recognized in text by itself');
+  });
+
+  it('D557: el subtítulo de una locación con muchos nombres dice dos y cuántos más; «/l arenera» la encuentra por lo escrito', async () => {
+    const { d, built } = await world({ team: true });
+    const { e } = await editorOn(d, built.ids.notas);
+    const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => built.ids.notas, tr: t as never });
+    expect(slash.items('l la arenera')![0].subtext).toBe('Location · La Arenera');
+    await writeBlocks(d, built.ids.arenera, [{ p: 'Otros nombres: Arenera VA, Estudio, Estudio Autos' }]);
+    // Se aplica 2 s después de escribir (D537).
+    await until(() => slash.items('l la arenera')![0].subtext === 'Location · La Arenera · Arenera VA · +2', 'el subtítulo con lo escrito', 500);
+    expect(slash.items('l arenera va')!.map((i) => i.title)).toEqual(['La Arenera (estudio)']);
   });
 
   it('sin red: «Keep as text» (otro dispositivo puede haberla creado)', async () => {

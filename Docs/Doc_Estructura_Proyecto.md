@@ -46,7 +46,7 @@ texto, link y foto, y una versión vieja de la app lo muestra entero.
 La carpeta dice qué tipo de página es, nunca la relación: una escena no se mueve de lugar porque cambie el plan. Con
 *Type*: `1.1 | Desglose` → *Scenes*, `1.2 | Locaciones y scoutings` → *Locations* y cada bloque de rodaje → *Shoot days*
 (no `2 | Rodaje` entero: adentro de un grupo un día sin número no cuenta, D403). `90 | Archivo` queda fuera de las
-relaciones (`graph: false`, D406). Ya no hay `00 | Mapa` congelado: lo reemplaza un Mapa vivo (ES9, punto 5; D411).
+relaciones (`graph: false`, D406; desde la v0.247 se marca con *Leave out of relations* en el menú ⋯, D540). Ya no hay `00 | Mapa` congelado: lo reemplaza un Mapa vivo (ES9, punto 5; D411).
 
 ## Vocabulario (ES3)
 
@@ -69,7 +69,7 @@ relaciones (`graph: false`, D406). Ya no hay `00 | Mapa` congelado: lo reemplaza
   `101-074` ya no trae la escena (`Doc_Roadmap.md`, grupo R).
 - **Día**: `2025-11-03 | Día 03 | <locación>`, compatible con el título que arma *New day report* (`src/templates/dayReport.ts`), con la locación como tercera parte. El
   número de día viejo queda en el subtítulo.
-- **Locación**: su nombre canónico. Los nombres alternativos, cuando la app tenga alias de locación.
+- **Locación**: su nombre canónico. Los otros nombres (cómo le dice el equipo, las abreviaturas de los títulos de día) van en la página de la locación, en el renglón `Otros nombres: …` o en la fila *Otros nombres* / *Also known as* de su tabla (`Doc_Relaciones.md`, sección 17).
 
 ## Cómo es cada página (ES5)
 

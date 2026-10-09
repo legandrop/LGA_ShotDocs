@@ -9,6 +9,10 @@ import { paragraphProps, schema } from '../ui/editorSchema';
 import { schema as anteriorSchema } from '../ui/fixtures/editorSchemaAnterior';
 import { schema as publishedSchema } from '../ui/fixtures/editorSchemaMain';
 import { findUnknownContent } from '../ui/unknownContent';
+import { aliasesFromFields } from '../relations/aliases';
+import { addAliasesInDoc } from '../relations/aliasWrite';
+import { fieldValues, readPageFields } from '../relations/fields';
+import { unitsFromYDoc, type BlockMeta } from '../search/extract';
 import { insertTemplate } from './apply';
 import { BUILTIN_IDS, BUILTIN_KINDS, BUILTIN_SLUGS, builtinBlocks, builtinTexts, kindOfSlug, type TemplateBlock } from './builtin';
 
@@ -168,6 +172,25 @@ describe('una página creada con una plantilla de fábrica', () => {
           unmountAll();
         }
       }
+    }
+  });
+});
+
+describe('la plantilla Location trae la fila de otros nombres (D538)', () => {
+  const fieldsOf = (doc: Y.Doc) => {
+    const meta: BlockMeta[] = [];
+    const units = unitsFromYDoc(doc, meta);
+    return readPageFields(units, meta);
+  };
+
+  it('primera fila de la tabla, en inglés y castellano; vacía no da nombres; escrita, sí', async () => {
+    for (const [lang, label] of [['en', 'Also known as'], ['es', 'Otros nombres']] as const) {
+      expect(tables(builtinBlocks('location', lang))[0].rows[0].cells[0], lang).toBe(label);
+      const doc = await pageWith('location', lang);
+      expect(fieldValues(fieldsOf(doc), 'aliases').map((f) => [f.label, f.text]), lang).toEqual([[label, '']]);
+      expect(aliasesFromFields(fieldsOf(doc)), lang).toEqual([]);
+      addAliasesInDoc(doc, ['Arenera', 'Estudio Autos'], label);
+      expect(aliasesFromFields(fieldsOf(doc)), lang).toEqual(['Arenera', 'Estudio Autos']);
     }
   });
 });

@@ -533,3 +533,21 @@ describe('el adelanto: el toque, el mouse, elegir, editar y lo que lo cierra', (
     expect(ev.close).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('el subrayado con el contexto de lugar (D545)', () => {
+  it('«Estudio» en la celda de Locacion Real se subraya (cuenta para la cabecera); en un párrafo o en Locacion Guion, no', () => {
+    const arenera = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const R2 = buildRegistry({ scenes: [], locations: [{ name: 'La Arenera (estudio)', aliases: ['La Arenera (estudio)'], wholeAliases: ['Estudio'], pageId: arenera }] });
+    const doc = new Y.Doc();
+    const e = mount(doc, { underline: false });
+    e.replaceBlocks(e.document, [
+      { type: 'table', content: { type: 'tableContent', rows: [{ cells: ['Locacion Guion', 'Estudio'] }, { cells: ['Locacion Real', 'Estudio | Autos'] }] } },
+      { type: 'paragraph', content: 'Estudio | Autos' },
+      { type: 'paragraph', content: 'Locación: Estudio' },
+    ] as never);
+    const pm = view(e).state.doc;
+    const built = buildUnderlines(pm, { ...info, R: R2, pageOf: () => arenera });
+    const shownText = built.decos.map((d) => `${pm.textBetween(d.from, d.to)}@${pm.resolve(d.from).parent.textContent}`);
+    expect(shownText).toEqual(['Estudio@Estudio | Autos', 'Estudio@Locación: Estudio']);
+  });
+});

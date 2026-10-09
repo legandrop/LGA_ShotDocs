@@ -1,9 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useT, type Key } from '../i18n';
-import { useTree } from '../services';
-import { ArrowLeftIcon, CheckIcon, TypeIcon } from '../ui/icons';
+import { useLinkMode } from '../linkMode';
+import { useServices, useTree } from '../services';
+import { ArrowLeftIcon, CheckIcon, EyeOffIcon, TypeIcon } from '../ui/icons';
+import { useCurrentProject } from '../ui/project';
+import { existingRelationsSession } from '../ui/relationsUi';
 import { markFolderHolds, setPageType } from './entitySync';
 import { entityMark, kindReader, type EntityKind } from './kind';
+import { leftOutBy } from './register';
 
 // *Type* en el menú de la página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): qué es esta página (escena,
 // locación, día de rodaje o nada) y qué es lo que se crea adentro (la carpeta da el tipo). Se abre en el mismo menú, en
@@ -101,3 +105,47 @@ export function TypeSubmenu({ pageId, onBack, onClose }: { pageId: string; onBac
     </>
   );
 }
+
+/**
+ * *Leave out of relations* (D540): la casilla debajo de *Type*. Deja esta página y lo de adentro fuera de las relaciones
+ * (`settings.graph = false`, D387): sus escenas, locaciones y días no cuentan en ningún lado (archivos, copias que repiten
+ * nombres). Solo se ofrece en un proyecto con escenas, locaciones o días, o si ya hay una marca (acá o arriba). Una
+ * carpeta de arriba marcada la deja afuera: marcada, deshabilitada, «By folder». Lo llama el menú solo con `canEditRow`.
+ */
+export function LeaveOutItem({ pageId, onClose }: { pageId: string; onClose: () => void }) {
+  const tree = useTree();
+  const tr = useT();
+  const link = useLinkMode();
+  const services = useServices();
+  const projectId = useCurrentProject();
+  const session = link ? null : existingRelationsSession(services);
+  useSyncExternalStore(session?.relations.subscribe ?? noSubscribe, session?.relations.getRevision ?? zero);
+  if (link) return null;
+  const out = leftOutBy(tree, pageId);
+  const snap = session?.relations.snapshot(projectId) ?? null;
+  const typed = !!snap && (snap.registry.scenes.size > 0 || snap.registry.locations.size > 0 || [...snap.registration.roles.values()].some((r) => r.entity?.kind === 'day'));
+  if (!out && !typed) return null;
+  const inherited = !!out && !out.own;
+  const by = inherited ? tree.get(out.pageId)?.title || tr('common.untitled') : '';
+  return (
+    <button
+      role="menuitemcheckbox"
+      className="leave-out"
+      aria-checked={!!out}
+      aria-disabled={inherited || undefined}
+      data-tip={inherited ? tr('leaveOut.inheritedTip', { title: by }) : tr('leaveOut.tip')}
+      onClick={() => {
+        if (inherited) return;
+        onClose();
+        void tree.setSetting(pageId, 'graph', out ? undefined : false).catch((err: unknown) => console.warn('[relaciones] no se pudo cambiar «fuera de las relaciones»', err));
+      }}
+    >
+      <EyeOffIcon />
+      {tr('leaveOut.menu')}
+      <span className="check">{inherited ? tr('type.byFolder') : out ? tr('common.on') : tr('common.off')}</span>
+    </button>
+  );
+}
+
+const noSubscribe = () => () => {};
+const zero = () => 0;

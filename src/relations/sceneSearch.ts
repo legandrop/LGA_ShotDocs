@@ -157,7 +157,9 @@ export function searchLocations(src: SearchSource, query: string, options: { lim
   const add = (name: string, why: LocationOption['why']) => {
     if (!out.some((o) => o.name === name)) out.push({ name, pageId: visible(src, R.locations.get(name)?.pageId), why });
   };
-  for (const h of scan(R, q, { heading: true })) if (h.kind === 'loc') add(h.ref, 'name');
+  // Quien busca en la lupa busca un lugar: los nombres de una palabra («Arenera VA») y los genéricos como parte entera
+  // cuentan como en el título de un día (D536, B1 de la auditoría de E10).
+  for (const h of scan(R, q, { heading: true, dayTitle: true })) if (h.kind === 'loc') add(h.ref, 'name');
   const fq = fold(q);
   // Desde 3 letras: con «la» o «de» subían media lista de locaciones arriba de las páginas (O5 de la auditoría). Por el
   // principio del nombre, y después por el principio de una de sus palabras («alv» → Hotel Alvear).

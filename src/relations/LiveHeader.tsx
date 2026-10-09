@@ -12,6 +12,7 @@ import { useLiveOpen, type FoldKind } from './liveFold';
 import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type OpenQuestion, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
 import { dayGallery, locationGallery, sceneGallery, type Gallery } from './photoGallery';
 import { PhotoSources } from './PhotoSources';
+import { leftOutBy } from './register';
 import './liveHeader.css';
 
 // La cabecera viva de una escena, una locación o un día de rodaje (Docs/Doc_Relaciones.md, secciones 10 y 11; diseño S4
@@ -41,6 +42,10 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   const kind = entity?.kind === 'scene' || entity?.kind === 'location' || entity?.kind === 'day' ? entity.kind : null;
   const ref = kind ? entity!.ref : null;
 
+  // Una escena, locación o día fuera de las relaciones (D541): en lugar de la cabecera, un renglón que lo dice.
+  const outKind = role?.excluded && role.entity && (role.entity.kind === 'scene' || role.entity.kind === 'location' || role.entity.kind === 'day');
+  const out = outKind ? leftOutBy(tree, pageId) : null;
+
   const view = useMemo(() => {
     if (!snap || !kind || !ref) return null;
     const src: LiveSource = { snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) };
@@ -58,6 +63,7 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
     // La foto cambia con cada revisión; el árbol (títulos) también se lee de la foto de esa revisión.
   }, [snap, kind, ref, pageId, revision, tree, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  if (out && snap) return <LeftOutLine by={out.own ? null : out.pageId} />;
   if (!view || !snap) return null;
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta: las ausencias se dicen «you can
   // see» (D401).
@@ -68,6 +74,64 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
     <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
   ) : (
     <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
+  );
+}
+
+/**
+ * Una escena, locación o día que quedó fuera de las relaciones (`graph: false` en ella o en una carpeta de arriba, D541):
+ * un renglón donde iba la cabecera, con la carpeta que la deja afuera (un toque lleva ahí, donde se deshace).
+ */
+function LeftOutLine({ by }: { by: string | null }) {
+  const tr = useT();
+  const tree = useTree();
+  const title = by ? tree.get(by)?.title || tr('common.untitled') : '';
+  return (
+    <section className="lh closed lh-out" aria-label={tr('live.aria')}>
+      <div className="lh-out-line" data-tip={tr(by ? 'live.leftOutByTip' : 'live.leftOutTip')}>
+        <span className="lh-out-t">{tr('live.leftOut')}</span>
+        {by && (
+          <>
+            {' · '}
+            <button className="lh-out-by" onClick={() => navigate(pagePath(by))}>
+              {tr('live.leftOutBy', { title })}
+            </button>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Los nombres escritos que no cuentan (D534): un renglón apagado por nombre, con un toque a la otra locación. Solo si hay.
+ */
+function AliasNotes({ notes, tr }: { notes: LocationLive['aliasNotes']; tr: Translate }) {
+  if (!notes.length) return null;
+  return (
+    <div className="lh-anotes">
+      {notes.map((n) => (
+        <div key={`${n.kind}:${n.alias}`} className="lh-anote" data-tip={tr('live.aliasNoteTip')}>
+          <Ic name="warn" small />
+          <span>
+            {n.kind === 'name' ? tr('live.aliasIsName', { alias: n.alias }) : tr('live.aliasShared', { alias: n.alias })}{' '}
+            {n.others.map((o, i) => (
+              <span key={o.name}>
+                {i > 0 && ', '}
+                {o.pageId ? (
+                  <button className="lh-anote-go" onClick={() => navigate(pagePath(o.pageId!))}>
+                    {o.name}
+                  </button>
+                ) : (
+                  o.name
+                )}
+              </span>
+            ))}
+            {' — '}
+            {tr(n.kind === 'name' ? 'live.aliasNotHere' : 'live.aliasNotEither')}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -772,6 +836,7 @@ function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages:
         </span>
         <Tools kind="location" complete={v.complete} onFold={() => setOpen(false)} foldRef={focus.ref} />
       </div>
+      <AliasNotes notes={v.aliasNotes} tr={tr} />
       <div className="lh-sum2">
         <div className="lh-col">
           <div className="lh-col-h">{tr('live.preproduction')}</div>

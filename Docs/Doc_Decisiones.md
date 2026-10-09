@@ -761,7 +761,7 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   «Lübben» solos no se reconocen hasta que existan los alias de locación (en el título de un día, sí: D417). Revertir:
   volver a sumar el paréntesis y el nombre sin él en `locationFromTitle` (`src/relations/register.ts`).
 - **D417 · El nombre sin paréntesis de una sola palabra vale solo para el lugar de un día por su título** (2026-10-08;
-  re-verificación de E4, R1; decidida por el orquestador, Lega la puede cambiar). Qué pasaba: con D416, tres días
+  re-verificación de E4, R1; decidida sin Lega, la puede cambiar). Qué pasaba: con D416, tres días
   verdaderos según la reorganización perdieron su lugar (D398): «Día 73 | Inquilinato», «Día 78 | Lubben Puente y
   calle» y «Día 79 | Brandemburgo»; sus locaciones decían que ningún día las nombra en el título y sus escenas
   mostraban esos días sin lugar. Los falsos de «Lübben» que motivaron D416 venían del texto del guion, no de títulos de
@@ -1159,6 +1159,76 @@ el tipo de bloque: borra y crea, y pierde lo que otro escribe en él).
 **Elegí A, con B anotado en el roadmap** porque no hay un caso real que lo pida; si aparece, B es seguro y C no.
 **Si preferís otra:** B son 6–9 h reutilizando `prepareDay.ts`.
 
+- **D526 · Los otros nombres de una locación se escriben en su página, como un campo** (2026-10-09; E10): un renglón
+  «Otros nombres: Arenera, Estudio» o la fila «Also known as» / «Otros nombres» de su tabla, leído por `fields.ts`. Es
+  texto del documento: se escribe en el teléfono, anda sin red, se sincroniza y se exporta; una versión vieja lo ve como un
+  renglón. Descartado: un ajuste de la página (invisible en la página y en el `.md`) o una lista central del proyecto.
+- **D527 · Rótulos y separadores** (2026-10-09; E10): `also known as`, `aka`, `a.k.a.`, `other names`, `alias`, `aliases`,
+  `otros nombres`, `también conocida/o como`, `nombres alternativos`; se separan por coma, punto y coma, renglón, viñeta y
+  « · » (`|` y `/` quedan adentro: «Estudio | Autos» es un nombre). Sin comillas ni `?` del final; se ignoran vacíos, «—»,
+  menos de 2 letras, más de 60 caracteres, el nombre propio y repetidos; tope 40 por locación.
+- **D528 · Solo cuenta la página de la locación misma** (2026-10-09; E10): no sus scoutings, ni una ficha o un decorado con
+  una fila «Alias», ni plantillas, papelera o lo que está fuera de las relaciones.
+- **D529 · Dónde vale cada nombre escrito** (2026-10-09; E10): dos palabras o más, en todos lados; una palabra, solo donde
+  se espera un lugar, por palabra; una palabra genérica o corta en minúsculas, solo ahí y como parte entera. Es la regla de
+  D416/D417 aplicada a lo que escribe la gente.
+- **D530 · Dónde «se espera un lugar»** (2026-10-09; E10): el título de un día y el valor de un campo de locación
+  (*Locacion Real*, *Location*, *Locación*; tabla, renglón o título) en cualquier página. *Locacion Guion* no: es el
+  decorado de la historia. La mención sigue siendo de texto (`placeUnits`, clave de caché propia).
+- **D531 · «Parte entera» para un genérico** (2026-10-09; E10): entre el borde o un separador (`|`, `,`, `;`, `/`, `+`,
+  `·`, paréntesis, `:`, « - ») solo espacios o `?!.`. «Estudio | Autos», «Europa ?» sí; «Estudio UnFilm» no.
+- **D532 · Las abreviaturas se resuelven solo con nombres escritos** (2026-10-09; E10): ninguna regla de parecido decide;
+  una regla así solo ordenaría sugerencias en *Link to a location…* (D539).
+- **D533 · Conflictos: nombre > escrito > derivado** (2026-10-09; E10): el nombre de una locación nunca se le da a otra; dos
+  escritos iguales no cuentan para ninguna; un escrito tapa al derivado igual de otra (el nombre sin paréntesis, una parte
+  del título). No depende del orden del árbol.
+- **D534 · El conflicto se avisa en la cabecera de las dos locaciones** (2026-10-09; E10): un renglón apagado con un toque a
+  la otra («“Europa” is also another name of Brandemburgo (Europa) — not used for either»). Pasivo: no salta nada al
+  escribir.
+- **D535 · Los genéricos suman su versión en inglés** (2026-10-09; E10): `studio, europe, center, centre, house`.
+- **D536 · Los nombres escritos se ven en el Map, la lupa, el `/l` y «also written»** (2026-10-09; E10):
+  `LocationEntry.aliases` (y `forms`) son todas las formas, valgan en el texto o solo en un lugar.
+- **D537 · Lo que se está escribiendo se aplica a los 2 s** (2026-10-09; E10): cambiar los nombres obliga a reconocer todo
+  el proyecto; mientras se tipea el renglón se usa lo aplicado antes y se aplica 2 s después del último cambio. Al abrir
+  el proyecto, o la primera vez que se lee una locación, enseguida.
+- **D538 · La plantilla *Location* trae la fila «Also known as» / «Otros nombres»** (2026-10-09; E10): primera fila de su
+  tabla de datos; las versiones viejas la abren igual (una fila más).
+- **D539 · *Link to a location…* desde un día sin lugar** (2026-10-09; E10): en la cabecera del día sin locación y en
+  *Map › Shoot days*: selector con las parecidas arriba (la regla solo ordena), escribe con `addAliasesInDoc` en la
+  locación elegida y avisa con *Open* y *Undo* (saca solo lo agregado y solo si sigue igual). Hecho en la misma tanda.
+- **D540 · *Leave out of relations* en el menú ⋯, debajo de *Type*** (2026-10-09; E10): casilla con `canEditRow` y sin link
+  público; escribe solo `settings.graph`. Aparece si el proyecto tiene escenas, locaciones o días, o si ya hay una marca;
+  heredada de una carpeta: marcada, deshabilitada, «By folder».
+- **D541 · Lo que queda afuera se nota** (2026-10-09; E10): rótulo `LEFT OUT` en el árbol (solo la página marcada) y, en
+  una escena, locación o día de adentro, «Left out of relations · by “90 | Archivo”» donde iba la cabecera.
+- **D542 · Qué nombres se cargan en ERSO** (2026-10-09; E10): solo los que hacen falta (20 en 14 locaciones), sacados de
+  `mapa.json` con un guion, en castellano, primer renglón de cada página; «Centro CABA» no (la verdad dice que no es un
+  lugar), «Mansión Rosenberg» sí (escrita «Rosenberg», D562).
+- **D543 · ERSO se carga con la app, una sola vez y con copia antes** (2026-10-09; E10): ensayo en memoria sin escribir, copia de la
+  base, escribir con `addAliasesInDoc` por el gancho de desarrollo y verificar desde un dispositivo nuevo.
+- **D544 · Cuándo se da por bueno en ERSO** (2026-10-09; E10): faltan ≤ 1 «planeada en», 69 de 70 días con lugar,
+  decorados como la verdad, 0 pares sin respaldo y 0 pares nuevos que la verdad no respalde (revisados uno por uno).
+- **D545 · El subrayado usa el mismo contexto de lugar** (2026-10-09; E10): lo que cuenta en un campo de locación se
+  subraya, y lo que se subraya cuenta.
+- **D556 · «Location (planned)» también es un campo de lugar** (2026-10-09; E10): la plantilla *Scene* trae esa fila;
+  `location planned` y `locacion planeada` se suman a los rótulos de locación, así lo escrito ahí da «planned at».
+- **D557 · El subtítulo del `/l`** (2026-10-09; E10): con todas las formas (D536) podía ser largo; muestra «Location» y
+  hasta dos formas, más «+N» si hay más.
+- **D558 · Escribir los nombres va en su propio módulo** (2026-10-09; E10): `addAliasesInDoc` está en `aliasWrite.ts` y no
+  en `aliases.ts`, para que el índice no cargue el editor. Agrega al renglón o a la celda de la fila (inserción de Yjs sin
+  formato); un campo en forma de título con una lista abajo recibe un renglón nuevo arriba (nunca se reescribe la lista).
+- **D559 · `registerProject` sigue devolviendo lo del título** (2026-10-09; E10): suma `titleLocations` y el índice resuelve
+  ahí lo escrito (`resolveLocationNames`); sin nada escrito el resultado es idéntico al de antes (pruebas de E4 intactas).
+- **D560 · «by» nombra la carpeta más alta que deja afuera** (2026-10-09; E10): como *Create* (G4), es donde se deshace; si
+  la página y una carpeta de arriba tienen la marca, la casilla se ve heredada.
+- **D561 · *Create location* tampoco crea un nombre en conflicto** (2026-10-09; E10): además de las formas, compara con los
+  nombres escritos que no cuentan (D533): son de una locación que existe.
+- **D562 · En ERSO se escribe «Rosenberg», no «Mansión Rosenberg»** (2026-10-09; E10, ensayo): «Mansión Rosenberg» es
+  también el nombre de la historia (el decorado) en una ficha y en el reporte del Día 46; con dos palabras contaba en el
+  texto y daba 3 pares falsos (C10). Con una palabra cuenta solo donde se espera un lugar (el título del Día 54).
+- **D563 · *Link to a location…* solo con permiso de editar la locación** (2026-10-09; E10): el selector lista solo las
+  locaciones cuya página la persona puede editar, y el botón no aparece si no puede editar ninguna (ni con un link
+  público). El texto que se ofrece es la parte de lugar del título sin la fecha, el día ni lo de entre paréntesis.
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

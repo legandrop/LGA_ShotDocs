@@ -89,7 +89,7 @@ interface DocBlock {
 type Editor = BlockNoteEditor;
 
 /** Un editor sin pantalla sobre el documento: y-prosemirror escribe desde la vista, así que se monta escondido. */
-function withEditor<T>(doc: Y.Doc, run: (editor: Editor) => T): T {
+export function withEditor<T>(doc: Y.Doc, run: (editor: Editor) => T): T {
   const editor = BlockNoteEditor.create(
     withCollaboration({ ...editorSchemaOptions, collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'Prepare', color: '#888888' } } }),
   ) as unknown as Editor;
@@ -189,7 +189,7 @@ function topBlocks(doc: Y.Doc): { group: Y.XmlElement; blocks: YBlock[] } | null
 }
 
 /** Un contenedor de bloque con ese id en cualquier lugar del documento (también adentro de otro). */
-function findContainer(doc: Y.Doc, id: string): Y.XmlElement | null {
+export function findContainer(doc: Y.Doc, id: string): Y.XmlElement | null {
   const walk = (node: Y.XmlElement | Y.XmlFragment): Y.XmlElement | null => {
     for (const child of node.toArray()) {
       if (!(child instanceof Y.XmlElement)) continue;

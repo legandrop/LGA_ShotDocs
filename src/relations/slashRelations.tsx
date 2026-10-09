@@ -213,10 +213,12 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
     const items: DefaultReactSuggestionItem[] = options
       .filter((o) => o.pageId && p.src.title(o.pageId) !== undefined)
       .map((o) => {
+        // Todas las formas (D536) pueden ser muchas: hasta dos y cuántas más, para que se lea (D557).
         const aliases = (R.locations.get(o.name)?.aliases ?? []).filter((a) => a !== o.name);
+        const more = aliases.length > 2 ? `+${aliases.length - 2}` : '';
         return {
           title: o.name,
-          subtext: [tr('slash.locationSub'), ...aliases].join(' · '),
+          subtext: [tr('slash.locationSub'), ...aliases.slice(0, 2), more].filter(Boolean).join(' · '),
           group,
           icon: <LocIcon />,
           onItemClick: () => insertPageLink(editor, o.name, o.pageId!),

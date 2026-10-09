@@ -36,7 +36,10 @@ Es la gramática de la maqueta S3/S4 (`engine.js`), portada a TypeScript y medid
   después: años, direcciones, horas, cantidades e ids no cuentan.
 - **Pendiente:** una escena nombrada con una forma fuerte que no existe ni con letra, de un episodio que existe.
 - **Locaciones:** por nombre o alias, palabra entera, sin tildes ni mayúsculas; los genéricos (*Estudio*, *Casa*,
-  *Centro*, *Europa*, *Abril*) y los alias de menos de 4 letras que no van en mayúsculas no se reconocen solos.
+  *Centro*, *Europa*, *Abril* y en inglés *Studio*, *Europe*, *Center*, *Centre*, *House*) y los alias de menos de 4
+  letras que no van en mayúsculas no se reconocen solos. Donde se espera un lugar (el título de un día, el valor de un
+  campo de locación) valen además los nombres de una palabra y los genéricos que la gente escribió en la locación, estos
+  como parte entera (sección 17).
 - **Proyectos sin episodios** (un largo, D383): la escena se escribe con 3 cifras y su letra (`074`, `069A`).
   Cuenta con «Escena/Esc./Sc/Scene» delante (texto o título), como nombre de plano `ABC_074_010`, o como lo primero
   de un título si tiene 3 cifras con ceros (`074`, `074A`), 3 cifras con `|`, `-`, `:`, `.` o nada después
@@ -894,3 +897,88 @@ sección a la escena en el PDF ni en la exportación (un «dossier de escena» e
 exportador). Si algún día se escribe, solo copiar con procedencia y nunca borrar del reporte (D587).
 
 **Decisiones:** D581–D588 en `Doc_Decisiones.md`.
+
+## 17. Otros nombres de una locación y *Leave out of relations* (E10, v0.247)
+
+Cómo le dice el equipo a una locación («Arenera», «Estudio Autos», «Edif Ministe Hall» en el título de un día) lo escribe
+la gente en la página de la locación; la app usa eso y nada que no esté escrito (D526–D545, plan `ALIAS`).
+
+| Pieza | Archivo |
+|---|---|
+| Leer los nombres, niveles y conflictos (puro) | `src/relations/aliases.ts` (`aliasesFromFields`, `resolveLocationNames`, `withBareNames`, `writtenLevel`) |
+| Escribirlos en un documento (solo agrega) | `src/relations/aliasWrite.ts` (`addAliasesInDoc`, `addAliasesToPage`) |
+| El rótulo del campo, las unidades de cada valor, el contexto de lugar | `src/relations/fields.ts` (`FIELD_LABELS.aliases`, `FieldValue.units`, `placeOf`, `placeUnits`) |
+| El nivel «parte entera» del lector | `src/relations/reader.ts` (`wholeAliases`, `locDayTitleAlias[].whole`, `wholePart`, `aliasNotes`, `LocationEntry.forms`) |
+| Antes del registro, con espera de 2 s | `src/relations/relationIndex.ts` (`writtenNow`, `WRITTEN_WAIT_MS`); `pageRelations.ts` (`ctx.place`) |
+| El aviso y lo que quedó afuera | `liveView.ts` (`LocationLive.aliasNotes`), `LiveHeader.tsx` (`AliasNotes`, `LeftOutLine`), `register.ts` (`leftOutBy`) |
+| La casilla y el rótulo | `src/relations/TypeMenu.tsx` (`LeaveOutItem`), `src/ui/menus.tsx`, `src/relations/HoldsTag.tsx` |
+| El subrayado con el mismo contexto | `src/relations/relUnderline.ts` (`metaFromPM` + `placeUnits`) |
+
+**El campo.** Un renglón `Otros nombres: Arenera, Estudio, Estudio Autos` (o `Also known as: …`, `AKA: …`), la fila
+*Also known as* / *Otros nombres* de la plantilla *Location* (primera de su tabla, D538) o un título *Otros nombres* con una
+lista abajo. Se separan por coma, punto y coma, renglón, viñeta y « · »; `|` y `/` quedan adentro del nombre (D527). Solo
+cuenta en la página de la locación misma (D528): no en sus scoutings, ni en una ficha con una fila «Alias».
+
+**Dónde vale cada uno** (D529–D531). Dos palabras o más (`Estudio Autos`, `Pasaje Bar`): en todos lados. Una palabra
+(`Arenera`): solo donde se espera un lugar. Una palabra genérica (`Estudio`, `Europa`, `Studio`…) o corta en minúsculas:
+solo ahí y como **parte entera** del lugar (entre el borde o un separador `| , ; / + · ( ) :` « - », solo espacios o
+`?!.`): «Estudio | Autos», «Europa ?» sí; «Estudio UnFilm», «el estudio de sonido» no. **Donde se espera un lugar**: el
+título de un día de rodaje y el valor de un campo de locación (*Locacion Real*, *Location*, *Locación*, *Location
+(planned)*; la celda del valor, el renglón entero o lo de abajo del título) en cualquier página (D530, D556). *Locacion
+Guion* no: es el decorado de la historia. Así «planned at» de una escena sale de su ficha («Locacion Real | Estudio |
+Autos» → La Arenera), un decorado «Estudio» entra en *Sets* y el Día 34 «Arenera VA» es de La Arenera. La mención es de
+texto como siempre; en el caché, la clave del valor de un lugar (`p`) no se mezcla con la misma frase en un párrafo (`t`).
+
+**Conflictos** (D533, D534). El nombre de una locación nunca se le da a otra; un nombre escrito en dos locaciones no
+cuenta para ninguna; un escrito tapa al derivado igual de otra (el nombre sin paréntesis, una parte del título). Lo que no
+cuenta queda como nota (`Registry.aliasNotes`) y la cabecera de la locación lo dice en un renglón apagado con un toque a la
+otra. Sin nada escrito, todo es exactamente como antes (D416, D417).
+
+**Formas a la vista** (D536). `LocationEntry.aliases` (y `forms`) son todas las formas: el Map («also …»), la lupa, el `/l`
+y «also written» de la cabecera las muestran. El subtítulo del `/l` dice hasta dos y «+N» (D557). *Create location*
+compara con todas, también con los nombres en conflicto (D561).
+
+**Cuándo** (D537). El índice lee los campos de cada página de locación visible y leída antes de armar el registro. Si los
+nombres de una página cambiaron hace menos de 2 s, usa los anteriores y agenda otra pasada: tipear el renglón no reconoce
+el proyecto entero en cada pausa. Al abrir el proyecto, o la primera vez que se lee una locación, se aplican enseguida.
+Un invitado que no ve la página de la locación no recibe sus nombres (ni la locación).
+
+**Escribirlos** (`addAliasesInDoc`, D543, D558). Si la página ya tiene el renglón o la fila, agrega al final lo que falta
+(«, Estudio»), sin formato; si no, inserta `Otros nombres: a, b` como primer bloque con el editor sin pantalla. Lo que ya
+está (sin tildes ni mayúsculas) no se repite; dos dispositivos que agregan a la vez dejan los dos nombres. `addAliasesToPage`
+lo hace con el documento del dispositivo, como *Prepare* (espera 8 s a que baje; si no, `missing`; contenido
+desconocido, `unknown`). Lo usan el guion de carga de ERSO y *Link to a location…*. Lo agregado devuelve cómo deshacerlo
+(`AliasUndo`): el renglón nuevo por su id y su texto, o el tramo agregado por posiciones relativas de Yjs;
+`removeAddedAliasesInDoc` lo saca solo si sigue exactamente igual (si alguien lo tocó, `changed` y no toca nada).
+
+***Link to a location…*** (D539, D563; `aliasAction.ts`, `LinkLocation.tsx`). En la cabecera de un día cuyo título no
+nombra ninguna locación (abierta) y en *Map › Shoot days*, al lado de lo que dice el título («Edif Ministe Hall», sin la
+fecha, el rótulo del día ni lo de entre paréntesis), con permiso de editar alguna locación y nunca con un link público. Abre
+un selector de las locaciones que la persona puede editar, filtrable por cualquier forma; arriba, con «similar», las que se
+parecen (cada palabra del título es el comienzo de una del nombre, sin artículos ni «de»): **la regla solo ordena**
+(D532). Elegir escribe el texto en «Other names» / «Otros nombres» de esa locación (rótulo en el idioma de la app) y
+avisa «Added “Edif Ministe Hall” to Edificio Ministerial Hall» con *Open* y *Undo*; si la página no está en el dispositivo
+y no baja en 8 s, «Open … once with a connection».
+
+***Leave out of relations*** (D540, D541, D560). Casilla en el menú ⋯ de la página, debajo de *Type*, con permiso de
+cambiar la fila y nunca con un link público; aparece si el proyecto tiene escenas, locaciones o días, o si ya hay una
+marca. Marcar escribe solo `settings.graph = false` (la base fusiona por clave); desmarcar saca la clave. Lo de adentro de
+una página marcada la muestra marcada, deshabilitada, «By folder», con el tooltip de la carpeta. El árbol rotula `LEFT
+OUT` solo la página marcada. Una escena, locación o día que quedó afuera muestra, donde iba la cabecera, «Left out of
+relations» y, si es por una carpeta, «· by “90 | Archivo”» (la más alta con la marca), con un toque a esa carpeta.
+
+**Pruebas.** `aliases.test.ts` (leer, niveles, conflictos, escribir: idempotente, solo agrega, renglón, fila vacía y con
+algo, sin estirar la negrita, dos documentos a la vez), `aliasIndex.test.ts` (de dónde salen, invitado, plantilla, lo que
+cambian en fichas, días, decorados y notas, los 2 s con temporizadores falsos, la locación recién leída), `reader.test.ts`
+(parte entera, una palabra, inglés), `fields.test.ts` (rótulos, `units`, `placeUnits` con la ficha de BD Main),
+`relUnderline.test.ts` (la celda de lugar se subraya; el párrafo y *Locacion Guion*, no), `leaveOut.test.tsx` (la casilla
+escribe solo `graph`, heredada, sin tipos, invitado que ve; el rótulo; las cabeceras; *Link to a location…* de punta a
+punta con *Undo*), `aliasAction.test.ts` (la parte del título, el parecido que solo ordena, el filtro y el permiso),
+`builtin.test.ts` (la fila en EN y ES, escrita con `addAliasesInDoc`). Arnés `src/dev/relaciones-motor.html`: «Puerto Norte» con `Otros nombres: Muelle
+Norte, Puerto` y la ficha de 101_027 con `Locacion Real: Puerto`.
+
+**ERSO.** La carga (20 nombres en 14 locaciones, D542) se hizo el 2026-10-09 con `addAliasesInDoc`, después del ensayo
+en memoria y la copia de la base (D543, D544), y se verificó desde un dispositivo nuevo: la meta de D544 se cumple
+entera (faltan 0 «planeada en», 69 de 70 días con lugar, decorados como la verdad, 0 relaciones sin respaldo).
+
+**Decisiones:** D526–D545 y D556–D563 en `Doc_Decisiones.md`.

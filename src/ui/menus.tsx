@@ -56,7 +56,7 @@ import { asAction, tipRows } from './tipRows';
 import { askSignOut, askSignOutOthers, openAssistantSettings } from '../assistant/assistantUi';
 import { hasAssistantKey } from '../assistant/keyStore';
 import { voiceLeftovers } from '../dictation/leftovers';
-import { TypeMenuItem, TypeSubmenu } from '../relations/TypeMenu';
+import { LeaveOutItem, TypeMenuItem, TypeSubmenu } from '../relations/TypeMenu';
 import { markFolderHolds } from '../relations/entitySync';
 
 /**
@@ -434,6 +434,7 @@ export function PageMenu(props: {
         </button>
       )}
       {canEditRow && <TypeMenuItem pageId={props.pageId} onOpen={() => setTypeOpen(true)} />}
+      {canEditRow && <LeaveOutItem pageId={props.pageId} onClose={props.onClose} />}
       <hr />
       {item(tr('pageMenu.trash'), <TrashIcon />, props.onTrash, true, canManage)}
       {!canEdit && perms.known && (
