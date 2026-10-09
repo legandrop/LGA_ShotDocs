@@ -1,0 +1,617 @@
+/* El mapa del proyecto (Docs/Doc_Relaciones.md, sección 12). Medidas y tonos de la maqueta aprobada (S4 «D»,
+   `e_mapa.html`), con los colores por tipo de entidad de la cabecera viva (liveHeader.css). Prefijo mp-. */
+
+.mp {
+  width: 100%;
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 40px var(--gutter) 30vh;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.mp a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mp .mono {
+  font-family: var(--mono);
+}
+
+.mp-i {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+.mp-i.s {
+  width: 13px;
+  height: 13px;
+}
+
+.mp-title {
+  margin: 0 0 6px;
+  font-family: var(--title-font);
+  font-weight: var(--title-weight);
+  font-size: var(--title-size);
+  letter-spacing: var(--title-tracking);
+  line-height: var(--title-leading);
+  color: var(--text);
+}
+
+.mp-lede {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.mp-reading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  font: 11px var(--mono);
+  color: var(--faint);
+}
+
+.mp-reading i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: mp-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes mp-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-reading i {
+    animation: none;
+  }
+}
+
+.mp-empty {
+  margin: 16px 0;
+  color: var(--muted);
+}
+
+/* --- Barra: pestañas, copiar, filtro ----------------------------------------------------------------------------- */
+
+.mp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mp-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--seg-bg);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+
+.mp-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mp-tab b {
+  font: 500 11px var(--mono);
+  color: var(--faint);
+}
+
+.mp-tab:hover {
+  color: var(--text);
+}
+
+.mp-tab.on {
+  background: var(--seg-active);
+  border-color: var(--seg-active-border);
+  color: var(--text);
+}
+
+.mp-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.mp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font: 500 13px var(--font);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mp-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.mp-filter {
+  flex: 1 1 220px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--faint);
+  min-width: 0;
+}
+
+.mp-filter input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: 13px var(--font);
+  padding: 0;
+  height: 100%;
+}
+
+.mp-filter:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.mp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mp-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* --- Tablas ------------------------------------------------------------------------------------------------------- */
+
+.mp-grid {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.mp-grid .head {
+  font: 500 11px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  background: none;
+}
+
+.mp-link:hover {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mp-none {
+  color: var(--faint);
+}
+
+/* Locations: nombre | cuántas | línea de tiempo */
+.mp-lrow {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+  padding: 4px 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.mp-lrow.head {
+  border-top: 0;
+  min-height: 32px;
+}
+
+.mp-lrow:not(.head):hover {
+  background: var(--hover);
+}
+
+.mp-nm {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text);
+}
+
+.mp-nm > .mp-i {
+  color: var(--lh-loc-fg);
+}
+
+.mp-nm a,
+.mp-nm > span:not(.mp-sc) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.mp-sc {
+  display: inline-flex;
+  color: var(--lh-scout-fg);
+}
+
+.mp-ct {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mp-ct b {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.mp-months,
+.mp-tl {
+  position: relative;
+  height: 22px;
+  min-width: 0;
+}
+
+.mp-months span {
+  position: absolute;
+  top: 3px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.mp-tick {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-left: 1px dashed var(--border);
+}
+
+.mp-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lh-loc-fg);
+  border: 1.5px solid var(--lh-loc-fg);
+}
+
+.mp-dot.e {
+  background: var(--surface);
+}
+
+.mp-dots {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  gap: 2px;
+  /* El centro del primer punto cae en su fecha; los de al lado siguen a la derecha. */
+  transform: translate(-5.5px, -50%);
+}
+
+.mp-dots .mp-dot {
+  width: 11px;
+  height: 11px;
+  cursor: pointer;
+}
+
+.mp-dots .mp-dot:hover {
+  box-shadow: 0 0 0 3px var(--lh-loc-bg);
+}
+
+.mp-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.mp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--lh-scene-line);
+  background: var(--lh-scene-bg);
+  color: var(--lh-scene-fg);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.mp-chip.loc {
+  border-color: var(--lh-loc-line);
+  background: var(--lh-loc-bg);
+  color: var(--lh-loc-fg);
+}
+
+.mp-chip.out {
+  background: none;
+  border-style: dashed;
+}
+
+.mp-chip .n {
+  font: 11px var(--mono);
+  opacity: 0.75;
+}
+
+/* Scenes y Days: tablas de cuatro columnas */
+.mp-srow,
+.mp-drow {
+  display: grid;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+
+.mp-srow {
+  grid-template-columns: 82px minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 0.8fr);
+}
+
+.mp-drow {
+  grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.mp-srow.head,
+.mp-drow.head {
+  border-top: 0;
+  padding-top: 9px;
+  padding-bottom: 7px;
+}
+
+.mp-srow:not(.head):hover,
+.mp-drow:not(.head):hover {
+  background: var(--hover);
+}
+
+.mp-ghead {
+  padding: 10px 14px 6px;
+  border-top: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  font: 500 11px var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mp-code {
+  font-size: 12.5px;
+  color: var(--lh-scene-fg);
+}
+
+.mp-date {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mp-st,
+.mp-dt {
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mp-ls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.mp-lt i {
+  font-style: normal;
+  color: var(--faint);
+}
+
+.mp-lt.shot {
+  color: var(--lh-loc-fg);
+}
+
+.mp-dd {
+  min-width: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.mp-tag {
+  margin-left: 8px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: 10px var(--mono);
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+/* --- Pending ---------------------------------------------------------------------------------------------------- */
+
+.mp-pend {
+  display: grid;
+  gap: 8px;
+}
+
+.mp-pcard {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.mp-ph {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.mp-pact {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.mp-pact:empty {
+  display: none;
+}
+
+.mp-pw {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.mp-plink {
+  font: inherit;
+  color: var(--accent-text);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mp-plink:hover {
+  text-decoration: underline;
+}
+
+.mp-q {
+  color: var(--text-2);
+}
+
+.mp-pnote {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.mp-warn {
+  display: inline-flex;
+  color: var(--warn);
+}
+
+.mp-foot2 {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+/* --- Teléfono: sin scroll horizontal --------------------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .mp {
+    padding: 22px 16px 30vh;
+  }
+
+  .mp-title {
+    font-size: 30px;
+  }
+
+  .mp-filter {
+    flex-basis: 100%;
+  }
+
+  .mp-lrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'nm ct' 'tl tl';
+    row-gap: 4px;
+    padding: 8px 12px;
+  }
+
+  .mp-lrow .mp-nm {
+    grid-area: nm;
+  }
+
+  .mp-lrow .mp-ct {
+    grid-area: ct;
+  }
+
+  .mp-lrow .mp-tl {
+    grid-area: tl;
+  }
+
+  .mp-lrow.head {
+    display: none;
+  }
+
+  .mp-srow,
+  .mp-drow {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 3px 10px;
+    padding: 9px 12px;
+  }
+
+  .mp-srow .mp-ls,
+  .mp-srow .mp-dd,
+  .mp-drow .mp-ls,
+  .mp-drow .mp-dd {
+    grid-column: 2;
+    font-size: 12.5px;
+  }
+
+  .mp-srow.head,
+  .mp-drow.head {
+    display: none;
+  }
+
+  .mp-ghead {
+    padding: 9px 12px 5px;
+  }
+}

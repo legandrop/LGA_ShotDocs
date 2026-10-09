@@ -16,6 +16,7 @@ import { history } from '../i18n/lazy/history';
 import { importArchive } from '../i18n/lazy/importArchive';
 import { importCoda } from '../i18n/lazy/importCoda';
 import { installDialog } from '../i18n/lazy/install';
+import { map } from '../i18n/lazy/map';
 import { oauthConsent } from '../i18n/lazy/oauthConsent';
 import { offline } from '../i18n/lazy/offline';
 import { projectStates } from '../i18n/lazy/projectStates';
@@ -146,6 +147,7 @@ const DICT = Object.assign(
   importArchive,
   importCoda,
   installDialog,
+  map,
   oauthConsent,
   offline,
   projectStates,

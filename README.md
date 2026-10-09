@@ -247,6 +247,9 @@ In development. What works today:
 - Scenes, locations and shoot days: *Type* in a folder's menu sets what's created inside it, the folder shows a small
   SCENES, LOCATIONS or SHOOT DAYS label, and its pages are marked as such, with the scene number taken from the title
   (`101_074`). A scene's breakdown cards, a location's scouts and a day's plan count as part of it.
+- *Map*, above the pages: every location in time, every scene with where a report has a section of it, the shoot days
+  and what's still pending, built from what the pages say; *Copy map* and *Copy JSON* hand it to an assistant, and the
+  search finds a scene by any form of its number (`101-074`, `1074`, `5027b`) or a location by name, first.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
 Connecting other AI apps (MCP) comes later. The plan, the decisions and the roadmap are in

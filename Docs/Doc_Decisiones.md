@@ -886,6 +886,54 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   segundo de atraso o no haber leído lo que llegó por sincronización: con ella, preparar dos veces seguidas duplicaría.
 - **D445 · La barra *Today* sobre el teclado y la ficha-chip del link quedan para E6/E7** (2026-10-08; E5). E5 escribe
   el link con la marca `link` de siempre; cómo se dibuja un link a una escena es del subrayado y de `/`.
+- **D486 · El mapa se abre desde una fila *Map* arriba de *Pages* en la barra lateral, en `/map/<pestaña>`**
+  (2026-10-08; E9, Lega la puede cambiar). Como la maqueta; solo en un proyecto con escenas, locaciones o días (en uno
+  sin tipos sería una pantalla vacía) y con «N pending» solo si hay alguno. Cada pestaña tiene su dirección (se puede
+  volver con atrás y abrir aparte). La otra opción: un ítem del menú del proyecto (más escondido).
+- **D487 · El mapa se arma en una sola pasada (`projectMap`) con las reglas de la cabecera viva** (2026-10-08; E9):
+  «filmada» = una sección de un reporte; la locación de un día, la de su título (D398); «planeada en», lo que nombra su
+  desglose (D393). Armar la cabecera de cada una de las 226 escenas y 52 locaciones repetía la pasada entera cada vez.
+- **D488 · *Locations*: «N scenes» = las que planea su desglose más las que tienen sección en uno de sus días; punto
+  lleno = el reporte tiene un renglón escrito que no es un título, o fotos** (2026-10-08; E9). Ordenadas por su primer
+  día; las que no tienen días, al pie; un día sin fecha en el título no tiene punto. Con 0 escenas dice solo los días.
+- **D489 · *Scenes* va por episodio; sin sección dice «in a plan» o «No report section», nunca «not shot»**
+  (2026-10-08; E9). Las locaciones de cada escena, rotuladas «report» (un día suyo tiene una sección) o «planned».
+- **D490 · *Pending* junta los números que no existen, las escenas en dos páginas y las secciones con fotos sin número;
+  sin *Create* ni *Assign*** (2026-10-08; E9). Crear y asignar con guardas es de E7: cada fila (`PendingRow`) tiene una
+  ranura `actions` vacía para eso. Las duplicadas van acá para que E7 no arme otra lista.
+- **D491 · Mientras el índice lee, el mapa dice «Reading 340 of 921…» y no muestra ceros** (2026-10-08; E9), como la
+  cabecera (D402): los números de las pestañas aparecen si no son cero o si ya está todo leído.
+- **D492 · *Copy map* copia texto legible y *Copy JSON* el formato `shotdocs.map` versión 1; sin descargar un archivo**
+  (2026-10-08; E9, Lega la puede cambiar). La maqueta tenía un botón que bajaba `erso_map.json`. El texto (48 KB en
+  ERSO) es lo que se pega en un chat; el JSON (538 KB, compacto, páginas una vez con `pageUrl`) es para un programa o el
+  MCP. Formato documentado en `Doc_Relaciones.md`, sección 12.
+- **D493 · La lupa pone arriba *Scenes and locations*: escenas solo por su número (cualquier forma, con el lector),
+  locaciones por nombre o parte, y un número que no existe solo si alguna página lo nombra** (2026-10-08; E9). El título
+  de una escena no la sube al grupo: ya sale en *Pages* y empujaría la búsqueda de texto. «Escena 27»: el episodio de la
+  página abierta primero, después los demás. Con una entidad no se ofrece «New project».
+- **D494 · La búsqueda de escenas es una función pura en `src/relations/sceneSearch.ts`** (`searchScenes(src, q, { ep,
+  near, limit, loose })`, `searchLocations`, `findEntities`; 2026-10-08; E9), la misma para la lupa y, desde E7, para el
+  `/`, *Add scene* de *Tomorrow* y *Assign*: exacto por el lector, después los dígitos, después el título.
+- **D495 · Con un link público no hay mapa** (2026-10-08; E9): el visitante no tiene tipos de página (D381); `/map` lleva
+  a la página compartida.
+- **D496 · El mapa no tiene atajo propio** (2026-10-08; E9): la fila de la barra lateral y la lupa alcanzan; no se suma
+  nada al registro de atajos.
+- **D497 · En la lupa, un número de 4 cifras solo se lee como la forma compacta** (2026-10-08; E9): lo escrito se lee como
+  un título, así que `2025` es la escena `102_025` si existe; las páginas que dicen «2025» siguen abajo. La otra opción
+  (pedir letra o «Escena») rompería `1074` y `5027`, que son lo que se escribe en los reportes.
+- **D498 · Quien ve una parte del proyecto nunca lee que una escena «no existe»** (2026-10-08; E9, auditoría O1): el
+  número nombrado que no está en su registro dice «isn’t in the pages you can see» en *Pending*, la cabecera del día y la
+  lupa; el texto copiado lo pone bajo «Scene numbers named that are not in the pages I can see» y el JSON lleva
+  `scope: "visible"`. Puede existir en una página que no ve (D401).
+- **D499 · En la línea de tiempo, los días que se tocarían van juntos, uno al lado del otro** (2026-10-08; E9, O3): se
+  mide el ancho de la línea (13 px por punto); cada día sigue siendo su propio link. Un día se suma al grupo si cae antes
+  de donde termina el grupo ya dibujado, no solo cerca del día anterior (si no, a 390 px un grupo largo tapaba 2 de 58
+  días). La otra opción (una pastilla con un menú) pide un clic más.
+- **D500 · Los números de *Pending* van separados en el JSON y la fila *Map* usa el total de la pestaña** (2026-10-08;
+  E9, O4): `counts.pending`, `duplicates` y `unnumbered`, cada uno el largo de su lista (antes `pending: 8` con
+  `pending: []`); la barra lateral y la pestaña dicen el mismo número.
+- **D501 · En la lupa, las locaciones por una parte del nombre solo desde 3 letras y por el principio de una palabra**
+  (2026-10-08; E9, O5): con «la» o «de» subían media lista arriba de las páginas.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

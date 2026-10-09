@@ -6693,6 +6693,53 @@ button.primary.danger {
   margin-top: 4px;
 }
 
+/* Escenas y locaciones primero en la lupa (Docs/Doc_Buscar.md, «Escenas y locaciones primero»). */
+.search-entity-chip {
+  flex: none;
+  max-width: 55%;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--accent-text);
+  font: 500 12.5px var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-entity-chip.loc {
+  font-family: var(--font);
+  border-color: var(--border);
+  background: none;
+  color: var(--ok);
+}
+
+.search-entity-chip.pending {
+  background: none;
+  border-style: dashed;
+}
+
+.search-entity-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.search-entity-why {
+  flex: none;
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .search-entity-why {
+    display: none;
+  }
+}
+
 .search-page svg {
   flex: none;
   color: var(--muted-2);

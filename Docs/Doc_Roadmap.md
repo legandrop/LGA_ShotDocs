@@ -61,7 +61,7 @@ listas generadas y fechadas; para que se sostenga en los proyectos nuevos, la ap
 2. **Selector de escena al escribir**, que conozca los nombres alternativos de la primera línea de cada escena.
 3. **Plantillas *Escena*, *Locación* y *Scouting***, y *New day report* con la locación en el título.
 4. **Galería por fuente** en la escena y en la locación (fotos de sus scoutings y días), como vista, sin copiar bloques.
-5. **Mapa vivo** del proyecto.
+5. **Mapa vivo** del proyecto. **Hecho en v0.242** (E9, `Doc_Relaciones.md`, sección 12), con *Copy map* / JSON.
 6. **«Repartir por escenas» un reporte**, con prueba de conservación y deshacer. Los encabezados con solo el número,
    las escenas en títulos de segundo nivel y las secciones que no son de una escena no se reparten solos.
 
@@ -131,6 +131,15 @@ escena (mostrar el título en vivo de otro modo, o al final del renglón); (8) O
 escenas, el texto que otro escribe sin red en una copia repetida que *Prepare* saca queda bajo la última sección de la
 tanda y no de la suya (la escena equivocada pasa a «shot»); (9) O-b: lo que otro escribe en el TÍTULO preparado
 mientras se hace *Undo* (ventana de segundos) se pierde con el título.
+
+**Anotado en la v0.242 (relaciones en vivo, el mapa y la lupa):** hecho el punto (2) de «ERSO en vivo» (⌘K con las otras
+formas del número, la escena primero). Queda: (1) *Create* y *Assign* en *Map › Pending* (E7, en la ranura `actions` de
+`PendingRow`); (2) los títulos de día con un nombre de lugar que el registro no tiene: en ERSO 13 de 73 días quedan sin
+locación en el mapa («Estudio Autos», «Arenera VA», «Centro CABA», «Mansión Rosenberg»), y *La Arenera (estudio)* muestra
+2 días de 8 (los alias que escriba la gente, punto (3) de arriba); (3) el JSON del mapa de ERSO pesa 538 KB (el texto, 48
+KB): para un chat sirve el texto; el asistente de la app podría recibir el mapa como contexto sin copiar y pegar, y el MCP
+(P.24) servirlo por partes (una escena, una locación); (4) en la lupa, un número de 4 cifras solo (`2025`, `2026`) se lee
+como una escena si existe (D497; O8 de la auditoría: no elegirla de entrada si parece un año).
 
 ### A. Plan de workspaces (D-17, D-18)
 

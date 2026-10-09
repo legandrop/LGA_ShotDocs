@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/search';
-import { navigate, pagePath } from '../router';
+import { mapPath, navigate, pagePath, useRoute } from '../router';
+import { pendingRelations } from '../relations/relationIndex';
+import { findEntities, type EntityHit } from '../relations/sceneSearch';
 import { normalize } from '../search/normalize';
 import { nameMatches, parseWords, rangesOf, titlesOnly, type PageHit, type SearchWord, type Snippet } from '../search/projectIndex';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
@@ -12,6 +14,7 @@ import { useCurrentProject, useSwitchProject } from './project';
 import { Monogram } from './ProjectSwitcher';
 import { ReplaceResults } from './ProjectReplace';
 import { searchSession, type ResultRequest } from './projectSearchUi';
+import { existingRelationsSession } from './relationsUi';
 import { redoReplace, undoReplace, useReplaceSession } from './replaceUi';
 import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
 
@@ -33,11 +36,15 @@ const PROJECT_LIMIT = 5;
 export const PROJECT_NAME_MAX = 200;
 
 type Item =
+  | { kind: 'entity'; id: string; entity: EntityHit }
   | { kind: 'project'; id: string; project: ProjectRow }
   | { kind: 'create'; id: string; name: string }
   | { kind: 'page'; id: string; hit: PageHit }
   | { kind: 'snippet'; id: string; hit: PageHit; snippet: Snippet }
   | { kind: 'more'; id: string };
+
+const noSubscribe = () => () => undefined;
+const zero = () => 0;
 
 /** El texto con lo encontrado resaltado. */
 function Highlight({ text, ranges }: { text: string; ranges: [number, number][] }) {
@@ -86,6 +93,13 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
   const going = useRef(false);
   const indexRevision = useSyncExternalStore(index.subscribe, index.getRevision);
   const treeRevision = tree.getRevision();
+  // Escenas y locaciones primero (Docs/Doc_Buscar.md, «Escenas y locaciones primero»): con el mismo lector que el texto
+  // y la foto del índice de relaciones (solo lo que la persona ve). Con un link público no hay relaciones.
+  const relations = existingRelationsSession(services)?.relations ?? null;
+  const relationsRevision = useSyncExternalStore(relations?.subscribe ?? noSubscribe, relations?.getRevision ?? zero);
+  const route = useRoute();
+  const openPage = route.name === 'page' ? route.id : null;
+  const partialView = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
   // Reemplazar en el proyecto (Docs/Doc_Buscar.md, "Reemplazar en el proyecto"): la flecha, solo con los permisos
   // conocidos y alguna página que se pueda editar (sin datos de permisos todo daría "puede": corrección 3).
   const { session: replace, ui: replaceUi } = useReplaceSession();
@@ -127,6 +141,15 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [index, indexRevision, treeRevision, projectId, searched, limit],
   );
+  const entities = useMemo(() => {
+    const snap = relations?.snapshot(projectId);
+    if (!snap || !searched.trim()) return [];
+    // «Escena 27» o «27»: primero en el episodio de la página abierta.
+    const ep = openPage ? (snap.registration.roles.get(openPage)?.ep ?? null) : null;
+    const named = new Set(pendingRelations(snap).map((p) => p.ref));
+    return findEntities({ snap, title: (id) => tree.get(id)?.title }, searched, { ep, limit: 6, named });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relations, relationsRevision, treeRevision, projectId, searched, openPage]);
   const info = index.info(projectId);
   const words = parseWords(searched);
   const typed = words.length > 0;
@@ -165,10 +188,13 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     query === searched &&
     !info.building &&
     info.missing === 0 &&
+    // Un número de escena o una locación que existe no es el nombre de un proyecto nuevo.
+    entities.length === 0 &&
     !allProjects.some((p) => nameMatches(p.name, words));
 
   const items: Item[] = [];
   // Con el reemplazo desplegado, la lista es la de cambios (ProjectReplace.tsx), no estas opciones.
+  if (!replacing) for (const e of entities) items.push({ kind: 'entity', id: `search-entity-${e.kind}-${e.ref}`.replace(/\s+/g, '_'), entity: e });
   if (!replacing) for (const p of projects) items.push({ kind: 'project', id: `search-project-${p.id}`, project: p });
   if (typed && !replacing) {
     for (const hit of results.hits) {
@@ -207,7 +233,17 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
 
   const activate = (item: Item | undefined) => {
     if (!item) return;
-    if (item.kind === 'project') {
+    if (item.kind === 'entity') {
+      const e = item.entity;
+      // Una escena o locación abre su página; un número que no existe, *Map › Pending*.
+      if (e.pageId) go({ pageId: e.pageId, term: null });
+      else {
+        going.current = true;
+        onGo?.();
+        onClose();
+        navigate(mapPath('pending'));
+      }
+    } else if (item.kind === 'project') {
       going.current = item.project.id !== projectId;
       onGo?.();
       onClose();
@@ -363,6 +399,33 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
             {typed ? tr('search.count', { count: results.total }) : ''}
           </p>
           <div id="search-results" role="listbox" aria-label={tr('search.label')}>
+            {!replacing && entities.length > 0 && (
+              <div className="search-group" role="group" aria-label={tr('search.entities')}>
+                <span className="mono-label search-section" aria-hidden="true">
+                  {tr('search.entities')}
+                </span>
+                {entities.map((e) =>
+                  option(
+                    itemOf((i) => i.kind === 'entity' && i.entity === e),
+                    'search-entity',
+                    <>
+                      <span className={`search-entity-chip ${e.kind}`}>{e.ref}</span>
+                      <span className="search-entity-title">{e.title}</span>
+                      <span className="search-entity-why muted">
+                        {e.kind === 'loc'
+                          ? tr('search.entLocation')
+                          : e.kind === 'pending'
+                            ? // Quien ve una parte del proyecto no puede saber si existe (D401).
+                              tr(partialView ? 'search.entPendingSeen' : 'search.entPending')
+                            : e.episode
+                              ? tr('search.entSceneEp', { ep: e.episode })
+                              : tr('search.entScene')}
+                      </span>
+                    </>,
+                  ),
+                )}
+              </div>
+            )}
             {projects.length > 0 && (
               <div className="search-group" role="group" aria-label={tr('search.projects')}>
                 <span className="mono-label search-section" aria-hidden="true">
@@ -444,7 +507,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
                 </>,
               )}
           </div>
-          {typed && results.total === 0 && !info.building && <p className="search-empty muted">{tr('search.none')}</p>}
+          {typed && results.total === 0 && entities.length === 0 && !info.building && <p className="search-empty muted">{tr('search.none')}</p>}
         </div>
         )}
         {!replacing && <p className="search-footer muted">{tr('search.keys')}</p>}

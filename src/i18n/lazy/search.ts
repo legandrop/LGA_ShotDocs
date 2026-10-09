@@ -12,6 +12,13 @@ export const search = {
   },
   'search.projects': { en: "Projects", es: "Proyectos" },
   'search.pages': { en: "Pages", es: "Páginas" },
+  // Escenas y locaciones primero (Docs/Doc_Buscar.md, «Escenas y locaciones primero»).
+  'search.entities': { en: "Scenes and locations", es: "Escenas y locaciones" },
+  'search.entScene': { en: "Scene", es: "Escena" },
+  'search.entSceneEp': { en: "Scene · Episode {ep}", es: "Escena · Episodio {ep}" },
+  'search.entLocation': { en: "Location", es: "Locación" },
+  'search.entPendingSeen': { en: "Not in the pages you can see · Map › Pending", es: "No está en las páginas que ves · Mapa › Pendientes" },
+  'search.entPending': { en: "Doesn’t exist yet · Map › Pending", es: "Todavía no existe · Mapa › Pendientes" },
   'search.none': { en: "No results in this project", es: "Sin resultados en este proyecto" },
   'search.searching': { en: "Searching…", es: "Buscando…" },
   'search.missingOnline': {

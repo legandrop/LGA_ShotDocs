@@ -25,6 +25,8 @@ export type Route =
   | { name: 'home' }
   | { name: 'page'; id: string }
   | { name: 'trash' }
+  // El mapa del proyecto abierto (Docs/Doc_Relaciones.md, sección 12): locaciones, escenas, días y pendientes.
+  | { name: 'map'; tab: MapTab }
   // La dirección fija de un archivo (P.30, Docs/Doc_Links_PDF.md): la clave local del workspace y el id del archivo.
   | { name: 'file'; localKey: string; id: string }
   // La página de práctica (P.13, Docs/Doc_Tutorial.md): en memoria, no es una página del árbol.
@@ -39,6 +41,14 @@ export type Route =
   // OAuth de cada Supabase es `/oauth/consent/<ref>`; el ref elige el workspace (la app es una para todos).
   | { name: 'oauthConsent'; projectRef: string };
 
+export type MapTab = 'locations' | 'scenes' | 'days' | 'pending';
+export const MAP_TABS: readonly MapTab[] = ['locations', 'scenes', 'days', 'pending'];
+
+/** La dirección del mapa del proyecto, en una pestaña (`/map`, `/map/scenes`…). */
+export function mapPath(tab: MapTab = 'locations'): string {
+  return tab === 'locations' ? '/map' : `/map/${tab}`;
+}
+
 export const PRIVACY_PATH = '/privacy';
 export const TERMS_PATH = '/terms';
 export const STORAGE_TEST_PATH = '/storage-test';
@@ -51,6 +61,8 @@ export function parseRoute(pathname: string): Route {
   const page = /^\/p\/([^/]+)\/?$/.exec(pathname)?.[1];
   if (page && UUID.test(page)) return { name: 'page', id: page };
   if (pathname === '/trash') return { name: 'trash' };
+  const map = /^\/map(?:\/([a-z]+))?\/?$/.exec(pathname);
+  if (map) return { name: 'map', tab: MAP_TABS.includes(map[1] as MapTab) ? (map[1] as MapTab) : 'locations' };
   const file = /^\/f\/([a-z0-9_-]{4,64})\/([^/]+)\/?$/.exec(pathname);
   if (file && UUID.test(file[2])) return { name: 'file', localKey: file[1], id: file[2].toLowerCase() };
   if (pathname === PRACTICE_PATH || pathname === PRACTICE_PATH + '/') return { name: 'practice' };

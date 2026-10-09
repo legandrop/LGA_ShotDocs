@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.242 :
+
+No había un mapa del proyecto ni para la persona ni para un asistente, y la lupa no encontraba una escena: `101-074` no daba nada y `101_074` traía antes una ficha. Ahora la fila *Map* de la barra lateral abre *Locations* en el tiempo, *Scenes* por episodio, *Shoot days* y *Pending* (números que no existen, escenas en dos páginas, secciones con fotos sin número), armados con el índice en el dispositivo, con las reglas de la cabecera viva y sin afirmar ceros mientras lee; cada fila lleva a su página o a la sección. *Copy map* (texto) y *Copy JSON* (`shotdocs.map` v1, documentado) llevan solo lo que se ve. ⌘K pone primero la escena o la locación con el mismo lector (`src/relations/sceneSearch.ts`, también para E7). Quien ve una parte lee «not in the pages you can see», nunca «no existe»; los días cercanos van juntos en la línea sin taparse. D486–D501. `typeMenu.test.tsx` espera con `shown()` en vez de 30 ms fijos (fallaba con la máquina cargada).
+
+[Mostrar el mapa del proyecto con locaciones en el tiempo, escenas, días y pendientes, copiarlo para un asistente y encontrar una escena por cualquier forma de su número]
+
 v0.241 :
 
 Un reporte del día no decía qué escenas tenía ni ayudaba a preparar el de mañana: la cabecera viva solo existía para escenas y locaciones. Ahora el día muestra sus escenas por los títulos de sección («shot», «prepared» si está vacía, «planned · no section»; la sección general no cuenta), las preguntas abiertas, de dónde sale el plan y la tarjeta *Tomorrow*, ajustable. *Prepare tomorrow's report* solo agrega al final del día siguiente «Escena 105_029» con el link; no duplica, no pisa y *Undo* saca solo lo vacío (si ya subió, solo los títulos). El editor muestra el título de la escena y su pregunta abierta como vista. Ir a una sección espera a que carguen las fotos de arriba. Preparado en dos dispositivos a la vez: preparar de nuevo saca el título repetido vacío. D429–D445.

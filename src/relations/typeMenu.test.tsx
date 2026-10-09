@@ -9,6 +9,7 @@ import { PageMenu } from '../ui/menus';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { placedEntity } from './entitySync';
 import { HoldsTag } from './HoldsTag';
+import { shown } from '../test/shown';
 
 // *Type* en el menú de la página y el rótulo de la carpeta en el árbol (Doc_Estructura_Proyecto.md, «Tipo de página»).
 
@@ -70,7 +71,6 @@ function mount(device: Device, server: FakeServer, node: React.ReactNode): HTMLE
   return host;
 }
 
-const wait = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)));
 const button = (host: HTMLElement, label: string) => [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith(label));
 
 function menu(device: Device, server: FakeServer, pageId: string, closed: { n: number }) {
@@ -105,12 +105,13 @@ describe('Type en el menú de la página', () => {
     expect(button(host, 'Scenes')?.getAttribute('aria-checked')).toBe('false');
     expect(button(host, 'Nothing in particular')?.getAttribute('aria-checked')).toBe('true');
     act(() => button(host, 'Scenes')!.click());
-    await wait(30);
-    expect(closed.n).toBe(1);
-    expect(device.tree.get(folder)?.settings?.holds).toBe('scene');
-    expect(device.tree.get(scene)?.settings?.entity).toEqual({ kind: 'scene', code: '101_074' });
+    await shown(() => {
+      expect(closed.n).toBe(1);
+      expect(device.tree.get(folder)?.settings?.holds).toBe('scene');
+      expect(device.tree.get(scene)?.settings?.entity).toEqual({ kind: 'scene', code: '101_074' });
+      expect(tag.querySelector('.tree-holds')?.textContent).toBe('Scenes');
+    });
     const span = tag.querySelector('.tree-holds')!;
-    expect(span.textContent).toBe('Scenes');
     expect(span.getAttribute('data-tip')).toBe('Everything created inside is a scene');
   });
 
@@ -126,8 +127,7 @@ describe('Type en el menú de la página', () => {
     expect(button(host, 'Scene')?.getAttribute('aria-checked')).toBe('true');
     expect(button(host, 'Scene')?.querySelector('.check')?.textContent).toBe('101_074');
     act(() => button(host, 'None of these')!.click());
-    await wait(30);
-    expect(device.tree.get(scene)?.settings?.entity).toBe(false);
+    await shown(() => expect(device.tree.get(scene)?.settings?.entity).toBe(false));
   });
 
   it('Back vuelve a los ítems del menú', async () => {
@@ -145,10 +145,9 @@ describe('Type en el menú de la página', () => {
     const host = menu(device, server, folder, { n: 0 });
     act(() => button(host, 'Type')!.click());
     act(() => button(host, 'Shoot days')!.click());
-    await wait(30);
-    expect(device.tree.get(folder)?.settings).toEqual({ dayReports: {} });
+    await shown(() => expect(device.tree.get(folder)?.settings).toEqual({ dayReports: {} }));
     const tag = mount(device, server, <HoldsTag pageId={folder} />);
-    expect(tag.textContent).toBe('Shoot days');
+    await shown(() => expect(tag.textContent).toBe('Shoot days'));
   });
 
   it('Use for day reports (el renglón de siempre) es lo mismo que Shoot days: no deja `holds` de otro tipo (O5)', async () => {
@@ -157,13 +156,11 @@ describe('Type en el menú de la página', () => {
     await device.tree.setSetting(folder, 'holds', 'scene');
     let host = menu(device, server, folder, { n: 0 });
     act(() => button(host, 'Use for day reports')!.click());
-    await wait(30);
-    expect(device.tree.get(folder)?.settings).toEqual({ dayReports: {} });
+    await shown(() => expect(device.tree.get(folder)?.settings).toEqual({ dayReports: {} }));
     for (const r of roots.splice(0)) act(() => r.unmount());
     host = menu(device, server, folder, { n: 0 });
     act(() => button(host, 'Stop using for day reports')!.click());
-    await wait(30);
-    expect(device.tree.get(folder)?.settings).toEqual({ dayReports: false });
+    await shown(() => expect(device.tree.get(folder)?.settings).toEqual({ dayReports: false }));
   });
 });
 

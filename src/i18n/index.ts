@@ -16,6 +16,7 @@ import type { history } from './lazy/history';
 import type { importArchive } from './lazy/importArchive';
 import type { importCoda } from './lazy/importCoda';
 import type { installDialog } from './lazy/install';
+import type { map } from './lazy/map';
 import type { oauthConsent } from './lazy/oauthConsent';
 import type { offline } from './lazy/offline';
 import type { projectStates } from './lazy/projectStates';
@@ -58,6 +59,7 @@ type LazyStrings = typeof annotator &
   typeof importArchive &
   typeof importCoda &
   typeof installDialog &
+  typeof map &
   typeof oauthConsent &
   typeof offline &
   typeof projectStates &

@@ -75,6 +75,8 @@ const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) 
 const HistoryPanel = lazyPart(() => import('./HistoryPanel').then((m) => m.HistoryPanel));
 // La dirección fija de un archivo (P.30, Docs/Doc_Links_PDF.md): se baja solo si se llega a una.
 const FileScreen = lazyPart(() => import('./FileScreen').then((m) => m.FileScreen));
+// El mapa del proyecto (Docs/Doc_Relaciones.md, sección 12): se baja aparte, al abrirlo.
+const MapView = lazyPart(() => import('../relations/MapView').then((m) => m.MapView));
 
 // Versiones anteriores recordaban una sola última página; se sigue leyendo como respaldo.
 const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
@@ -423,6 +425,10 @@ export function Shell() {
     if (linkPage) navigate(pagePath(linkPage), true);
     else openProjectTrash();
   }, [route.name, linkPage]);
+  // Con un link público no hay mapa (no hay tipos de página, D381): la página compartida.
+  useEffect(() => {
+    if (route.name === 'map' && linkPage) navigate(pagePath(linkPage), true);
+  }, [route.name, linkPage]);
   useEffect(() => {
     if (route.name === 'page') rememberPage(keys, tree, user.id, route.id);
     if (route.name !== 'home') return;
@@ -484,6 +490,11 @@ export function Shell() {
                     {current.title || tr('common.untitled')}
                   </span>
                 )}
+                {route.name === 'map' && !linkMode && (
+                  <span className="crumb current" aria-current="page">
+                    {tr('sidebar.map')}
+                  </span>
+                )}
               </nav>
               <span className="only-mobile">
                 <SyncIcon onClick={() => setNavOpen(true)} />
@@ -530,6 +541,10 @@ export function Shell() {
             ) : route.name === 'file' ? (
               <Part>
                 <FileScreen key={route.id} localKey={route.localKey} id={route.id} />
+              </Part>
+            ) : route.name === 'map' && !linkMode ? (
+              <Part>
+                <MapView tab={route.tab} />
               </Part>
             ) : (
               <Home />

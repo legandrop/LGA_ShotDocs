@@ -1405,3 +1405,28 @@ buscado, Esc con la selección adentro y afuera, lo tocado, lo cerrado y reabier
 se escribe nada —ni el Y.Doc ni "para todos" ni el dispositivo—, y que sin secciones colapsadas no pasa nada),
 `projectSearch.test.tsx` (la barra avisa y lo guardado sigue colapsado) y un recorrido en Chromium (16 pasos) sobre la
 app con el servidor falso. No toca el documento ni su esquema: no hace falta subir `min_app_version`.
+
+## Escenas y locaciones primero (relaciones en vivo, E9, v0.242)
+
+Buscar una escena es el primer gesto del pedido de las relaciones (C7, O1), y la lupa no la encontraba: `101-074` no
+daba nada (el texto dice `101_074`) y `101_074` traía antes una ficha que la escena. Ahora, con algo escrito, el panel
+muestra arriba de los proyectos y de las páginas el grupo **Scenes and locations** (`findEntities` de
+`src/relations/sceneSearch.ts`, con la foto del índice de relaciones: solo lo que la persona ve):
+
+- **Escenas por cualquier forma de su número**, con el mismo lector que el texto (lo escrito se lee como un título):
+  `101_074`, `101-074`, `1074`, `5027b`, `H1067`, `1033B+C`; «Escena 27» o «27» en el episodio de la página abierta y,
+  si no hay o no existe ahí, en todos (el de la página primero); una escena que existe solo con letra
+  (`101_069A`) la encuentra el número sin letra. El título de una escena no la pone en el grupo: ya sale en *Pages*.
+- **Locaciones** por nombre o alias, o por el principio del nombre o de una de sus palabras, desde 3 letras (`cenad`,
+  `are`; con «la» subía media lista de locaciones).
+- **Un número que no existe**, solo si alguna página lo nombra: lleva a *Map › Pending*. Para quien ve una parte del
+  proyecto dice «Not in the pages you can see», nunca que no existe (D401).
+- `105 027` (con un espacio) también es `105_027`.
+
+Cada fila muestra el número (o el nombre) en una ficha, el título de la escena y «Scene · Episode 105» / «Location».
+Enter abre la primera (la entidad, si hay); con una entidad no se ofrece «New project». La búsqueda de texto, los
+fragmentos, las anotaciones y reemplazar no cambian (sus pruebas siguen iguales). Un número suelto de 4 cifras se lee
+como la forma compacta (`2025` es la escena `102_025` si existe, D497): las páginas que dicen «2025» siguen abajo.
+Pruebas: `src/relations/sceneSearch.test.ts` (las formas, el orden, un largo, lo que no es un número) y
+`src/relations/mapView.test.tsx` (la app montada: `105_027`, `105-027`, `5027`, `5027b`, «Escena 29», `cenad`, Enter, el
+texto que sigue, un pendiente que lleva al mapa). Detalle y decisiones: `Doc_Relaciones.md`, sección 12.

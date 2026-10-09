@@ -1,0 +1,52 @@
+/* La fila «Map» de la barra lateral (Docs/Doc_Relaciones.md, sección 12), como las filas del árbol. */
+
+.map-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 0 0 10px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-2);
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.map-nav:hover {
+  background: var(--hover);
+}
+
+.map-nav.on {
+  background: var(--active);
+  color: var(--text);
+}
+
+.map-nav:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.map-nav-i {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--muted);
+}
+
+.map-nav-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.map-nav-count {
+  font: 11px var(--mono);
+  color: var(--warn);
+}

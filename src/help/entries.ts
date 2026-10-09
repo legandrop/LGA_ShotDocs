@@ -162,6 +162,8 @@ const LIVE_HEADER = '0.238';
 const LIVE_FIELDS = '0.240';
 /** La cabecera del día de rodaje y Prepare tomorrow's report (relaciones en vivo, E5): la versión se pone al publicar. */
 const LIVE_DAY = '0.241';
+/** El mapa del proyecto, Copy map / JSON y la lupa por escenas y locaciones (relaciones en vivo, E9): la versión se pone al publicar. */
+const LIVE_MAP = '0.242';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
@@ -326,6 +328,22 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.liveDay.text',
     words: ['shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet'],
     since: LIVE_DAY,
+  },
+  {
+    id: 'relationsMap',
+    section: 'find',
+    title: 'help.relationsMap.title',
+    text: 'help.relationsMap.text',
+    words: ['map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'json', 'assistant', 'asistente', 'ai', 'ia'],
+    since: LIVE_MAP,
+  },
+  {
+    id: 'searchEntities',
+    section: 'find',
+    title: 'help.searchEntities.title',
+    text: 'help.searchEntities.text',
+    words: ['scene number', 'número de escena', '5027', '101_074', 'location', 'locación', 'search', 'buscar'],
+    since: LIVE_MAP,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

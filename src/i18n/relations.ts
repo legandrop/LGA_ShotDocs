@@ -206,6 +206,7 @@ export const relations = {
   'day.plannedNoSection': { en: "planned · no section", es: "planeada · sin sección" },
   'day.plannedNoSectionTip': { en: "The plan of this day names it, but this report has no section for it", es: "El plan de este día la nombra, pero este reporte no tiene una sección suya" },
   'day.doesntExist': { en: "doesn't exist yet", es: "todavía no existe" },
+  'day.notSeen': { en: "not in the pages you can see", es: "no está en las páginas que ves" },
   'day.pending': { en: "pending", es: "pendiente" },
   'day.noSceneNumber': { en: "no scene number", es: "sin número de escena" },
   'day.unnumberedTip': { en: "Write the scene number in its title and it links by itself", es: "Escribí el número de escena en su título y se relaciona solo" },

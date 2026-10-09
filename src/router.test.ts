@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPublicRoute, oauthConsentPath, pagePath, parseRoute, PRIVACY_PATH, TERMS_PATH } from './router';
+import { isPublicRoute, mapPath, oauthConsentPath, pagePath, parseRoute, PRIVACY_PATH, TERMS_PATH } from './router';
 
 // Las direcciones de la app: la política de privacidad y las condiciones son las únicas públicas (se ven sin
 // sesión ni workspace); todas las demás pasan por el login.
@@ -29,6 +29,19 @@ describe('parseRoute', () => {
     // La vieja prueba de media ya no existe: su dirección abre la app (puede quedar en un link guardado o en
     // la vuelta de Google de un portero viejo, con `?drive=`).
     expect(parseRoute('/media-test')).toEqual({ name: 'home' });
+  });
+});
+
+describe('el mapa del proyecto', () => {
+  it('/map y /map/<pestaña>; una pestaña que no existe abre Locations; no es pública', () => {
+    expect(parseRoute('/map')).toEqual({ name: 'map', tab: 'locations' });
+    expect(parseRoute('/map/')).toEqual({ name: 'map', tab: 'locations' });
+    for (const tab of ['scenes', 'days', 'pending'] as const) expect(parseRoute(mapPath(tab))).toEqual({ name: 'map', tab });
+    expect(mapPath()).toBe('/map');
+    expect(parseRoute('/map/otra')).toEqual({ name: 'map', tab: 'locations' });
+    expect(parseRoute('/map/scenes/x')).toEqual({ name: 'home' });
+    expect(parseRoute('/mapa')).toEqual({ name: 'home' });
+    expect(isPublicRoute(parseRoute('/map'))).toBe(false);
   });
 });
 

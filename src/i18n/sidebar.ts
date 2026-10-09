@@ -6,6 +6,13 @@ export const sidebar = {
   'sidebar.collapse': { en: "Collapse", es: "Plegar" },
   'sidebar.expand': { en: "Expand", es: "Desplegar" },
   'sidebar.moreActions': { en: "More actions", es: "Más acciones" },
+  // El mapa del proyecto (Docs/Doc_Relaciones.md, sección 12).
+  'sidebar.map': { en: "Map", es: "Mapa" },
+  'sidebar.mapTip': {
+    en: "Every scene, location and shoot day of the project, from what the pages say",
+    es: "Todas las escenas, locaciones y días de rodaje del proyecto, según lo que dicen las páginas",
+  },
+  'sidebar.mapPending': { en: { one: "{count} pending", other: "{count} pending" }, es: { one: "{count} pendiente", other: "{count} pendientes" } },
   // El rótulo de una carpeta con tipo (Doc_Estructura_Proyecto.md, «Tipo de página»).
   'sidebar.holdsScenes': { en: "Everything created inside is a scene", es: "Todo lo que se crea adentro es una escena" },
   'sidebar.holdsLocations': { en: "Everything created inside is a location", es: "Todo lo que se crea adentro es una locación" },

@@ -134,7 +134,7 @@ function Rows({ v, tr, partial }: { v: DayLive; tr: Translate; partial: boolean 
                 <span className="lh-chip-t">{r.code}</span>
               </span>
               <button className="tt" onClick={() => go(r.place)}>
-                «{r.heading}» <span className="lh-via">· {tr('day.doesntExist')}</span>
+                «{r.heading}» <span className="lh-via">· {tr(partial ? 'day.notSeen' : 'day.doesntExist')}</span>
               </button>
               <span className="meta">
                 <span className="lh-st">{tr('day.pending')}</span>

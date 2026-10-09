@@ -458,3 +458,119 @@ en hoy, aviso y *Undo*, decoraciones en el editor, teléfono plegado sin ceros, 
 - *Assign* en una sección sin número (E7) y la barra *Today* sobre el teclado en el teléfono (E6).
 - El link del título preparado se ve como un link, no como la ficha-chip de la maqueta (la ficha es de E6/E7).
 - *Undo* vive en el aviso (15 s); después, se borra a mano.
+
+## 12. El mapa del proyecto, la lupa por escenas y locaciones, y el mapa para un asistente (E9, v0.242)
+
+El pedido de Lega incluye «un mapa que ayude a encontrar las cosas al asistente de IA y al usuario» y «buscar una
+escena» como primer gesto (C7, O1). Todo sale de la foto del índice (lo que la persona ve), en el dispositivo; nada se
+guarda ni se escribe en un documento.
+
+| Pieza | Archivo |
+|---|---|
+| El mapa, en una pasada (puro): días, escenas, locaciones, pendientes, duplicadas, secciones sin número | `src/relations/projectMap.ts` (`projectMap`, `mapCounts`) |
+| Lo que se copia: JSON y texto | `src/relations/projectMap.ts` (`mapJson`, `mapText`, `MAP_FORMAT`, `MAP_VERSION`) |
+| Buscar escenas y locaciones por cualquier forma (puro; también para E7: `/`, *Tomorrow*, *Assign*) | `src/relations/sceneSearch.ts` (`searchScenes`, `searchLocations`, `findEntities`) |
+| La vista | `src/relations/MapView.tsx` + `map.css` (prefijo `mp-`), ruta `/map/<pestaña>` (`src/router.ts`, `mapPath`), se baja aparte |
+| La fila *Map* de la barra lateral | `src/relations/MapNav.tsx` + `mapNav.css` (en `Sidebar.tsx`, arriba de *Pages*) |
+| La lupa | `src/ui/ProjectSearch.tsx` (grupo *Scenes and locations*) |
+| Textos y ayuda | `src/i18n/lazy/map.ts`, `sidebar.map*`, `search.ent*`; ayuda `relationsMap` y `searchEntities` (since 0.242) |
+
+**La fila *Map*.** Arriba del árbol, como en la maqueta, solo en un proyecto con escenas, locaciones o días de rodaje
+(lo que dice el registro de lo que la persona ve); suma «N pending» si hay alguno, nunca un cero, con el mismo número que
+la pestaña *Pending* (`pendingSummary`: números que no existen + duplicadas + secciones sin número). Con un link público
+no hay mapa (`/map` lleva a la página compartida).
+
+**Las pestañas** (mismas reglas que la cabecera viva: «filmada» = una sección de un reporte; la locación de un día, la
+de su título, D398; «planeada en» = lo que nombra su desglose, D393):
+
+- *Locations*, en el tiempo: una fila por locación con días, ordenadas por su primer día; «6 scenes · 2 days» (escenas
+  que planea su desglose más las que tienen sección en uno de sus días; los días cuyo título la nombra); un punto por día
+  en una línea de meses (lleno: el reporte tiene un renglón escrito que no es un título, o fotos; hueco: nada escrito),
+  con el título del día en su tooltip y que lleva al día. Los días cuyos puntos se tocarían con el ancho que tiene la
+  línea (13 px; `groupDots`, `dotGap`) van juntos, uno al lado del otro desde la fecha del primero: cada uno se puede
+  abrir (encimados, el de arriba tapaba al otro). Las locaciones sin días van al pie. Ícono de scouting si tiene
+  páginas adentro.
+- *Scenes*, por episodio: número (lleva a la escena), título en vivo, locaciones «· report» / «· planned» y los días
+  con sección (cada uno lleva al día); sin sección, «in a plan» si un plan la nombra o «No report section» («you can
+  see» para un invitado, D401). Nunca «not shot».
+- *Shoot days*, por fecha: día, locación del título (si el título no nombra una que exista, lo que dice, apagado:
+  «Frente Ruso Villarino»; `titlePlace`), «1 with a section · 2 planned», «nothing written».
+- *Pending*: los números que no existen con dónde se nombran (lleva al bloque), las escenas en dos páginas
+  (`registration.duplicates`) y las secciones de un reporte con fotos y sin número (sin la general, D429; *Open section*
+  lleva a la sección exacta). Cada fila es un `PendingRow` con una ranura `actions`: ahí van *Create* y *Assign* con sus
+  guardas (E7); en E9 queda vacía. **Quien ve una parte del proyecto** (un invitado) no puede saber si una escena existe
+  en una página que no ve: el número que no está en su registro dice «105_029 isn’t in the pages you can see» (y «may
+  exist in a page you can’t see»), nunca «doesn’t exist»; lo mismo la cabecera del día y la lupa (D401).
+
+El filtro de *Scenes* y *Shoot days* lee el número con `searchScenes` (exacto, como la lupa): `5027`, `105-027`,
+`105_027b`, «Escena 27»; si lo escrito no nombra escenas, filtra por el texto (título, locación, fecha de un día con
+sección). El de *Locations*, por nombre, alias y fecha de sus días. Mientras el índice lee, la línea
+de arriba dice «Reading 340 of 921…», los números aparecen solo si no son cero y lo vacío dice «Reading…» (D402).
+
+**La lupa ⌘K.** Arriba de los proyectos y las páginas, el grupo *Scenes and locations* con `findEntities`: lo escrito
+leído como un título por el mismo lector (`101_074`, `101-074`, `1074`, `5027b`, `H1067`, `1033B+C`); «Escena 27» o
+«27», en el episodio de la página abierta y si no en todos (el de la página primero); una escena que existe solo con
+letra la encuentra el número sin letra; las locaciones por nombre o alias, o por el principio del nombre o de una de sus palabras, desde 3 letras (`cenad`, `are`;
+con «la» o «de» subía media lista); un número que no
+existe, solo si alguna página lo nombra (lleva a *Map › Pending*). Enter abre la primera; con una entidad no se ofrece
+«New project». La búsqueda de texto, las anotaciones y reemplazar no cambian. `searchScenes` suma, para el `/` de E7,
+los códigos que contienen los dígitos y el título (con `loose`), con `near` (las escenas del día) primero.
+
+### El JSON del mapa: `shotdocs.map`, versión 1
+
+*Copy JSON* copia un objeto compacto con esta forma fija (las claves en este orden; una versión nueva solo si cambia el
+significado o se saca algo; sumar una clave opcional no cambia la versión). Las páginas se nombran por su id y van una
+sola vez en `pages`; el link de cada una es `pageUrl` con `{id}` reemplazado. Solo lo que la persona ve; `scope` dice si
+es todo el proyecto o una parte (un invitado), y `complete: false` si el dispositivo todavía estaba leyendo.
+
+```text
+{
+  format: "shotdocs.map", version: 1,
+  project: { id, name }, pageUrl: "https://…/p/{id}", builtAt: ISO, complete: bool, scope: "project" | "visible",
+  counts: { scenes, locations, days, pending, duplicates, unnumbered },   // cada uno, el largo de su lista
+  scenes: [{ code: "105_027", page: id | null, title, episode: "105" | null,
+             plannedAt: [locación…],                       // las que nombra su desglose (D393)
+             shot: [{ day: id, date, locations: [locación…], sections: [Section…] }],   // reportes con sección suya
+             plannedDays: [id…], cards: [id…], mentions: [Mention…] }],
+  locations: [{ name, page, aliases: [..], days: [id…], planned: [código…], shot: [código…], scouts: [id…],
+                mentions: [Mention…] }],
+  days: [{ page, label: "Día 59", date, locations: [..], written: bool,
+           plan: { source: "plan" | "breakdown" | "none", scenes: [código…] },
+           sections: [Section & { scenes: [código…], pending?: [código…] }], unnumbered?: [Section…] }],
+  pending: [{ code, mentions: [{ page, blocks: [blockId…] }] }],   // con scope "visible": no está en lo que se ve
+  duplicates: [{ code, pages: [id…] }],
+  pages: { [id]: { title, kind: "scene" | "location" | "day" | "part" | "page", stage: "breakdown" | "scouting" | "shoot" | "location" | "other" } }
+}
+Section = { block: blockId, end: blockId | null, title, photos: n }     // del título hasta `end` (null: el final)
+Mention = { page, stage, own?: true, index?: true, via: ["heading" | "text" | "link"], blocks: [blockId…], sections?: [Section…] }
+```
+
+`own`: la página es la entidad o parte de ella (una ficha, un scouting); `index`: una página índice (más de 20 escenas y
+locaciones). `unnumbered` está en cada día (`days[].unnumbered`) y su total en `counts`. Con `scope: "visible"`, un código
+en `pending` es uno nombrado que no está en las páginas que la persona ve (puede existir en otra). *Copy map* copia lo
+mismo como texto legible, sin ids, para pegar en un chat (con «To resolve: …» separado por clase). Medido en ERSO (921
+páginas): texto 48 KB, JSON 538 KB. Abrir el mapa con el índice ya leído: menos de medio segundo en la PC de escritorio.
+
+### Decisiones de esta entrega
+
+D486–D501 en `Doc_Decisiones.md`: la fila *Map* y la ruta (D486), una pasada con las reglas de la cabecera (D487), lo que
+cuenta *Locations* (D488), *Scenes* (D489), *Pending* con duplicadas y la ranura de E7 (D490), sin ceros mientras lee
+(D491), texto y JSON sin descarga (D492), la lupa (D493), `sceneSearch.ts` para E7 (D494), sin mapa con link público
+(D495), sin atajo nuevo (D496), un número suelto de 4 cifras en la lupa (D497); y de la auditoría: el invitado nunca lee
+«no existe» (D498), días cercanos juntos en la línea (D499), los números de *Pending* separados (D500), locaciones en la
+lupa desde 3 letras (D501).
+
+### Comparado con la verdad (ERSO, `mapa.json`)
+
+Escenas 226/226, locaciones 52/52, días 73/73. Escena × día con sección: las 131 de la verdad están; la app suma 9 que
+son subtítulos que nombran otra escena dentro de una sección («5056 plano 1» en el Día 34; C8 ya los había revisado:
+son reales). Las 8 secciones sin número son las mismas. Día → locación: 60 de 73 iguales; en 13 el título usa un nombre
+que el registro no tiene («Estudio Autos», «Arenera VA», «Centro CABA», «Mansión Rosenberg»; D417): *La Arenera
+(estudio)* muestra 2 días de 8. *Planned here* difiere en 6 de 52 locaciones porque sale de lo que nombra el desglose y
+no del campo *Locacion Real* (D393; ver «Lo que falta» de la sección 10).
+
+### Lo que falta (E9)
+
+- *Create* y *Assign* en *Pending* (E7, en la ranura `actions`).
+- Los alias de lugar de los títulos de los días que el registro no reconoce (13 días de ERSO, arriba).
+- Que el asistente de la app reciba el mapa sin copiar y pegar, y que el MCP (fase 5) lo sirva.
