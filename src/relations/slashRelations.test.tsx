@@ -11,7 +11,11 @@ import { schema } from '../ui/editorSchema';
 import { disposeRelationsSession, relationsSession } from '../ui/relationsUi';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { buildRegistry } from './reader';
-import { parseSlashQuery, pendingCode, relationSlash } from './slashRelations';
+import { parseSlashQuery, partLetter, pendingCode, relationSlash } from './slashRelations';
+import { searchScenes } from './sceneSearch';
+import { SuggestionMenu } from '@blocknote/core/extensions';
+import { pendingSummary, projectMap } from './projectMap';
+import { setSlashDraft, slashDraft } from './slashDraft';
 
 // El `/` de escenas y locaciones (E7, D506–D511) con el editor de verdad: qué lista sale de lo escrito, qué deja ↵ en el
 // documento (un link común con el número canónico, en un párrafo o en un título), *Create* con las guardas y *Keep as
@@ -145,6 +149,72 @@ describe('el / en el editor', () => {
     const id2 = typeLine(e, 'Vuelco');
     slash.items('e 026')![0].onItemClick();
     expect(inline(e, id2)).toBe(`Vuelco [105_026](/p/${built.ids.s026}) `);
+  });
+
+  it('/e 105_027a (una parte, sin escena 105_027A): link a 105_027 y el texto conserva la letra como se escribió (O6, D569)', async () => {
+    const { d, built } = await world();
+    const { e } = await editorOn(d, built.ids.notas);
+    const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => built.ids.notas, tr: t as never });
+    const items = slash.items('e 105_027a')!;
+    expect(items[0].title).toBe('105_027a');
+    expect(items[0].subtext).toContain('part of 105_027');
+    const id = typeLine(e, 'Ver la ');
+    items[0].onItemClick();
+    expect(inline(e, id)).toBe(`Ver la [105_027a](/p/${built.ids.s027}) `);
+    // Igual con la forma compacta y en mayúscula, como se escribió.
+    expect(slash.items('e5027B')![0].title).toBe('105_027B');
+    // Sin letra, lo de siempre.
+    expect(slash.items('e 105_027')![0].title).toBe('105_027');
+  });
+
+  it('/e con la escena con letra que existe: esa primero, no la base (O6)', () => {
+    const R = buildRegistry({ scenes: [{ code: '105_027', pageId: 'a' }, { code: '105_027A', pageId: 'b' }], locations: [] });
+    const src = { snap: { registry: R }, title: (id: string) => (id === 'a' ? '027 | Base' : '027A | Con letra') };
+    for (const q of ['105_027a', '5027a', '27a']) {
+      const o = searchScenes(src, q, { ep: '105', loose: true });
+      expect(o[0], q).toMatchObject({ code: '105_027A' });
+      expect(o[0].part, q).toBeUndefined();
+    }
+    // Sin la escena con letra: la base, con la parte.
+    const R2 = buildRegistry({ scenes: [{ code: '105_027', pageId: 'a' }], locations: [] });
+    expect(searchScenes({ snap: { registry: R2 }, title: () => '027 | Base' }, '27a', { ep: '105' })[0]).toMatchObject({ code: '105_027', part: 'A' });
+    expect(partLetter('105_027a', 'A')).toBe('a');
+    expect(partLetter('5027A', 'A')).toBe('A');
+    expect(partLetter('105_027', undefined)).toBe('');
+  });
+
+  it('mientras se tipea /e 105_141 en el menú, ese número no cuenta en Map › Pending; al cerrarse el menú vuelve a contar (O7, D568)', async () => {
+    const { d, built } = await world();
+    const { e } = await editorOn(d, built.ids.notas);
+    const session = relationsSession(d);
+    const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => built.ids.notas, tr: t as never });
+    const src = () => ({ snap: session.relations.snapshot(built.projectId)!, title: (id: string) => d.tree.get(id)?.title, content: () => undefined });
+    const pending = () => projectMap(src()).pending.map((p) => p.code);
+    // Lo que el menú deja escrito en el documento mientras está abierto.
+    typeLine(e, 'Revisar /e 105_141');
+    await until(() => pending().includes('105_141'), 'el índice lee la consulta');
+    const before = pendingSummary(src()).pending;
+    slash.items('e 105_141');
+    expect(slashDraft()).toMatchObject({ pageId: built.ids.notas, codes: ['105_141'] });
+    expect(pending()).not.toContain('105_141');
+    expect(pendingSummary(src()).pending).toBe(before - 1);
+    // Otra consulta (sin número): ya no hay nada anotado.
+    slash.items('e cami');
+    expect(slashDraft()).toBeNull();
+    slash.items('e 105_141');
+    // El menú se cierra (Esc, elegir, tocar afuera): vuelve a contar si quedó escrito.
+    const menu = e.getExtension(SuggestionMenu)!;
+    menu.store.setState(undefined);
+    expect(slashDraft()).toBeNull();
+    expect(pending()).toContain('105_141');
+    // Solo el bloque de la consulta: el mismo número escrito en otro bloque sigue contando.
+    typeLine(e, 'Y acá 105_141 de verdad.');
+    await until(() => session.relations.snapshot(built.projectId)!.pages.get(built.ids.notas)!.mentions.filter((m) => m.ref === '105_141').length === 2, 'las dos menciones');
+    const last = e.document[e.document.length - 2].id;
+    e.setTextCursorPosition(last, 'end');
+    slash.items('e 105_141');
+    expect(pending()).toContain('105_141');
+    setSlashDraft(null);
   });
 
   it('en un día, /e sin nada: primero las escenas del día; /l cen deja «CENADE» con link; en un título también', async () => {

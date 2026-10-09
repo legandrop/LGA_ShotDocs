@@ -5,11 +5,11 @@ import { useServices, useSyncStatus, useTree, type Services } from '../services'
 import { Permissions } from '../sync/access';
 import { notify } from '../ui/notice';
 import { existingRelationsSession } from '../ui/relationsUi';
-import { assignHeading, assignMention, unlinkPage, type AssignResult } from './assign';
+import { assignHeading, assignMention, assignMentionEverywhere, undoAssign, undoAssignEverywhere, unlinkPage, type AssignResult } from './assign';
 import { createDepsFrom, createEntity, createGuard, freshSync, undoCreate, type CreateResult, type CreateWant, type GuardResult } from './createEntity';
 import { sceneTitleOf } from './dayLive';
 import { Ic } from './LiveHeader';
-import { searchScenes, type SceneOption } from './sceneSearch';
+import { nearEpisodes, searchScenes, type SceneOption } from './sceneSearch';
 
 // Los botones de *Create* y *Assign* (Docs/Doc_Relaciones.md, sección 15; E7): el mismo en el adelanto de un pendiente,
 // la cabecera del día y *Map › Pending*, con las mismas guardas (`createEntity.ts`) y la misma escritura (`assign.ts`).
@@ -295,10 +295,13 @@ export function pickerOptions(
   const usable = (o: SceneOption) => !!o.pageId && !have.includes(o.code);
   if (q.trim()) return searchScenes(src, q, { ep, near, limit: limit + have.length, loose: true }).filter(usable).slice(0, limit);
   const R = src.snap.registry;
-  const nearSet = new Set(near);
+  // Primero las cercanas, en su orden (el plan del día, lo que nombra la página); después las del episodio de la página o,
+  // sin episodio (un día), las de los episodios de las cercanas (D570); después el resto, por número.
+  const order = new Map(near.map((c, i) => [c, i]));
+  const eps = nearEpisodes(R, ep, near);
   const codes = [...R.scenes.keys()].sort((a, b) => {
-    const rank = (c: string) => (nearSet.has(c) ? 0 : ep && c.startsWith(`${ep}_`) ? 1 : 2);
-    return rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0);
+    const rank = (c: string) => (order.has(c) ? 0 : eps.has(R.scenes.get(c)?.ep ?? '') ? 1 : 2);
+    return rank(a) - rank(b) || (order.get(a) ?? 0) - (order.get(b) ?? 0) || (a < b ? -1 : a > b ? 1 : 0);
   });
   const out: SceneOption[] = [];
   for (const code of codes) {
@@ -312,12 +315,31 @@ export function pickerOptions(
   return out;
 }
 
-/** El aviso de cómo salió *Assign*. */
-export function assignNotice(tr: Translate, res: AssignResult, done: string, kind: 'heading' | 'mention'): void {
-  if (res.status === 'ok') notify(done);
+/**
+ * El aviso de cómo salió *Assign*. Si escribió, con *Undo* (D566): `undo` deshace solo lo agregado y solo si sigue igual;
+ * si cambió, no toca nada y lo dice.
+ */
+export function assignNotice(tr: Translate, res: AssignResult, done: string, kind: 'heading' | 'mention', undo?: () => Promise<'undone' | 'changed' | 'partial'>): void {
+  if (res.status === 'ok') notify(done, undo ? undoAction(tr, undo) : undefined);
   else if (res.status === 'unknown') notify(tr('assign.unknown'));
   else if (res.status === 'missing') notify(tr('assign.missing'));
   else notify(tr(kind === 'heading' ? 'assign.changed' : 'assign.changedMention'));
+}
+
+/** El botón *Undo* del aviso de *Assign*, con el aviso de cómo salió. */
+export function undoAction(tr: Translate, undo: () => Promise<'undone' | 'changed' | 'partial'>) {
+  return {
+    label: tr('assign.undo'),
+    run: () => {
+      void undo().then(
+        (out) => notify(tr(out === 'undone' ? 'assign.undone' : out === 'partial' ? 'assign.undonePartial' : 'assign.undoChanged')),
+        (err) => {
+          console.warn('[asignar] no se pudo deshacer', err);
+          notify(tr('assign.undoChanged'));
+        },
+      );
+    },
+  };
 }
 
 /**
@@ -334,8 +356,13 @@ export function AssignButton({
   onPick,
 }: {
   src: Parameters<typeof searchScenes>[0];
-  pageId: string;
-  target: { kind: 'heading'; blockId: string; text: string } | { kind: 'mention'; blockId: string; pending: string; ep: string | null };
+  /** La página donde se escribe (`heading` y `mention`; con `everywhere`, cada lugar trae la suya). */
+  pageId?: string;
+  target:
+    | { kind: 'heading'; blockId: string; text: string }
+    | { kind: 'mention'; blockId: string; pending: string; ep: string | null }
+    /** Un número que no existe, en todos los lugares que lo nombran y la persona puede editar (*Map › Pending*, D567). */
+    | { kind: 'everywhere'; pending: string; places: { pageId: string; blockIds: string[]; ep: string | null }[] };
   near?: readonly string[];
   ep?: string | null;
   className?: string;
@@ -351,13 +378,26 @@ export function AssignButton({
     if (onPick) return onPick(scene);
     setBusy(true);
     try {
-      if (target.kind === 'heading') {
-        const res = await assignHeading(services, pageId, target.blockId, target.text, scene);
-        assignNotice(tr, res, tr('assign.done', { code: scene.code, title: target.text }), 'heading');
-      } else {
-        const res = await assignMention(services, pageId, target.blockId, target.pending, scene, { registry: src.snap.registry, ep: target.ep });
-        assignNotice(tr, res, tr('assign.doneMention', { pending: target.pending, code: scene.code }), 'mention');
+      if (target.kind === 'everywhere') {
+        const out = await assignMentionEverywhere(services, target.places, target.pending, scene, src.snap.registry);
+        const name = (id: string) => services.tree.get(id)?.title ?? '';
+        if (!out.added) {
+          notify(tr(out.failed.some((f) => f.status === 'missing') ? 'assign.missing' : out.failed.some((f) => f.status === 'unknown') ? 'assign.unknown' : 'assign.changedMention'));
+          return;
+        }
+        const parts = [tr('assign.doneEverywhere', { pending: target.pending, code: scene.code, count: out.done.length })];
+        if (out.failed.length) parts.push(tr('assign.notIn', { pages: out.failed.map((f) => `«${name(f.pageId)}»`).join(', '), count: out.failed.length }));
+        notify(parts.join(' · '), undoAction(tr, () => undoAssignEverywhere(services, out.done)));
+        return;
       }
+      const at = pageId!;
+      const res =
+        target.kind === 'heading'
+          ? await assignHeading(services, at, target.blockId, target.text, scene)
+          : await assignMention(services, at, target.blockId, target.pending, scene, { registry: src.snap.registry, ep: target.ep });
+      const done = target.kind === 'heading' ? tr('assign.done', { code: scene.code, title: target.text }) : tr('assign.doneMention', { pending: target.pending, code: scene.code });
+      const spans = res.status === 'ok' ? res.undo : [];
+      assignNotice(tr, res, done, target.kind, () => undoAssign(services, at, spans));
     } catch (err) {
       console.warn('[asignar] no se pudo', err);
       notify(tr('assign.failed'));
@@ -371,7 +411,7 @@ export function AssignButton({
         className={`lh-tbtn rel-assign ${className ?? ''}`}
         disabled={busy}
         aria-expanded={open}
-        data-tip={tr(target.kind === 'heading' ? 'assign.headingTip' : 'assign.pendingTip')}
+        data-tip={tr(target.kind === 'heading' ? 'assign.headingTip' : target.kind === 'everywhere' ? 'assign.everywhereTip' : 'assign.pendingTip')}
         onClick={() => setOpen(!open)}
       >
         {tr('assign.button')}

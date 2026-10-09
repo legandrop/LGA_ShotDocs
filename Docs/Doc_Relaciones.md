@@ -457,7 +457,7 @@ en hoy, aviso y *Undo*, decoraciones en el editor, teléfono plegado sin ceros, 
 
 ### Lo que falta (E5)
 
-- Sin día siguiente no hay tarjeta: crear el reporte de mañana desde ahí (con *New day report*) y prepararlo.
+- ~~Sin día siguiente no hay tarjeta~~: hecho en la v0.248 (sección 18).
 - *Assign* en una sección sin número (E7). La barra *Today* y la ficha del link: hechas en la v0.244 (sección 14).
 - *Undo* vive en el aviso (15 s); después, se borra a mano.
 
@@ -765,7 +765,8 @@ mapa no escribe en ningún documento: las menciones se reconocen solas apenas ex
 
 ***Assign*.** En una sección de un reporte con fotos y sin número (fila «no scene number» del día y de *Map ›
 Pending*), con permiso de editar el día: el selector de escenas y, al elegir, se agrega « · 105_025» al final del
-título, con el número como link (otra escena suma la suya). Sobre un número que no existe (fila «doesn't exist» del día,
+título, con el número como link (otra escena suma la suya). Desde la v0.248 su aviso tiene *Undo* y *Map › Pending* lo
+ofrece también sobre los números que no existen (sección 18). Sobre un número que no existe (fila «doesn't exist» del día,
 adelanto): la marca `link` a la escena elegida sobre el texto escrito, sin cambiarlo; desde la fila, en cada aparición
 de ese número en el bloque. Las dos son solo inserciones en un bloque, directo en el Y.Doc, por su id, en una
 transacción y verificando antes el bloque (si el título cambió o el número ya no está, no se escribe y se avisa). Desde
@@ -982,3 +983,69 @@ en memoria y la copia de la base (D543, D544), y se verificó desde un dispositi
 entera (faltan 0 «planeada en», 69 de 70 días con lugar, decorados como la verdad, 0 relaciones sin respaldo).
 
 **Decisiones:** D526–D545 y D556–D563 en `Doc_Decisiones.md`.
+
+## 18. Lo que quedaba: *Undo* de *Assign*, *Assign* en *Pending*, el reporte de mañana desde el último día (E11, v0.248)
+
+| Pieza | Archivo |
+|---|---|
+| *Undo* de *Assign* (anclas, verificar, deshacer) y *Assign* en varias páginas | `src/relations/assign.ts` (`AssignSpan`, `undoAssignInDoc`, `captureNewLinks`, `assignMentionEverywhere`, `undoAssignEverywhere`) |
+| Los avisos con *Undo* | `EntityActions.tsx` (`assignNotice`, `undoAction`), `RelPeek.tsx` (el adelanto) |
+| La consulta abierta del `/` | `src/relations/slashDraft.ts`; la anota `slashRelations.tsx`, la descuentan `projectMap.ts`, `MapView.tsx` y `MapNav.tsx` |
+| El fondo del subrayado con el mouse movido | `src/relations/hoverGate.ts` (`data-rel-mouse` en `.editor`), `liveHeader.css` |
+| La tarjeta del día sin día siguiente | `src/relations/tomorrowNew.ts` (`proposeTomorrow`, `nextDayTitle`, `createTomorrow`, `undoTomorrow`), `DayHeader.tsx` (`TomorrowNew`) |
+
+***Undo* de *Assign*** (D566). Al asignar se guardan anclas relativas de Yjs (`Y.createRelativePositionFromTypeIndex`,
+pegadas al primer y al último carácter) de lo que se agregó: « · 105_025» (se borra) o la marca sobre `105_120` (se saca).
+*Undo* ubica cada tramo, verifica que diga lo mismo con el mismo link (y « · » sin link) y que su texto no esté borrado, y
+recién ahí actúa, en una transacción; **todo o nada**: si algo cambió, no toca ningún tramo y el aviso lo dice. Como borra
+caracteres por sus anclas y no bloques, lo que otro dispositivo escribe al lado (o, sin red, en el medio) queda: Yjs
+integra lo insertado entre caracteres borrados. El adelanto linkea por el editor (D522); `captureNewLinks` compara el link
+de cada carácter del bloque antes y después de esa edición y guarda los tramos nuevos, con el mismo *Undo* en su aviso
+(⌘Z sigue andando).
+
+***Assign* en *Map › Pending*** (D567): en la fila de cada número que no existe, en la ranura `actions` junto a *Create*.
+Linkea cada aparición en cada página que lo nombra y la persona puede editar (las demás no se tocan), página por página
+como desde el día (`inPage`: bajada entera, sin contenido desconocido); el aviso dice en cuántas páginas y en cuáles no
+pudo. Su *Undo* revisa todas las páginas antes y deshace solo si en todas sigue igual. El selector pone primero las escenas
+que nombran esas páginas.
+
+**El `/`.** `/e 105_027a`: si existe `105_027A`, esa primero; si no, «105_027a · part of 105_027», que deja `105_027a`
+con la letra como se escribió y el link a 105_027 (D569; `searchScenes` lleva la parte en `part`). Mientras el menú está
+abierto en modo escenas, `slashDraft` anota qué números de qué bloque son la consulta y el mapa (la pestaña y el número de
+la fila *Map*) no los cuenta; al cerrarse el menú se borra (D568). Sin episodio propio (un día), el selector y el `/`
+ordenan: las cercanas en su orden (el plan, también el del desglose), las de su episodio, el resto (D570).
+
+**Ver y escribir.** El fondo de `:hover` del subrayado pide `data-rel-mouse` en el contenedor del editor, que pone
+`hoverGate.ts` con su propio `MouseGate` (una tecla lo saca; un movimiento a otro lugar lo pone): un subrayado nuevo bajo
+el puntero quieto ya no se pinta (D571). *Today* escribe el espacio de después solo si no sigue un espacio, puntuación o
+un cierre (D572).
+
+**La tarjeta del último día** (D573–D577). Un día con fecha y sin día siguiente, con el índice completo y para quien ve el
+proyecto entero, muestra «Tomorrow · Mon 16 Mar · no report yet»: la próxima fecha con escenas en el desglose dentro de
+una semana (o el día siguiente), su plan del desglose (ajustable con × y *Add scene*, guardado en el dispositivo y pasado
+al reporte al crearlo) y *Create and prepare tomorrow’s report*, con el título que va a tener y la carpeta. Al tocarlo
+(`createTomorrow`, corregido en la ronda de la auditoría: D579, D580): lo local primero (`planDayReport`: la carpeta, la
+plantilla, lo de ayer); una sincronización buena en el momento (sin ella no crea: «Connect to create…»; si el motor ya
+sabe que no hay red, con tope de 1,5 s); si la carpeta ya tiene un reporte con esa fecha y está llegando de otro
+dispositivo (la fila sí, el contenido no), no se toca («Another device just created…»); si no, se prepara ese. Si no hay,
+la fila sola (título `2026-03-16 | Día 77`, la forma del de hoy sin su locación; `template_id`; marca de día explícita;
+la marca de la carpeta no se toca) y se sube enseguida; una lectura más y, si otro reporte del mismo día con id menor
+apareció, esta página todavía vacía va a la papelera y queda el otro (`yielded`); si no, la plantilla de *New day report*
+y las secciones de las escenas se escriben **de una vez** (`writeNewPage` con los bloques de `sectionBlocks`) y se sube.
+Dos toques dan uno solo. Si quedan dos reportes del mismo día (ninguno vio al otro), el aviso lo dice y *Map › Pending*
+los lista (`dayTwins`). *Prepare* en general (`prepareReport`) no escribe en un reporte creado en otro dispositivo hace
+menos de 2 minutos sin contenido todavía (`isArriving`): espera hasta 10 s y, si no llega, avisa sin tocar nada. Lleva a lo agregado y avisa
+con *Undo*: sincroniza y la manda a la papelera solo si nadie la tocó (`undoCreate`, D547); si ya existía, el *Undo* de
+*Prepare*. Sin permiso de crear en la carpeta, la tarjeta lo dice sin el botón. Una versión vieja ve una página común con
+títulos, párrafos y links: no hay tipos nuevos ni propiedades nuevas.
+
+**Pruebas.** `assignUndo.test.ts` (dos Y.Doc: lo de B después del título queda, B en el medio → no toca nada, link sacado,
+bloque borrado, todo o nada, sin red; `captureNewLinks` con el editor; varias páginas y su *Undo*), `relUnderline.test.ts`
+(el *Undo* del adelanto con dos dispositivos), `dayHeader.test.tsx` (*Undo* desde la fila, y con un cambio en el medio; la
+tarjeta del Día 76: crea, lleva, *Undo*; sin red; un invitado no la ve), `mapView.test.tsx` (*Assign* en *Pending* con
+*Undo*; la consulta abierta no cuenta), `slashRelations.test.tsx` (la parte, la consulta abierta y el menú cerrado),
+`sceneSearch.test.ts` (el orden sin episodio), `todayHover.test.ts` (*Today* y el fondo), `tomorrowNew.test.ts` (fecha,
+título, crear, dos toques, dos dispositivos, sin red, sin permiso, *Undo* con y sin escritura de otro, el reporte que ya
+existía).
+
+**Decisiones:** D566–D577 en `Doc_Decisiones.md`.

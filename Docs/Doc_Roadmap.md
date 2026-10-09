@@ -152,7 +152,8 @@ escena (mostrar el título en vivo de otro modo, o al final del renglón); (8) O
 escenas, el texto que otro escribe sin red en una copia repetida que *Prepare* saca queda bajo la última sección de la
 tanda y no de la suya (la escena equivocada pasa a «shot»); (9) O-b: lo que otro escribe en el TÍTULO preparado
 mientras se hace *Undo* (ventana de segundos) se pierde con el título. Hecho en la v0.244: la barra *Today* de (2), la
-ficha de (3) y (7) (el título en vivo va al final del título).
+ficha de (3) y (7) (el título en vivo va al final del título). Hecho en la v0.248: (1), la tarjeta del último día crea y
+prepara el reporte de mañana (D573–D577).
 
 **Anotado en la v0.247 (relaciones en vivo, otros nombres de una locación y *Leave out of relations*):** hechos, de
 «ERSO en vivo», el (1) (la casilla *Leave out of relations* en el menú ⋯, D540) y el (3) (los otros nombres que escribe la
@@ -182,7 +183,32 @@ Android de verdad (el teclado y el menú de BlockNote); (7) de la auditoría: la
 (`105_123`) aunque sus hermanas usen `025 | título` (O5; D517, cosmético); `/e 105_027a` (una parte) deja `105_027` sin la
 letra de la consulta (O6); mientras se tipea `/e 105_141` el número ya cuenta como pendiente en *Map* hasta elegir (O7); en
 el selector de un día (sin episodio) las escenas con letra de otro episodio salen antes que las del plan (O8). Hecho de
-paso: el adelanto de un pendiente ya no le dice «doesn’t exist yet» a quien ve una parte del proyecto (D401).
+paso: el adelanto de un pendiente ya no le dice «doesn’t exist yet» a quien ve una parte del proyecto (D401). Hecho en la
+v0.248: (2) *Undo* de *Assign* (D566), (3) *Assign* en *Pending* (D567), O6 (D569), O7 en el mapa (D568) y O8 (D570).
+
+**Anotado en la v0.248 (relaciones en vivo, lo que quedaba del `/`, *Assign* y *Tomorrow*):** (0) de la re-verificación
+(media): la copia que cede (D580) puede ir a la papelera con texto de un tercer dispositivo que la abrió y escribió en sus
+primeros segundos (queda en la papelera, con «Restaurar»); antes de mandarla, una última sincronización que mire si
+alguien la abrió o le escribió, o dejarla listada en *Pending* como las repetidas; además, el aviso de crear tarda
+3,7–7,3 s, *Prepare* sobre una página que llega tarda hasta 12 s sin más señal que el botón apagado, y el aviso «si quedan
+dos…» sale aunque el otro ceda. (1) mientras se tipea
+`/e 105_141` el número sigue subrayado gris de pendiente en el editor (es de `relUnderline.ts`: la consulta abierta ya está
+en `slashDraft.ts` para que el subrayado la salte); (2) otro dispositivo cuenta esa consulta como pendiente hasta que se
+elige (solo se anota en el dispositivo que tipea); (3) dos dispositivos que crean el reporte de mañana con red en el mismo
+segundo pueden dejar dos reportes (la sincronización en el momento achica la ventana a un viaje; quedan los dos, como
+D520); (4) el reporte de mañana no lleva la locación en el título (D574) y su ficha propone la locación de ayer, como *New
+day report*; (5) *Assign* en *Pending* no dice nada de las páginas que nombran el número y la persona no puede editar (las
+saltea); (6) el *Undo* de *Assign* y del reporte de mañana vive solo en el aviso (15 s, no se pausa con el mouse
+encima; un aviso sin botón que llega encima lo corre); (7) probar la tarjeta nueva en un teléfono de verdad. De la
+auditoría de E11 (hechos en la ronda: B1 = D578, B2 = D579 y D580, el orden del *Undo*, el *Undo* parcial en varias
+páginas, «Alguien lo cambió» neutral y el tope corto sin red): (8) la sincronización entre dispositivos tarda 6–20 s en
+la base real, más que lo que vive el *Undo*; (9) `withoutDraft` descuenta todas las menciones del número en el bloque de
+la consulta, también una escrita antes del `/` (mientras el menú está abierto); (10) en el teléfono el botón de dictar
+tapa el final del texto de la tarjeta *Tomorrow*; (11) las fechas largas de la cabecera del día salen en el idioma del
+navegador y no en el de la app (`longDate` usa `locale()`); (12) una foto `sdmedia://` cuyo registro no existe deja
+«usos sin confirmar» que traban *Borrar proyecto* (fuera de E11); (13) la regla de «recién creado en otro dispositivo»
+(D579) usa la hora de la base contra la del dispositivo: con el reloj muy corrido, espera de más o de menos; (14) la
+copia que cede (D580) queda en la papelera, vacía.
 
 **Anotado en la v0.244 (relaciones en vivo, el subrayado, el adelanto y *Today*):** (1) probar en un iPhone y un Android
 de verdad lo que el navegador sin pantalla no abre: el teclado (la barra *Today* arriba de él con `visualViewport`, el
@@ -193,9 +219,9 @@ subrayados) armar y dibujar tarda 12–36 ms en la computadora: medirlo en un te
 bloques que cambiaron; (4) el lector todavía toma «2026 | Presupuesto» al principio de un título como 102_026 (auditoría
 de la v0.237): no se tocó porque «2012 | Cocina» puede ser la escena; (5) la barra *Today* no deja elegir otras escenas
 que las del plan (*Add scene* desde ahí); (6) volver link todos los subrayados de una página de una vez; (7) de la
-auditoría: el fondo de `:hover` sí aparece bajo el mouse quieto cuando el subrayado nuevo se dibuja debajo (O9; se
-puede atar a `MouseGate` armado); borrar la última cifra de `105_029` deja medio segundo la referencia vieja en `105_02`
-(O10); *Today* deja un espacio antes de la puntuación (O11); en Safari, la fila nueva de la cabecera puede bajar el texto
+auditoría: el fondo de `:hover` sí aparece bajo el mouse quieto cuando el subrayado nuevo se dibuja debajo (O9; hecho en la
+v0.248, D571); borrar la última cifra de `105_029` deja medio segundo la referencia vieja en `105_02`
+(O10); ~~*Today* deja un espacio antes de la puntuación (O11)~~ (hecho en la v0.248, D572); en Safari, la fila nueva de la cabecera puede bajar el texto
 52 px en la pausa (sin `overflow-anchor`, O2); con dos apariciones iguales del mismo número en un párrafo, si otro escribe
 antes de las dos mientras el adelanto está abierto, *Make it a link* linkea la otra (mismo destino; O12 de la auditoría
 de E6: guardar cuántas apariciones de esa referencia hay antes en el bloque, o una posición relativa de Yjs).

@@ -12,6 +12,8 @@
 //                                                  pendiente 105_120 en el Día 58 y en las notas, 104_054A sin base,
 //                                                  105_121 en «90 | Archivo» y 105_122 en la papelera
 //   &e7=1&como=ana                                 lo mismo, visto por una invitada (edita los días, ve el desglose)
+//   &e11=1                                         la tarjeta del último día (E11): 104_008 y 105_029 con fecha de
+//                                                  rodaje 16/03 (el lunes después del Día 76), para ?page=d76
 //   window.__cabecera = { listo, ids, ir(clave), red(bool) }
 import { createRoot } from 'react-dom/client';
 import '@blocknote/core/fonts/inter.css';
@@ -162,6 +164,13 @@ async function main() {
       await d.engine.syncNow();
       await d.engine.syncNow();
     }
+  }
+  // `?e11=1`: la tarjeta del último día (E11): dos fichas filmadas el lunes después del Día 76.
+  if (params.get('e11') === '1') {
+    await writeBlocks(owner, built.ids.s008, [{ table: [['Fecha Rodaje', '16/03/2026']] }]);
+    await writeBlocks(owner, built.ids.s029, [{ table: [['Fecha Rodaje', '16/03/2026']] }]);
+    await owner.engine.syncNow();
+    await d.engine.syncNow();
   }
   // `?lento=1`: el índice nunca termina de leer los documentos (para ver la cabecera mientras lee).
   if (params.get('lento') === '1') d.docs.indexSnapshot = () => new Promise(() => undefined);

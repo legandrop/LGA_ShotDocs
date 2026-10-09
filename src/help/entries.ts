@@ -160,16 +160,18 @@ const INDEX_READING = '0.237';
 const LIVE_HEADER = '0.238';
 /** Los campos de las fichas en la cabecera viva (pregunta abierta, decorados, INT/EXT, coordenadas; E3b). */
 const LIVE_FIELDS = '0.240';
-/** La cabecera del día de rodaje y Prepare tomorrow's report (relaciones en vivo, E5): la versión se pone al publicar. */
-const LIVE_DAY = '0.241';
 /** Las fotos por fuente de la cabecera viva y el carrete de varias páginas (relaciones en vivo, E8). */
 const LIVE_PHOTOS = '0.243';
 /** El mapa del proyecto, Copy map / JSON y la lupa por escenas y locaciones (relaciones en vivo, E9): la versión se pone al publicar. */
 const LIVE_MAP = '0.242';
 /** El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6). */
 const LIVE_UNDERLINE = '0.244';
-/** El `/` de escenas y locaciones, *Create* con sus guardas y *Assign* (relaciones en vivo, E7). */
-const LINK_SCENES = '0.245';
+/**
+ * Lo que quedaba del `/`, *Create*, *Assign*, *Today* y *Tomorrow* (relaciones en vivo, E11): *Undo* de *Assign*,
+ * *Assign* en *Map › Pending* y crear el reporte de mañana desde *Tomorrow*. Sube `liveDay` (antes 0.241, E5) y
+ * `linkScenes` (antes 0.245, E7). La versión se pone al publicar.
+ */
+const REL_RESTOS = '0.248';
 /** Otros nombres de una locación y Dejar fuera de las relaciones (D526–D545). */
 const LOCATION_NAMES = '0.247';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
@@ -334,8 +336,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.liveDay.title',
     text: 'help.liveDay.text',
-    words: ['shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet'],
-    since: LIVE_DAY,
+    words: ['shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana'],
+    since: REL_RESTOS,
   },
   {
     id: 'livePhotos',
@@ -378,8 +380,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.linkScenes.title',
     text: 'help.linkScenes.text',
     more: ['slashScene', 'slashLocation'],
-    words: ['/e', '/l', 'slash', 'link', 'linkear', 'create scene', 'crear escena', 'create location', 'crear locación', 'assign', 'asignar', 'pending', 'pendiente', 'no scene number', 'sin número'],
-    since: LINK_SCENES,
+    words: ['/e', '/l', 'slash', 'link', 'linkear', 'create scene', 'crear escena', 'create location', 'crear locación', 'assign', 'asignar', 'pending', 'pendiente', 'no scene number', 'sin número', 'undo', 'deshacer', 'part', 'parte'],
+    since: REL_RESTOS,
   },
   {
     id: 'locationNames',

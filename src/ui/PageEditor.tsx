@@ -87,6 +87,7 @@ import { placeFlashExtension, showPlace } from '../relations/placeFlash';
 import { dayDecoInfo, dayDecorationsExtension, goFrom, refreshDayDecorations, type DayDecoInfo } from '../relations/dayDecorations';
 import { existingRelationsSession } from './relationsUi';
 import { refreshRelUnderline, relUnderlineExtension, underlineInfo, type PeekEvents, type UnderlineInfo } from '../relations/relUnderline';
+import { hoverGateExtension } from '../relations/hoverGate';
 import { RelPeek } from '../relations/RelPeek';
 import { TodayBar } from '../relations/TodayBar';
 import { relationSlash } from '../relations/slashRelations';
@@ -639,6 +640,8 @@ export function BlockEditor({
         dayDecorationsExtension(() => dayDecoRef.current),
         // Las escenas y locaciones reconocidas, subrayadas; los links a ellas, como fichas; el adelanto al pasar o tocar.
         relUnderlineExtension(() => underlineRef.current, () => peekRef.current),
+        // El fondo del subrayado al pasar el mouse, solo con el mouse movido de verdad (D571).
+        hoverGateExtension(),
         ...pageEditorExtensions(
           canCollapse
             ? {

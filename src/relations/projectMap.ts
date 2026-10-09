@@ -4,6 +4,7 @@ import { GENERAL_SECTION, type LiveSource } from './liveView';
 import { INDEX_PAGE_MIN, type MentionVia, type Section } from './pageRelations';
 import { fold } from './reader';
 import { pendingRelations } from './relationIndex';
+import { withoutDraft } from './slashDraft';
 import type { Stage } from './register';
 
 // El mapa del proyecto (Docs/Doc_Relaciones.md, sección 12; diseño S4 «D», `e_mapa.html`): locaciones en el tiempo,
@@ -120,8 +121,11 @@ export interface ProjectMapData {
   locations: MapLocation[];
   days: MapDay[];
   pending: MapPending[];
-  /** Escenas con el mismo código en dos páginas o más que la persona ve (las relaciones usan la primera del árbol). */
-  duplicates: { code: string; pageIds: string[] }[];
+  /**
+   * Escenas con el mismo código en dos páginas o más que la persona ve (las relaciones usan la primera del árbol) y, con
+   * `kind: 'day'`, reportes del día con el mismo título (dos dispositivos que crearon el mismo día a la vez, D580).
+   */
+  duplicates: { code: string; pageIds: string[]; kind?: 'day' }[];
   /** Las secciones sin número con fotos de todos los días. */
   unnumbered: (MapSectionRef & { dayId: string })[];
   /** Las páginas que se nombran en el mapa, con su título. */
@@ -182,9 +186,27 @@ export function pendingSummary(src: Pick<LiveSource, 'snap' | 'title'>): { pendi
     if (role?.excluded || role?.entity?.kind !== 'day' || rel.entities > INDEX_PAGE_MIN || src.title(pageId) === undefined) continue;
     unnumbered += daySections(rel.sections).unnumbered.length;
   }
-  const pending = pendingRelations(snap).length;
-  const duplicates = snap.registration.duplicates.filter((d) => d.pageIds.filter((id) => src.title(id) !== undefined).length > 1).length;
+  // Sin lo que se está tipeando en el menú `/` de escenas (D568).
+  const pending = withoutDraft(pendingRelations(snap)).length;
+  const duplicates = snap.registration.duplicates.filter((d) => d.pageIds.filter((id) => src.title(id) !== undefined).length > 1).length + dayTwins(src).length;
   return { pending, duplicates, unnumbered, total: pending + duplicates + unnumbered };
+}
+
+/**
+ * Los días de rodaje con el mismo título (con su fecha) en dos páginas o más que la persona ve: lo que dejan dos
+ * dispositivos que crean el reporte de mañana a la vez (D580). Una segunda unidad con el mismo título también sale: la
+ * persona decide (el renglón de ayuda lo dice). Nada se borra solo.
+ */
+export function dayTwins(src: Pick<LiveSource, 'snap' | 'title'>): { code: string; pageIds: string[]; kind: 'day' }[] {
+  const by = new Map<string, string[]>();
+  for (const d of dayList(src as LiveSource)) {
+    if (!d.date) continue;
+    const title = (src.title(d.pageId) ?? '').replace(/\s+/g, ' ').trim();
+    const list = by.get(title) ?? [];
+    list.push(d.pageId);
+    by.set(title, list);
+  }
+  return [...by].filter(([, ids]) => ids.length > 1).map(([code, pageIds]) => ({ code, pageIds, kind: 'day' as const }));
 }
 
 /** Si un reporte tiene algo escrito: un renglón con texto que no es un título, o fotos. */
@@ -356,13 +378,14 @@ export function projectMap(src: LiveSource): ProjectMapData {
     return fold(a.name) < fold(b.name) ? -1 : fold(a.name) > fold(b.name) ? 1 : 0;
   });
 
-  const pending: MapPending[] = pendingRelations(snap).map((p) => ({ code: p.ref, mentions: p.pages }));
+  const pending: MapPending[] = withoutDraft(pendingRelations(snap)).map((p) => ({ code: p.ref, mentions: p.pages }));
   for (const p of pending) for (const m of p.mentions) notePage(m.pageId);
   const duplicates = snap.registration.duplicates
     .map((d) => ({ code: d.code, pageIds: d.pageIds.filter((id) => src.title(id) !== undefined) }))
     .filter((d) => d.pageIds.length > 1);
-  for (const d of duplicates) for (const id of d.pageIds) notePage(id);
-  return { scenes, locations, days, pending, duplicates, unnumbered, pages, complete: snap.complete };
+  const allDuplicates = [...duplicates, ...dayTwins(src)];
+  for (const d of allDuplicates) for (const id of d.pageIds) notePage(id);
+  return { scenes, locations, days, pending, duplicates: allDuplicates, unnumbered, pages, complete: snap.complete };
 }
 
 /**

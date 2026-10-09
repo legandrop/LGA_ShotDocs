@@ -8,6 +8,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import { unitsFromYDoc } from '../search/extract';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
@@ -263,6 +264,86 @@ async function headingRuns(d: Device, pageId: string): Promise<string[]> {
   return out;
 }
 
+describe('Tomorrow sin día siguiente: crear y preparar el reporte de mañana (D573–D577)', () => {
+  it('Día 76: la tarjeta propone el 16/03 del desglose; crea, lleva al reporte nuevo y Undo lo manda a la papelera', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const built = await buildProject(d, fakePhoto, { indexPage: false, days: true });
+    await writeBlocks(d, built.ids.s029, [{ table: [['Fecha Rodaje', '16/03/2026']] }]);
+    await d.engine.syncNow();
+    const host = mount(d, built.ids.d76);
+    const card = await shown(() => {
+      const c = header(host)?.querySelector<HTMLElement>('.lh-tomorrow.new');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    expect(card.querySelector('.th')!.textContent).toBe('Tomorrow · Mon 16 Mar · no report yet');
+    expect([...card.querySelectorAll('.tchip .k')].map((x) => x.textContent)).toEqual(['105_029']);
+    expect(card.querySelector('.row2')!.textContent).toContain('Creates «2026-03-16 | Día 77» in «2 | Rodaje»');
+    // Sumar una escena a mano antes de crear (se guarda en el dispositivo y pasa al reporte nuevo).
+    click(card.querySelector('.lh-tbtn.add'));
+    type(header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!, '025');
+    click(header(host)!.querySelector('.lh-picker-list button'));
+    await shown(() => expect([...header(host)!.querySelectorAll('.lh-tomorrow.new .tchip .k')].map((x) => x.textContent)).toEqual(['105_029', '105_025']));
+    click(header(host)!.querySelector('.lh-tomorrow.new .lh-prepare'));
+    const created = await shown(() => {
+      const row = d.tree.children(built.ids.rodaje).find((p) => p.title === '2026-03-16 | Día 77');
+      expect(row).toBeTruthy();
+      return row!;
+    });
+    await shown(() => expect(location.pathname).toBe(pagePath(created.id)));
+    await shown(async () => expect((await headingRuns(d, created.id)).filter((h) => h.startsWith('Escena'))).toEqual([`Escena [105_029](/p/${built.ids.s029})`, `Escena [105_025](/p/${built.ids.s025})`]));
+    await shown(() => expect(host.textContent).toContain('Created «2026-03-16 | Día 77» · added 2 sections'));
+    // El Día 76 ahora tiene día siguiente: el reporte nuevo es un día.
+    expect(created.settings?.entity).toEqual({ kind: 'day' });
+    click([...host.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent === 'Undo'));
+    await shown(() => expect(d.tree.isTrashed(created.id)).toBe(true));
+    await shown(() => expect(host.textContent).toContain('«2026-03-16 | Día 77» went to the trash'));
+  });
+
+  it('quien ve una parte del proyecto (un invitado a la carpeta de días) no tiene la tarjeta: mañana puede estar donde no ve', async () => {
+    const server = new FakeServer();
+    server.enableTeam();
+    const owner = await makeDevice(server);
+    devices.push(owner);
+    const built = await buildProject(owner, fakePhoto, { indexPage: false, days: true });
+    await owner.engine.syncNow();
+    server.addMember('beto', 'member', 'beto@test');
+    server.grant('beto', { pageId: built.ids.rodaje }, 'edit_pages');
+    const guest = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'beto', email: 'beto@test' });
+    devices.push(guest);
+    await guest.engine.syncNow();
+    await guest.engine.syncNow();
+    const host = mount(guest, built.ids.d76);
+    await shown(() => expect(header(host)?.textContent).toContain('Live'));
+    await act(() => settled(300));
+    expect(header(host)!.querySelector('.lh-tomorrow')).toBeNull();
+    // El dueño, en cambio, sí.
+    const host2 = mount(owner, built.ids.d76);
+    await shown(() => expect(host2.querySelector('section.lh .lh-tomorrow.new')).toBeTruthy());
+  });
+
+  it('sin red: no crea nada y lo dice', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    devices.push(d);
+    const built = await buildProject(d, fakePhoto, { indexPage: false, days: true });
+    await d.engine.syncNow();
+    const host = mount(d, built.ids.d76);
+    const button = await shown(() => {
+      const b = header(host)?.querySelector<HTMLElement>('.lh-tomorrow.new .lh-prepare');
+      expect(b).toBeTruthy();
+      return b!;
+    });
+    const before = d.tree.children(built.ids.rodaje).length;
+    server.online = false;
+    click(button);
+    await shown(() => expect(host.textContent).toContain('Connect to create tomorrow’s report'), 15000);
+    expect(d.tree.children(built.ids.rodaje).length).toBe(before);
+    server.online = true;
+  });
+});
+
 describe('Create y Assign en la cabecera del día (E7)', () => {
   it('Assign en una sección sin número: agrega « · 105_025» con link al título y la sección pasa a esa escena con sus fotos', async () => {
     const { d, built, host } = await app('d59');
@@ -282,6 +363,46 @@ describe('Create y Assign en la cabecera del día (E7)', () => {
     expect(header(host)!.querySelectorAll('[title]').length).toBe(0);
   });
 
+  it('Assign tiene Undo en su aviso: saca solo « · 105_025»; si alguien cambió el título después, no toca nada (D566)', async () => {
+    const { d, built, host } = await app('d59');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera completa');
+    const row = () => [...header(host)!.querySelectorAll<HTMLElement>('.lh-mrow')].find((r) => r.textContent?.includes('Plates ambulancia'));
+    const assign = async () => {
+      click(row()!.querySelector('.rel-assign'));
+      type(header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!, '025');
+      click(header(host)!.querySelector('.lh-picker-list button'));
+      await shown(async () => expect(await headingRuns(d, built.ids.d59)).toContain(`Plates ambulancia · [105_025](/p/${built.ids.s025})`));
+      return shown(() => {
+        const undo = [...host.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent === 'Undo');
+        expect(undo).toBeTruthy();
+        return undo!;
+      });
+    };
+    const undo = await assign();
+    expect(host.textContent).toContain('Assigned 105_025 to «Plates ambulancia»');
+    click(undo);
+    await shown(async () => expect(await headingRuns(d, built.ids.d59)).toContain('Plates ambulancia'));
+    await shown(() => expect(host.textContent).toContain('Assign undone'));
+    await shown(() => expect(row()?.textContent).toContain('no scene number'));
+
+    // Otra vez, y ahora alguien escribe en el medio de lo agregado antes de deshacer: no se toca nada.
+    const undo2 = await assign();
+    const doc = await d.docs.open(built.ids.d59);
+    let text: Y.XmlText | null = null;
+    const walk = (node: Y.XmlElement | Y.XmlFragment) => {
+      for (const c of node.toArray()) {
+        if (c instanceof Y.XmlText && c.toString().startsWith('Plates ambulancia')) text = c;
+        else if (c instanceof Y.XmlElement) walk(c);
+      }
+    };
+    walk(doc.getXmlFragment('document-store'));
+    (text as Y.XmlText | null)!.insert('Plates ambulancia · '.length, 'ruta ', {});
+    d.docs.close(built.ids.d59);
+    click(undo2);
+    await shown(() => expect(host.textContent).toContain('It changed since: nothing was undone'));
+    expect((await headingRuns(d, built.ids.d59)).some((h) => h.startsWith('Plates ambulancia · ruta ') && h.includes(`/p/${built.ids.s025}`))).toBe(true);
+  });
+
   it('un número que no existe: Create con el motivo (permisos desconocidos) y Assign pone el link sobre lo escrito', async () => {
     const d = await makeDevice(new FakeServer());
     devices.push(d);
@@ -294,6 +415,9 @@ describe('Create y Assign en la cabecera del día (E7)', () => {
     expect(cant.textContent).toBe('Create scene 105_120');
     expect(cant.getAttribute('data-tip')).toContain('whole project');
     click(row.querySelector('.rel-assign'));
+    // Sin plan ni secciones de escena en el día: primero las del episodio del número escrito (D570, O8 de E7).
+    const firsts = [...header(host)!.querySelectorAll('.lh-picker-list button .k')].map((x) => x.textContent);
+    expect(firsts.slice(0, 4)).toEqual(['105_025', '105_026', '105_027', '105_029']);
     type(header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!, '5026');
     click(header(host)!.querySelector('.lh-picker-list button'));
     await until(async () => (await headingRuns(d, built.ids.d58)).some((h) => h.includes('/p/')), 'el link');

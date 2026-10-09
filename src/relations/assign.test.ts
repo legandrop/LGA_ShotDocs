@@ -76,7 +76,7 @@ describe('Assign en el Y.Doc', () => {
 
   it('una sección sin número: agrega « · 105_025» con link al final del título; otra escena suma la suya', () => {
     const { doc, ids } = makeDoc();
-    expect(assignHeadingInDoc(doc, ids[0], 'Plates ambulancia', { code: '105_025', pageId: SCENE })).toEqual({ status: 'ok', added: 1 });
+    expect(assignHeadingInDoc(doc, ids[0], 'Plates ambulancia', { code: '105_025', pageId: SCENE })).toMatchObject({ status: 'ok', added: 1 });
     expect(read(doc)[0]).toBe(`Plates ambulancia · [105_025](/p/${SCENE})`);
     expect(assignHeadingInDoc(doc, ids[0], `Plates ambulancia · 105_025`, { code: '105_027', pageId: OTHER }).status).toBe('ok');
     expect(read(doc)[0]).toBe(`Plates ambulancia · [105_025](/p/${SCENE}) · [105_027](/p/${OTHER})`);
@@ -128,7 +128,7 @@ describe('Assign en el Y.Doc', () => {
   it('un número que no existe: la marca va sobre lo escrito (cada aparición del bloque) y la mención deja de estar pendiente', () => {
     const { doc, ids } = makeDoc();
     const res = assignMentionInDoc(doc, ids[1], '105_120', { pageId: SCENE }, { registry, ep: '105' });
-    expect(res).toEqual({ status: 'ok', added: 2 });
+    expect(res).toMatchObject({ status: 'ok', added: 2 });
     expect(read(doc)[1]).toBe(`Plates de ruta, la [105_120](/p/${SCENE}) con grúa y otra vez [105_120](/p/${SCENE}).`);
     const meta: BlockMeta[] = [];
     const units = unitsFromYDoc(doc, meta);

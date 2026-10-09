@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.248 :
+
+*Assign* no se podía deshacer, *Map › Pending* no lo ofrecía sobre los números y un día sin día siguiente no tenía tarjeta *Tomorrow*. Ahora el aviso de *Assign* trae *Undo*, que saca solo lo agregado por anclas relativas de Yjs y solo si sigue igual; en *Pending*, *Assign* linkea el número en cada página editable que lo nombra. El último día ofrece crear el reporte de mañana como *New day report* (fecha del desglose, título como los demás días) y prepararlo en un paso: sincroniza antes, prepara el que ya exista, *Undo* va a la papelera solo si nadie escribió. Dos que crean a la vez: cede la copia vacía de id mayor; *Prepare* no escribe en un reporte cuyo contenido llega de otro dispositivo. Además: `/e 105_027a` conserva la parte, en un día el episodio del plan va primero (también tipeando), y otros detalles. D566–D580.
+
+[Deshacer Assign desde su aviso, asignar desde Map › Pending y crear y preparar el reporte de mañana desde el último día]
+
 v0.247 :
 
 Una locación no tenía dónde guardar cómo le dice el equipo, así que «Estudio | Autos» en una ficha, «Arenera VA» en el título de un día o un decorado «Estudio» no la nombraban, y dejar una carpeta fuera de las relaciones pedía un guion. Ahora el renglón «Otros nombres: …» (o la fila nueva de la plantilla *Location*) de la página de la locación cuenta con la regla de D416: dos palabras en todos lados, una sola o un genérico solo donde se espera un lugar (título del día o campo *Locación*, también en el subrayado), el genérico como parte entera. Un nombre escrito en dos locaciones no cuenta y la cabecera lo avisa; se aplica 2 s después de escribir. *Link to a location…* lo escribe desde un día sin lugar, con *Undo*. *Leave out of relations* en el menú ⋯, con rótulo y aviso. D526–D545, D556–D563.

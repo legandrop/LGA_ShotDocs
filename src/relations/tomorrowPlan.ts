@@ -100,3 +100,16 @@ function subscribe(fn: () => void): () => void {
 export function usePlanAdjust(dayId: string | null): PlanAdjust {
   return useSyncExternalStore(subscribe, () => (dayId ? planAdjust(dayId) : NONE));
 }
+
+/**
+ * Lo ajustado para un reporte que todavía no existía (la tarjeta *Tomorrow* de un día sin día siguiente, D573) pasa al
+ * reporte recién creado: si después se vuelve a abrir su tarjeta, la lista es la misma.
+ */
+export function movePlan(from: string, to: string): void {
+  const store = { ...readStore() };
+  const cur = store[from];
+  if (!cur) return;
+  delete store[from];
+  store[to] = cur;
+  writeStore(store);
+}

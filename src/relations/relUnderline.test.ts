@@ -11,6 +11,7 @@ import { schema } from '../ui/editorSchema';
 import { buildRegistry } from './reader';
 import { anchorOf, linkTextInBlock, locateUnderline, makeLinkAt, relLinkKeyExtension, underlineAt, underlineKey } from './relLink';
 import { buildUnderlines, mapThroughReplace, relUnderlineExtension, UNDERLINE_WAIT_MS, type PeekEvents, type UnderlineInfo } from './relUnderline';
+import { captureNewLinks, undoAssignInDoc } from './assign';
 
 // El subrayado pasivo, la ficha de los links y el gesto para volver link (Docs/Doc_Relaciones.md, sección 14): son
 // decoraciones (nada entra al Y.Doc), se corren con lo que se escribe acá y se rearman en el momento con lo que llega de
@@ -328,6 +329,32 @@ describe('Assign desde el adelanto de un pendiente y el link de lo creado desde 
     expect(b.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_026']}">105_120</link>`);
     // Con otro ref (el subrayado ya no dice eso), no.
     expect(makeLinkAt(va, drawnRange(ea, 'CENADE').from, '105_120', { pageId: PAGES['105_026'] })).toBe(false);
+  });
+
+  it('el Undo del aviso del adelanto (D566): saca solo la marca puesta, en los dos dispositivos; lo que B escribió queda', async () => {
+    const a = page();
+    const b = new Y.Doc();
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a));
+    a.on('update', (u: Uint8Array, origin: unknown) => origin !== 'b' && Y.applyUpdate(b, u, 'a'));
+    b.on('update', (u: Uint8Array, origin: unknown) => origin !== 'a' && Y.applyUpdate(a, u, 'b'));
+    const ea = mount(a);
+    const eb = mount(b, { underline: false });
+    await tick();
+    const va = view(ea);
+    const anchor = anchorOf(va.state, drawnRange(ea, '105_120').from, '105_120');
+    const href = `/p/${PAGES['105_026']}`;
+    const spans = captureNewLinks(a, anchor.blockId!, href, () => makeLinkAt(va, locateUnderline(va.state, anchor)!, '105_120', { pageId: PAGES['105_026'] }));
+    expect(spans!.map((s) => s.text)).toEqual(['105_120']);
+    eb.insertBlocks([{ type: 'paragraph', content: 'Nota de B arriba.' }] as never, eb.document[0], 'before');
+    await tick(10);
+    expect(undoAssignInDoc(a, spans!)).toBe('undone');
+    await tick(10);
+    for (const d of [a, b]) {
+      const xml = d.getXmlFragment(CONTENT_FRAGMENT).toString();
+      expect(xml).not.toContain(href);
+      expect(xml).toContain('105_120');
+      expect(xml).toContain('Nota de B arriba.');
+    }
   });
 
   it('linkTextInBlock: el número recién escrito, en su bloque (el más cercano al lugar); si el bloque ya no está, nada', async () => {

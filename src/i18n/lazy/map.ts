@@ -74,12 +74,16 @@ export const map = {
   },
   'map.namedIn': { en: "Named in", es: "Nombrada en" },
   'map.createLater': {
-    en: "Create it here when it can’t duplicate anything (or with + in its episode folder): every mention relates by itself.",
-    es: "Creala desde acá cuando no puede duplicar nada (o con + en la carpeta de su episodio): cada mención se relaciona sola.",
+    en: "Create it here when it can’t duplicate anything (or with + in its episode folder): every mention relates by itself. If it’s a typo, Assign links every mention to the scene it means.",
+    es: "Creala desde acá cuando no puede duplicar nada (o con + en la carpeta de su episodio): cada mención se relaciona sola. Si es un error de tipeo, Asignar linkea cada mención a la escena que quiere decir.",
   },
   'map.duplicate': {
     en: { one: "{code} is in {count} page", other: "{code} is in {count} pages" },
     es: { one: "{code} está en {count} página", other: "{code} está en {count} páginas" },
+  },
+  'map.duplicateDayHint': {
+    en: "Two devices may have created the same shoot day at the same time. Move what’s written into one and send the other to the trash; if it’s a second unit, it can stay.",
+    es: "Dos dispositivos pueden haber creado el mismo día de rodaje a la vez. Pasá lo escrito a uno y mandá el otro a la papelera; si es una segunda unidad, puede quedar.",
   },
   'map.duplicateHint': {
     en: "The relations use the first one in the sidebar. Move what’s written into one and send the other to the trash.",

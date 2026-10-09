@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { locale, useT, type Translate } from '../i18n';
 import { navigate, pagePath } from '../router';
-import { usePermissions, useServices } from '../services';
+import { usePermissions, useServices, useTree } from '../services';
 import { notify } from '../ui/notice';
 import { dayShortLabel, headingStyleFor, linkTargetOf, sceneTitleOf, type DayLive, type DayPlan, type DayQuestion, type DayRow } from './dayLive';
 import { goToPlace } from './goToPlace';
@@ -12,7 +12,8 @@ import { titleFragment } from './aliasAction';
 import { AssignButton, CreateEntityButton, ScenePicker } from './EntityActions';
 import { LinkLocationButton } from './LinkLocation';
 import type { DayRef, LiveSource } from './liveView';
-import { addToPlan, adjustedPlan, removeFromPlan, usePlanAdjust } from './tomorrowPlan';
+import { addToPlan, adjustedPlan, movePlan, removeFromPlan, usePlanAdjust } from './tomorrowPlan';
+import { createTomorrow, nextDayNumber, nextDayTitle, proposeTomorrow, undoTomorrow, type TomorrowProposal } from './tomorrowNew';
 import type { PreparedSection } from './prepareDay';
 
 // La cabecera viva de un día de rodaje y su tarjeta *Tomorrow* (Docs/Doc_Relaciones.md, sección 11; maqueta S4 «D»,
@@ -152,6 +153,8 @@ function Rows({ v, src, tr, partial }: { v: DayLive; src: LiveSource; tr: Transl
                     pageId={v.day.pageId}
                     target={{ kind: 'mention', blockId: r.place.blockId, pending: r.code, ep: src.snap.registration.roles.get(v.day.pageId)?.ep ?? null }}
                     near={near}
+                    // Sin plan ni secciones de escena, primero las del episodio del número escrito (como el adelanto, D570).
+                    ep={r.code.includes('_') ? r.code.slice(0, 3) : null}
                   />
                 )}
               </span>
@@ -273,10 +276,11 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
       const linkTarget = linkTargetOf(src);
       const style = headingStyleFor(src, v.day.pageId, tr.lang);
       const { prepareReport, undoPrepared } = await import('./prepareDay');
-      const deps = { docs: services.docs, engine: services.engine };
+      // Con el árbol: un reporte recién creado en otro dispositivo cuyo contenido todavía no llegó no se prepara (D579).
+      const deps = { docs: services.docs, engine: services.engine, tree: services.tree };
       const res = await prepareReport(deps, t.day.pageId, { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level });
       if (res.status !== 'ok') {
-        notify(tr(res.status === 'missing' ? 'day.prepareMissing' : 'day.prepareUnknown', { day: dayShortLabel(t.day) }));
+        notify(tr(res.status === 'missing' ? 'day.prepareMissing' : res.status === 'busy' ? 'day.prepareBusy' : 'day.prepareUnknown', { day: dayShortLabel(t.day) }));
         return;
       }
       const parts = [res.added.length ? tr('day.added', { count: res.added.length }) : tr('day.nothingToAdd')];
@@ -388,6 +392,170 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
   );
 }
 
+// --- La tarjeta «Tomorrow» de un día sin día siguiente (D573–D577) --------------------------------------------------
+
+function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr: Translate; proposal: TomorrowProposal }) {
+  const services = useServices();
+  const perms = usePermissions();
+  const tree = useTree();
+  // Lo ajustado a mano antes de que exista el reporte: por el día de hoy y la fecha; al crearlo pasa al reporte nuevo.
+  const key = `new:${v.day.pageId}:${proposal.date}`;
+  const adj = usePlanAdjust(key);
+  const codes = adjustedPlan(proposal.plan.codes, adj);
+  const [picking, setPicking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const today = tree.get(v.day.pageId);
+  const projectId = src.snap.projectId;
+  const parentId = today?.parent_id ?? null;
+  const folder = parentId ? (tree.get(parentId)?.title ?? '') : tr('day.newRoot');
+  const canCreate = () => perms.canCreateIn(parentId, projectId);
+  const scenePage = (code: string) => {
+    const id = src.snap.registry.scenes.get(code)?.pageId ?? null;
+    return id && src.title(id) !== undefined ? id : null;
+  };
+  // El título que va a tener (sin número de día en el de hoy, el número lo decide al crear, como New day report: la fecha).
+  const n = nextDayNumber(today?.title ?? '', 0);
+  const title = n ? nextDayTitle(today?.title ?? '', proposal.date, n, tr.lang) : proposal.date;
+  const source = proposal.plan.source === 'breakdown' ? tr('day.srcBreakdown', { label: proposal.plan.label, date: ddmm(proposal.date) }) : tr('day.srcNone');
+
+  const create = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const scenes = codes.flatMap((code) => {
+        const pageId = scenePage(code);
+        return pageId ? [{ code, pageId }] : [];
+      });
+      const noPage = codes.filter((code) => !scenePage(code));
+      const linkTarget = linkTargetOf(src);
+      const style = headingStyleFor(src, v.day.pageId, tr.lang);
+      const deps = { tree: services.tree, docs: services.docs, engine: services.engine };
+      const res = await createTomorrow(
+        deps,
+        { projectId, parentId, todayTitle: today?.title ?? '', date: proposal.date, lang: tr.lang, prepare: { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level } },
+        canCreate,
+      );
+      if (res.status === 'yielded') {
+        // Otro dispositivo creó el mismo día a la vez: queda el suyo; la copia vacía de acá fue a la papelera (D580).
+        notify(tr('day.newYielded', { title: res.title }));
+        navigate(pagePath(res.pageId));
+        return;
+      }
+      if (res.status === 'elsewhere') {
+        // Otro dispositivo lo acaba de crear y lo prepara él: no se toca (D579). Se va a verlo.
+        notify(tr('day.newElsewhere', { title: res.title }));
+        navigate(pagePath(res.pageId));
+        return;
+      }
+      if (res.status !== 'ok') return notify(res.status === 'offline' ? tr('day.newOffline') : tr('day.newCantCreate', { folder }));
+      movePlan(key, res.pageId);
+      const p = res.prepared;
+      const parts = [tr(res.created ? 'day.newCreated' : 'day.newExisted', { title: res.title })];
+      if (p.status === 'ok') {
+        parts.push(p.added.length ? tr('day.added', { count: p.added.length }) : tr('day.nothingToAdd'));
+        if (p.skipped.length) parts.push(tr('day.alreadyHad', { codes: p.skipped.join(', '), count: p.skipped.length }));
+        if (p.merged) parts.push(tr('day.merged', { count: p.merged }));
+      } else parts.push(tr(p.status === 'missing' ? 'day.prepareMissing' : p.status === 'busy' ? 'day.prepareBusy' : 'day.prepareUnknown', { day: res.title }));
+      // Otro dispositivo creó el mismo día a la vez: quedan los dos, a la vista (D580).
+      if (res.twins.length) parts.push(tr('day.newTwins'));
+      if (noPage.length) parts.push(tr('day.noPage', { codes: noPage.join(', '), count: noPage.length }));
+      const canUndo = res.created || (p.status === 'ok' && p.added.length > 0);
+      notify(
+        parts.join(' · '),
+        canUndo
+          ? {
+              label: tr('day.undo'),
+              run: () => {
+                void undoTomorrow(deps, res, parentId, linkTarget).then(
+                  (u) => {
+                    if (u.kind === 'trashed') notify(tr('create.undone', { title: res.title }));
+                    else if (u.kind === 'offline') notify(tr('create.undoOffline', { title: res.title }));
+                    else if (u.kind === 'changed') notify(tr(res.created ? 'create.undoChanged' : 'day.undoUnexpected', { title: res.title }));
+                    else if (u.kind === 'prepared') notify(u.kept ? `${tr('day.undoneShort', { count: u.removed })} · ${tr('day.undoKept', { count: u.kept })}` : tr('day.undone', { count: u.removed }));
+                  },
+                  (err) => console.warn('[relaciones] no se pudo deshacer el reporte de mañana', err),
+                );
+              },
+            }
+          : undefined,
+      );
+      // Al reporte de mañana, con lo agregado resaltado (o al reporte, si no se agregó nada).
+      if (p.status === 'ok' && p.added.length) goToPlace(services, { pageId: res.pageId, blockId: p.added[0].headingId, endBlockId: null });
+      else navigate(pagePath(res.pageId));
+    } catch (err) {
+      console.warn('[relaciones] no se pudo crear el reporte de mañana', err);
+      notify(tr('day.newFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="lh-tomorrow new">
+      <div className="th">
+        <Ic name="day" small />
+        <span>
+          {tr.rich('day.newTitle', { date: <b>{longDate(proposal.date).split(' ').slice(0, 3).join(' ')}</b> })}
+          <span className="lh-via"> · {tr('day.newNoReport')}</span>
+        </span>
+      </div>
+      <div className="lh-via sub">
+        {tr('live.scenes', { count: codes.length })} · {source}
+      </div>
+      <div className="chips">
+        {codes.map((code) => {
+          const pageId = scenePage(code);
+          const t = pageId ? sceneTitleOf(src.title(pageId)) : '';
+          return (
+            <span key={code} className={`lh-chip scene tchip${pageId ? '' : ' out'}`}>
+              <Ic name="scene" />
+              <span className="lh-chip-t">
+                <span className="k">{code}</span>
+                {t && <span className="tl"> {short(t, 24)}</span>}
+              </span>
+              <button className="x" onClick={() => removeFromPlan(key, code)} aria-label={tr('day.removeScene', { code })}>
+                <Ic name="x" small />
+              </button>
+            </span>
+          );
+        })}
+        <span className="lh-addwrap">
+          <button className="lh-tbtn add" onClick={() => setPicking(!picking)} aria-expanded={picking}>
+            <Ic name="plus" small />
+            {tr('day.addScene')}
+          </button>
+          {picking && (
+            <ScenePicker
+              src={src}
+              have={codes}
+              near={[...proposal.plan.codes, ...v.rows.flatMap((r) => (r.kind === 'scene' || r.kind === 'planned' ? [r.code] : []))]}
+              label={tr('day.addScene')}
+              onClose={() => setPicking(false)}
+              onPick={({ code }) => {
+                addToPlan(key, code);
+                setPicking(false);
+              }}
+            />
+          )}
+        </span>
+      </div>
+      <div className="row2">
+        {canCreate() ? (
+          <>
+            <button className="primary lh-prepare" onClick={() => void create()} disabled={busy}>
+              <Ic name="wand" small />
+              {tr('day.newCreate')}
+            </button>
+            <span>{tr('day.newHint', { title, folder })}</span>
+          </>
+        ) : (
+          <span>{tr('day.newCantCreate', { folder })}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // --- La cabecera del día ---------------------------------------------------------------------------------------
 
 export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src: LiveSource; pages: number; partial: boolean; photos: HeaderPhotos }) {
@@ -399,6 +567,9 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
     setOpenRaw(next);
   };
   const reading = !v.complete;
+  // Sin día siguiente: la tarjeta que crea el reporte de mañana (D573). Solo con el índice completo (si no, mañana puede
+  // existir y todavía no estar leído) y si quien mira ve el proyecto entero (si no, mañana puede estar donde no ve).
+  const newTomorrow = !v.tomorrow && !v.next && v.complete && !partial ? proposeTomorrow(src, v.day) : null;
   const fragment = titleFragment({ title: src.title(v.day.pageId) ?? '', label: v.day.label, date: v.day.date });
   const scenePage = (code: string) => {
     const id = src.snap.registry.scenes.get(code)?.pageId ?? null;
@@ -491,6 +662,7 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
         </dd>
       </dl>
       {v.tomorrow && <Tomorrow v={v} src={src} tr={tr} />}
+      {!v.tomorrow && newTomorrow && <TomorrowNew v={v} src={src} tr={tr} proposal={newTomorrow} />}
       <PhotoSources gallery={photos.gallery} complete={v.complete} unread={photos.unread} here={photos.here} tr={tr} />
       <div className="lh-foot">{tr('live.foot', { count: pages })}</div>
     </section>

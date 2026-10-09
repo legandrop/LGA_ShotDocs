@@ -317,13 +317,18 @@ export async function createDayReport(
     markTemplate?: string | null;
     /** Avisa cuántas fotos de la plantilla quedaron sin sus anotaciones porque no entraban en los topes de la página. */
     onMarkupSkipped?: (photos: number) => void;
+    /**
+     * El título, si no es el de `reportTitle`: el reporte de mañana desde la tarjeta *Tomorrow* toma la forma de los días
+     * del proyecto (`2026-02-21 | Día 61`, relations/tomorrowNew.ts).
+     */
+    title?: string;
   },
 ): Promise<string> {
   const { tree } = deps;
   const template = options.template ?? null;
   const blocks = reportBlocks(plan, input, lang, template);
   const templateId = template?.id ?? BUILTIN_ONSET;
-  const title = reportTitle(input.date, input.day, lang);
+  const title = options.title ?? reportTitle(input.date, input.day, lang);
   if (plan.parentId && options.canMark) await markReportFolder(tree, plan.parentId, options.markTemplate);
   // Solo un reporte hecho por la app, con su título de reporte y sin subpáginas, de esta carpeta (B1). La vacía se
   // vuelve a comprobar al escribir (`writeNewPage` no escribe en una página con contenido).

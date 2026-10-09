@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
+import type { EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { useT } from '../i18n';
 import { useServices, useTree } from '../services';
@@ -20,6 +21,21 @@ import type { LiveSource } from './liveView';
 // micrófono queda en la barra). No escribe nada por su cuenta: solo lo que se toca.
 
 const ROOT_VAR = '--rel-today-space';
+
+/**
+ * Lo que escribe una pastilla donde está el cursor: un espacio antes si lo de antes no es un espacio, y uno después solo
+ * si lo que sigue no es puntuación, un espacio o un cierre («… doble 101_001.», no «101_001 .»: O11 de la auditoría de
+ * E6, D572). Al final del renglón, el espacio después queda (para seguir escribiendo).
+ */
+export function todayText(state: EditorState, text: string): string {
+  const { from, to } = state.selection;
+  const size = state.doc.content.size;
+  const before = from > 0 ? state.doc.textBetween(from - 1, from, '\n', '\n') : '';
+  const after = to < size ? state.doc.textBetween(to, Math.min(to + 1, size), '\n', '\n') : '';
+  const pre = before && !/\s/.test(before) ? ' ' : '';
+  const post = after && /[\s.,;:!?)\]}»”’…]/u.test(after) ? '' : ' ';
+  return `${pre}${text}${post}`;
+}
 
 export function TodayBar({ view, pageId, editable, camera }: { view: () => EditorView | null; pageId: string; editable: boolean; camera: (() => void) | null }) {
   const services = useServices();
@@ -96,10 +112,7 @@ export function TodayBar({ view, pageId, editable, camera }: { view: () => Edito
     const v = view();
     if (!v) return;
     const { state } = v;
-    const { from } = state.selection;
-    const before = from > 0 ? state.doc.textBetween(from - 1, from, '\n', '\n') : '';
-    const pre = before && !/\s/.test(before) ? ' ' : '';
-    v.dispatch(state.tr.insertText(`${pre}${text} `).scrollIntoView());
+    v.dispatch(state.tr.insertText(todayText(state, text)).scrollIntoView());
     v.focus();
   };
   const keep = (e: { preventDefault: () => void }) => e.preventDefault();

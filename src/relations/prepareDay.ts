@@ -3,6 +3,7 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import * as Y from 'yjs';
 import { linkedPageId, unitsFromYDoc, type BlockMeta } from '../search/extract';
 import type { PageDocs } from '../sync/docs';
+import type { PageRow } from '../sync/types';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions } from '../ui/editorSchema';
 import { findUnknownContent } from '../ui/unknownContent';
@@ -67,7 +68,12 @@ export interface PrepareOutcome {
   merged: number;
 }
 
-export type PrepareResult = ({ status: 'ok' } & PrepareOutcome) | { status: 'missing' | 'unknown' };
+/**
+ * `busy`: el reporte se acaba de crear en otro dispositivo y su contenido todavía no llegó (ni al servidor ni acá):
+ * prepararlo ahora escribiría sobre un documento vacío y, al llegar lo del otro, quedarían las secciones dos veces
+ * (B2 de la auditoría de E11, D579). Se espera un rato; si no llega, no se toca y se avisa.
+ */
+export type PrepareResult = ({ status: 'ok' } & PrepareOutcome) | { status: 'missing' | 'unknown' | 'busy' };
 
 interface InlineText {
   type: 'text';
@@ -301,6 +307,25 @@ function cleanRepeated(doc: Y.Doc, linkTarget: LinkTarget): number {
  * Prepara un documento ya abierto: limpia los preparados repetidos y agrega, al final, una sección por escena que no
  * tiene. Sin pantalla; puro sobre el Y.Doc (lo usan las pruebas de colaboración con dos documentos).
  */
+/**
+ * La sección que agrega *Prepare* para una escena: el título («Escena» + el número como link) y un renglón vacío. Con
+ * `ids`, esos ids (el reporte de mañana creado de una vez, `tomorrowNew.ts`, los escribe junto con la plantilla).
+ */
+export function sectionBlocks(s: PrepareScene, word: string, level: 1 | 2 | 3, ids?: { heading: string; paragraph: string }): Record<string, unknown>[] {
+  return [
+    {
+      ...(ids ? { id: ids.heading } : {}),
+      type: 'heading',
+      props: { level },
+      content: [
+        { type: 'text', text: `${word} `, styles: {} },
+        { type: 'link', href: `/p/${s.pageId}`, content: [{ type: 'text', text: s.code, styles: {} }] },
+      ],
+    },
+    { ...(ids ? { id: ids.paragraph } : {}), type: 'paragraph', content: [] },
+  ];
+}
+
 export function prepareInDoc(doc: Y.Doc, opts: PrepareOptions): PrepareOutcome {
   const sections = scenesWithSection(doc, opts);
   const origin = { client: doc.clientID, clock: Y.decodeStateVector(Y.encodeStateVector(doc)).get(doc.clientID) ?? 0 };
@@ -316,17 +341,7 @@ export function prepareInDoc(doc: Y.Doc, opts: PrepareOptions): PrepareOutcome {
       continue;
     }
     want.push(s);
-    blocks.push(
-      {
-        type: 'heading',
-        props: { level: opts.level },
-        content: [
-          { type: 'text', text: `${opts.word} `, styles: {} },
-          { type: 'link', href: `/p/${s.pageId}`, content: [{ type: 'text', text: s.code, styles: {} }] },
-        ],
-      },
-      { type: 'paragraph', content: [] },
-    );
+    blocks.push(...sectionBlocks(s, opts.word, opts.level));
   }
   if (blocks.length) {
     withEditor(doc, (editor) => {
@@ -401,11 +416,51 @@ export function undoInDoc(
 
 export interface PrepareDeps {
   docs: Pick<PageDocs, 'open' | 'close' | 'flush'> & Partial<Pick<PageDocs, 'stateOf'>>;
-  engine: { isMissingContent(pageId: string): Promise<boolean>; prefetchPage?(pageId: string, timeoutMs?: number): Promise<boolean> };
+  engine: { isMissingContent(pageId: string): Promise<boolean>; prefetchPage?(pageId: string, timeoutMs?: number): Promise<boolean>; syncNow?(): Promise<void> };
+  /** Para saber si la página se acaba de crear en otro dispositivo (`arriving`). Sin el árbol no se mira. */
+  tree?: { get(id: string): PageRow | undefined; hasUnsentCreate(id: string): boolean };
+  /** Cuánto esperar a que llegue el contenido de una página que está llegando (`ARRIVING_WAIT_MS`; las pruebas, menos). */
+  arrivingWaitMs?: number;
 }
 
-/** Lo que pasó antes de escribir: el reporte no terminó de bajar (se intenta bajar un rato) o tiene algo que esta versión no conoce. */
-async function ready(deps: PrepareDeps, pageId: string): Promise<'ok' | 'missing'> {
+/** Hasta cuándo una página creada en otro dispositivo, sin contenido en el servidor, se espera en vez de darse por vacía. */
+export const ARRIVING_MS = 120_000;
+/** Cuánto se espera a que llegue su contenido antes de decir que no se puede. */
+export const ARRIVING_WAIT_MS = 10_000;
+
+/**
+ * La página se acaba de crear en otro dispositivo (la fila llegó, su contenido no): sin nada en el servidor
+ * (`update_seq` 0), nada en este documento, no creada acá y con menos de `ARRIVING_MS` (D579). Una página vacía de
+ * verdad (alguien la creó y la dejó así) pasa a prepararse cuando deja de ser nueva.
+ */
+export async function isArriving(deps: Pick<PrepareDeps, 'docs' | 'tree'>, pageId: string): Promise<boolean> {
+  const row = deps.tree?.get(pageId);
+  if (!row || deps.tree!.hasUnsentCreate(pageId)) return false;
+  if ((row.update_seq ?? 0) > 0 || (row.snapshot_seq ?? 0) > 0) return false;
+  const age = Date.now() - Date.parse(row.created_at);
+  if (!(age < ARRIVING_MS)) return false;
+  const doc = await deps.docs.open(pageId);
+  try {
+    return doc.getXmlFragment(CONTENT_FRAGMENT).length === 0 || !unitsFromYDoc(doc).some((u) => u.text.trim());
+  } finally {
+    deps.docs.close(pageId);
+  }
+}
+
+/**
+ * Lo que pasó antes de escribir: el reporte se está creando en otro dispositivo (se espera a que llegue su contenido),
+ * no terminó de bajar (se intenta bajar un rato) o tiene algo que esta versión no conoce.
+ */
+async function ready(deps: PrepareDeps, pageId: string): Promise<'ok' | 'missing' | 'busy'> {
+  if (await isArriving(deps, pageId)) {
+    const end = Date.now() + (deps.arrivingWaitMs ?? ARRIVING_WAIT_MS);
+    while (Date.now() < end && (await isArriving(deps, pageId))) {
+      if (!deps.engine.syncNow) return 'busy';
+      await deps.engine.syncNow().catch(() => undefined);
+      await new Promise((r) => setTimeout(r, 600));
+    }
+    if (await isArriving(deps, pageId)) return 'busy';
+  }
   let missing = await deps.engine.isMissingContent(pageId).catch(() => true);
   if (missing && deps.engine.prefetchPage) missing = !(await deps.engine.prefetchPage(pageId, 8000).catch(() => false));
   return missing ? 'missing' : 'ok';
@@ -413,7 +468,8 @@ async function ready(deps: PrepareDeps, pageId: string): Promise<'ok' | 'missing
 
 /** Prepara el reporte `pageId` (el de mañana). Todo local: anda sin red si el reporte ya está en el dispositivo. */
 export async function prepareReport(deps: PrepareDeps, pageId: string, opts: PrepareOptions): Promise<PrepareResult> {
-  if ((await ready(deps, pageId)) === 'missing') return { status: 'missing' };
+  const state = await ready(deps, pageId);
+  if (state !== 'ok') return { status: state };
   const doc = await deps.docs.open(pageId, { seed: true });
   try {
     if (findUnknownContent(doc)) return { status: 'unknown' };

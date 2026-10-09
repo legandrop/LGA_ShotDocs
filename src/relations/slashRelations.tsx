@@ -6,8 +6,11 @@ import type { Services } from '../services';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { pickerOptions, reasonText, runCreate, createEnv } from './EntityActions';
 import type { CreateWant } from './createEntity';
+import { planOf } from './dayLive';
+import { dayRef } from './liveView';
 import { fold, scan, type Registry } from './reader';
 import { anchorOf, linkTextInBlock } from './relLink';
+import { setSlashDraft } from './slashDraft';
 import type { RelationSnapshot } from './relationIndex';
 import { searchLocations, searchScenes, type SearchSource } from './sceneSearch';
 
@@ -47,6 +50,13 @@ export function pendingCode(R: Registry, q: string, ep: string | null): string |
   return null;
 }
 
+/** La letra de una parte como se escribió en la consulta (`a` de `105_027a`), o la de la opción en minúscula; nada si no hay. */
+export function partLetter(q: string, part: string | undefined): string {
+  if (!part) return '';
+  const typed = /(\p{L})\s*$/u.exec(q)?.[1];
+  return typed && typed.toUpperCase() === part ? typed : part.toLowerCase();
+}
+
 /** Lo que el `/` necesita saber de la página: la foto del índice, su episodio y lo que está cerca. */
 export interface SlashPlace {
   snap: RelationSnapshot;
@@ -71,7 +81,12 @@ export function slashPlace(snap: RelationSnapshot, title: (id: string) => string
     }
   };
   take(dayId ?? pageId);
-  if (dayId) for (const c of children(dayId)) take(c.id);
+  if (dayId) {
+    for (const c of children(dayId)) take(c.id);
+    // El plan del día también cuando sale del desglose (las fichas con esa fecha, D570): no lo nombra ninguna página suya.
+    const live = { snap, title, content: () => undefined };
+    for (const code of planOf(live, dayRef(live, dayId)).codes) if (!near.includes(code)) near.push(code);
+  }
   return { snap, src: { snap, title }, projectId: snap.projectId, ep: role?.ep ?? null, near, nearLocs };
 }
 
@@ -97,6 +112,9 @@ const TextIcon = () => (
 );
 
 type Editor = BlockNoteEditor<any, any, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** Los editores cuyo menú ya se mira (para borrar la consulta anotada al cerrarse). */
+const watched = new WeakSet<object>();
 
 /** Un espacio antes si lo de antes del cursor es una letra o una cifra (`la/e 027` no deja «la105_027»). */
 function spaceBefore(editor: Editor): string {
@@ -190,13 +208,18 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
   const sceneItems = (p: SlashPlace, q: string): DefaultReactSuggestionItem[] => {
     const group = tr('slash.scenes');
     const options = q ? searchScenes(p.src, q, { ep: p.ep, near: p.near, loose: true, limit: 7 }).filter((o) => o.pageId) : pickerOptions(p.src, '', { near: p.near, ep: p.ep, limit: 7 });
-    const items: DefaultReactSuggestionItem[] = options.map((o) => ({
-      title: o.code,
-      subtext: [o.title, o.episode && o.episode !== p.ep ? `EP ${o.episode}` : ''].filter(Boolean).join(' · '),
-      group,
-      icon: <SceneIcon />,
-      onItemClick: () => insertPageLink(editor, o.code, o.pageId!),
-    }));
+    const items: DefaultReactSuggestionItem[] = options.map((o) => {
+      // Una parte (`/e 105_027a` sin escena `105_027A`): el link va a la escena y el texto conserva la letra como se
+      // escribió (O6 de la auditoría de E7, D569).
+      const text = o.code + partLetter(q, o.part);
+      return {
+        title: text,
+        subtext: [o.part ? tr('slash.partOf', { code: o.code }) : '', o.title, o.episode && o.episode !== p.ep ? `EP ${o.episode}` : ''].filter(Boolean).join(' · '),
+        group,
+        icon: <SceneIcon />,
+        onItemClick: () => insertPageLink(editor, text, o.pageId!),
+      };
+    });
     const code = q ? pendingCode(p.snap.registry, q, p.ep) : null;
     if (code && !options.some((o) => o.code === code)) items.push(createItem(p, { kind: 'scene', code }, code));
     return items;
@@ -231,6 +254,28 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
     return items;
   };
 
+  // La consulta abierta no cuenta como pendiente en el mapa (D568): se anota mientras el menú está abierto y se borra al
+  // cerrarse (elegir, Esc, tocar afuera), una sola suscripción por editor.
+  const menu = editor.getExtension(SuggestionMenu);
+  if (menu && !watched.has(editor)) {
+    watched.add(editor);
+    menu.store.subscribe(() => {
+      if (!menu.shown()) setSlashDraft(null);
+    });
+  }
+  const noteDraft = (p: SlashPlace | null, q: string) => {
+    const view = editor.prosemirrorView;
+    const blockId = view ? anchorOf(view.state, view.state.selection.from, '').blockId : null;
+    if (!p || !blockId || !q) return setSlashDraft(null);
+    const R = p.snap.registry;
+    // Lo que el índice lee en ese renglón (un párrafo o un título) y lo que el `/` ofrecería crear.
+    const codes = new Set<string>();
+    for (const heading of [false, true]) for (const h of scan(R, q, { heading, ep: p.ep })) if (h.kind === 'pending') codes.add(h.ref);
+    const code = pendingCode(R, q, p.ep);
+    if (code) codes.add(code.replace(/[A-Z]$/, ''));
+    setSlashDraft({ pageId: env.pageId(), blockId, codes: [...codes] });
+  };
+
   return {
     root: (group) => {
       if (!place()) return [];
@@ -257,8 +302,10 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
     },
     items: (query) => {
       const parsed = parseSlashQuery(query);
+      if (parsed.mode !== 'scene') setSlashDraft(null);
       if (parsed.mode === 'normal') return null;
       const p = place();
+      if (parsed.mode === 'scene') noteDraft(p, parsed.q);
       if (!p || (parsed.mode === 'scene' && p.snap.registry.scenes.size === 0 && !parsed.q)) return null;
       return parsed.mode === 'scene' ? sceneItems(p, parsed.q) : locationItems(p, parsed.q);
     },

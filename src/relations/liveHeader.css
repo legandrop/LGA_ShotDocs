@@ -1529,16 +1529,18 @@
   background: var(--hover);
 }
 
+/* Solo con el mouse movido de verdad desde la última tecla (`data-rel-mouse`, hoverGate.ts, D571): un subrayado que se
+   dibuja debajo del puntero quieto mientras se escribe no cambia de fondo. */
 @media (hover: hover) and (pointer: fine) {
-  .editor .rel-u:hover {
+  .editor[data-rel-mouse] .rel-u:hover {
     background: var(--lh-scene-bg);
   }
 
-  .editor .rel-u.loc:hover {
+  .editor[data-rel-mouse] .rel-u.loc:hover {
     background: var(--lh-loc-bg);
   }
 
-  .editor .rel-u.pend:hover {
+  .editor[data-rel-mouse] .rel-u.pend:hover {
     background: var(--hover);
   }
 }

@@ -13,6 +13,7 @@ import type { Place } from './liveView';
 import { fold, type Registry } from './reader';
 import { mapCounts, mapJson, mapText, projectMap, sceneFilterText, titlePlace, type MapDay, type MapLocation, type MapScene, type ProjectMapData } from './projectMap';
 import { searchScenes } from './sceneSearch';
+import { useSlashDraft } from './slashDraft';
 import { AssignButton, CreateEntityButton } from './EntityActions';
 import { titleFragment } from './aliasAction';
 import { LinkLocationButton } from './LinkLocation';
@@ -121,11 +122,13 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   const [filter, setFilter] = useState('');
   useEffect(() => setFilter(''), [tab]);
 
+  // La consulta abierta del `/` no cuenta como pendiente (D568): al abrirse o cerrarse, se vuelve a armar.
+  const draft = useSlashDraft();
   const data = useMemo(() => {
     if (!snap) return null;
     return projectMap({ snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) });
     // La foto cambia con cada revisión; los títulos se leen del árbol en ese momento.
-  }, [snap, revision, tree, session]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snap, revision, tree, session, draft]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
@@ -584,16 +587,34 @@ function Pending({
   const src = snap ? { snap, title: (id: string) => tree.get(id)?.title } : null;
   const title = (id: string) => data.pages.get(id)?.title ?? '';
   const nothing = !data.pending.length && !data.unnumbered.length && !data.duplicates.length;
+  // En el selector de *Assign* de un número, primero las escenas que nombran las páginas donde está escrito.
+  const nearOf = (code: string): string[] => {
+    const out = new Set<string>();
+    for (const m of data.pending.find((x) => x.code === code)?.mentions ?? []) {
+      for (const x of snap?.pages.get(m.pageId)?.mentions ?? []) if (x.kind === 'scene') out.add(x.ref);
+    }
+    return [...out];
+  };
   return (
     <>
       {nothing ? (
         <p className="mp-empty">{!complete ? tr('live.reading') : tr(partial ? 'map.nothingPendingSeen' : 'map.nothingPending')}</p>
       ) : (
         <div className="mp-pend">
-          {data.pending.map((p) => (
+          {data.pending.map((p) => {
+            // *Assign* sobre el número (D567): en cada lugar que lo nombra y la persona puede editar.
+            const places = p.mentions
+              .filter((m) => perms.canEditPage(m.pageId))
+              .map((m) => ({ pageId: m.pageId, blockIds: m.blockIds, ep: snap?.registration.roles.get(m.pageId)?.ep ?? null }));
+            return (
             <PendingRow
               key={p.code}
-              actions={<CreateEntityButton want={{ kind: 'scene', code: p.code }} projectId={projectId} className="mp-btn" />}
+              actions={
+                <>
+                  <CreateEntityButton want={{ kind: 'scene', code: p.code }} projectId={projectId} className="mp-btn" />
+                  {src && places.length > 0 && <AssignButton src={src} target={{ kind: 'everywhere', pending: p.code, places }} near={nearOf(p.code)} ep={p.code.includes('_') ? p.code.slice(0, 3) : null} className="mp-btn" />}
+                </>
+              }
               head={
                 <>
                   <span className="mp-chip out mono">
@@ -622,14 +643,15 @@ function Pending({
               </div>
               <div className="mp-pnote">{tr(partial ? 'map.pendingSeenNote' : 'map.createLater')}</div>
             </PendingRow>
-          ))}
+            );
+          })}
           {data.duplicates.map((d) => (
             <PendingRow
               key={`dup:${d.code}`}
               head={
                 <>
                   <span className="mp-chip mono">
-                    <Ic name="scene" small />
+                    <Ic name={d.kind === 'day' ? 'day' : 'scene'} small />
                     {d.code}
                   </span>
                   <span>{tr('map.duplicate', { code: d.code, count: d.pageIds.length })}</span>
@@ -646,7 +668,7 @@ function Pending({
                   </span>
                 ))}
               </div>
-              <div className="mp-pnote">{tr('map.duplicateHint')}</div>
+              <div className="mp-pnote">{tr(d.kind === 'day' ? 'map.duplicateDayHint' : 'map.duplicateHint')}</div>
             </PendingRow>
           ))}
           {data.unnumbered.map((u) => (

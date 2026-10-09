@@ -9,6 +9,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import type { PageSettings } from '../sync/types';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { settled } from '../test/settle';
+import { shown } from '../test/shown';
 import { searchSession } from '../ui/projectSearchUi';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
@@ -142,6 +143,26 @@ function type(input: HTMLInputElement, value: string) {
   });
 }
 
+/** Todo el texto de una página, con los links como [texto](href). */
+async function linkedRuns(d: Device, pageId: string): Promise<string> {
+  const doc = await d.docs.open(pageId);
+  let out = '';
+  const walk = (node: Y.XmlElement | Y.XmlFragment) => {
+    for (const child of node.toArray()) {
+      if (child instanceof Y.XmlText) {
+        for (const op of child.toDelta() as { insert: unknown; attributes?: { link?: { href: string } } }[]) {
+          const t = typeof op.insert === 'string' ? op.insert : '';
+          out += op.attributes?.link ? `[${t}](${op.attributes.link.href})` : t;
+        }
+        out += ' ¶ ';
+      } else if (child instanceof Y.XmlElement) walk(child);
+    }
+  };
+  walk(doc.getXmlFragment('document-store'));
+  d.docs.close(pageId);
+  return out;
+}
+
 function key(target: EventTarget, init: KeyboardEventInit) {
   act(() => {
     target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
@@ -194,6 +215,60 @@ describe('el mapa en la app', () => {
     expect(location.pathname).toBe(pagePath(built.ids.arenera));
   });
 
+  it('la consulta abierta del / no cuenta en la fila Map ni en Pending; al cerrarse, sí (D568)', async () => {
+    const { built, host } = await app(
+      () => mapPath('pending'),
+      async (dev, b) => {
+        await writeBlocks(dev, b.ids.notas, [{ p: 'Revisar /e 105_141' }]);
+      },
+    );
+    const count = () => host.querySelector('.map-nav-count')?.textContent;
+    await shown(() => expect(count()).toBe('2 pending'));
+    await shown(() => expect(host.textContent).toContain('105_141 doesn’t exist yet'));
+    // El bloque de la nota (donde está la consulta).
+    const { existingRelationsSession } = await import('../ui/relationsUi');
+    const { pendingRelations } = await import('./relationIndex');
+    const { setSlashDraft } = await import('./slashDraft');
+    const snap = existingRelationsSession(services(devices[0]))!.relations.snapshot(built.projectId)!;
+    const where = pendingRelations(snap).find((p) => p.ref === '105_141')!.pages[0];
+    act(() => setSlashDraft({ pageId: where.pageId, blockId: where.blockIds[0], codes: ['105_141'] }));
+    await shown(() => expect(count()).toBe('1 pending'));
+    await shown(() => expect(host.textContent).not.toContain('105_141 doesn’t exist yet'));
+    act(() => setSlashDraft(null));
+    await shown(() => expect(count()).toBe('2 pending'));
+    await shown(() => expect(host.textContent).toContain('105_141 doesn’t exist yet'));
+  });
+
+  it('Pending: Assign sobre un número que no existe lo linkea en cada página que lo nombra, con Undo (D567)', async () => {
+    const { d, built, host } = await app(
+      () => mapPath('pending'),
+      async (dev, b) => {
+        await writeBlocks(dev, b.ids.notas, [{ p: 'Falta la Escena 105_120 en el desglose.' }]);
+        await writeBlocks(dev, b.ids.d58, [{ h: 1, text: 'Info general' }, { p: 'Llamado 8:00, después la 105_120.' }]);
+      },
+    );
+    const card = () => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('105_120'));
+    await shown(() => expect(card()?.querySelector('.rel-assign')).toBeTruthy());
+    expect(card()!.querySelector('.rel-assign')!.getAttribute('data-tip')).toContain('everywhere');
+    click(card()!.querySelector('.rel-assign'));
+    type(host.querySelector<HTMLInputElement>('.lh-picker input')!, '5026');
+    click(host.querySelector('.lh-picker-list button'));
+    const href = `/p/${built.ids.s026}`;
+    await shown(async () => {
+      expect(await linkedRuns(d, built.ids.notas)).toContain(`[105_120](${href})`);
+      expect(await linkedRuns(d, built.ids.d58)).toContain(`[105_120](${href})`);
+    });
+    await shown(() => expect(host.textContent).toContain('105_120 now links to 105_026 in 2 pages'));
+    // El número deja de estar pendiente.
+    await shown(() => expect(card()).toBeUndefined());
+    click([...host.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent === 'Undo'));
+    await shown(async () => {
+      expect(await linkedRuns(d, built.ids.notas)).not.toContain(href);
+      expect(await linkedRuns(d, built.ids.d58)).not.toContain(href);
+    });
+    await shown(() => expect(card()?.textContent).toContain('105_120 doesn’t exist yet'));
+  });
+
   it('Scenes por episodio, Shoot days y Pending (con el lugar de los botones de E7); ir a la sección exacta', async () => {
     const { d, built, host } = await app(
       () => mapPath('scenes'),
@@ -244,7 +319,7 @@ describe('el mapa en la app', () => {
     expect(cards[0].textContent).toContain('Notas de dirección: «Falta la Escena 105_120 en el desglose.»');
     // Los botones de E7: *Create* (acá sin permisos conocidos, el rótulo con el motivo) y, en la sección sin número,
     // *Assign* y *Open section*.
-    expect(cards[0].querySelector('.mp-pact')!.textContent).toBe('Create scene 105_120');
+    expect(cards[0].querySelector('.mp-pact')!.textContent).toBe('Create scene 105_120Assign');
     expect(cards[0].querySelector('.mp-pact .rel-cant')!.getAttribute('data-tip')).toContain('whole project');
     expect([...cards[1].querySelectorAll('.mp-pact button')].map((b) => b.textContent)).toEqual(['Assign', 'Open section']);
     expect(cards[1].textContent).toContain('«Plates ambulancia» has no scene number');

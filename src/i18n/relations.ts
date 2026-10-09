@@ -331,6 +331,38 @@ export const relations = {
     en: "«{day}» has content this version doesn’t know: update the app to prepare it.",
     es: "«{day}» tiene contenido que esta versión no conoce: actualizá la app para prepararlo.",
   },
+  'day.newTitle': { en: "Tomorrow · {date}", es: "Mañana · {date}" },
+  'day.newNoReport': { en: "no report yet", es: "todavía sin reporte" },
+  'day.newCreate': { en: "Create and prepare tomorrow’s report", es: "Crear y preparar el reporte de mañana" },
+  'day.newHint': {
+    en: "Creates «{title}» in «{folder}», like New day report, and adds one section per scene. If that day already has a report there, it prepares that one.",
+    es: "Crea «{title}» en «{folder}», como New day report, y agrega una sección por escena. Si ese día ya tiene un reporte ahí, prepara ese.",
+  },
+  'day.newRoot': { en: "the project", es: "el proyecto" },
+  'day.newCantCreate': { en: "You can’t create pages in «{folder}»: creating tomorrow’s report needs that.", es: "No podés crear páginas en «{folder}»: para crear el reporte de mañana hace falta." },
+  'day.newOffline': {
+    en: "Connect to create tomorrow’s report: another device may have created it already. Nothing was changed.",
+    es: "Conectate para crear el reporte de mañana: otro dispositivo puede haberlo creado ya. No se cambió nada.",
+  },
+  'day.newCreated': { en: "Created «{title}»", es: "Se creó «{title}»" },
+  'day.newExisted': { en: "«{title}» already existed: prepared that one", es: "«{title}» ya existía: se preparó ese" },
+  'day.newElsewhere': {
+    en: "Another device just created «{title}» and is preparing it: nothing was changed here",
+    es: "Otro dispositivo acaba de crear «{title}» y lo está preparando: acá no se cambió nada",
+  },
+  'day.newYielded': {
+    en: "Another device created «{title}» at the same time: that one stays and it prepares it (the empty copy from here went to the trash)",
+    es: "Otro dispositivo creó «{title}» a la vez: queda ese y él lo prepara (la copia vacía de acá fue a la papelera)",
+  },
+  'day.newTwins': {
+    en: "another device was creating the same day at the same time: if two reports stay, Map › Pending lists them",
+    es: "otro dispositivo estaba creando el mismo día a la vez: si quedan dos reportes, Mapa › Pendientes los lista",
+  },
+  'day.prepareBusy': {
+    en: "«{day}» was just created on another device and its content hasn’t arrived yet: try again in a moment. Nothing was changed.",
+    es: "«{day}» se acaba de crear en otro dispositivo y su contenido todavía no llegó: probá de nuevo en un momento. No se cambió nada.",
+  },
+  'day.newFailed': { en: "Tomorrow’s report couldn’t be created. Nothing was changed.", es: "No se pudo crear el reporte de mañana. No se cambió nada." },
   'day.prepareFailed': { en: "Tomorrow’s report couldn’t be prepared. Nothing was changed.", es: "No se pudo preparar el reporte de mañana. No se cambió nada." },
   // En el editor, debajo de un título de escena con link en un reporte (dayDecorations.ts)
   'day.liveTitleTip': {
@@ -382,6 +414,7 @@ export const relations = {
   'slash.scenes': { en: "Scenes", es: "Escenas" },
   'slash.locations': { en: "Locations", es: "Locaciones" },
   'slash.locationSub': { en: "Location", es: "Locación" },
+  'slash.partOf': { en: "part of {code}", es: "parte de {code}" },
   'create.scene': { en: "Create scene {code}", es: "Crear la escena {code}" },
   'create.location': { en: "Create location «{name}»", es: "Crear la locación «{name}»" },
   'create.in': { en: "In «{folder}»", es: "En «{folder}»" },
@@ -449,4 +482,26 @@ export const relations = {
   'assign.unknown': { en: "This page has something this version doesn’t know: update the app", es: "Esta página tiene algo que esta versión no conoce: actualizá la app" },
   'assign.missing': { en: "That page isn’t fully downloaded yet: try again with a connection", es: "Esa página todavía no bajó entera: probá de nuevo con red" },
   'assign.failed': { en: "Couldn’t assign it", es: "No se pudo asignar" },
+  'assign.everywhereTip': {
+    en: "Link this number to the scene it means, everywhere it’s written in pages you can edit; the text stays as written",
+    es: "Linkear este número a la escena que quiere decir, en todos los lugares donde está escrito en páginas que podés editar; el texto queda como está",
+  },
+  'assign.doneEverywhere': {
+    en: { one: "{pending} now links to {code} in {count} page", other: "{pending} now links to {code} in {count} pages" },
+    es: { one: "{pending} ahora lleva a {code} en {count} página", other: "{pending} ahora lleva a {code} en {count} páginas" },
+  },
+  'assign.notIn': {
+    en: { one: "not in {pages}: open it and fix it by hand", other: "not in {pages}: open them and fix them by hand" },
+    es: { one: "no en {pages}: abrila y arreglalo a mano", other: "no en {pages}: abrilas y arreglalo a mano" },
+  },
+  'assign.undo': { en: "Undo", es: "Deshacer" },
+  'assign.undone': { en: "Assign undone", es: "Se deshizo la asignación" },
+  'assign.undoChanged': {
+    en: "It changed since: nothing was undone (fix it by hand)",
+    es: "Cambió desde entonces: no se deshizo nada (arreglalo a mano)",
+  },
+  'assign.undonePartial': {
+    en: "Undone, except where it changed since (fix that by hand)",
+    es: "Se deshizo, salvo donde cambió desde entonces (eso, a mano)",
+  },
 } satisfies Dict;

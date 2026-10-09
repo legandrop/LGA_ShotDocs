@@ -6,6 +6,7 @@ import { useServices, useTree } from '../services';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { pendingSummary } from './projectMap';
+import { useSlashDraft } from './slashDraft';
 import './mapNav.css';
 
 // La fila *Map* de la barra lateral (Docs/Doc_Relaciones.md, sección 12): arriba del árbol, como en la maqueta. Aparece
@@ -26,6 +27,8 @@ function MapNavFor({ session }: { session: NonNullable<ReturnType<typeof existin
   const projectId = useCurrentProject();
   const tree = useTree();
   useSyncExternalStore(session.relations.subscribe, session.relations.getRevision);
+  // Lo que se tipea en el menú `/` de escenas no cuenta mientras el menú está abierto (D568).
+  useSlashDraft();
   const snap = session.relations.snapshot(projectId);
   if (!snap) return null;
   const typed =

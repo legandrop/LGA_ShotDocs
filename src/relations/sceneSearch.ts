@@ -30,6 +30,11 @@ export interface SceneOption {
   episode: string | null;
   /** Cómo coincidió. */
   why: 'number' | 'episode' | 'digits' | 'title';
+  /**
+   * La letra de una parte que nombra lo escrito (`105_027a` sin escena `105_027A`: `A`), si la nombra. La escena es la
+   * base; quien escribe el número (el `/`) la conserva (O6 de la auditoría de E7).
+   */
+  part?: string;
 }
 
 export interface LocationOption {
@@ -56,23 +61,23 @@ const COMPACT = /^[hH]?([1-9])(\d{3})([a-z]?)$/;
 
 const visible = (src: SearchSource, pageId: string | null | undefined) => (pageId && src.title(pageId) !== undefined ? pageId : null);
 
-function option(src: SearchSource, code: string, why: SceneOption['why']): SceneOption {
+function option(src: SearchSource, code: string, why: SceneOption['why'], part = ''): SceneOption {
   const e = src.snap.registry.scenes.get(code);
   const pageId = visible(src, e?.pageId);
-  return { code, pageId, title: pageId ? sceneTitleOf(src.title(pageId)) : '', episode: e?.ep || null, why };
+  return { code, pageId, title: pageId ? sceneTitleOf(src.title(pageId)) : '', episode: e?.ep || null, why, ...(part ? { part } : {}) };
 }
 
 /** Lo que el lector entiende exacto en lo escrito: escenas (en orden) y números que no existen (pendientes). */
-function exact(R: Registry, q: string, ep: string | null): { scenes: { code: string; why: SceneOption['why'] }[]; pending: string[] } {
-  const scenes: { code: string; why: SceneOption['why'] }[] = [];
+function exact(R: Registry, q: string, ep: string | null, prefer: ReadonlySet<string> = new Set()): { scenes: { code: string; why: SceneOption['why']; part: string }[]; pending: string[] } {
+  const scenes: { code: string; why: SceneOption['why']; part: string }[] = [];
   const pending: string[] = [];
-  const add = (code: string, why: SceneOption['why']) => {
-    if (!scenes.some((x) => x.code === code)) scenes.push({ code, why });
+  const add = (code: string, why: SceneOption['why'], part = '') => {
+    if (!scenes.some((x) => x.code === code)) scenes.push({ code, why, part });
   };
   // Leído como el título de una sección: así cuenta una forma compacta suelta («1074», «5027b»).
   const hits = scan(R, q, { heading: true, ep });
   for (const h of hits) {
-    if (h.kind === 'scene') add(h.ref, h.form === 'episode' ? 'episode' : 'number');
+    if (h.kind === 'scene') add(h.ref, h.form === 'episode' ? 'episode' : 'number', h.part);
     else if (h.kind === 'pending' && !pending.includes(h.ref)) pending.push(h.ref);
   }
   if (scenes.length) return { scenes, pending };
@@ -83,7 +88,10 @@ function exact(R: Registry, q: string, ep: string | null): { scenes: { code: str
   const canon = CANON.exec(rest);
   const compact = COMPACT.exec(rest);
   if (bare) {
-    const eps = R.eps.size ? [...(ep ? [ep] : []), ...[...R.eps].sort().filter((e) => e !== ep)] : [''];
+    // El episodio de la página primero; sin episodio (un día), los de sus escenas cercanas (B1 de la auditoría de E11,
+    // D578); después el resto, por número.
+    const rest = [...R.eps].sort().filter((e) => e !== ep);
+    const eps = R.eps.size ? [...(ep ? [ep] : []), ...rest.filter((e) => prefer.has(e)), ...rest.filter((e) => !prefer.has(e))] : [''];
     for (const e of eps) bases.push({ ep: e, n: pad3(+bare[1]), L: bare[2].toUpperCase() });
   } else if (canon && R.eps.has(canon[1])) {
     bases.push({ ep: canon[1], n: pad3(+canon[2]), L: canon[3].toUpperCase() });
@@ -95,10 +103,25 @@ function exact(R: Registry, q: string, ep: string | null): { scenes: { code: str
     const base = e ? `${e}_${n}` : n;
     const why = e && e === ep ? 'episode' : 'number';
     if (L && R.scenes.has(base + L)) add(base + L, why);
-    else if (R.scenes.has(base)) add(base, why);
+    else if (R.scenes.has(base)) add(base, why, L);
     else for (const code of [...R.scenes.keys()].filter((c) => c.startsWith(base) && /^[A-Z]$/.test(c.slice(base.length))).sort()) add(code, why);
   }
   return { scenes, pending };
+}
+
+/**
+ * Los episodios que van después de las escenas cercanas y antes del resto: el de la página; si la página no tiene (un día
+ * de rodaje), los de las escenas cercanas (su plan, sus secciones). Así en un día de 105 una escena con letra de 104 no
+ * sale antes que las de 105 (O8 de la auditoría de E7, D570).
+ */
+export function nearEpisodes(R: Registry, ep: string | null, near: readonly string[]): Set<string> {
+  if (ep) return new Set([ep]);
+  const out = new Set<string>();
+  for (const code of near) {
+    const e = R.scenes.get(code)?.ep;
+    if (e) out.add(e);
+  }
+  return out;
 }
 
 /** Las escenas que coinciden con lo escrito (ver el orden arriba). */
@@ -112,10 +135,11 @@ export function searchScenes(
   const limit = options.limit ?? 7;
   if (!q || R.scenes.size === 0) return [];
   const ep = options.ep && R.eps.has(options.ep) ? options.ep : null;
-  const out: SceneOption[] = exact(R, q, ep).scenes.map((x) => option(src, x.code, x.why));
+  const eps = nearEpisodes(R, ep, options.near ?? []);
+  const out: SceneOption[] = exact(R, q, ep, eps).scenes.map((x) => option(src, x.code, x.why, x.part));
   if (options.loose === false || out.length >= limit) return out.slice(0, limit);
   const near = new Set(options.near ?? []);
-  const rank = (code: string) => (near.has(code) ? 0 : ep && code.startsWith(`${ep}_`) ? 1 : 2);
+  const rank = (code: string) => (near.has(code) ? 0 : eps.has(R.scenes.get(code)?.ep ?? '') ? 1 : 2);
   const byRank = (a: string, b: string) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0);
   const taken = new Set(out.map((o) => o.code));
   const all = [...R.scenes.keys()].sort(byRank);

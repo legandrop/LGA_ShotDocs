@@ -1229,6 +1229,115 @@ el tipo de bloque: borra y crea, y pierde lo que otro escribe en él).
 - **D563 · *Link to a location…* solo con permiso de editar la locación** (2026-10-09; E10): el selector lista solo las
   locaciones cuya página la persona puede editar, y el botón no aparece si no puede editar ninguna (ni con un link
   público). El texto que se ofrece es la parte de lugar del título sin la fecha, el día ni lo de entre paréntesis.
+
+- **D566 · *Undo* de *Assign* en su aviso: solo lo agregado y solo si sigue igual** (2026-10-09; E11, roadmap v0.245 (2)).
+  Qué pasaba: *Assign* no se podía deshacer desde la fila del día ni del mapa (había que borrar « · 105_025» o el link a
+  mano). Las opciones: el deshacer del editor (la fila no tiene editor y deshacería lo último escrito, no lo de *Assign*),
+  sacar el bloque y volverlo a poner (se lleva lo que otro escribe, la lección de E5) o borrar exactamente lo agregado.
+  Elegí lo último porque es lo único que no puede tocar lo de otro: al asignar se guardan anclas relativas de Yjs sobre los
+  caracteres agregados (« · 105_025») o marcados (`105_120`); *Undo* los ubica, verifica que digan lo mismo con el mismo
+  link y recién ahí borra esos caracteres o saca esa marca, en una transacción, todo o nada. Si alguien escribió en el
+  medio, sacó el link o borró el bloque, no toca nada y lo dice. Desde el adelanto (que linkea por el editor) se miran
+  los tramos que la edición linkeó y su aviso tiene el mismo *Undo* (⌘Z sigue andando). Si preferís otra: que *Undo*
+  saque lo que pueda aunque algo haya cambiado (`undoAssignInDoc` en `assign.ts`, hoy todo o nada).
+- **D567 · *Assign* en *Map › Pending* sobre un número que no existe: en todos los lugares que lo nombran** (2026-10-09;
+  E11, roadmap v0.245 (3)). Qué pasaba: ahí solo estaba *Create*. Las opciones: un *Assign* por cada lugar (una fila por
+  página), uno solo que linkea todos, o mandar a cada página. Elegí uno solo, en la ranura `actions`, porque el error de
+  tipeo suele estar repetido y *Pending* lo muestra como una sola fila: linkea cada aparición en cada página que lo nombra
+  **y la persona puede editar**, directo en cada Y.Doc (como desde el día); las que no pudo (no bajó entera, algo que esta
+  versión no conoce, el número ya no está) se dicen en el aviso. *Undo* mira primero todas las páginas y deshace solo si
+  en todas sigue igual. Si preferís otra: un botón por página (`AssignButton` con `kind: 'mention'` por cada lugar).
+- **D568 · Lo que se tipea en el menú `/` de escenas no cuenta como pendiente mientras el menú está abierto** (2026-10-09;
+  E11, O7 de la auditoría de E7). Qué pasaba: «/e 105_141» está escrito en el documento mientras se elige, el índice lo
+  leía y *Map › Pending* y el número de la fila *Map* lo sumaban hasta elegir. Las opciones: que el lector ignore todo lo
+  que empieza con «/e » (también lo que quedó escrito con Esc, que sí es texto), o anotar la consulta abierta. Elegí lo
+  segundo: mientras el menú está abierto, este dispositivo anota qué números de qué bloque son la consulta
+  (`slashDraft.ts`) y el mapa no los cuenta en ese bloque; al cerrarse el menú (elegir, Esc, tocar afuera) se borra y, si
+  quedó escrito, vuelve a contar. No cambia el lector ni el índice. Queda: el subrayado gris de ese número mientras se
+  tipea (es de `relUnderline.ts`, de otro frente) y otro dispositivo, que puede verlo un momento. Si preferís otra: que el
+  lector tape «/palabra número» siempre.
+- **D569 · `/e 105_027a`: la escena con letra si existe; si no, la base con la letra de la parte** (2026-10-09; E11, O6).
+  Qué pasaba: con una parte (`105_027a`, sin escena `105_027A`) ↵ dejaba `105_027` y la letra se perdía. Las opciones:
+  dejar el código canónico de la base, o el texto con la letra. Elegí: si existe `105_027A` va primero y se linkea esa; si
+  no, el ítem dice «105_027a · part of 105_027» y deja `105_027a` (la letra como se escribió) con el link a `105_027`,
+  como escribe el set las partes. `searchScenes` lleva la parte en la opción (`part`). Si preferís otra: siempre el código
+  de la escena, sin la letra.
+- **D570 · Sin episodio propio (un día), primero el plan y después el episodio del plan** (2026-10-09; E11, O8). Qué
+  pasaba: en el selector de un día, `104_054A` salía antes que las escenas de 105 del plan, porque el día no tiene
+  episodio y el resto iba por número. Elegí: primero las cercanas en su orden (el plan, las secciones del día, lo que nombra
+  la página), después las de los episodios de esas cercanas, después el resto. El `/` de un día suma a las cercanas el plan
+  del desglose (las fichas con su fecha), que antes solo contaba si una página lo nombraba. Si preferís otra: las cercanas
+  por número, como antes (`pickerOptions` en `EntityActions.tsx`).
+- **D571 · El fondo del subrayado bajo el mouse, solo con el mouse movido de verdad** (2026-10-09; E11, O9 de la auditoría
+  de E6). Qué pasaba: el subrayado nuevo que se dibuja debajo del puntero quieto se pintaba con el fondo de `:hover`
+  mientras se escribía. Elegí el mismo criterio que el adelanto (D455): el contenedor del editor lleva `data-rel-mouse`
+  mientras el mouse se movió a otro lugar desde la última tecla, y el CSS lo pide. Va en `hoverGate.ts` con su propio
+  `MouseGate` (sin tocar `relUnderline.ts`). Si preferís otra: el fondo siempre (sacar `[data-rel-mouse]` del CSS).
+- **D572 · *Today* no deja un espacio antes de la puntuación** (2026-10-09; E11, O11 de E6): el espacio de después va solo
+  si lo que sigue no es un espacio, puntuación o un cierre («… doble 101_001.», no «101_001 .»); al final del renglón queda
+  (para seguir escribiendo).
+- **D573 · Un día sin día siguiente tiene tarjeta *Tomorrow*: crear y preparar el reporte de mañana** (2026-10-09; E11,
+  roadmap v0.241 (1)). Qué pasaba: sin un día siguiente no había tarjeta, y había que crear el reporte con *New day report*
+  y después volver para prepararlo. Las opciones para la fecha: el día siguiente siempre, la de hoy en el dispositivo (lo
+  que propone *New day report*) o la próxima que planea el desglose. Elegí la próxima fecha con escenas en el desglose
+  dentro de una semana (un fin de semana o un franco en el medio) y, si no hay, el día siguiente, con su plan del desglose
+  ajustable como en la otra tarjeta. Solo con el índice completo (si no, mañana puede existir sin estar leído) y para quien
+  ve el proyecto entero (si no, mañana puede estar donde no ve). Si preferís otra: el día siguiente siempre
+  (`proposeTomorrow` en `tomorrowNew.ts`, `LOOKAHEAD_DAYS`).
+- **D574 · El título del reporte de mañana tiene la forma del de hoy, sin la locación** (2026-10-09; E11). Qué pasaba: *New
+  day report* titula `2026-02-21 | Day 61` en el idioma de la app; los días de ERSO dicen `2026-04-06 | Día 81 | Farmacia
+  Fanfarria`. Elegí la palabra, el separador y los ceros del de hoy (`2026-04-07 | Día 82`) y no copiar lo de después: es
+  la locación de hoy, y el título es de donde la cabecera saca el lugar del día (D398); mañana puede ser otro. Sin esa
+  forma, el de *New day report*. Si preferís otra: copiar la locación de hoy al título.
+- **D575 · Crear el reporte de mañana con las garantías de *Prepare*** (2026-10-09; E11). Qué pasaba: crear en un paso
+  podía duplicar el reporte (dos toques, dos dispositivos) y *New day report* crea sin red. Elegí: primero una
+  sincronización buena en el momento (sin red no crea y lo dice: otro dispositivo pudo crearlo); si la carpeta ya tiene un
+  reporte con esa fecha, prepara ese y no crea otro; dos toques seguidos dan uno solo; si no, la página como *New day
+  report* (la plantilla de la carpeta o *On-Set Report*, la ficha llena con lo de ayer) en la carpeta del día de hoy, con la
+  marca de día explícita y **sin tocar la marca de la carpeta**; *Prepare* la prepara antes de subirla y se sube enseguida.
+  **Corregida por D579 y D580** (auditoría de E11, B2): la ventana real no era «un viaje» sino todo el trabajo del
+  primero (2–3,5 s medidos en la base), y el segundo podía preparar la página del primero antes de que llegara su
+  contenido y repetir las secciones. Si preferís otra: que cree sin red como *New day report*.
+- **D576 · *Undo* del reporte de mañana: a la papelera solo si nadie lo tocó** (2026-10-09; E11). Elegí lo de *Create*
+  (D547): sincroniza y, solo si el reporte sigue como quedó (título, lugar, contenido, sin páginas adentro), va a la
+  papelera; si alguien escribió, queda y lo dice; sin red no deshace. Si el reporte ya existía, *Undo* es el de *Prepare*
+  (saca solo lo agregado que sigue vacío).
+- **D577 · Quién ve la tarjeta para crear** (2026-10-09; E11): quien ve el proyecto entero; sin permiso de crear en la
+  carpeta del día, la tarjeta lo dice sin el botón (y se vuelve a mirar al crear, después de sincronizar). Un invitado a
+  una parte no la ve.
+- **D578 · Tipeando un número en un día, también primero el episodio del plan** (2026-10-09; corrección de E11, B1 de la
+  auditoría). Qué pasaba: D570 ordenaba solo la lista vacía; al tipear `026` en un día de 105, el lector probaba los
+  episodios en orden (101, 102…) y salían `101_026A` o `101_026` antes que `105_026` (en ERSO, `054` daba 101, 102 y
+  104_054A antes que 105_054), y elegir el primero asignaba la escena equivocada. Las opciones: dejarlo (el número
+  completo `105_026` igual funciona) o que la búsqueda exacta use el mismo orden que la lista. Elegí lo segundo: sin
+  episodio propio, `exact()` prueba primero los episodios de las escenas cercanas (`nearEpisodes`: el plan, las secciones
+  del día). Con el episodio de la página, manda ese; sin nada cerca, por número como antes. Si preferís otra: sacar
+  `prefer` de `exact()` en `sceneSearch.ts`.
+- **D579 · Nunca se prepara un reporte cuyo contenido todavía está llegando** (2026-10-09; corrección de E11, B2). Qué
+  pasaba: la fila de un reporte nuevo llega al servidor antes que su contenido; otro dispositivo lo veía vacío, lo
+  preparaba y, al llegar lo del primero, quedaban `Escena 105_026` y `Escena 105_029` dos veces. Las opciones: preparar
+  igual y que *Prepare* de nuevo limpie (D436), esperar el contenido, o no tocarlo. Elegí: (1) el reporte de mañana se
+  escribe **de una vez**, la plantilla y las secciones en un solo guardado (una sola subida: nadie ve la plantilla sin
+  las secciones); (2) *Prepare* (también el de la tarjeta de siempre) no escribe en una página creada en otro dispositivo
+  hace menos de 2 minutos que no tiene nada ni en el servidor ni en el dispositivo: espera hasta 10 s sincronizando y, si
+  no llega, no toca nada y lo dice («se acaba de crear en otro dispositivo… probá en un momento»); (3) la tarjeta del
+  último día, si encuentra así el reporte de esa fecha, no lo prepara: el otro dispositivo lo está preparando
+  (`elsewhere`). Una página vacía de verdad (más de 2 minutos) se prepara como siempre. Si preferís otra: preparar
+  igual y confiar en *Prepare* de nuevo (`isArriving` en `prepareDay.ts`).
+- **D580 · Dos dispositivos que crean el mismo día a la vez: cede el de id mayor; si quedan dos, se ven** (2026-10-09;
+  corrección de E11, B2). Qué pasaba: con 0–3,5 s de diferencia quedaban dos reportes del mismo día. Las opciones: una
+  restricción en la base (fecha única por carpeta: no vale para una segunda unidad), dejar los dos o que uno ceda. Elegí:
+  lo local (la carpeta, la plantilla) antes de sincronizar; la fila sola y subida apenas se crea; una lectura más
+  empezada después de subirla; si aparece otro reporte con el mismo día y **id menor**, este dispositivo abandona su
+  página **todavía vacía** (a la papelera) y queda el del otro. «Vacía» es seguro para quien la creó, no para un tercer
+  dispositivo: si alguien abre esa copia en sus primeros segundos y escribe, su texto puede llegar después de la
+  decisión y quedar en la página de la papelera (no se pierde: se ve con «Restaurar»; la re-verificación lo reprodujo con
+  un tercero que la buscaba cada 100 ms). Mirar una última vez antes de la papelera queda en el roadmap. El de id
+  menor nunca cede, así que siempre queda al menos uno. Si ninguno vio al otro, quedan los dos: el aviso lo dice y *Map ›
+  Pending* lista los días con el mismo título (««2026-03-16 | Día 76» is in 2 pages», con ícono de día y su ayuda; una
+  segunda unidad con el mismo título también sale, y puede quedar). Medido en la base real con la hora del toque fijada,
+  0, 1, 2, 2,5, 3 y 3,5 s (dos tandas, 11 corridas): siempre un reporte, nunca secciones repetidas. El costo: el que crea
+  espera una sincronización más (aviso a los 4,5–7 s en vez de 2–4). Si preferís otra: no ceder y dejar los dos listados.
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

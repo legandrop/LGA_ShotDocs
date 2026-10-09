@@ -256,7 +256,9 @@ In development. What works today:
   the keyboard with the day's scenes, its location, the camera and dictation.
 - Type `/e 027` or `/l cen` to link a scene or a location (it shows as a chip). A number that doesn't exist yet can be
   created right there, in its folder, only when it's safe (you see the whole project, you're online and it isn't
-  anywhere, not even in the trash); a report section without a scene number gets *Assign* to say which scene it is.
+  anywhere, not even in the trash); a report section without a scene number gets *Assign* to say which scene it is, and
+  so does a mistyped number in *Map › Pending*, with *Undo*. On the last shoot day, the *Tomorrow* card creates and
+  prepares tomorrow's report in one step.
 - A location's other names (what the crew calls it, the abbreviations in day titles) go in an *Other names* line on its
   page (or come from *Link to a location…* on a shoot day whose title names none), and are recognized only where they are
   written; *Leave out of relations* in the page menu keeps archives and old copies out of scenes, locations and the Map.

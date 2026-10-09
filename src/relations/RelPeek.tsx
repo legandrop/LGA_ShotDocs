@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { EditorView } from '@tiptap/pm/view';
-import { t as tTr, useT } from '../i18n';
+import { t as tTr, useT, type Translate } from '../i18n';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import { isPhoneLayout } from '../ui/commentsUi';
@@ -12,8 +12,11 @@ import { sceneTitleOf } from './dayLive';
 import { Chip, DayChip, Ic, Thumb } from './LiveHeader';
 import { locationLive, sceneLive, type LiveSource, type PhotoRef } from './liveView';
 import { anchorOf, locateUnderline, makeLinkAt, type UnderlineAnchor } from './relLink';
-import { CreateEntityButton, ScenePicker } from './EntityActions';
+import { CreateEntityButton, ScenePicker, undoAction } from './EntityActions';
 import { notify } from '../ui/notice';
+import { ySyncPluginKey } from 'y-prosemirror';
+import type * as Y from 'yjs';
+import { captureNewLinks, pageHref, undoAssignInDoc } from './assign';
 import type { PeekEvents, PeekTarget } from './relUnderline';
 
 // El adelanto de un subrayado o de una ficha del editor (Docs/Doc_Relaciones.md, sección 14; maqueta `c_dia.html`): una
@@ -174,10 +177,17 @@ export function RelPeek({ eventsRef, view, pageId, editable }: { eventsRef: Muta
         // donde está ahora el subrayado (O8: el ancla, no `target.from`).
         const v = view();
         const at = v && open.anchor ? locateUnderline(v.state, open.anchor) : null;
-        const ok = !!v && at !== null && makeLinkAt(v, at, open.target.ref, { pageId: scene.pageId });
+        // Lo que la marca agregó en el Y.Doc, para el *Undo* del aviso (D566): el editor lo escribe ahí en el momento.
+        const doc = v ? (ySyncPluginKey.getState(v.state) as { doc?: Y.Doc } | undefined)?.doc : undefined;
+        const blockId = open.anchor?.blockId ?? null;
+        const run = () => !!v && at !== null && makeLinkAt(v, at, open.target.ref, { pageId: scene.pageId });
+        const spans = doc && blockId ? captureNewLinks(doc, blockId, pageHref(scene.pageId), run) : run() ? [] : null;
+        const ok = spans !== null;
         close();
         if (ok) v!.focus();
-        notify(ok ? tTr('assign.doneMention', { pending: open.target.ref, code: scene.code }) : tTr('assign.changedMention'));
+        const message = ok ? tTr('assign.doneMention', { pending: open.target.ref, code: scene.code }) : tTr('assign.changedMention');
+        // Sin lo agregado ubicado (no debería pasar), sin *Undo* en el aviso: queda ⌘Z.
+        notify(message, ok && spans!.length && doc ? undoAction(tTr as unknown as Translate, async () => undoAssignInDoc(doc, spans!)) : undefined);
       }}
       onClose={close}
     />,

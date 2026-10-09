@@ -163,3 +163,46 @@ describe('findEntities (la lupa ⌘K)', () => {
     expect(findEntities(empty, '1074')).toEqual([]);
   });
 });
+
+describe('el orden sin episodio propio (un día de rodaje: O8 de la auditoría de E7, D570)', () => {
+  const R = buildRegistry({
+    scenes: ['104_054A', '104_008', '105_025', '105_026', '105_027', '105_029', '106_001'].map((code, i) => ({ code, pageId: `p${i}` })),
+    locations: [],
+  });
+  const src: SearchSource = { snap: { registry: R }, title: (id) => `${id} | Escena` };
+
+  it('el selector vacío: el plan del día primero (en su orden), después su episodio, después el resto', async () => {
+    const { pickerOptions } = await import('./EntityActions');
+    const codes = pickerOptions(src, '', { near: ['105_029', '105_027'], ep: null, limit: 10 }).map((o) => o.code);
+    expect(codes).toEqual(['105_029', '105_027', '105_025', '105_026', '104_008', '104_054A', '106_001']);
+    // Con el episodio de la página, manda ese.
+    expect(pickerOptions(src, '', { near: [], ep: '104', limit: 3 }).map((o) => o.code)).toEqual(['104_008', '104_054A', '105_025']);
+    // Sin nada cerca ni episodio: por número, como antes.
+    expect(pickerOptions(src, '', { limit: 2 }).map((o) => o.code)).toEqual(['104_008', '104_054A']);
+  });
+
+  it('buscando por cifras sueltas también: las del episodio del plan antes que las de otro', () => {
+    expect(searchScenes(src, '0', { near: ['105_029'], loose: true, limit: 4 }).map((o) => o.code)).toEqual(['105_029', '105_025', '105_026', '105_027']);
+  });
+});
+
+describe('tipeando un número en un día sin episodio propio (B1 de la auditoría de E11, D578)', () => {
+  // Como ERSO: 026 existe en 101, 102 y 105; 054 en 101, 102, 104 (con letra) y 105.
+  const R = buildRegistry({
+    scenes: ['101_026', '102_026', '105_026', '101_054', '102_054', '104_054A', '105_054', '105_025', '101_026A'].map((code, i) => ({ code, pageId: `p${i}` })),
+    locations: [],
+  });
+  const src: SearchSource = { snap: { registry: R }, title: (id) => `${id} | Escena` };
+
+  it('el episodio del plan del día primero, también con lo tipeado', async () => {
+    const plan = ['105_025'];
+    expect(searchScenes(src, '054', { near: plan, loose: true }).map((o) => o.code)).toEqual(['105_054', '101_054', '102_054', '104_054A']);
+    expect(searchScenes(src, '026', { near: plan, loose: true })[0].code).toBe('105_026');
+    // El selector (Assign, Add scene) usa lo mismo.
+    const { pickerOptions } = await import('./EntityActions');
+    expect(pickerOptions(src, '054', { near: plan, ep: null })[0].code).toBe('105_054');
+    // Con el episodio de la página, manda ese; sin nada cerca, por número como antes.
+    expect(searchScenes(src, '054', { ep: '102', loose: true })[0].code).toBe('102_054');
+    expect(searchScenes(src, '054', { loose: true }).map((o) => o.code).slice(0, 2)).toEqual(['101_054', '102_054']);
+  });
+});
