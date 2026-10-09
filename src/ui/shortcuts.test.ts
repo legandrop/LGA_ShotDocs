@@ -49,7 +49,8 @@ describe('el registro', () => {
       expect(translate('en', key)).not.toBe(key);
       expect(translate('es', key)).not.toBe(key);
       if (s.source === 'window' || s.source === 'dom') expect(SHORTCUT_FILES[s.id]?.length, `${s.id} sin archivos`).toBeGreaterThan(0);
-      if (s.source === 'typed' && s.id !== 'mdSlash') expect(SHORTCUT_RULES[s.id]?.length, `${s.id} sin reglas`).toBeGreaterThan(0);
+      // El menú / y lo que se escribe adentro (`/e `, `/l `: relations/slashRelations.tsx) no son reglas de entrada.
+      if (s.source === 'typed' && !['mdSlash', 'slashScene', 'slashLocation'].includes(s.id)) expect(SHORTCUT_RULES[s.id]?.length, `${s.id} sin reglas`).toBeGreaterThan(0);
     }
     for (const place of SHORTCUT_PLACES) expect(translate('es', PLACE_TEXTS[place])).not.toBe(PLACE_TEXTS[place]);
     // Nada de textos que sobren.

@@ -1,4 +1,4 @@
-import { fieldDate, fieldValues, normLabel, emptyValue, type FieldValue, type PageFields } from './fields';
+import { fieldDate, fieldValues, normLabel, emptyValue, openQuestionText, type FieldValue, type PageFields } from './fields';
 import { INDEX_PAGE_MIN, type LinkTarget, type Section } from './pageRelations';
 import { cardFields, findFields } from './relationIndex';
 import { dayRef, GENERAL_SECTION, pageBlocks, sectionText, type DayRef, type LiveSource, type PageChip, type PhotoRef, type Place } from './liveView';
@@ -31,7 +31,7 @@ export type DayRow =
       photos: number;
       status: DayStatus;
     }
-  | { kind: 'pending'; code: string; heading: string; place: Place }
+  | { kind: 'pending'; code: string; part: string; heading: string; place: Place }
   | { kind: 'unnumbered'; heading: string; place: Place; photos: number }
   | { kind: 'planned'; code: string; scenePageId: string | null; sceneTitle: string };
 
@@ -217,7 +217,8 @@ export function openQuestions(src: LiveSource, codes: readonly string[], cards =
       const pf = src.snap.fields.get(pageId);
       if (!pf) continue;
       for (const f of valued(fieldValues(pf, 'openQuestion'))) {
-        const text = firstLine(f.text);
+        // Sin los rótulos vacíos («Director: » de la plantilla): una pregunta sin nada escrito no está abierta (O11).
+        const text = firstLine(openQuestionText(f.text));
         const key = normLabel(text);
         if (!key) continue;
         const known = out.find((q) => normLabel(q.text) === key);
@@ -291,7 +292,7 @@ export function dayLive(src: LiveSource, pageId: string): DayLive {
     }
     for (const x of scenes) {
       if (x.kind === 'pending') {
-        rows.push({ kind: 'pending', code: x.ref, heading: s.title, place });
+        rows.push({ kind: 'pending', code: x.ref, part: x.part, heading: s.title, place });
         continue;
       }
       // Dos secciones vacías de la misma escena (preparadas en dos dispositivos a la vez) son una sola fila.

@@ -116,6 +116,10 @@ export const SHORTCUTS: Shortcut[] = [
 
   // --- Lo que se escribe al principio de un renglón ---
   { id: 'mdSlash', keys: ['/'], place: 'markdown', owner: 'blocknote', source: 'typed' },
+  // El `/` de escenas y locaciones (relations/slashRelations.tsx, E7, D523): lo que se escribe después de `/`, sin atajo
+  // de teclas nuevo (⌘↩ es el salto de hoja y Tab la sangría).
+  { id: 'slashScene', keys: ['/e '], place: 'markdown', owner: 'app', source: 'typed' },
+  { id: 'slashLocation', keys: ['/l '], place: 'markdown', owner: 'app', source: 'typed' },
   { id: 'mdHeading', keys: ['# ', '## ', '### '], place: 'markdown', owner: 'blocknote', source: 'typed' },
   { id: 'mdBullet', keys: ['- ', '* '], place: 'markdown', owner: 'blocknote', source: 'typed' },
   { id: 'mdNumbered', keys: ['1. '], place: 'markdown', owner: 'blocknote', source: 'typed' },

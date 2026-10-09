@@ -254,6 +254,9 @@ In development. What works today:
   pops up). Hover one, or tap it with the keyboard closed, for a preview with *Open* and *Make it a link*
   (Ctrl+Alt+K / ⌘⌥K); links to scenes and locations show as chips. On a phone, a shoot day report has a *Today* bar above
   the keyboard with the day's scenes, its location, the camera and dictation.
+- Type `/e 027` or `/l cen` to link a scene or a location (it shows as a chip). A number that doesn't exist yet can be
+  created right there, in its folder, only when it's safe (you see the whole project, you're online and it isn't
+  anywhere, not even in the trash); a report section without a scene number gets *Assign* to say which scene it is.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
 Connecting other AI apps (MCP) comes later. The plan, the decisions and the roadmap are in

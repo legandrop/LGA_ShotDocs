@@ -13,6 +13,7 @@ import type { Place } from './liveView';
 import { fold } from './reader';
 import { mapCounts, mapJson, mapText, projectMap, sceneFilterText, titlePlace, type MapDay, type MapLocation, type MapScene, type ProjectMapData } from './projectMap';
 import { searchScenes } from './sceneSearch';
+import { AssignButton, CreateEntityButton } from './EntityActions';
 import './liveHeader.css';
 import './map.css';
 
@@ -226,7 +227,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
           ) : tab === 'days' ? (
             <Days data={data} fq={fq} codes={codes} />
           ) : (
-            <Pending data={data} complete={complete} partial={partial} session={session} onPlace={(p) => goToPlace(services, p)} />
+            <Pending data={data} complete={complete} partial={partial} session={session} snap={snap} projectId={projectId} onPlace={(p) => goToPlace(services, p)} />
           )}
         </>
       )}
@@ -538,8 +539,8 @@ function blockText(session: Session, pageId: string, blockId: string): string {
 }
 
 /**
- * Una fila de *Pending*. `actions` es el lugar de los botones de cada fila: *Create* y *Assign* (con sus guardas) son de
- * la entrega E7; acá queda vacío.
+ * Una fila de *Pending*. `actions` es el lugar de los botones de cada fila: *Create* (con sus guardas) en los números que
+ * no existen y *Assign* en las secciones sin número (E7, `EntityActions.tsx`).
  */
 export function PendingRow({ head, children, actions }: { head: ReactNode; children?: ReactNode; actions?: ReactNode }) {
   return (
@@ -558,15 +559,23 @@ function Pending({
   complete,
   partial,
   session,
+  snap,
+  projectId,
   onPlace,
 }: {
   data: ProjectMapData;
   complete: boolean;
   partial: boolean;
   session: Session;
+  snap: ReturnType<Session['relations']['snapshot']>;
+  projectId: string;
   onPlace: (place: Place) => void;
 }) {
   const tr = useT();
+  const perms = usePermissions();
+  const tree = useTree();
+  // *Assign* necesita la foto (para elegir la escena) y permiso de editar el día (E7).
+  const src = snap ? { snap, title: (id: string) => tree.get(id)?.title } : null;
   const title = (id: string) => data.pages.get(id)?.title ?? '';
   const nothing = !data.pending.length && !data.unnumbered.length && !data.duplicates.length;
   return (
@@ -578,6 +587,7 @@ function Pending({
           {data.pending.map((p) => (
             <PendingRow
               key={p.code}
+              actions={<CreateEntityButton want={{ kind: 'scene', code: p.code }} projectId={projectId} className="mp-btn" />}
               head={
                 <>
                   <span className="mp-chip out mono">
@@ -645,9 +655,12 @@ function Pending({
                 </>
               }
               actions={
-                <button className="mp-btn" onClick={() => onPlace({ pageId: u.dayId, blockId: u.blockId, endBlockId: u.endBlockId })}>
-                  {tr('map.openSection')}
-                </button>
+                <>
+                  {src && perms.canEditPage(u.dayId) && <AssignButton src={src} pageId={u.dayId} target={{ kind: 'heading', blockId: u.blockId, text: u.title }} className="mp-btn" />}
+                  <button className="mp-btn" onClick={() => onPlace({ pageId: u.dayId, blockId: u.blockId, endBlockId: u.endBlockId })}>
+                    {tr('map.openSection')}
+                  </button>
+                </>
               }
             >
               <div className="mp-pw">

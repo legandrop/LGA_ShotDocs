@@ -8,7 +8,11 @@
 //   &ronda=1 / &lento=1                            casos de la auditoría / índice que nunca termina
 //   &days=1                                        el día de rodaje y Tomorrow (E5): ?page=d59&days=1
 //   &largo=1 / &lentofotos=1                       el Día 60 largo con fotos grandes / fotos que tardan en llegar
-//   window.__cabecera = { listo, ids, ir(clave) }
+//   &e7=1                                          crear y asignar (E7): con equipo (permisos conocidos, dueño), un
+//                                                  pendiente 105_120 en el Día 58 y en las notas, 104_054A sin base,
+//                                                  105_121 en «90 | Archivo» y 105_122 en la papelera
+//   &e7=1&como=ana                                 lo mismo, visto por una invitada (edita los días, ve el desglose)
+//   window.__cabecera = { listo, ids, ir(clave), red(bool) }
 import { createRoot } from 'react-dom/client';
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
@@ -89,7 +93,11 @@ async function drawPhoto(label: string, w = 900, h = 600): Promise<Blob> {
 async function main() {
   prefs.init();
   const server = new FakeServer();
-  const d = await makeDevice(server);
+  const e7 = new URLSearchParams(location.search).get('e7') === '1';
+  // E7: con equipo, la app conoce los permisos (sin equipo, no los conoce y no deja crear desde el texto).
+  if (e7) server.enableTeam();
+  const owner = await makeDevice(server);
+  let d = owner;
   // El dispositivo de las pruebas guarda miniaturas de mentira (unos bytes): acá cada foto se muestra con su imagen
   // dibujada, en el editor y en la cabecera (las dos piden la dirección a `resolve`).
   const drawn = new Map<string, string>();
@@ -131,6 +139,30 @@ async function main() {
     await writeBlocks(d, plan59, [{ p: 'Orden: 105_027 primero.' }]);
     await d.engine.syncNow();
   }
+  // `?e7=1`: lo de crear y asignar (E7).
+  if (e7) {
+    await writeBlocks(d, built.ids.d58, [
+      { h: 1, text: 'Info general' },
+      { p: 'Llamado 8:00. Prueba de cámara en la curva.' },
+      { h: 1, text: 'Escena 105_120' },
+      { p: 'Plano del puente, la 105_121 quedó para otro día.' },
+    ]);
+    await writeBlocks(d, built.ids.notas, [{ p: 'Revisar con dirección la 105_027 antes del día 70.' }, { p: 'Falta la 105_120 en el desglose y la 104_054 de la plaza.' }]);
+    await d.tree.create(built.ids.ep4, '054A | La plaza de noche', built.projectId);
+    await d.tree.create(built.ids.archivo, '105_121 | Descartada', built.projectId);
+    const trashed = await d.tree.create(built.ids.ep5, '122 | La que se borró', built.projectId);
+    await d.tree.trash(trashed);
+    await d.engine.syncNow();
+    if (params.get('como') === 'ana') {
+      server.addMember('ana', 'member', 'ana@test');
+      server.grant('ana', { pageId: built.ids.rodaje }, 'edit_pages');
+      server.grant('ana', { pageId: built.ids.desglose }, 'view');
+      d = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'ana', email: 'ana@test' });
+      d.media.resolve = owner.media.resolve;
+      await d.engine.syncNow();
+      await d.engine.syncNow();
+    }
+  }
   // `?lento=1`: el índice nunca termina de leer los documentos (para ver la cabecera mientras lee).
   if (params.get('lento') === '1') d.docs.indexSnapshot = () => new Promise(() => undefined);
   // `?collapsed=1`: la sección «Escena 105_027b» del día 59 colapsada para todos (ir ahí tiene que abrirla).
@@ -153,6 +185,12 @@ async function main() {
     ids: built.ids,
     photos: built.photos,
     ir: (key: string) => navigate(pagePath(built.ids[key] ?? key)),
+    // Sin red / con red (el servidor en memoria deja de contestar), y una sincronización ya.
+    red: async (on: boolean) => {
+      server.online = on;
+      await d.engine.syncNow();
+    },
+    tree: d.tree,
   };
 }
 void main();

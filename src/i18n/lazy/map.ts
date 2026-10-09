@@ -74,8 +74,8 @@ export const map = {
   },
   'map.namedIn': { en: "Named in", es: "Nombrada en" },
   'map.createLater': {
-    en: "Creating it from here comes later; for now, create its page in its episode folder and every mention relates by itself.",
-    es: "Crearla desde acá viene después; por ahora, creá su página en la carpeta de su episodio y cada mención se relaciona sola.",
+    en: "Create it here when it can’t duplicate anything (or with + in its episode folder): every mention relates by itself.",
+    es: "Creala desde acá cuando no puede duplicar nada (o con + en la carpeta de su episodio): cada mención se relaciona sola.",
   },
   'map.duplicate': {
     en: { one: "{code} is in {count} page", other: "{code} is in {count} pages" },

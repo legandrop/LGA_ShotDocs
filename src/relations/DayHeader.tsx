@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { locale, useT, type Translate } from '../i18n';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices } from '../services';
 import { notify } from '../ui/notice';
 import { dayShortLabel, headingStyleFor, linkTargetOf, sceneTitleOf, type DayLive, type DayPlan, type DayQuestion, type DayRow } from './dayLive';
-import { fold } from './reader';
 import { goToPlace } from './goToPlace';
 import { useLiveOpen } from './liveFold';
 import { Badge, Chip, Ic, Line, LiveDot, useFoldFocus, useGo, type HeaderPhotos } from './LiveHeader';
 import { PhotoSources } from './PhotoSources';
+import { AssignButton, CreateEntityButton, ScenePicker } from './EntityActions';
 import type { DayRef, LiveSource } from './liveView';
 import { addToPlan, adjustedPlan, removeFromPlan, usePlanAdjust } from './tomorrowPlan';
 import type { PreparedSection } from './prepareDay';
@@ -92,8 +92,13 @@ function StatusPill({ row, tr }: { row: Extract<DayRow, { kind: 'scene' }>; tr: 
   return <span className="lh-st shot">{tr('day.shot')}</span>;
 }
 
-function Rows({ v, tr, partial }: { v: DayLive; tr: Translate; partial: boolean }) {
+function Rows({ v, src, tr, partial }: { v: DayLive; src: LiveSource; tr: Translate; partial: boolean }) {
   const go = useGo();
+  const perms = usePermissions();
+  // *Create* y *Assign* (E7, D519, D521, D522): Assign escribe en este reporte (con permiso de editarlo); Create, con sus
+  // guardas (un invitado ve el rótulo con el motivo).
+  const canEdit = perms.canEditPage(v.day.pageId);
+  const near = v.rows.flatMap((r) => (r.kind === 'scene' || r.kind === 'planned' ? [r.code] : []));
   if (!v.rows.length) {
     return <span className="lh-none">{v.complete ? tr(partial ? 'day.noSectionsSeen' : 'day.noSections') : tr('live.reading')}</span>;
   }
@@ -137,8 +142,16 @@ function Rows({ v, tr, partial }: { v: DayLive; tr: Translate; partial: boolean 
               <button className="tt" onClick={() => go(r.place)}>
                 «{r.heading}» <span className="lh-via">· {tr(partial ? 'day.notSeen' : 'day.doesntExist')}</span>
               </button>
-              <span className="meta">
-                <span className="lh-st">{tr('day.pending')}</span>
+              <span className="meta rel-acts">
+                <CreateEntityButton want={{ kind: 'scene', code: r.code + r.part }} projectId={src.snap.projectId} className="lh-tbtn" />
+                {canEdit && (
+                  <AssignButton
+                    src={src}
+                    pageId={v.day.pageId}
+                    target={{ kind: 'mention', blockId: r.place.blockId, pending: r.code, ep: src.snap.registration.roles.get(v.day.pageId)?.ep ?? null }}
+                    near={near}
+                  />
+                )}
               </span>
             </div>
           );
@@ -151,7 +164,9 @@ function Rows({ v, tr, partial }: { v: DayLive; tr: Translate; partial: boolean 
             <button className="tt" onClick={() => go(r.place)} data-tip={tr('day.unnumberedTip')}>
               «{r.heading}» <span className="lh-via">· {tr('day.noSceneNumber')} · {tr('live.photoCount', { count: r.photos })}</span>
             </button>
-            <span className="meta" />
+            <span className="meta rel-acts">
+              {canEdit && <AssignButton src={src} pageId={v.day.pageId} target={{ kind: 'heading', blockId: r.place.blockId, text: r.heading }} near={near} />}
+            </span>
           </div>
         );
       })}
@@ -216,58 +231,6 @@ function PlanText({ plan, date, reading, partial, tr }: { plan: DayPlan; date: s
 }
 
 // --- La tarjeta «Tomorrow» -------------------------------------------------------------------------------------
-
-/** El selector para sumar una escena a la lista de mañana: filtra por número (`029`, `5029`, `105-029`) o por título. */
-function Picker({ src, have, onPick, onClose, tr }: { src: LiveSource; have: string[]; onPick: (code: string) => void; onClose: () => void; tr: Translate }) {
-  const [q, setQ] = useState('');
-  const box = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const away = (e: PointerEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('pointerdown', away);
-    return () => document.removeEventListener('pointerdown', away);
-  }, [onClose]);
-  const needle = fold(q).trim();
-  const digits = needle.replace(/[^0-9a-z]/g, '');
-  const options: { code: string; title: string }[] = [];
-  for (const e of src.snap.registry.scenes.values()) {
-    if (!e.pageId || have.includes(e.code)) continue;
-    const title = src.title(e.pageId);
-    if (title === undefined) continue;
-    const flat = e.code.replace('_', '').toLowerCase();
-    const compact = e.ep ? `${e.ep.slice(-1)}${e.code.slice(4)}`.toLowerCase() : flat;
-    const hit = !needle || flat.includes(digits) || compact.includes(digits) || fold(title).includes(needle);
-    if (hit) options.push({ code: e.code, title: sceneTitleOf(title) });
-    if (options.length >= 8) break;
-  }
-  return (
-    <div className="lh-picker" ref={box} role="dialog" aria-label={tr('day.addScene')}>
-      <input
-        autoFocus
-        value={q}
-        placeholder={tr('day.pickerPlaceholder')}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') onClose();
-          if (e.key === 'Enter' && options[0]) onPick(options[0].code);
-        }}
-      />
-      <div className="lh-picker-list">
-        {options.length ? (
-          options.map((o) => (
-            <button key={o.code} onClick={() => onPick(o.code)}>
-              <span className="k">{o.code}</span>
-              <span className="t">{o.title}</span>
-            </button>
-          ))
-        ) : (
-          <span className="lh-none">{tr('day.noMatch')}</span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }) {
   const services = useServices();
@@ -391,12 +354,13 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
             {tr('day.addScene')}
           </button>
           {picking && (
-            <Picker
+            <ScenePicker
               src={src}
               have={codes}
-              tr={tr}
+              near={t.plan.codes}
+              label={tr('day.addScene')}
               onClose={() => setPicking(false)}
-              onPick={(code) => {
+              onPick={({ code }) => {
                 addToPlan(t.day.pageId, code);
                 setPicking(false);
               }}
@@ -489,7 +453,7 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
       <dl className="lh-facts">
         <dt>{tr('day.scenesOfDay')}</dt>
         <dd>
-          <Rows v={v} tr={tr} partial={partial} />
+          <Rows v={v} src={src} tr={tr} partial={partial} />
         </dd>
         {v.questions.length > 0 && (
           <>

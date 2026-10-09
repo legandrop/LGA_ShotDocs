@@ -1865,3 +1865,95 @@
 :root:has(.rel-today) .editor-host {
   padding-bottom: 64px;
 }
+
+/* Create y Assign (E7, EntityActions.tsx): en la cabecera del día, el adelanto de un pendiente y Map › Pending. */
+.lh .rel-create,
+.rel-create {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lh .lh-tbtn.rel-create,
+.lh .lh-tbtn.rel-assign {
+  height: 26px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.rel-cant {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  color: var(--muted-2);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+button.rel-cant.trash,
+.lh button.rel-cant.trash {
+  border: 1px dashed var(--border);
+  padding: 0 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* El selector, del lado de su botón (a la derecha de la fila); si igual se sale de la pantalla, ScenePicker lo corre. */
+.rel-acts .lh-picker,
+.mp-pact .lh-picker {
+  left: auto;
+  right: 0;
+}
+
+/* En el adelanto va en el flujo de la tarjeta, en el lugar de la nota (la tarjeta recorta lo que sale de ella: B1 de la
+   auditoría de E7): el campo arriba y la lista con su propio alto. */
+.lh-picker.inline {
+  position: static;
+  width: auto;
+  max-width: none;
+  margin: 2px 10px 6px;
+  box-shadow: none;
+}
+
+.lh-picker.inline .lh-picker-list {
+  max-height: min(240px, 34vh);
+}
+
+/* Fuera de la cabecera (Map › Pending) los renglones del selector no heredan el estilo de `.lh`. */
+.lh-picker-list button {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lh-picker-list button:hover {
+  background: var(--hover);
+}
+
+@media (max-width: 760px) {
+  .rel-acts .lh-picker {
+    left: 0;
+    right: auto;
+  }
+
+  .lh-picker.inline .lh-picker-list {
+    max-height: min(220px, 30vh);
+  }
+}

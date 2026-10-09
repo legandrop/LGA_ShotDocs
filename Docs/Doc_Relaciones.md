@@ -700,3 +700,89 @@ apretado, Esc y escribir, el mouse quieto bajo un subrayado nuevo, elegir texto,
 atajo); `reader.test.ts` (unidades); `dayHeader.test.tsx` (el título en vivo en la app).
 
 **Decisiones:** D446–D460 en `Doc_Decisiones.md`.
+
+## 15. El `/` de escenas y locaciones, *Create* con guardas y *Assign* (E7, v0.245)
+
+Escribir el número de una escena o el nombre de una locación como link, crear la escena que el texto nombra y no existe,
+y decir de qué escena es una sección sin número (maqueta `d_escribir.html` y `c_dia.html`). Lo único que escribe en un
+documento es el `/` (un link común en el cursor) y *Assign* (texto agregado o una marca); *Create* escribe en el árbol.
+
+| Pieza | Archivo |
+|---|---|
+| El `/`: lo escrito después, los ítems, insertar el link | `src/relations/slashRelations.tsx` (`parseSlashQuery`, `pendingCode`, `relationSlash`), mezclado en `slashItems` de `src/ui/PageEditor.tsx` |
+| Las guardas y crear (puro, salvo crear) | `src/relations/createEntity.ts` (`createGuard`, `createEntity`, `undoCreate`, `createDepsFrom`) |
+| La plantilla de lo creado (se baja al crear) | `src/relations/createWrite.ts` (`writeEntityTemplate`, `pageSignature`) |
+| *Assign*, directo en el Y.Doc | `src/relations/assign.ts` (`assignHeadingInDoc`, `assignMentionInDoc`, `unlinkPageInDoc`) |
+| Los botones y el selector de escenas | `src/relations/EntityActions.tsx` (`CreateEntityButton`, `AssignButton`, `ScenePicker`, `runCreate`) |
+| Dónde aparecen | `RelPeek.tsx` (adelanto de un pendiente), `DayHeader.tsx` (filas «doesn't exist» y «no scene number»; *Add scene* usa `ScenePicker`), `MapView.tsx` (*Pending*, en la ranura `actions`) |
+| Volver link desde el adelanto y lo creado desde el `/` | `src/relations/relLink.ts` (`makeLinkAt(view, pos, ref, to)`, `linkTextInBlock`) |
+
+**El `/`** es el menú de BlockNote de siempre: su consulta es todo lo escrito después de `/` (con espacios). Con una
+palabra de escena (`e`, `sc`, `esc`, `scene`, `escena` y sus prefijos) seguida de un espacio o pegada a cifras (`/e 027`,
+`/e5027`, `/escena 105-027`, `/e cami`), la lista pasa a escenas; con una de locación y un espacio (`/l cen`), a
+locaciones. La palabra sola sigue siendo el menú de siempre (`/sc`↵ da *Script*) y suma al final *Scene* y *Location*,
+que vuelven a abrir el menú con `/e ` o `/l ` (`openSuggestionMenu`). El filtro es `searchScenes` de E9 (exacto por el
+lector con el episodio de la página, después las cifras y el título; tope 7); `/e ` sin nada pone primero las escenas que
+nombra la página (en un día, también su plan). Solo escenas con una página que la persona ve. ↵ deja en el cursor el
+número canónico (`105_027`) o el nombre de la locación como link `/p/<id>`, con un espacio (y otro antes si lo de antes
+era una letra), también en un título; el subrayado lo dibuja como ficha. Con un link público, en una versión del
+historial o en la práctica no hay nada de esto.
+
+**Lo que no existe.** Si lo escrito nombra un número que el lector da por pendiente (`105_120`, `5120`, `120` en una
+página del episodio 105), el último ítem es *Create scene 105_120* («In «105 | Episodio 5»») si pasan las guardas; si no,
+*Keep 105_120 as text* con el motivo, que deja el número escrito (queda subrayado como pendiente). *Create* escribe el
+número enseguida, crea la página y, al estar, lo vuelve link (`linkTextInBlock`, por el id del bloque). En locaciones,
+*Create location «…»* si no hay una con ese nombre (sin tildes, alias o el nombre sin el paréntesis), desde 3 letras.
+
+**Las guardas** (`createGuard`, puras; se vuelven a mirar al crear):
+
+| # | Pasa si | Si no |
+|---|---|---|
+| G1 | Permisos conocidos y nivel sobre el proyecto entero (`projectLevel ≥ view`, la cuenta de `private.project_level`) | «Only people who see the whole project can create it…»: un invitado a una carpeta, aunque sea *Edit & create* |
+| G2 | La foto del índice está completa | «Reading the project…» |
+| G3 | En línea y con una sincronización buena en esta sesión. **Al crear, además, se sincroniza en el momento** (hasta 6 s) y se vuelven a mirar las guardas con el árbol recién bajado; y apenas se crea, se sincroniza otra vez para que la fila suba ya (D546). Lo que no cubre: dos dispositivos que crean la misma escena casi a la vez (la auditoría midió 2 páginas con hasta 1,6 s de diferencia y 1 con 3 s, antes de D546; ahora la ventana es un viaje de ida y vuelta, no medido en la base) dejan dos páginas (D520) | «Connect to create it: another device may have created it already» |
+| G4 | Ninguna página del proyecto (todo el árbol: papelera, lo de adentro de algo en la papelera, `graph: false`, sueltas) dice ese código por su marca o por su título, ni otro con la misma base (`105_120A` al pedir `105_120`, `105_120` al pedir `105_120B`) | `It’s in the trash («…»): restore it`, `It exists in «90 \| Archivo»`, `105_120A exists: write its letter`, `It already exists` |
+| G5 | Una sola carpeta destino: la de las escenas de ese episodio (si empatan dos, no); si no hay, su grupo de episodio en la carpeta *Scenes*; si no, la única carpeta *Scenes*. Y permiso de crear ahí | «Mark a folder as Scenes first», «More than one folder could hold it», «You can’t create pages in «…»» |
+
+**Qué crea** (`createEntity`): la página en la carpeta, título = el código (`105_120`), en orden por número si las
+hermanas ya lo están, `template_id` de *Scene*, la marca `settings.entity` explícita y la plantilla de *Scene* (o la propia
+del proyecto que salió de *Scene*, si hay una sola y se lee entera) con `writeNewPage`. Locación: el nombre con mayúscula
+inicial, al final de la carpeta, *Location*. Todo primero en el dispositivo. Dos pedidos a la vez para lo mismo (dos ↵, o
+el `/` y el adelanto) dan una sola página. No navega: el aviso dice dónde quedó, con *Open* y *Undo*; *Undo* primero sincroniza
+(lo que otro dispositivo ya escribió en la página nueva tiene que llegar) y la manda a la papelera solo si nadie la tocó
+(mismo título, lugar y contenido, sin páginas adentro); sin red no la deshace (D547). Si salió del `/`, le saca el link al
+número escrito, que vuelve a leerse como pendiente. La plantilla *Scene* trae «Director: » y «Production design: » para
+llenar: una pregunta sin nada después del rótulo no cuenta como abierta en la cabecera viva (D548, `openQuestionText`).
+
+**Dónde está *Create*.** El `/`, el adelanto de un pendiente (botón o rótulo con el motivo, y *Assign*), la fila
+«doesn't exist» de la cabecera del día y cada número de *Map › Pending*: el mismo botón (`CreateEntityButton`), que
+cuando no se puede es un rótulo de borde punteado con el motivo en su tooltip; si está en la papelera, el rótulo lo dice a
+la vista («In the trash · restore it») y lleva a la papelera (D549). Crear desde la cabecera, el adelanto o el
+mapa no escribe en ningún documento: las menciones se reconocen solas apenas existe la escena.
+
+***Assign*.** En una sección de un reporte con fotos y sin número (fila «no scene number» del día y de *Map ›
+Pending*), con permiso de editar el día: el selector de escenas y, al elegir, se agrega « · 105_025» al final del
+título, con el número como link (otra escena suma la suya). Sobre un número que no existe (fila «doesn't exist» del día,
+adelanto): la marca `link` a la escena elegida sobre el texto escrito, sin cambiarlo; desde la fila, en cada aparición
+de ese número en el bloque. Las dos son solo inserciones en un bloque, directo en el Y.Doc, por su id, en una
+transacción y verificando antes el bloque (si el título cambió o el número ya no está, no se escribe y se avisa). Desde
+el adelanto, la marca va por el editor abierto (`makeLinkAt` con destino, con el ancla de E6: se deshace con ⌘Z), y el
+selector va adentro de la tarjeta, en el lugar de la nota, con el campo arriba, la lista con su propio alto y primero las
+escenas de la página y del episodio del número (la tarjeta recorta lo que sale de ella); en la cabecera y el mapa flota
+debajo de su botón, corrido para no salirse de la pantalla (D550).
+
+**Duplicadas.** Aun con las guardas, dos personas pueden crear la misma escena a la vez, o con el «+» sin red: quedan
+las dos páginas, nada se borra solo, las relaciones usan la primera del árbol y cuentan las menciones de las dos, y
+*Map › Pending* las muestra («in 2 pages», E9). Se resuelve a mano.
+
+**Pruebas.** `createEntity.test.ts` (cada guarda con su caso negativo: invitado con *Edit & create* en la carpeta con la
+cuenta de la base, permisos desconocidos, índice leyendo, sin red, sin sincronización, papelera, adentro de algo en la
+papelera, `graph: false`, con letra, la base, dos carpetas, sin carpeta, sin permiso; lo creado; dos pedidos a la vez; sin
+red en el momento; la escena que otro dispositivo acaba de crear; *Undo*), `createSync.test.ts` (dos dispositivos: sin
+red y con el «+», con red y a la vez, uno después del otro), `assign.test.ts` (la marca igual a la del editor, el
+título, sin heredar formato, título cambiado, dos dispositivos escribiendo el mismo título, el pendiente, el esquema
+anterior), `slashRelations.test.tsx` (con el editor de verdad: la consulta, ↵, el título, *Create* y *Keep as text*, sin
+red, *Scene* que reabre el menú, sin relaciones, el esquema anterior), `relUnderline.test.ts` (*Assign* desde el adelanto
+con el ancla), `dayHeader.test.tsx` y `mapView.test.tsx` (los botones en la app, invitados).
+
+**Decisiones:** D506–D525 y, de la auditoría, D546–D550 en `Doc_Decisiones.md`.

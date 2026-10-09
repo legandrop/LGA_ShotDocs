@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { EditorView } from '@tiptap/pm/view';
-import { useT } from '../i18n';
+import { t as tTr, useT } from '../i18n';
 import { navigate, pagePath } from '../router';
-import { useServices, useTree } from '../services';
+import { usePermissions, useServices, useTree } from '../services';
 import { isPhoneLayout } from '../ui/commentsUi';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { keyLabel, shortcut } from '../ui/shortcuts';
@@ -12,6 +12,8 @@ import { sceneTitleOf } from './dayLive';
 import { Chip, DayChip, Ic, Thumb } from './LiveHeader';
 import { locationLive, sceneLive, type LiveSource, type PhotoRef } from './liveView';
 import { anchorOf, locateUnderline, makeLinkAt, type UnderlineAnchor } from './relLink';
+import { CreateEntityButton, ScenePicker } from './EntityActions';
+import { notify } from '../ui/notice';
 import type { PeekEvents, PeekTarget } from './relUnderline';
 
 // El adelanto de un subrayado o de una ficha del editor (Docs/Doc_Relaciones.md, sección 14; maqueta `c_dia.html`): una
@@ -166,12 +168,46 @@ export function RelPeek({ eventsRef, view, pageId, editable }: { eventsRef: Muta
         close();
         navigate(pagePath(id));
       }}
+      editable={editable}
+      onAssign={(scene) => {
+        // *Assign* de un pendiente (D522): la marca a la escena elegida sobre lo escrito, por el editor (un paso de ⌘Z),
+        // donde está ahora el subrayado (O8: el ancla, no `target.from`).
+        const v = view();
+        const at = v && open.anchor ? locateUnderline(v.state, open.anchor) : null;
+        const ok = !!v && at !== null && makeLinkAt(v, at, open.target.ref, { pageId: scene.pageId });
+        close();
+        if (ok) v!.focus();
+        notify(ok ? tTr('assign.doneMention', { pending: open.target.ref, code: scene.code }) : tTr('assign.changedMention'));
+      }}
+      onClose={close}
     />,
     document.body,
   );
 }
 
-function PeekCard({ target, pageId, canLink, onEnter, onLeave, onLink, onGo }: { target: PeekTarget; pageId: string; canLink: boolean; onEnter: () => void; onLeave: () => void; onLink: () => void; onGo: (pageId: string) => void }) {
+function PeekCard({
+  target,
+  pageId,
+  canLink,
+  editable,
+  onEnter,
+  onLeave,
+  onLink,
+  onGo,
+  onAssign,
+  onClose,
+}: {
+  target: PeekTarget;
+  pageId: string;
+  canLink: boolean;
+  editable: boolean;
+  onEnter: () => void;
+  onLeave: () => void;
+  onLink: () => void;
+  onGo: (pageId: string) => void;
+  onAssign: (scene: { code: string; pageId: string }) => void;
+  onClose: () => void;
+}) {
   const tr = useT();
   const services = useServices();
   const tree = useTree();
@@ -179,8 +215,12 @@ function PeekCard({ target, pageId, canLink, onEnter, onLeave, onLink, onGo }: {
   const card = useRef<HTMLDivElement>(null);
   const phone = isPhoneLayout();
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [assigning, setAssigning] = useState(false);
   const revision = useSyncExternalStore(session?.relations.subscribe ?? noSubscribe, session?.relations.getRevision ?? zero);
   const projectId = tree.get(pageId)?.workspace_id;
+  // Quien ve una parte del proyecto no lee «no existe» (D401): puede existir en una página que no ve.
+  const perms = usePermissions();
+  const partial = !!projectId && perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
   const snap = session && projectId ? session.relations.snapshot(projectId) : null;
 
   const data = useMemo(() => {
@@ -197,7 +237,7 @@ function PeekCard({ target, pageId, canLink, onEnter, onLeave, onLink, onGo }: {
     const left = Math.max(8, Math.min(r.left, window.innerWidth - CARD_W - 8));
     const top = r.bottom + 8 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 8) : r.bottom + 8;
     setPos({ left, top });
-  }, [phone, target, data]);
+  }, [phone, target, data, assigning]);
 
   const linkKey = touchDevice() ? null : keyLabel(shortcut('relLink').keys[0]);
   const reading = !!data && !data.v.complete;
@@ -206,7 +246,22 @@ function PeekCard({ target, pageId, canLink, onEnter, onLeave, onLink, onGo }: {
 
   let rows: ReactNode = null;
   if (target.kind === 'pending') {
-    rows = <div className="rp-note">{tr('peek.pendingNote')}</div>;
+    // Eligiendo la escena de *Assign*: el selector en el lugar de la nota, dentro de la tarjeta (B1 de la auditoría de E7).
+    rows =
+      assigning && snap ? (
+        <ScenePicker
+          inline
+          src={{ snap, title: (id) => tree.get(id)?.title }}
+          // Sin filtro, primero las escenas que nombra la página y las del episodio del número escrito (105_120 → 105).
+          near={[...new Set((snap.pages.get(pageId)?.mentions ?? []).filter((m) => m.kind === 'scene').map((m) => m.ref))]}
+          ep={target.ref.includes('_') ? target.ref.slice(0, 3) : null}
+          label={tr('assign.button')}
+          onClose={() => setAssigning(false)}
+          onPick={onAssign}
+        />
+      ) : (
+        <div className="rp-note">{tr(partial ? 'peek.pendingNoteSeen' : 'peek.pendingNote')}</div>
+      );
   } else if (data?.kind === 'scene') {
     const v = data.v;
     const shotDays = v.days.filter((d) => d.sections.length);
@@ -283,7 +338,7 @@ function PeekCard({ target, pageId, canLink, onEnter, onLeave, onLink, onGo }: {
           {target.kind === 'loc' ? tr('live.location') : label}
           <small> · {target.kind === 'pending' ? tr('peek.pending') : target.via === 'link' ? tr('peek.link') : tr('peek.recognized')}</small>
         </span>
-        <span className="rp-tt">{target.kind === 'pending' ? tr('peek.pendingTitle') : target.kind === 'loc' ? target.ref : title !== undefined ? sceneTitleOf(title) : tr('peek.notVisible')}</span>
+        <span className="rp-tt">{target.kind === 'pending' ? tr(partial ? 'peek.pendingTitleSeen' : 'peek.pendingTitle') : target.kind === 'loc' ? target.ref : title !== undefined ? sceneTitleOf(title) : tr('peek.notVisible')}</span>
       </span>
     </>
   );
@@ -316,6 +371,18 @@ function PeekCard({ target, pageId, canLink, onEnter, onLeave, onLink, onGo }: {
             ))}
             {photos.length > 3 && <span className="lh-more">+{photos.length - 3}</span>}
           </div>
+        </div>
+      )}
+      {target.kind === 'pending' && projectId && snap && (
+        // Un número que no existe (E7, D519, D522): crearlo con las guardas, o decir a qué escena se refiere.
+        <div className="rp-f">
+          <CreateEntityButton want={{ kind: 'scene', code: target.ref + target.part }} projectId={projectId} className="rp-open" onDone={(res) => res.ok && onClose()} />
+          <span className="sp" />
+          {editable && (
+            <button className="rp-link rel-assign" aria-expanded={assigning} data-tip={tr('assign.pendingTip')} onClick={() => setAssigning(!assigning)}>
+              {tr('assign.button')}
+            </button>
+          )}
         </div>
       )}
       {(target.pageId || canLink) && (

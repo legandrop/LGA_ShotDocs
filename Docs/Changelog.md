@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.245 :
+
+Linkear una escena pedía el diálogo de links, un número que no existía no se podía crear desde donde se escribía y una sección sin número no tenía cómo decir su escena. Ahora `/e 027` o `/l cen` en el menú `/` de siempre dejan el número canónico o la locación como link. *Create*, en el `/`, el adelanto del pendiente, la cabecera del día y *Map › Pending*, crea la página en su carpeta con su plantilla solo si pasan cinco guardas (proyecto entero visible, índice completo, red y sincronización en el momento, nada igual en el árbol ni con letra, una carpeta destino), y avisa con *Open* y *Undo*; si no, deja el texto y dice por qué. *Assign* agrega « · 105_025» con link al título de una sección sin número, o linkea un pendiente sin cambiar el texto, solo insertando y por id. D506–D525, D546–D550.
+
+[Linkear escenas y locaciones con /e y /l, crear la escena que el texto nombra solo cuando no puede duplicarse, y asignar la escena de una sección sin número]
+
 v0.244 :
 
 Escribir un número de escena o una locación no mostraba nada en el texto, volverlo link pedía el diálogo de links y en el teléfono no había atajo para las escenas de hoy. Ahora lo reconocido queda con un subrayado punteado (gris de rayas si no existe) que no se guarda ni se imprime; se relee a los 500 ms. Pasar el mouse (solo con un movimiento real: el subrayado nuevo bajo el puntero quieto abría el adelanto mientras se escribía), tocar con el teclado cerrado o mantener apretado abre un adelanto con *Open* y *Make it a link* (o Ctrl+Alt+K / ⌘⌥K, que avisa si no hay nada), con la marca `link` de siempre y un paso de deshacer. Un link a una escena o locación se ve como ficha. En el reporte del día, la barra *Today* sobre el teclado. D446–D460.

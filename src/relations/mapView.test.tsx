@@ -242,8 +242,11 @@ describe('el mapa en la app', () => {
     const cards = [...host.querySelectorAll<HTMLElement>('.mp-pcard')];
     expect(cards[0].textContent).toContain('105_120 doesn’t exist yet');
     expect(cards[0].textContent).toContain('Notas de dirección: «Falta la Escena 105_120 en el desglose.»');
-    // El lugar de los botones (Create/Assign, E7) está y está vacío.
-    expect(cards[0].querySelector('.mp-pact')!.childElementCount).toBe(0);
+    // Los botones de E7: *Create* (acá sin permisos conocidos, el rótulo con el motivo) y, en la sección sin número,
+    // *Assign* y *Open section*.
+    expect(cards[0].querySelector('.mp-pact')!.textContent).toBe('Create scene 105_120');
+    expect(cards[0].querySelector('.mp-pact .rel-cant')!.getAttribute('data-tip')).toContain('whole project');
+    expect([...cards[1].querySelectorAll('.mp-pact button')].map((b) => b.textContent)).toEqual(['Assign', 'Open section']);
     expect(cards[1].textContent).toContain('«Plates ambulancia» has no scene number');
     // El pedido de ir a la sección exacta (lo toma el editor del día apenas está listo).
     const session = searchSession(services(d));
@@ -253,7 +256,7 @@ describe('el mapa en la app', () => {
       asked.push(r);
       request(r);
     };
-    click(cards[1].querySelector('.mp-pact button'));
+    click([...cards[1].querySelectorAll('.mp-pact button')].at(-1));
     await wait();
     expect(location.pathname).toBe(pagePath(built.ids.d59));
     expect(asked).toEqual([expect.objectContaining({ pageId: built.ids.d59, term: null, place: { endBlockId: null } })]);

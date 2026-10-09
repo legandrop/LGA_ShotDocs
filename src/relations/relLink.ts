@@ -116,12 +116,15 @@ export function locateUnderline(state: EditorState, a: UnderlineAnchor): number 
 
 /**
  * Vuelve link el subrayado de esa posición (por defecto, el del cursor). Solo escenas y locaciones con página, y con la
- * página editable. Devuelve si lo hizo (si no, la tecla sigue su camino).
+ * página editable; con `to`, también un pendiente, hacia esa página (*Assign*). Devuelve si lo hizo (si no, la tecla sigue
+ * su camino).
  */
-export function makeLinkAt(view: EditorView, pos?: number, ref?: string): boolean {
+export function makeLinkAt(view: EditorView, pos?: number, ref?: string, to?: { pageId: string }): boolean {
   if (!view.editable) return false;
   const found = underlineAt(view.state, pos);
-  if (!found || found.spec.kind === 'pending' || !found.spec.pageId) return false;
+  // Con `to` (*Assign* de un pendiente, E7: D522), el link va a esa página: el texto escrito no cambia.
+  const pageId = to?.pageId ?? found?.spec.pageId;
+  if (!found || !pageId || (!to && found.spec.kind === 'pending')) return false;
   if (ref && found.spec.ref !== ref) return false;
   const linkType = view.state.schema.marks.link;
   if (!linkType) return false;
@@ -131,7 +134,7 @@ export function makeLinkAt(view: EditorView, pos?: number, ref?: string): boolea
     if (node.isText && node.marks.some((m) => m.type === linkType)) linked = true;
   });
   if (linked) return false;
-  const tr = view.state.tr.addMark(found.from, found.to, linkType.create({ href: `/p/${found.spec.pageId}` }));
+  const tr = view.state.tr.addMark(found.from, found.to, linkType.create({ href: `/p/${pageId}` }));
   tr.setMeta(underlineKey, UNDERLINE_NOW);
   // Un solo paso de deshacer, aparte de lo escrito justo antes.
   asOneUndoStep(view.state, () => view.dispatch(tr));
@@ -170,3 +173,45 @@ export const relLinkKeyExtension = createExtension({
     },
   },
 });
+
+/**
+ * Vuelve link un texto recién escrito en un bloque (crear desde el `/`, E7: el número se escribe enseguida y queda link
+ * cuando la página existe). Busca en ese bloque, por su id, la aparición de `text` sin link más cercana al lugar donde se
+ * escribió; si el bloque ya no está o el texto cambió, no hace nada. Su propio paso de deshacer.
+ */
+export function linkTextInBlock(view: EditorView, at: { blockId: string; offset: number }, text: string, href: string): boolean {
+  const linkType = view.state.schema.marks.link;
+  if (!linkType || !text) return false;
+  let block: { start: number; node: import('@tiptap/pm/model').Node } | null = null;
+  view.state.doc.descendants((node, pos) => {
+    if (block) return false;
+    if (node.attrs?.id === at.blockId) {
+      block = { start: pos + 1, node };
+      return false;
+    }
+    return true;
+  });
+  if (!block) return false;
+  const { start, node } = block as { start: number; node: import('@tiptap/pm/model').Node };
+  let best: number | null = null;
+  let dist = Infinity;
+  node.descendants((child, rel) => {
+    if (!child.isText || !child.text) return true;
+    if (child.marks.some((m) => m.type === linkType)) return false;
+    for (let i = child.text.indexOf(text); i >= 0; i = child.text.indexOf(text, i + 1)) {
+      const from = start + rel + i;
+      const away = Math.abs(from - (start + at.offset));
+      if (away < dist) {
+        dist = away;
+        best = from;
+      }
+    }
+    return false;
+  });
+  if (best === null) return false;
+  const from: number = best;
+  const tr = view.state.tr.addMark(from, from + text.length, linkType.create({ href }));
+  tr.setMeta(underlineKey, UNDERLINE_NOW);
+  asOneUndoStep(view.state, () => view.dispatch(tr));
+  return true;
+}

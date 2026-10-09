@@ -89,6 +89,7 @@ import { existingRelationsSession } from './relationsUi';
 import { refreshRelUnderline, relUnderlineExtension, underlineInfo, type PeekEvents, type UnderlineInfo } from '../relations/relUnderline';
 import { RelPeek } from '../relations/RelPeek';
 import { TodayBar } from '../relations/TodayBar';
+import { relationSlash } from '../relations/slashRelations';
 import { normalize, normalizeQuery, searchNormalized } from '../search/normalize';
 import '../i18n/lazy/search';
 import { registerRestoreTarget } from './historyUi';
@@ -470,6 +471,9 @@ export function BlockEditor({
   const peekRef = useRef<PeekEvents | null>(null);
   /** Si la página se puede editar ahora (lo leen las funciones que el editor guarda al crearse). */
   const editableRef = useRef(editable);
+  /** La página de este editor (el `/` de escenas la lee al momento). */
+  const pageIdRef = useRef(pageId);
+  pageIdRef.current = pageId;
   /** Si se puede colapsar o abrir para todos (Shift+clic): con permiso de editar, conocido. */
   const canShare = editable && permsKnown;
   const canShareRef = useRef(canShare);
@@ -1202,6 +1206,9 @@ export function BlockEditor({
       icon: <PageBreakIcon size={18} />,
       onItemClick: () => insertPageBreakForSlashMenu(editor),
     };
+    // `/e 027` y `/l cen` (relations/slashRelations.tsx, E7): *Scene* y *Location* van con los básicos; con lo escrito
+    // después de la palabra, la lista pasa a escenas o locaciones. No en una versión del historial ni con un link público.
+    const relSlash = preview || link || filesNotice ? null : relationSlash({ editor: editor as never, services, pageId: () => pageIdRef.current, tr });
     const extra = [withParagraphVariants(script, editor, 'script'), questionSlashItem(editor, tr, basic), pageBreak];
     // "Take photo" y "Record video" (camera.ts), en el grupo de "Image", después de ella.
     const imageAt = variants.findIndex((i) => (i as { key?: string }).key === 'image');
@@ -1228,9 +1235,14 @@ export function BlockEditor({
       : [];
     const added = [...camera, ...folder];
     const withCamera = imageAt >= 0 ? [...variants.slice(0, imageAt + 1), ...added, ...variants.slice(imageAt + 1)] : [...variants, ...added];
-    return (query: string) =>
-      Promise.resolve(filterSuggestionItems([...withCamera.slice(0, at), ...extra, ...withCamera.slice(at)], query));
-  }, [editor, tr, media, cameraOffer, folderOffer]);
+    return (query: string) => {
+      const relations = relSlash?.items(query);
+      if (relations) return Promise.resolve(relations);
+      // *Scene* y *Location*, solo en un proyecto con las relaciones leídas (se mira en cada consulta).
+      const roots = relSlash?.root(basic) ?? [];
+      return Promise.resolve(filterSuggestionItems([...withCamera.slice(0, at), ...extra, ...roots, ...withCamera.slice(at)], query));
+    };
+  }, [editor, tr, media, cameraOffer, folderOffer, preview, link, filesNotice, services]);
 
   const toolbarItems = useMemo(
     () => pageToolbarItems(editor.dictionary, tr),

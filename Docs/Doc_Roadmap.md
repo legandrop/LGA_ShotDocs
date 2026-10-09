@@ -133,6 +133,18 @@ tanda y no de la suya (la escena equivocada pasa a «shot»); (9) O-b: lo que ot
 mientras se hace *Undo* (ventana de segundos) se pierde con el título. Hecho en la v0.244: la barra *Today* de (2), la
 ficha de (3) y (7) (el título en vivo va al final del título).
 
+**Anotado en la v0.245 (relaciones en vivo, el `/`, *Create* y *Assign*):** hechos el punto (2) de la v0.244 y el (1) de
+la v0.242. Queda: (1) un *Merge* de dos páginas de la misma escena que solo agregue (D520; hoy se resuelve a mano); (2)
+*Assign* no tiene *Undo* en su aviso (desde el adelanto, ⌘Z; desde la fila, borrar el link o « · 105_025» a mano);
+(3) *Assign* en *Map › Pending* sobre los números que no existen (hoy ahí solo *Create*; *Assign* está en el día y el
+adelanto); (4) el subtítulo «Location · N scenes» del `/l` (hoy dice sus alias); (5) la barra *Today* no tiene un botón
+que abra `/e ` (no hizo falta: sus pastillas ya escriben las escenas del día); (6) probar el menú `/` en un iPhone y un
+Android de verdad (el teclado y el menú de BlockNote); (7) de la auditoría: la escena creada se titula solo con el código
+(`105_123`) aunque sus hermanas usen `025 | título` (O5; D517, cosmético); `/e 105_027a` (una parte) deja `105_027` sin la
+letra de la consulta (O6); mientras se tipea `/e 105_141` el número ya cuenta como pendiente en *Map* hasta elegir (O7); en
+el selector de un día (sin episodio) las escenas con letra de otro episodio salen antes que las del plan (O8). Hecho de
+paso: el adelanto de un pendiente ya no le dice «doesn’t exist yet» a quien ve una parte del proyecto (D401).
+
 **Anotado en la v0.244 (relaciones en vivo, el subrayado, el adelanto y *Today*):** (1) probar en un iPhone y un Android
 de verdad lo que el navegador sin pantalla no abre: el teclado (la barra *Today* arriba de él con `visualViewport`, el
 caret que no quede abajo de la barra), mantener apretado en iOS (el menú del sistema sobre el texto; `-webkit-touch-callout`
@@ -145,7 +157,9 @@ que las del plan (*Add scene* desde ahí); (6) volver link todos los subrayados 
 auditoría: el fondo de `:hover` sí aparece bajo el mouse quieto cuando el subrayado nuevo se dibuja debajo (O9; se
 puede atar a `MouseGate` armado); borrar la última cifra de `105_029` deja medio segundo la referencia vieja en `105_02`
 (O10); *Today* deja un espacio antes de la puntuación (O11); en Safari, la fila nueva de la cabecera puede bajar el texto
-52 px en la pausa (sin `overflow-anchor`, O2).
+52 px en la pausa (sin `overflow-anchor`, O2); con dos apariciones iguales del mismo número en un párrafo, si otro escribe
+antes de las dos mientras el adelanto está abierto, *Make it a link* linkea la otra (mismo destino; O12 de la auditoría
+de E6: guardar cuántas apariciones de esa referencia hay antes en el bloque, o una posición relativa de Yjs).
 
 **Anotado en la v0.243 (relaciones en vivo, fotos por fuente y carrete de varias páginas):** (1) las miniaturas de los
 renglones de día y de los extractos van a su lugar, no abren el carrete (D471); (2) anotar desde el carrete de varias

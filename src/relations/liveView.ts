@@ -1,7 +1,7 @@
 import { SEPARATOR, type SearchUnit } from '../search/extract';
 import type { IndexedContent } from '../search/projectIndex';
 import { dateAtStart, dayInTitle } from '../templates/dayReport';
-import { coordsIn, emptyValue, fieldValues, normLabel, type FieldValue, type PageFields } from './fields';
+import { coordsIn, emptyValue, fieldValues, normLabel, openQuestionText, type FieldValue, type PageFields } from './fields';
 import { blocksOf, INDEX_PAGE_MIN, type Mention, type PageRelations, type Section } from './pageRelations';
 import { fold, scan, type Registry } from './reader';
 import { entityRelations, type EntityPage, type RelationSnapshot } from './relationIndex';
@@ -452,8 +452,10 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
     const pf = fieldsOf(src, o.pageId);
     if (!pf) continue;
     for (const f of valued(fieldValues(pf, 'openQuestion'))) {
+      // Sin los rótulos vacíos («Director: » de la plantilla): una pregunta sin nada escrito no está abierta (O11).
+      const text = openQuestionText(f.text);
       // Dos fichas con la misma pregunta (su primer renglón, lo que se muestra) son una sola, «in 2 cards».
-      const key = normLabel(firstLine(f.text));
+      const key = normLabel(firstLine(text));
       if (!key) continue;
       const card = o.card ? { pageId: o.pageId, shot: shotOf(src, o.pageId, o.title) } : null;
       const known = questions.find((q) => normLabel(firstLine(q.text)) === key);
@@ -462,7 +464,7 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
         continue;
       }
       const place: Place = f.via === 'heading' ? { pageId: o.pageId, blockId: f.blockId, endBlockId: f.endBlockId ?? null } : { pageId: o.pageId, blockId: f.blockId };
-      questions.push({ text: f.text, place, cards: card ? [card] : [] });
+      questions.push({ text, place, cards: card ? [card] : [] });
     }
     setsOf(src, fieldValues(pf, 'set'), sets);
     for (const f of valued(fieldValues(pf, 'intExt'))) {

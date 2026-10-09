@@ -45,6 +45,8 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   strike: 'shortcut.strike',
   code: 'shortcut.code',
   'mdSlash': 'shortcut.mdSlash',
+  slashScene: 'shortcut.slashScene',
+  slashLocation: 'shortcut.slashLocation',
   'mdHeading': 'shortcut.mdHeading',
   'mdBullet': 'shortcut.mdBullet',
   'mdNumbered': 'shortcut.mdNumbered',

@@ -426,6 +426,14 @@ export class PageTree {
       .sort((a, b) => (a.deleted_at! < b.deleted_at! ? 1 : -1));
   }
 
+  /**
+   * Todas las filas de un proyecto que tiene el dispositivo, también las de la papelera y lo de adentro de ellas, sin
+   * orden. Para mirar si algo existe en algún lado del proyecto (crear una escena desde el texto, E7).
+   */
+  allRowsOf(projectId: string): PageRow[] {
+    return [...this.view.values()].filter((p) => p.workspace_id === projectId);
+  }
+
   /** De la raíz hasta la página, sin incluirla. */
   ancestors(id: string): PageRow[] {
     const out: PageRow[] = [];

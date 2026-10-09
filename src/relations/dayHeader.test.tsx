@@ -11,7 +11,7 @@ import { settled } from '../test/settle';
 import { unitsFromYDoc } from '../search/extract';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { buildProject, type Built } from './fixtures/proyectoSintetico';
+import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 
 // La cabecera del día y *Prepare tomorrow's report* en la app de verdad (Docs/Doc_Relaciones.md, sección 11): la
 // cabecera no escribe en su página; *Prepare* escribe solo en el reporte de mañana, lleva ahí, avisa con *Undo*; el
@@ -141,7 +141,7 @@ describe('la cabecera del día en la app', () => {
     expect(lh.textContent).toContain('Scenes of the day');
     expect([...lh.querySelectorAll('.lh-mrow')].map((r) => r.textContent)).toEqual([
       '105_027 BLa ambulancia empieza a zigzaguear · 5 photosshot',
-      '«Plates ambulancia» · no scene number · 2 photos',
+      '«Plates ambulancia» · no scene number · 2 photosAssign',
       '105_025El fugitivo espera escondidoplanned · no section',
     ]);
     expect(lh.textContent).toContain('2 scenes from the breakdown (Fecha Rodaje 19/02)');
@@ -230,5 +230,133 @@ describe('la cabecera del día en la app', () => {
     expect(lh.querySelector('.lh-tomorrow')!.textContent).toContain('You can’t edit «Día 60»');
     // No ve las fichas: nada de sus preguntas ni de sus títulos.
     expect(lh.textContent).not.toContain('¿Todo el interior');
+  });
+});
+
+function type(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  act(() => {
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+/** Lo que dice cada título de un reporte, con los links como [texto](href). */
+async function headingRuns(d: Device, pageId: string): Promise<string[]> {
+  const doc = await d.docs.open(pageId);
+  const out: string[] = [];
+  const walk = (node: Y.XmlElement | Y.XmlFragment) => {
+    for (const child of node.toArray()) {
+      if (!(child instanceof Y.XmlElement)) continue;
+      if (child.nodeName === 'heading') {
+        out.push(
+          child
+            .toArray()
+            .map((x) => (x instanceof Y.XmlText ? (x.toDelta() as { insert: string; attributes?: { link?: { href: string } } }[]).map((op) => (op.attributes?.link ? `[${op.insert}](${op.attributes.link.href})` : op.insert)).join('') : ''))
+            .join(''),
+        );
+      } else walk(child);
+    }
+  };
+  walk(doc.getXmlFragment('document-store'));
+  d.docs.close(pageId);
+  return out;
+}
+
+describe('Create y Assign en la cabecera del día (E7)', () => {
+  it('Assign en una sección sin número: agrega « · 105_025» con link al título y la sección pasa a esa escena con sus fotos', async () => {
+    const { d, built, host } = await app('d59');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera completa');
+    const row = () => [...header(host)!.querySelectorAll<HTMLElement>('.lh-mrow')].find((r) => r.textContent?.includes('Plates ambulancia'));
+    click(row()!.querySelector('.rel-assign'));
+    const input = header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!;
+    type(input, '025');
+    const options = [...header(host)!.querySelectorAll<HTMLElement>('.lh-picker-list button')];
+    expect(options[0].textContent).toBe('105_025El fugitivo espera escondido');
+    click(options[0]);
+    await until(async () => (await headingRuns(d, built.ids.d59)).some((h) => h.includes('105_025')), 'el título con la escena');
+    expect(await headingRuns(d, built.ids.d59)).toContain(`Plates ambulancia · [105_025](/p/${built.ids.s025})`);
+    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('105_025') && r.textContent.includes('2 photos')), 'la fila de 105_025');
+    expect([...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.includes('no scene number'))).toBe(false);
+    // Tooltips de la app, nunca `title=`.
+    expect(header(host)!.querySelectorAll('[title]').length).toBe(0);
+  });
+
+  it('un número que no existe: Create con el motivo (permisos desconocidos) y Assign pone el link sobre lo escrito', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const built = await buildProject(d, fakePhoto, { indexPage: false, days: true });
+    await writeBlocks(d, built.ids.d58, [{ h: 1, text: 'Info general' }, { p: 'Llamado 8:00.' }, { h: 1, text: 'Escena 105_120' }, { p: 'Plano del puente.' }]);
+    const host = mount(d, built.ids.d58);
+    await until(() => [...(header(host)?.querySelectorAll('.lh-mrow') ?? [])].some((r) => r.textContent?.includes('105_120')), 'la fila pendiente');
+    const row = [...header(host)!.querySelectorAll<HTMLElement>('.lh-mrow')].find((r) => r.textContent?.includes('105_120'))!;
+    const cant = row.querySelector('.rel-cant')!;
+    expect(cant.textContent).toBe('Create scene 105_120');
+    expect(cant.getAttribute('data-tip')).toContain('whole project');
+    click(row.querySelector('.rel-assign'));
+    type(header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!, '5026');
+    click(header(host)!.querySelector('.lh-picker-list button'));
+    await until(async () => (await headingRuns(d, built.ids.d58)).some((h) => h.includes('/p/')), 'el link');
+    expect(await headingRuns(d, built.ids.d58)).toEqual(['Info general', `Escena [105_120](/p/${built.ids.s026})`]);
+    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('105_026')), 'la fila de 105_026');
+  });
+
+  it('con las guardas: Create crea la escena en su carpeta, la fila pasa a ser de ella, y Undo la manda a la papelera', async () => {
+    const server = new FakeServer();
+    server.enableTeam();
+    const d = await makeDevice(server);
+    devices.push(d);
+    const built = await buildProject(d, fakePhoto, { indexPage: false, days: true });
+    await writeBlocks(d, built.ids.d58, [{ h: 1, text: 'Escena 105_120' }, { p: 'Plano del puente.' }]);
+    await d.engine.syncNow();
+    const host = mount(d, built.ids.d58);
+    await until(() => [...(header(host)?.querySelectorAll('.lh-mrow .rel-create') ?? [])].length === 1, 'el botón Create');
+    const button = header(host)!.querySelector<HTMLElement>('.lh-mrow .rel-create')!;
+    expect(button.textContent).toBe('Create scene 105_120');
+    expect(button.getAttribute('data-tip')).toBe('In «105 | Episodio 5»');
+    click(button);
+    await until(() => d.tree.children(built.ids.ep5).some((p) => p.title === '105_120'), 'la escena creada');
+    const created = d.tree.children(built.ids.ep5).find((p) => p.title === '105_120')!;
+    expect(created.settings?.entity).toEqual({ kind: 'scene', code: '105_120' });
+    await until(() => [...host.querySelectorAll('button')].some((b) => b.textContent === 'Undo'), 'el aviso');
+    expect(host.textContent).toContain('Created scene 105_120 in «105 | Episodio 5»');
+    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('105_120') && !r.querySelector('.rel-create')), 'la fila de la escena');
+    click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Undo'));
+    await until(() => d.tree.isTrashed(created.id), 'a la papelera');
+    // La fila vuelve a pendiente y dice a la vista que está en la papelera, con el link para restaurarla (O4).
+    await until(() => header(host)!.querySelector('.rel-cant.trash'), 'el rótulo de la papelera');
+    expect(header(host)!.querySelector('.rel-cant.trash')!.textContent).toBe('In the trash · restore it');
+    click(header(host)!.querySelector('.rel-cant.trash'));
+    await until(() => location.pathname === '/trash', 'la papelera');
+    // El reporte no cambió: crear no escribe en el día.
+    expect(await headingRuns(d, built.ids.d58)).toEqual(['Escena 105_120']);
+  });
+
+  it('invitados (permiso sobre carpetas, no sobre el proyecto): Create con el motivo; Assign solo para quien edita el día', async () => {
+    const server = new FakeServer();
+    server.enableTeam();
+    const owner = await makeDevice(server);
+    devices.push(owner);
+    const built = await buildProject(owner, fakePhoto, { indexPage: false, days: true });
+    await writeBlocks(owner, built.ids.d58, [{ h: 1, text: 'Escena 105_120' }, { p: 'Plano del puente.' }]);
+    await owner.engine.syncNow();
+    for (const [who, level] of [['ana', 'view'], ['beto', 'edit_pages']] as const) {
+      server.addMember(who, 'member', `${who}@test`);
+      server.grant(who, { pageId: built.ids.rodaje }, level);
+      server.grant(who, { pageId: built.ids.desglose }, level);
+    }
+    for (const who of ['ana', 'beto']) {
+      const guest = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: who, email: `${who}@test` });
+      devices.push(guest);
+      await guest.engine.syncNow();
+      await guest.engine.syncNow();
+      const host = mount(guest, built.ids.d58);
+      await until(() => header(host)?.querySelector('.rel-cant'), `el rótulo de ${who}`);
+      expect(header(host)!.querySelector('.rel-cant')!.getAttribute('data-tip')).toContain('whole project');
+      expect(header(host)!.querySelector('.rel-create')).toBeNull();
+      expect(!!header(host)!.querySelector('.rel-assign')).toBe(who === 'beto');
+      act(() => roots.pop()!.unmount());
+      host.remove();
+    }
   });
 });

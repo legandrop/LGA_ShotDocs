@@ -1002,7 +1002,77 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   `pending: []`); la barra lateral y la pestaña dicen el mismo número.
 - **D501 · En la lupa, las locaciones por una parte del nombre solo desde 3 letras y por el principio de una palabra**
   (2026-10-08; E9, O5): con «la» o «de» subían media lista arriba de las páginas.
-
+- **D506 · El `/` de escenas es el mismo menú `/` de siempre** (2026-10-09; E7): su lista cambia según lo escrito
+  (`/e 027`); BlockNote ya lee lo de después de `/` con espacios. Nada de un segundo menú ni otro disparador (`@`, `[[`).
+- **D507 · El `/` pasa a escenas solo con la palabra y un espacio, o pegada a cifras** (2026-10-09; E7): `/e 027`,
+  `/e5027`. La palabra sola es el menú de siempre con *Scene* y *Location* al final: `/sc`↵ sigue siendo *Script*.
+- **D508 · Las palabras** (2026-10-09; E7): escenas `e`, `sc`, `esc`, `sce`, `scen`, `scene`, `esce`, `escen`, `escena`;
+  locaciones `l`, `lo`, `loc`… `location`, `locación`; sin tildes ni mayúsculas. `s` sola no. Una lista en
+  `slashRelations.tsx`.
+- **D509 · ↵ deja un link común con el número canónico** (`105_027`) o el nombre de la locación, y un espacio
+  (2026-10-09; E7): la marca `link` de siempre (una versión vieja la ve igual) que el subrayado dibuja como ficha. No copia
+  el título de la escena al documento.
+- **D510 · El filtro es `searchScenes` de E9** (2026-10-09; E7): exacto por el lector con el episodio de la página,
+  después las cifras y el título; tope 7. `/e ` sin nada: primero las escenas que nombra la página (en un día, también su
+  plan), después las del episodio y por número.
+- **D511 · Lo que no existe: *Create* o *Keep as text*, nunca un ↵ que borre** (2026-10-09; E7): el último ítem es
+  *Create scene 105_120* si pasan las guardas; si no, *Keep 105_120 as text* con el motivo. *Create* escribe el número
+  enseguida y lo vuelve link cuando la página existe: si crear falla, el número queda escrito y pendiente.
+- **D512 · G1: crea solo quien ve el proyecto entero** (2026-10-09; E7, C8 B3): permisos conocidos y nivel sobre el
+  proyecto (la cuenta de `private.project_level`). Un invitado a una carpeta, aunque sea *Edit & create*, no: puede no ver
+  una escena con permiso aparte. Para él queda *Assign*.
+- **D513 · G2: con el índice completo** (2026-10-09; E7): mientras lee (un teléfono nuevo, páginas sin bajar), no.
+- **D514 · G3: con red, y una sincronización en el momento antes de crear** (2026-10-09; E7): además de «en línea con
+  una sincronización buena en esta sesión», `createEntity` sincroniza (hasta 6 s) y vuelve a mirar las guardas con el
+  árbol recién bajado (desvío del plan, que solo miraba el estado). La auditoría midió que no alcanza para dos
+  dispositivos que crean casi a la vez (2 páginas con hasta 1,6 s de diferencia, 1 con 3 s: la fila del primero subía en
+  el ciclo siguiente); con D546 la ventana es un viaje de ida y vuelta, y lo que quede lo cubre D520. El «+» del árbol
+  sigue creando sin red, como siempre.
+- **D515 · G4: mira todo el árbol, también la papelera, `graph: false` y las páginas sueltas** (2026-10-09; E7): por la
+  marca y por el número del título. Una página suelta que empieza con el número («105_120 | notas») también frena: se
+  prefiere no ofrecer crear a duplicar. En la papelera dice cuál restaurar; fuera de las relaciones, dónde está.
+- **D516 · Ni la base ni otra letra** (2026-10-09; E7): con `105_120A`, `105_120` no se ofrece (y al revés); las letras
+  se crean con el «+» del árbol, a propósito.
+- **D517 · Dónde y cómo queda la escena creada** (2026-10-09; E7): la carpeta de las otras escenas de su episodio (si
+  dos empatan, no se ofrece), si no su grupo de episodio en *Scenes*, si no la única *Scenes*; título = el código
+  canónico; en orden por número si las hermanas lo están; marca de tipo explícita; la plantilla *Scene* (o la propia que
+  salió de ella si hay una sola). Locación: el nombre escrito con mayúscula inicial, al final de su carpeta, *Location*.
+- **D518 · Crear no te saca de donde escribís** (2026-10-09; E7): aviso «Created scene 105_120 in «105 | Episodio 5»» con
+  *Open* y *Undo*. *Undo* la manda a la papelera solo si nadie la tocó (título, lugar, contenido, sin páginas adentro) y,
+  si salió del `/`, le saca el link al número, que vuelve a ser pendiente.
+- **D519 · *Create* en cuatro lugares, el mismo botón** (2026-10-09; E7): el `/`, el adelanto de un pendiente, la fila
+  «doesn't exist» del día y cada número de *Map › Pending* (en la ranura `actions` de E9). Sin las guardas, un rótulo de
+  borde punteado con el motivo en el tooltip.
+- **D520 · Dos páginas de la misma escena: quedan las dos** (2026-10-09; E7): nada las funde ni las borra solo; *Map ›
+  Pending* ya las lista (E9, «in 2 pages»), no se agregó otro renglón. Un *Merge* que solo agregue queda para después.
+- **D521 · *Assign* en una sección sin número agrega « · 105_025» al final del título** (2026-10-09; E7, D431): con link,
+  solo agregando, directo en el documento verificando el título; otra escena suma la suya. En el día y en *Map ›
+  Pending*, con permiso de editar el día.
+- **D522 · *Assign* de un número que no existe pone el link sobre lo escrito** (2026-10-09; E7): no cambia el texto.
+  Desde la fila del día marca cada aparición de ese número en ese bloque (directo en el Y.Doc); desde el adelanto, la que
+  se señaló, por el editor (⌘Z la deshace; el ancla de E6, no la posición vieja). Es el camino del invitado.
+- **D523 · Sin atajo de teclas nuevo** (2026-10-09; E7): `/e ` y `/l ` van al registro como lo que se escribe, con su
+  texto en la ayuda (*Link a scene or a location with /*).
+- **D524 · Un solo filtro de escenas** (2026-10-09; E7): el `/`, *Assign* y *Add scene* de *Tomorrow* usan
+  `searchScenes` de E9 (el selector `ScenePicker` reemplaza al de la cabecera del día).
+- **D525 · *Create location* desde `/l`** (2026-10-09; E7): con G1–G3, desde 3 letras, y no si el nombre coincide sin
+  tildes con el nombre, un alias o el nombre sin el paréntesis de otra locación (también en la papelera o fuera de las
+  relaciones). Un nombre genérico o corto se crea igual y el ítem avisa que no se reconoce solo en el texto.
+- **D546 · Crear sube la fila enseguida** (2026-10-09; E7, O1 de la auditoría): `createEntity` pide una sincronización
+  apenas crea la página (sin esperarla): la ventana en que otro dispositivo todavía no la ve se achica del ciclo siguiente
+  (2–3 s medidos) a un viaje de ida y vuelta.
+- **D547 · *Undo* de *Create* sincroniza y compara antes de la papelera; sin red, no deshace** (2026-10-09; E7, O2): lo que
+  otro dispositivo ya escribió en la página nueva llega antes de comparar; si no se puede sincronizar, el aviso dice que
+  hace falta conexión (no se sabe si alguien escribe).
+- **D548 · Una pregunta abierta sin nada después del rótulo no está abierta** (2026-10-09; E7, O11): «Director: » de la
+  plantilla *Scene* aparecía como pregunta abierta en cada escena creada y en los días que la nombran. Se filtra al
+  mostrar (`openQuestionText` en `fields.ts`), no al leer: el índice y su `CACHE_FORMAT` no cambian.
+- **D549 · «En la papelera» a la vista** (2026-10-09; E7, O4): en vez del rótulo «Create scene» con el motivo en el
+  tooltip, «In the trash · restore it», que lleva a la papelera.
+- **D550 · El selector de *Assign* del adelanto va adentro de la tarjeta** (2026-10-09; E7, B1): en el lugar de la nota,
+  con el campo arriba, la lista con su alto y primero las escenas de la página y del episodio del número (la tarjeta recorta
+  lo que sale de ella; en el teléfono es una hoja). En la cabecera y el mapa, flotando, se corre lo justo para no salirse de
+  la pantalla (O3).
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

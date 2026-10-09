@@ -141,6 +141,15 @@ function splitCode(code: string): { ep: string; n: string; letter: string } {
 /** Las locaciones con estos nombres no se reconocen solas: son palabras comunes. */
 const GENERIC = new Set(['estudio', 'europa', 'abril', 'centro', 'casa']);
 
+/**
+ * Si un nombre o alias de locación se reconoce solo en el texto: no es una palabra común (`Estudio`, `Casa`) ni tiene
+ * menos de 4 letras salvo en mayúsculas (`CABA` sí, `Bar` no). Lo usa también *Create location* (D525) para avisar.
+ */
+export function recognizedAlone(alias: string): boolean {
+  const f = fold(alias).trim();
+  return !!f && !GENERIC.has(f) && !(f.length < 4 && alias !== alias.toUpperCase());
+}
+
 export function buildRegistry(input: { scenes: SceneInput[]; locations: LocationInput[] }): Registry {
   const scenes = new Map<string, SceneEntry>();
   for (const s of input.scenes) {
@@ -168,10 +177,7 @@ export function buildRegistry(input: { scenes: SceneInput[]; locations: Location
     if (!name || locations.has(name)) continue;
     locations.set(name, { name, aliases: l.aliases?.length ? l.aliases : [name], pageId: l.pageId ?? null });
   }
-  const usable = (a: string) => {
-    const f = fold(a).trim();
-    return f && !GENERIC.has(f) && !(f.length < 4 && a !== a.toUpperCase()) ? f : null;
-  };
+  const usable = (a: string) => (recognizedAlone(a) ? fold(a).trim() : null);
   const longestFirst = (a: { f: string }, b: { f: string }) => b.f.length - a.f.length || (a.f < b.f ? -1 : a.f > b.f ? 1 : 0);
   const locAlias: Registry['locAlias'] = [];
   const locDayTitleAlias: Registry['locDayTitleAlias'] = [];

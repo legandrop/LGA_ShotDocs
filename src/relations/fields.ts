@@ -96,6 +96,22 @@ export function emptyValue(text: string): boolean {
   return !t || t === 'n a' || t === 'na' || t === 'none' || t === 'ninguna' || t === 'ninguno';
 }
 
+/** Un renglón que es solo un rótulo, sin nada después («Director: », «Arte:»): lo que dejan las plantillas para llenar. */
+const LABEL_ONLY = /^\s*[^:\n]{1,60}:\s*$/;
+
+/**
+ * Lo que dice una pregunta abierta, sin los renglones que son solo un rótulo vacío («Director: » de la plantilla *Scene*):
+ * una pregunta sin nada escrito no está abierta (O11 de la auditoría de E7). Vacío si no queda nada. Se mira al mostrar, no
+ * al leer: el índice guarda el valor como está.
+ */
+export function openQuestionText(text: string): string {
+  return text
+    .split('\n')
+    .filter((line) => !LABEL_ONLY.test(line))
+    .join('\n')
+    .trim();
+}
+
 /** Una fecha de un valor (`06/03/2026`, `6-3-2026`, `2026-03-06`) como `AAAA-MM-DD`, o `null`. */
 export function fieldDate(text: string): string | null {
   const iso = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(text);

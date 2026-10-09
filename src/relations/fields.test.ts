@@ -205,3 +205,14 @@ describe('las otras formas', () => {
     expect(fieldDate('mañana')).toBeNull();
   });
 });
+
+describe('pregunta abierta sin texto (O11 de la auditoría de E7)', () => {
+  it('los renglones que son solo un rótulo vacío no cuentan; lo escrito después de un rótulo, sí', async () => {
+    const { openQuestionText } = await import('./fields');
+    expect(openQuestionText('Director: \nProduction design: ')).toBe('');
+    expect(openQuestionText('Director:')).toBe('');
+    expect(openQuestionText('Director: ¿cámara en mano?\nArte: ')).toBe('Director: ¿cámara en mano?');
+    expect(openQuestionText('¿La sangre es práctica o se agrega?')).toBe('¿La sangre es práctica o se agrega?');
+    expect(openQuestionText('Hora: 10:30 en el set')).toBe('Hora: 10:30 en el set');
+  });
+});

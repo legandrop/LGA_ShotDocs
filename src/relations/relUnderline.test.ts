@@ -9,7 +9,7 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from '../ui/editorSchema';
 import { buildRegistry } from './reader';
-import { anchorOf, locateUnderline, makeLinkAt, relLinkKeyExtension, underlineAt, underlineKey } from './relLink';
+import { anchorOf, linkTextInBlock, locateUnderline, makeLinkAt, relLinkKeyExtension, underlineAt, underlineKey } from './relLink';
 import { buildUnderlines, mapThroughReplace, relUnderlineExtension, UNDERLINE_WAIT_MS, type PeekEvents, type UnderlineInfo } from './relUnderline';
 
 // El subrayado pasivo, la ficha de los links y el gesto para volver link (Docs/Doc_Relaciones.md, sección 14): son
@@ -302,6 +302,48 @@ describe('volver link un subrayado', () => {
     eb.removeBlocks([eb.document[2]] as never);
     await tick(10);
     expect(locateUnderline(va.state, gone)).toBeNull();
+  });
+});
+
+describe('Assign desde el adelanto de un pendiente y el link de lo creado desde el / (E7)', () => {
+  it('Assign: la marca a la escena elegida sobre el pendiente, el mismo texto, en un paso de deshacer; aunque otro escriba arriba', async () => {
+    const a = page();
+    const b = new Y.Doc();
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a));
+    a.on('update', (u: Uint8Array, origin: unknown) => origin !== 'b' && Y.applyUpdate(b, u, 'a'));
+    b.on('update', (u: Uint8Array, origin: unknown) => origin !== 'a' && Y.applyUpdate(a, u, 'b'));
+    const ea = mount(a);
+    const eb = mount(b, { underline: false });
+    await tick();
+    const va = view(ea);
+    // Sin destino, un pendiente no se vuelve link (E6).
+    expect(makeLinkAt(va, drawnRange(ea, '105_120').from)).toBe(false);
+    const anchor = anchorOf(va.state, drawnRange(ea, '105_120').from, '105_120');
+    eb.insertBlocks([{ type: 'paragraph', content: 'Nota de B arriba.' }] as never, eb.document[0], 'before');
+    await tick(10);
+    const at = locateUnderline(va.state, anchor);
+    expect(at).not.toBeNull();
+    expect(makeLinkAt(va, at!, '105_120', { pageId: PAGES['105_026'] })).toBe(true);
+    expect(a.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_026']}">105_120</link>`);
+    expect(b.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_026']}">105_120</link>`);
+    // Con otro ref (el subrayado ya no dice eso), no.
+    expect(makeLinkAt(va, drawnRange(ea, 'CENADE').from, '105_120', { pageId: PAGES['105_026'] })).toBe(false);
+  });
+
+  it('linkTextInBlock: el número recién escrito, en su bloque (el más cercano al lugar); si el bloque ya no está, nada', async () => {
+    const doc = page();
+    const e = mount(doc);
+    await tick();
+    const v = view(e);
+    const block = e.document[1].id;
+    const from = drawnRange(e, '105_120').from;
+    const at = anchorOf(v.state, from, '');
+    expect(at.blockId).toBe(block);
+    expect(linkTextInBlock(v, { blockId: block, offset: at.offset }, '105_120', `/p/${PAGES['105_027']}`)).toBe(true);
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_027']}">105_120</link>`);
+    // Ya tiene link: no se vuelve a marcar ni se toma otro.
+    expect(linkTextInBlock(v, { blockId: block, offset: at.offset }, '105_120', `/p/${PAGES['105_029']}`)).toBe(false);
+    expect(linkTextInBlock(v, { blockId: 'no-esta', offset: 0 }, 'CENADE', `/p/${PAGES.CENADE}`)).toBe(false);
   });
 });
 
