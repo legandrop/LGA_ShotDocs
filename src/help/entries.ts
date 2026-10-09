@@ -316,7 +316,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.liveHeader.title',
     text: 'help.liveHeader.text',
-    words: ['scene', 'escena', 'location', 'locación', 'shot at', 'filmada', 'scouting', 'breakdown', 'desglose', 'header', 'cabecera', 'related', 'relacionado'],
+    words: ['scene', 'escena', 'location', 'locación', 'shot at', 'filmada', 'scouting', 'breakdown', 'desglose', 'header', 'cabecera', 'related', 'relacionado', 'split', 'repartir', 'dividir', 'move report', 'mover reporte'],
     since: LIVE_HEADER,
   },
   {

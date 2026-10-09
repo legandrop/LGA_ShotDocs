@@ -104,6 +104,12 @@ miles de registros de uso que la importación hace de a uno. Mientras tanto, el 
 - **No se parten los reportes por escena**: el día se lee entero, el PDF del día sigue igual y los comentarios no
   pierden su ancla. Una partición automática se equivoca con encabezados que tienen solo el número, con escenas en
   títulos de segundo nivel y con secciones que no son de una escena.
+  **R6 (D581, v0.246): ni mover ni copiar texto entre páginas.** El motivo de fondo es la conservación y la
+  colaboración: mover una sección pierde lo que otro dispositivo escribe sin red adentro de lo movido (Yjs integra
+  borrado lo insertado en un bloque borrado), rompe el ancla de los comentarios, las fotos por página y el PDF del día, y
+  no es atómico entre dos documentos; copiar duplica el texto y envejece. Los casos raros de arriba ya los resuelve el
+  lector (D582): la escena muestra su parte de cada reporte en vivo, con la sección abierta y resaltada
+  (`Doc_Relaciones.md`, sección 16).
 - **No se usa `#`** delante del número: la búsqueda no lo necesita y al principio de un renglón choca con el atajo de
   título del editor.
 - **Nada se descarta** al reorganizar, salvo páginas sin texto ni fotos (separadores).
@@ -180,6 +186,8 @@ para él nada tiene tipo. Mostrárselo pide una migración que sume `entity` a l
 3. Plantillas *Escena*, *Locación* y *Scouting* (hechas en v0.236: *Scene*, *Location*, *Tech scout*, *Creative scout*), y *New day report* con la locación en el título.
 4. Galería por fuente en la escena y en la locación.
 5. Un Mapa vivo.
-6. «Repartir por escenas» un reporte, con prueba de que no se pierde nada y que se puede deshacer.
+6. ~~«Repartir por escenas» un reporte, con prueba de que no se pierde nada y que se puede deshacer.~~ **Cerrado en
+   v0.246 (D581): no se reparte.** La escena muestra su parte de cada reporte en vivo (puntos 1, 4 y 5) y el reporte
+   queda entero; la prueba de que ninguna sección ni foto se pierde en esa vista es `sectionCoverage.test.ts`.
 
 Ninguna regeneración futura escribe dentro de una página que edita la gente (ES10).

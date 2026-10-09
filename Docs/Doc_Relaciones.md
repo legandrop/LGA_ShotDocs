@@ -786,3 +786,111 @@ red, *Scene* que reabre el menú, sin relaciones, el esquema anterior), `relUnde
 con el ancla), `dayHeader.test.tsx` y `mapView.test.tsx` (los botones en la app, invitados).
 
 **Decisiones:** D506–D525 y, de la auditoría, D546–D550 en `Doc_Decisiones.md`.
+
+## 16. Repartir un reporte por escenas: no se reparte (R6, v0.246)
+
+El roadmap pedía «repartir por escenas» un reporte (cortar cada sección `Escena NNN` del día y llevarla a la escena).
+Se cerró sin escribir (D581): el reporte no se parte y la escena muestra su parte de cada reporte en vivo. Esta sección
+deja escrito por qué, qué lo cubre hoy, cómo se cuentan los números medidos en ERSO y el diseño de lo único que
+faltaba, «Read here» (R.6b, sin construir).
+
+### 16.1 Qué es «repartir» y qué lo cubre hoy
+
+| Lectura | Qué hace | Estado |
+|---|---|---|
+| **Mover** | Corta la sección del día, la pega en una subpágina de la escena y deja un link | Descartada (D355, ES8, D581): pierde lo que otro dispositivo escribe sin red en lo movido, rompe comentarios, fotos por página, PDF y links al lugar exacto, y no es atómica entre dos documentos |
+| **Copiar** | Deja el día y pega una copia en la escena | Descartada (D581, D587): duplica, el índice cuenta la sección dos veces y la copia envejece (la lista congelada que Lega rechazó) |
+| **Mostrar** | El día queda entero; la escena muestra su parte | Es lo que hace la propuesta «D» |
+
+| Pieza | Qué ya resuelve | Dónde |
+|---|---|---|
+| Lector | Número pelado en un título (`0116B`, `H1067`, `2065A_PD`), formas compactas, dos escenas en un título, partes con letra | `reader.ts` |
+| Secciones | Cada título abre una sección hasta el próximo de su nivel o mayor, a cualquier nivel; las fotos de adentro (y de sus subtítulos) son suyas | `pageRelations.ts`, `relationIndex.ts` |
+| Cabecera de escena (sección 10) | *Shoot*: un renglón por día con cada sección suya, extracto, 3 fotos y un clic al lugar exacto, abierto y resaltado | `liveView.ts`, `LiveHeader.tsx`, `goToPlace.ts` |
+| Fotos (sección 13) | «Día 59 · Escena 105_027b» como fuente propia y el carrete | `photoGallery.ts`, `GalleryCarrete.tsx` |
+| Día (sección 11) y mapa (sección 12) | Las escenas del día; cada día con sus secciones; las sin número a *Pending* | `dayLive.ts`, `projectMap.ts` |
+| *Assign* (sección 15) | Una sección con fotos y sin número se asigna a una escena sin mover nada | `assign.ts` |
+
+### 16.2 La prueba de conservación
+
+`src/relations/sectionCoverage.test.ts`, sobre el Día 80 de `buildProject(..., { coverage: true })` (nombres inventados; la
+opción está apagada por defecto, así los demás fixtures no cambian). No repite al lector (`reader.test.ts`) ni las fichas
+(`liveView.test.ts`): agrega lo que faltaba de punta a punta.
+
+- **Una definición de «sección externa»:** el par (sección, escena) de un título que nombra la escena y no está adentro de
+  otra sección del día que nombre esa misma escena. Un subtítulo que nombra *otra* escena (`5026 plano 1` adentro de
+  `Escena 105_027`) es externo para la suya.
+- **(a)** cada par aparece **una vez** en la cabecera de la escena que nombra, con el mismo lugar (bloque de inicio y de
+  cierre) que en el mapa; el mapa no tiene ninguno de más.
+- **(b)** las fotos son un **conjunto**, no una suma: ninguna foto del día se pierde (está en la parte general, en una
+  sección de escena o en una sin escena); **ninguna** de la parte general (las de arriba y las de «Info general») ni de una
+  sección sin escena llega a una escena; las que llegan a dos escenas son solo las previstas (un título con dos escenas,
+  un subtítulo que nombra otra escena adentro de una sección, y la misma foto repetida en dos bloques). Una tabla escrita a
+  mano de 19 fotos dice a qué escenas llega cada una.
+- **(c)** las secciones sin escena con fotos están en `unnumbered` (*Map › Pending*) y la general no (D429). Caso del Día
+  79: un título sin escena **con fotos propias** y escenas en títulos de segundo nivel adentro va a *Pending* (sus fotos
+  propias no son de ninguna escena), y las escenas de adentro siguen siendo de su escena.
+- **(d)** armar la cabecera, el mapa y la lista de pendientes no cambia el documento (`encodeStateVector` y
+  `encodeStateAsUpdate` iguales). Es una guarda barata: la vista lee del índice, no del documento; el valor está en (a)–(c).
+
+**Por qué no es una suma de fotos:** `readPageRelations` anota cada foto en **todas** las secciones abiertas, así que la
+de un subtítulo cuenta en el subtítulo y en la sección que lo contiene, a propósito. En ERSO, sumar (fotos antes de la
+primera escena) + (las de las secciones de escena) + (las de las sin escena) da 1.566 contra las 1.561 fotos de los días
+(Días 34, 73 y 79: un subtítulo que nombra otra escena, fotos repetidas en el día y un título sin escena que contiene a
+sus escenas de segundo nivel); no hay fotos perdidas, hay fotos que cuentan en dos partes.
+
+### 16.3 Cómo se cuentan los números de ERSO
+
+Cuatro números parecidos que no se deben confundir (volcado de la app de ERSO en vivo, 73 días, después de E4):
+
+| Número | Qué cuenta | Dónde sale |
+|---|---|---|
+| **137** | **Secciones** de escena **externas por nivel**: un título que nombra una o más escenas y no está adentro de otra sección de escena de nivel menor, sin mirar qué escena nombra (46 de 73 días; por día mín 1, mediana 2, máx 9) | La medición de R6 |
+| **141** | Lo mismo, por **escena** (la regla de la cabecera y del mapa): las 137 más los 4 subtítulos que nombran otra escena adentro de una sección | Esa regla, recontada para R6 |
+| **138** | **Pares (escena, día)** distintos entre esas 137 secciones (un título con dos escenas cuenta en dos pares; una escena repetida en un día cuenta una vez) | La medición de R6 |
+| **140** | **Pares (escena, día)** distintos por la regla de la cabecera y del mapa: los **131** de la verdad independiente (`mapa.json`) más los **9** subtítulos reales que la app suma (sección 12) | Sección 12 (E9); recontado para R6: 140 |
+
+Además, 154 son los pares (sección, escena) con esa regla (una escena que se repite en un día cuenta cada sección). Los
+«139 de 139 secciones» de la sección 2 son otra cosa: las secciones de la verdad que el lector asigna a su escena exacta.
+
+Lo que se «movería» si se repartiera: 4.446 de 11.218 bloques de los días y 1.192 de 1.561 fotos (76 %); quedarían en el
+día 302 fotos antes de la primera escena y 72 en 6 secciones sin escena. Los casos raros: 18 títulos sin «Escena» (13 %),
+11 escenas en títulos de segundo nivel, 11 títulos con dos o más escenas, 7 días con la misma escena en varias secciones
+(Día 06: `101_005` ×5), 4 subtítulos que nombran otra escena, 6 secciones sin escena con 72 fotos, 0 menciones de escena
+fuera de una sección y 0 comentarios en reportes. Secciones por escena: mediana 1, máx 5 (`101_074`: 5 secciones en 2
+días); 18 de 117 escenas tienen secciones en dos días o más. Tamaño de una sección: mediana 26 bloques y 7 fotos; máx 175
+bloques y 56 fotos.
+
+### 16.4 R.6b «Read here» (diseñado, sin construir; D584–D586)
+
+Leer la sección entera en la cabecera de la escena sin ir al día (hoy el extracto corta a 280 caracteres). Solo lectura:
+
+1. En cada extracto de una **sección** (*Shoot*, *Scouting* y las fichas de *Breakdown*), un renglón **Read here**
+   (`aria-expanded`, sin tooltip). Despliega la sección entera: el título, el texto con su formato, las tablas, las fotos
+   con sus anotaciones, Script y preguntas. En la cabeza de *Shoot*, **Read all** despliega todas en orden de fecha.
+   **Edit in Día 59** (el `goToPlace` de hoy) lleva al lugar exacto para escribir: desde la escena no se edita (D586).
+2. **Cómo, sin escribir:** `docs.snapshot(pageId)` → copia del día; `readPageContent(copia)` → bloques desde el del título
+   hasta `endBlockId` (sin incluirlo), en el primer nivel; un `Y.Doc` en memoria con esos bloques y las anotaciones de sus
+   fotos; `BlockEditor` con `preview`, `editable={false}` y `historyServices` (las fotos se ven y abren el carrete; nada
+   escribe en la base local, el servidor ni el Drive). Si el título quedó adentro de otro bloque o la sección ya no
+   existe: solo **Edit in …** con «This section moved: open the day».
+3. **En vivo:** mientras está abierta, cada cambio del índice en esa página vuelve a armar la copia a los 500 ms.
+4. **Tope:** más de 200 bloques o 60 fotos → los primeros 200 bloques y **Continue in Día 19** (ERSO: máx 175 y 56).
+5. **No bajado:** si el día no está entero en el dispositivo, `engine.prefetchPage` como *Prepare*; sin red: «Not on this
+   device yet» + **Edit in …**. Con contenido de una versión más nueva (`findUnknownContent`): solo **Edit in …**.
+6. **Comentarios:** no se muestran (anclados al día); con hilos, «2 comments · open in Día 59». **Imprimir y PDF:** no sale
+   (`@media print`), como el resto de la cabecera. **Permisos:** solo extractos que la persona ya ve.
+7. **Archivos:** `src/relations/SectionReader.tsx` (nuevo, se baja aparte), `LiveHeader.tsx` (`ExcerptCard`: *Read here*;
+   *Shoot*: *Read all*), `liveHeader.css`, `src/i18n/relations.ts`, `src/help/entries.ts` y `sectionReader.test.tsx` (los
+   bloques exactos del título al cierre, *Read all* en orden, el día sin cambios, lo escrito aparece, sección movida, sin
+   red, contenido desconocido, tope, invitado que ve solo la escena). 14–20 h, riesgo medio-bajo. Medir en un teléfono
+   *Read all* con 5 secciones (`101_074`: 321 bloques, 49 fotos).
+
+### 16.5 Lo que no hace
+
+No mueve, no copia, no borra y no reescribe nada del reporte ni de la escena. No arma secciones en un reporte escrito de
+corrido (0 casos en ERSO; si aparece, *Make it a section*, que solo inserta un título como *Prepare*: D588). No lleva la
+sección a la escena en el PDF ni en la exportación (un «dossier de escena» exportable sería otro punto, sobre el
+exportador). Si algún día se escribe, solo copiar con procedencia y nunca borrar del reporte (D587).
+
+**Decisiones:** D581–D588 en `Doc_Decisiones.md`.

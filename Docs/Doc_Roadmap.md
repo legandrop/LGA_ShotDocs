@@ -62,8 +62,29 @@ listas generadas y fechadas; para que se sostenga en los proyectos nuevos, la ap
 3. **Plantillas *Escena*, *Locación* y *Scouting***, y *New day report* con la locación en el título.
 4. **Galería por fuente** en la escena y en la locación (fotos de sus scoutings y días), como vista, sin copiar bloques.
 5. **Mapa vivo** del proyecto. **Hecho en v0.242** (E9, `Doc_Relaciones.md`, sección 12), con *Copy map* / JSON.
-6. **«Repartir por escenas» un reporte**, con prueba de conservación y deshacer. Los encabezados con solo el número,
-   las escenas en títulos de segundo nivel y las secciones que no son de una escena no se reparten solos.
+6. **«Repartir por escenas» un reporte.** **Cerrado en v0.246 (R6, D581): no se reparte, la escena lo muestra en vivo.**
+   No se mueve ni se copia texto entre páginas (pierde lo que otro dispositivo escribe sin red, rompe comentarios, fotos
+   por página y el PDF del día; copiar duplica y envejece). Cada escena ya muestra su parte de cada reporte (texto,
+   fotos y un clic al lugar exacto) y el reporte queda entero. Los encabezados con solo el número, las escenas en títulos
+   de segundo nivel y las secciones que no son de una escena los resuelve el lector (D582). La «prueba de conservación»
+   es `src/relations/sectionCoverage.test.ts` (D583). Reemplaza al punto R.6 de la especificación de ERSO (D-ERSO-10);
+   Lega puede cambiarlo.
+   - **R.6b · «Read here»: leer la sección entera en la escena** (diseñado, **sin construir**, D584–D586; 14–20 h, riesgo
+     medio-bajo, solo lectura). Lo único que el reparto daba y la vista no: hoy el extracto corta a 280 caracteres y un
+     clic lleva al día. Idea: un renglón *Read here* por extracto de sección (y *Read all* en *Shoot*) que despliega la
+     sección entera, leída de una copia (`docs.snapshot` → bloques desde el título hasta el cierre → un `Y.Doc` en memoria
+     → el editor de solo lectura del historial con sus servicios), con tope de 200 bloques y *Edit in Día 59* (el lugar
+     exacto) para escribir; no se edita desde la escena. Vale la pena cuando un proyecto junte muchas partes por escena:
+     en ERSO la mediana es 1 sección por escena y solo 18 de 117 escenas tienen secciones en dos días o más. Diseño
+     completo: `Doc_Relaciones.md`, sección 16.
+   - **Si aparece (hoy 0 casos en ERSO):** *Make it a section* para un reporte escrito de corrido (solo inserta un título
+     antes del renglón, como *Prepare*; D588, 6–9 h); y un «dossier de escena» exportable (PDF o zip de solo lectura) si
+     Lega quiere mandar todo de una escena a un proveedor: un punto aparte, sobre el exportador.
+   - **Anotado por la prueba de R6:** un título sin escena que solo contiene escenas de segundo nivel con fotos, y ninguna
+     foto propia, aparece en *Map › Pending* (y en el número de la fila *Map*) como «sin número con fotos», porque
+     `daySections` cuenta las fotos de la pila (las de sus escenas incluidas). No pasa en ERSO (el título del Día 79 tiene
+     4 fotos propias y es un pendiente verdadero); arreglarlo es contar solo las fotos propias, y cambia el número de
+     Pending, por eso queda anotado y sin tocar.
 
 Anotado al reorganizar: buscar el nombre de una locación trae primero los días que la llevan en el título y después
 la página de la locación; buscar «Día 19» trae primero el planning de ese día.

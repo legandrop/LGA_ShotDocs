@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.246 :
+
+«Repartir por escenas» un reporte seguía en el roadmap con deshacer y prueba de conservación, pero venía de mover texto entre páginas, que D355 ya había descartado: mover pierde lo que otro dispositivo escribe sin red adentro de lo movido, y la escena ya muestra su parte en vivo. Se cierra sin escribir (D581–D588). Nueva `sectionCoverage.test.ts` sobre un Día 80 de casos raros (`coverage` en el fixture, apagado por defecto): cada sección de escena sale una vez por escena y con el mismo lugar que en el mapa; las fotos se comparan como conjunto, ninguna se pierde y ninguna de lo general cruza a una escena; el documento no cambia. La ayuda dice «los reportes quedan enteros» y se encuentra con *split* o *repartir*. Docs: ES8, ES9.6, R.6 y R.6b «Read here» (diseñado), sección 16 de Relaciones con cómo se cuentan 137, 138, 140 y 141.
+
+[Cerrar «repartir por escenas» sin escribir: prueba de que ninguna sección ni foto se pierde en la vista de la escena, ayuda y documentación]
+
 v0.245 :
 
 Linkear una escena pedía el diálogo de links, un número que no existía no se podía crear desde donde se escribía y una sección sin número no tenía cómo decir su escena. Ahora `/e 027` o `/l cen` en el menú `/` de siempre dejan el número canónico o la locación como link. *Create*, en el `/`, el adelanto del pendiente, la cabecera del día y *Map › Pending*, crea la página en su carpeta con su plantilla solo si pasan cinco guardas (proyecto entero visible, índice completo, red y sincronización en el momento, nada igual en el árbol ni con letra, una carpeta destino), y avisa con *Open* y *Undo*; si no, deja el texto y dice por qué. *Assign* agrega « · 105_025» con link al título de una sección sin número, o linkea un pendiente sin cambiar el texto, solo insertando y por id. D506–D525, D546–D550.

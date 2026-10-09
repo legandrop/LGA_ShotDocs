@@ -105,8 +105,14 @@ export async function buildProject(
    * `days`: lo del día de rodaje (E5): fechas de rodaje en las fichas de 104_008, 104_009, 105_025 y 105_029, una ficha
    * de 105_027 para el Día 59, preguntas abiertas con su categoría, un Día 58, un «Sin reporte» sin número de día y el
    * Día 60 sin su página *Plan* (así el plan sale del desglose, como en la maqueta).
+   *
+   * `coverage` (R6; apagada por defecto, así no cambia los totales de las pruebas que no la piden): un Día 80 con los
+   * casos raros de los reportes reales, para `sectionCoverage.test.ts`: fotos de arriba y «Info general», números
+   * pelados (`0408`, `H5029`), dos escenas en un título, una escena en tres secciones del día, un subtítulo que nombra
+   * otra escena, secciones sin escena con fotos, un título sin escena que contiene escenas de segundo nivel y una foto
+   * repetida en dos secciones.
    */
-  options: { name?: string; indexPage?: boolean; days?: boolean } = {},
+  options: { name?: string; indexPage?: boolean; days?: boolean; coverage?: boolean } = {},
 ): Promise<Built> {
   const projectId = await d.tree.createProject(options.name ?? 'Serie de prueba');
   const ids: Record<string, string> = {};
@@ -243,6 +249,56 @@ export async function buildProject(
     { p: 'Repetición del inserto con otra lente.' },
     ...(await pics(d76, 'D76 b', 2)),
   ]);
+
+  if (options.coverage) {
+    // Los casos raros de los reportes de ERSO, con escenas y textos inventados (el repo es público).
+    const d80 = await page('d80', '2026-03-20 | Día 80 | CENADE', rodaje);
+    await writeBlocks(d, d80, [
+      ...(await pics(d80, 'Cov general previa', 2)),
+      { h: 1, text: 'Info general' },
+      { p: 'Llamado temprano, cámara testigo en la curva.' },
+      ...(await pics(d80, 'Cov general', 2)),
+      // Número pelado, sin «Escena».
+      { h: 1, text: '0408' },
+      { p: 'Plano fijo desde la banquina.' },
+      ...(await pics(d80, 'Cov 0408', 2)),
+      // Con una «H» delante, un subtítulo con texto y una foto de otra sección repetida (el mismo archivo en dos bloques).
+      { h: 1, text: 'H5029' },
+      ...(await pics(d80, 'Cov H5029', 1)),
+      { photo: photos['Cov 0408 1'] },
+      { h: 3, text: 'Sup Notes' },
+      { p: 'El fugitivo mira a cámara.' },
+      ...(await pics(d80, 'Cov H5029 sub', 1)),
+      // Dos escenas en un título.
+      { h: 1, text: 'Escena 5025 + 5026' },
+      { p: 'Dos escenas en el mismo plano largo.' },
+      ...(await pics(d80, 'Cov 5025+26', 2)),
+      // Un subtítulo que nombra otra escena adentro de una sección.
+      { h: 1, text: 'Escena 105_027' },
+      { p: 'Ambulancia frenando.' },
+      ...(await pics(d80, 'Cov 027', 1)),
+      { h: 3, text: '5026 plano 1' },
+      { p: 'Inserto de la ruta.' },
+      ...(await pics(d80, 'Cov 026 plano', 1)),
+      // La escena de recién, en una tercera sección del mismo día.
+      { h: 1, text: 'Escena 105_026' },
+      { p: 'Repetición con otra lente.' },
+      ...(await pics(d80, 'Cov 026', 1)),
+      // Secciones de arriba sin escena y con fotos; una con «Escena» sin número.
+      { h: 1, text: 'Plates ambulancia' },
+      ...(await pics(d80, 'Cov plates', 2)),
+      { h: 1, text: 'Escena Driving POV' },
+      ...(await pics(d80, 'Cov driving', 1)),
+      // Un título sin escena, con fotos propias, que contiene escenas en títulos de segundo nivel.
+      { h: 1, text: 'Plate viejitos + gestapo' },
+      { p: 'Plates para el fondo.' },
+      ...(await pics(d80, 'Cov viejitos', 1)),
+      { h: 2, text: '0409' },
+      ...(await pics(d80, 'Cov viejitos 0409', 1)),
+      { h: 2, text: '5025' },
+      ...(await pics(d80, 'Cov viejitos 5025', 1)),
+    ]);
+  }
 
   // Una nota suelta que la nombra, una página índice y un archivo fuera del grafo.
   const notas = await page('notas', 'Notas de dirección', null);

@@ -1073,6 +1073,92 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   con el campo arriba, la lista con su alto y primero las escenas de la página y del episodio del número (la tarjeta recorta
   lo que sale de ella; en el teléfono es una hoja). En la cabecera y el mapa, flotando, se corre lo justo para no salirse de
   la pantalla (O3).
+
+**R6 · «Repartir por escenas» un reporte (2026-10-09, v0.246; D581–D588).** Plan y auditoría en el trabajo de relaciones;
+lo que quedó escrito del diseño está en `Doc_Relaciones.md`, sección 16. D587 y D588 son reglas «si algún día…»: no
+rigen hoy porque nada de eso se construye.
+
+### D581 · «Repartir por escenas» no mueve ni copia texto: la escena muestra su parte
+**Qué pasaba:** el roadmap (R.6) pedía repartir un reporte por escenas con prueba de conservación y deshacer. El punto
+venía de la propuesta P2 (b6: mover cada sección a la escena) y de la especificación de ERSO (D-ERSO-10), y D355 (ES8: el
+reporte no se parte) ya lo había descartado; el diseño aprobado muestra en la escena cada sección suya, en vivo.
+**Las opciones:** A) mover cada sección a una subpágina de la escena y dejar un link; B) copiarla a la escena y dejar
+el día; C) no escribir: la escena muestra su parte (cabecera viva, fotos por fuente y carrete, mapa) y R.6 se cierra.
+**Elegí C** porque A pierde lo que otro dispositivo escribe sin red adentro de la sección movida (Yjs integra borrado lo
+insertado en un bloque borrado; medido en E5), rompe el ancla de los comentarios, las fotos por página, el PDF y la
+lectura del día, y no es atómico entre dos documentos; B duplica el texto, lo cuenta dos veces en el índice y envejece
+(la lista congelada que Lega rechazó el 2026-10-08). C da lo que pide el pedido: ir de la escena a cada reporte y ver sus
+fotos, sin tocar nada.
+**Reemplaza** el punto R.6 del roadmap y a D-ERSO-10 (especificación de ERSO, «roadmap de la app»).
+**Si preferís otra:** Lega puede cambiarlo cuando quiera. B es lo único razonable que escribe; su protocolo está en el
+plan de R6, anexo A (24–34 h, riesgo alto).
+
+### D582 · Los casos que «no se reparten solos» ya los resuelve el lector
+**Qué pasaba:** el roadmap advertía que los encabezados con el número solo, las escenas en títulos de segundo nivel y las
+secciones que no son de una escena no se reparten solos.
+**Las opciones:** A) reglas nuevas para repartir esos casos; B) dejarlos a la vista, que ya los lee: número pelado en
+títulos, secciones a cualquier nivel, y las sin número con fotos a *Map › Pending* con *Assign*.
+**Elegí B** porque en ERSO son 18 títulos sin «Escena», 11 escenas en títulos de segundo nivel y 6 secciones sin escena con
+72 fotos, y la vista los da bien (139/139 secciones; el mapa 131/131 escena × día, más 9 subtítulos reales; 0 falsos).
+Faltaba una prueba que lo fije: D583.
+**Si preferís otra:** A solo tiene sentido si Lega elige mover o copiar en D581.
+
+### D583 · R6 se cierra con una prueba de cobertura, una línea de ayuda y la documentación
+**Qué pasaba:** «con prueba de conservación» pedía asegurar que nada se pierde ni se duplica. Sin escritura, lo que se
+puede perder es una sección que la vista no muestre, o una foto que cruce a una escena que no es la suya.
+**Las opciones:** A) cerrar solo en los docs; B) docs + prueba + oración en la ayuda; C) además, R.6b ahora.
+**Elegí B:** `src/relations/sectionCoverage.test.ts` fija, sobre un día sintético con los casos raros de ERSO, que cada
+sección de escena aparece una vez en cada escena que nombra con el mismo lugar en la cabecera y en el mapa, que las fotos
+son un **conjunto** (ninguna se pierde, ninguna de la parte general ni de una sección sin escena llega a una escena, y las
+que llegan a dos son solo las previstas), que lo que no es de ninguna escena queda en *Pending* y que armar las vistas no
+cambia el documento. No es una suma: `readPageRelations` anota cada foto en todas las secciones abiertas (la de un
+subtítulo cuenta en el subtítulo y en la sección que lo contiene, a propósito). La oración de la ayuda («los reportes
+quedan enteros», y las palabras *split* y *repartir* para encontrarla) evita que alguien busque cómo repartir y no
+encuentre nada.
+**Si preferís otra:** A ahorra unas 3 h; C suma 14–20 h (D584).
+
+### D584 · «Read here» (leer la sección entera en la escena) va al roadmap como R.6b, diseñado y sin construir
+**Qué pasaba:** lo único que el reparto daba y la vista no es leer la sección entera sin ir al día (el extracto corta a
+280 caracteres).
+**Las opciones:** A) construirlo ahora; B) dejarlo diseñado en el roadmap; C) descartarlo.
+**Elegí B** porque en ERSO la mediana es 1 sección por escena y solo 18 de 117 escenas tienen secciones en dos días o
+más: hoy un clic ya lleva al lugar exacto, abierto y resaltado. Vale la pena cuando un proyecto nuevo junte muchas partes
+por escena; con el diseño escrito, construirlo no pide otra etapa de diseño.
+**Si preferís otra:** A, con el diseño de `Doc_Relaciones.md` sección 16: 14–20 h, riesgo medio-bajo (solo lectura).
+
+### D585 · «Read here» lee de una copia con el editor de solo lectura del historial
+**Qué pasaba:** mostrar una parte de otro documento sin poder escribirlo.
+**Las opciones:** A) `docs.snapshot` + los bloques de la sección en un `Y.Doc` en memoria + el editor con `preview` y los
+servicios del historial; B) el HTML del exportador; C) el texto del índice.
+**Elegí A** porque se ve igual que en el día (fotos con anotaciones, Script, tablas, carrete) y las versiones del
+historial ya usan ese camino sin escribir. B pierde el carrete y las anotaciones; C pierde todo menos el texto.
+**Si preferís otra:** B es la salida si el editor pesa demasiado en el teléfono con *Read all*.
+
+### D586 · Desde la escena no se edita la sección: se edita en el día
+**Qué pasaba:** con la sección a la vista, tienta escribir ahí.
+**Las opciones:** A) solo lectura y *Edit in Día 59* al lugar exacto; B) un editor atado al documento del día que muestre
+solo la sección.
+**Elegí A** porque y-prosemirror ata un editor al fragmento entero; mostrar un tramo editable obliga a otro mecanismo de
+vista parcial con colaboración, justo donde se pierden datos. Ir al día es un clic y abre la sección resaltada (D399).
+**Si preferís otra:** B pide su propio diseño y prueba con dos dispositivos; no entra en R.6b.
+
+### D587 · Si algún día se escribe, solo copiar y nunca borrar del reporte (regla «si algún día…», no vigente hoy)
+**Qué pasaba:** dejar escrita la regla para que nadie retome «mover» desde el roadmap.
+**Las opciones:** A) nunca mover: a lo sumo copiar con procedencia, verificado y deshacible por id; B) mover en dos fases
+(copiar, verificar, borrar).
+**Elegí A** porque ni con dos fases se salva lo que otro escribe sin red en lo borrado; copiar solo agrega y el reporte no
+cambia.
+**Si preferís otra:** B necesita un modo de «sección bloqueada» que no existe y que con offline no se puede garantizar.
+
+### D588 · Un reporte escrito de corrido no se parte solo; si aparece, *Make it a section* solo inserta un título (regla «si aparece», no vigente hoy)
+**Qué pasaba:** la otra cara de «repartir» es un reporte sin títulos de escena, con renglones que empiezan con el número.
+La escena lo ve como «named in the text» (un renglón), sin las fotos de abajo. En ERSO hay 0 casos.
+**Las opciones:** A) nada por ahora (*Prepare*, *Today* y `/e` ya dejan títulos); B) *Make it a section*: insertar un
+título `Escena 105_027` (link) antes del renglón, solo inserta, como *Prepare*; C) convertir el renglón en título (cambia
+el tipo de bloque: borra y crea, y pierde lo que otro escribe en él).
+**Elegí A, con B anotado en el roadmap** porque no hay un caso real que lo pida; si aparece, B es seguro y C no.
+**Si preferís otra:** B son 6–9 h reutilizando `prepareDay.ts`.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de
