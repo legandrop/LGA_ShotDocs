@@ -1742,6 +1742,38 @@ repartir por escenas) quita una foto de una página que este dispositivo nunca a
 nunca se desvincula (queda «en uso»; dirección segura, sin pérdida). Pasa igual antes y después de D611.
 **Elegí** anotarlo en el roadmap (punto 28) y no arreglarlo acá.
 
+### D691 · Lo propio que vuelve a poner una foto que la página ya tenía se confirma con el servidor después de subir
+**Qué pasaba:** en una página ya comparada, un dispositivo sin red recuperaba una foto (deshacer un borrado, mover el
+bloque, pegar una copia de la misma página) mientras otro la quitaba con red y mandaba el `unlink`. Al volver, subía la
+página con la foto pero no mandaba el `link`: su fila seguía confirmada y la comparación solo le pregunta al servidor por
+páginas nuevas o con filas sin confirmar. El archivo quedaba en la papelera de archivos con la foto en el documento hasta
+que el otro volviera (roadmap 29).
+**Las opciones:** A) anotar en memoria las fotos de lo subido y preguntar en la comparación de ese ciclo (se pierde si la
+app se cierra entre subir y comparar); B) lo mismo, pero pasando las filas confirmadas a sin confirmar en la base del
+dispositivo antes de subir; C) que la purga lea los documentos (Yjs en el portero, historiales enteros, y no cubre lo no
+subido); D) leer los usos de toda página que cambió en cada ciclo (una lectura más por ciclo en cada dispositivo y más
+carreras); E) marcar al editar (no ve lo escrito sin el editor ni lo que hace el deshacer).
+**Elegí B:** `PageDocs.beforePush` justo antes de cada `pushUpdate` (también al reintentar un envío armado antes) saca los
+`sdmedia://` del envío (`mediaIdsInUpdate`) y `MediaQueue.recheckUses` pasa a sin confirmar solo las filas confirmadas de
+esas fotos en esa página. Lo demás ya existía (D601): la comparación del mismo ciclo, con el envío ya en el servidor, lee
+los usos y manda el `link` de lo que el servidor quitó. Una página de 52 fotos movidas sin red cuesta una lectura y ningún
+`link`. Si anotar falla, la subida sigue igual. Sin migración, sin tocar el portero y sin subir `min_app_version`: no
+cambia nada guardado (`unconfirmed` existe desde la v0.249).
+**Si preferís otra:** D cura desde cualquier dispositivo, no solo desde el que recuperó la foto, a cambio de una lectura por
+ciclo en todos.
+
+### D692 · Purgar mientras el que recuperó la foto sigue sin red queda para Lega
+**Qué pasaba:** D691 actúa cuando el dispositivo vuelve. Mientras sigue sin red nadie más sabe que la foto volvió, y un
+dueño o admin puede vaciar la papelera de archivos en cualquier momento (no hay plazo mínimo; la purga automática a los 30
+días está apagada): el `link` que llega después no deshace `purged_at`. El original queda 30 días en la papelera de Drive.
+**Elegí** dejarlo como punto propio del roadmap (sección C, punto 14) con una mitigación posible (no incluir en *Empty* lo
+que entró hace poco), porque es una decisión de producto.
+
+### D693 · Los dos restos de la auditoría de la v0.252
+**Elegí** sumar la prueba de `linkOnOpen` cuando guardar empieza a fallar mientras se lee lo guardado (la mutación que
+sobrevivía) y que el bucle de la prueba de filas sin confirmar en lote avance con `Math.max(1, UNCONFIRMED_SCAN_FROM)`, así
+con el umbral en 0 falla en vez de colgarse.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

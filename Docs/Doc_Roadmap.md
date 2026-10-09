@@ -1824,13 +1824,28 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    comparó, durante su primera bajada, no deja fila y el archivo queda «en uso» para siempre (dirección segura; D618,
    anterior a la v0.252). Y una vuelta de la cola sin nada que mandar (todo esperando) dice «Uploading» unos
    milisegundos, como cada ciclo con `syncing`.
-29. **PRIORIDAD ALTA: una foto recuperada con deshacer, sin red, mientras otro dispositivo la borra** (auditoría de la
-   v0.252, O1; anterior a la v0.252). En una página ya comparada, A borra una foto y la recupera con deshacer sin red
-   mientras B la borra con red: el archivo va a la papelera de archivos aunque siga en el documento de A. Lo arregla A
-   recién cuando vuelve a conectarse; si no vuelve antes de que se purgue la papelera de archivos, se pierde el original.
-   Poco probable, pero en la dirección peligrosa. De la misma auditoría: falta una prueba para cuando guardar empieza a
-   fallar mientras se lee lo guardado (la única mutación que sobrevivió); en el vite de desarrollo Ctrl+Z no deshace
-   (en el build sí); el (5) del 28 (pegar y salir antes de guardar) solo se pudo cubrir en el arnés.
+29. ~~**PRIORIDAD ALTA: una foto recuperada con deshacer, sin red, mientras otro dispositivo la borra**~~ (hecho en la
+   v0.255, D691–D693). En una página ya comparada, B quitaba una foto y la recuperaba con deshacer sin red (o la movía, o
+   pegaba una copia de la misma página) mientras A la quitaba con red: el archivo iba a la papelera de archivos aunque
+   siguiera en el documento de B, y B al volver no mandaba el `link` (su fila seguía confirmada). Ahora, antes de subir,
+   las filas confirmadas de las fotos que trae el envío pasan a sin confirmar y la comparación del mismo ciclo le pregunta
+   al servidor (D691). También: la prueba de cuando guardar empieza a fallar mientras se lee lo guardado y el paso del
+   bucle de la prueba en lote (D693). Lo que no cubre (un admin que purga mientras B sigue sin red) pasó a la sección C,
+   punto 14 (D692). En el vite de desarrollo Ctrl+Z no deshace (en el build sí); el (5) del 28 solo se cubre en el arnés.
+   De la auditoría de la v0.255 (sin bloqueantes): ninguna prueba fija que la marca vaya antes de `pushUpdate` (un cierre
+   entre la confirmación del servidor y la marca, milisegundos) ni que el gancho la espere; el arnés de «mover» es borrar e
+   insertar, mientras el editor real reescribe atributos de bloques existentes (funciona; sumar ese caso a
+   `reAdded.test.ts`); un admin que vacía la papelera en los segundos entre subir y comparar no se frena (`hasUnsentUse` no
+   cuenta filas sin confirmar; no es regresión); las filas sin confirmar de páginas que ya no se comparan (sin permiso,
+   borradas) quedan, inocuas; y `uploadPagesFirst` en paralelo con la comparación podría confirmar con una lectura vieja si
+   además otro quita el uso en ese intervalo (improbable).
+30. **PRIORIDAD ALTA: mover un bloque sin red mientras otro dispositivo borra el bloque movido puede borrar el VECINO**
+   (auditoría de la v0.255, H1; anterior). B sin red sube la foto a2 arriba de a1 (Ctrl+Shift+↑); A con red borra a2; al
+   juntarse, desaparece a1, que nadie tocó, y su archivo va a la papelera. Causa: y-prosemirror (`updateYFragment`) no
+   mueve elementos: reescribe los atributos de los existentes, así que el elemento que A borra ya lleva a1 (la misma
+   familia que `removeBlocks`, D436). Alcance probable: cualquier reordenamiento de bloques del mismo tipo, también
+   párrafos. Recuperable desde el historial de la página y, para fotos, desde la papelera hasta que se purgue. Pide su
+   frente (propuesta auditada).
 
 ### C. Esperan a Lega
 
@@ -1845,6 +1860,14 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
     privacidad y condiciones del punto 6 y dominio autorizado `lega.com.ar`), publicar la app (**In
     production**, así la conexión tampoco vence a los 7 días) y pedir la verificación de marca. Hasta entonces, la conexión con
     Drive vence cada 7 días y se reconecta desde la app.
+14. **Purgar una foto mientras un dispositivo sin red la recuperó** (nivel normal; decide Lega, D692). Si un dispositivo
+    sin red recupera una foto (deshacer, mover, pegar una copia) que otro quitó, y en ese rato un dueño o admin la manda a
+    la papelera de Google Drive desde la papelera de archivos (*Empty* o de a uno: no hay plazo mínimo), al volver la red
+    la foto queda en la página sin su original para la app (`purged_at` no se deshace con un `link`). El original sigue
+    **30 días en la papelera de Drive** y se puede recuperar a mano desde Drive. Nadie más que ese dispositivo sabe que la
+    foto volvió, así que la app no lo puede evitar del lado del dispositivo. Mitigación posible, si se quiere: mostrar en
+    la papelera de archivos cuándo entró cada uno y no incluir en *Empty* lo que entró en las últimas N horas (o pedir una
+    confirmación aparte para eso). Un plazo fijo no lo cubre del todo: un rodaje sin red puede durar días.
 
 ### Resueltos adentro del plan
 

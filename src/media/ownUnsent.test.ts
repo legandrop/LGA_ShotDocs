@@ -575,8 +575,10 @@ describe('filas sin confirmar en lote (D614)', () => {
     expect(pages.length).toBeGreaterThan(UNCONFIRMED_SCAN_FROM);
     expect([...many].sort()).toEqual([...expected].sort());
     const few = new Set<string>();
-    for (let i = 0; i < pages.length; i += UNCONFIRMED_SCAN_FROM) {
-      for (const p of await a.media.pagesWithUnconfirmed(pages.slice(i, i + UNCONFIRMED_SCAN_FROM))) few.add(p);
+    // Con el umbral en 0 (una mutación), el paso no puede ser 0: la prueba fallaría colgada en vez de fallar (O2 de E14).
+    const step = Math.max(1, UNCONFIRMED_SCAN_FROM);
+    for (let i = 0; i < pages.length; i += step) {
+      for (const p of await a.media.pagesWithUnconfirmed(pages.slice(i, i + step))) few.add(p);
     }
     expect([...few].sort()).toEqual([...expected].sort());
     // Una página por página, como antes.

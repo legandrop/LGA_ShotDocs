@@ -1,7 +1,7 @@
 // Los avisos del estado van en inglés y se traducen al mostrarlos (`localize` en SyncBadge.tsx).
 import { stored as t } from '../i18n';
 import type { MediaQueue, MediaStatus } from '../media/queue';
-import { mediaIdsInDoc, serverUsesBesidesOwn } from '../media/usage';
+import { mediaIdsInDoc, mediaIdsInUpdate, serverUsesBesidesOwn } from '../media/usage';
 import * as Y from 'yjs';
 import { LEVEL_EDIT, Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import { CLEAN_PER_ROUND, CLEAN_SCHEMA_VERSION, sha256Hex } from './clean';
@@ -253,6 +253,18 @@ export class SyncEngine {
         if (unregistered.size === 0) return false;
         const shown = mediaIdsInDoc(doc);
         return [...unregistered].some((id) => shown.has(id));
+      };
+    }
+    // Papelera de archivos (D691): una foto que lo propio vuelve a poner en una página que ya la tenía (deshacer un
+    // borrado, mover o duplicar el bloque, Merge…) se confirma con el servidor después de subir. Otro dispositivo pudo
+    // quitar su uso mientras tanto (este, sin red), y la fila confirmada de acá no se volvía a mirar: el archivo quedaba
+    // en la papelera con la foto en el documento. Un link no registra usos (`reconcileMedia`): no hace falta.
+    if (options.media && !options.linkVisitor) {
+      const media = options.media;
+      docs.beforePush = async (pageId, update) => {
+        if (!media.tracksUsage) return;
+        const ids = mediaIdsInUpdate(update);
+        if (ids.size > 0) await media.recheckUses(pageId, ids);
       };
     }
     files.onQueued = poke;

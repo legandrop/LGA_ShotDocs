@@ -507,6 +507,48 @@ describe('dos dispositivos', () => {
     expect(t).toContain('Texto de la segunda.');
   });
 
+  it('D691: la que queda ya tenía la foto y otro la quita mientras se une: la copia la vuelve a usar y la unión termina', async () => {
+    const w = await world();
+    // La que queda también muestra la foto, y A ya la comparó: su fila del uso está confirmada.
+    const doc = await w.a.docs.open(w.keep);
+    const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+    const container = new Y.XmlElement('blockContainer');
+    container.setAttribute('id', crypto.randomUUID());
+    const image = new Y.XmlElement('image');
+    image.setAttribute('url', `sdmedia://${PHOTO}`);
+    container.insert(0, [image]);
+    group.insert(group.length, [container]);
+    w.a.docs.close(w.keep);
+    await w.a.docs.flush();
+    await w.a.engine.syncNow();
+    await w.a.engine.syncMedia();
+    await w.a.engine.syncNow();
+    expect(w.server.pageFiles.has(`${w.keep}:${PHOTO}`)).toBe(true);
+    expect(await w.a.mediaDb.get('links', `${w.keep}:${PHOTO}`)).toMatchObject({ pending: 0, removed: false });
+    await w.b.engine.syncNow();
+    const out = await merge(w.a, w, {
+      afterStep: async (step) => {
+        // Con la copia hecha en A y todavía sin subir: B quita la foto de la que queda y su `unlink` pasa.
+        if (step !== 'copied') return;
+        const d = await w.b.docs.open(w.keep);
+        const g = d.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+        const at = g.toArray().findIndex((c) => ((c as Y.XmlElement).get(0) as Y.XmlElement | undefined)?.getAttribute('url') === `sdmedia://${PHOTO}`);
+        g.delete(at, 1);
+        w.b.docs.close(w.keep);
+        await w.b.docs.flush();
+        await w.b.engine.syncNow();
+        await w.b.engine.syncMedia();
+        // Y B no vuelve: si no, al bajar la copia su fila quitada vuelve a usada y él manda el `link`.
+        w.b.engine.stop();
+        expect(w.server.pageFiles.has(`${w.keep}:${PHOTO}`)).toBe(false);
+      },
+    });
+    // Antes de D691 la fila de A seguía confirmada, nadie mandaba el `link` y la unión quedaba pendiente.
+    expect(out.status).toBe('done');
+    expect(w.server.pageFiles.has(`${w.keep}:${PHOTO}`)).toBe(true);
+    await merged(w.a, w);
+  });
+
   it('C9 a: dos dispositivos unen lo mismo a la vez: se prefiere duplicar a perder', async () => {
     const w = await world();
     const [x, y] = await Promise.all([merge(w.a, w), merge(w.b, w)]);

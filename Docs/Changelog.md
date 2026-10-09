@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.255 :
+
+En una página ya comparada, si un dispositivo sin red recuperaba una foto (deshacer un borrado, mover el bloque, pegar una copia de la misma página) mientras otro la borraba con red, el archivo iba a la papelera de archivos aunque siguiera en la página: al volver, el primero subía la foto pero no avisaba que la usaba, porque su fila del uso seguía confirmada y la comparación no la volvía a mirar. Ahora, justo antes de subir, las filas confirmadas de las fotos que trae el envío pasan a sin confirmar (guardado, vale aunque la app se cierre) y la comparación del mismo ciclo le pregunta al servidor: manda el `link` solo de las que quitó otro. Esto también destraba un *Merge* que quedaba pendiente en ese caso. D691–D693.
+
+[Que una foto recuperada con deshacer sin red no quede en la papelera de archivos si otro dispositivo la borró mientras tanto]
+
 v0.254 :
 
 Restos de las auditorías de la tanda 5. *Merge* copiaba la página entera: ahora compara cada bloque (con sus mayúsculas, formato y anotaciones de fotos) y copia solo lo que la que queda no tiene, así que la plantilla repetida o lo ya unido no se duplica; un título idéntico viaja con lo de su sección que se copia (la escena no pierde lo que B escribió debajo), el adelanto lo lee de los documentos, y si otro dispositivo borra de A algo salteado mientras se une, B no va a la papelera. Dos páginas con el mismo título se distinguen en *Pending*, en el cartel de la copia que cede y en los avisos. El reporte de mañana lleva la locación del desglose; el menú ⋯ cabe a 320 px; un lugar con coma explica por qué no se vincula; el aviso con *Undo* espera al mouse. D706–D717.

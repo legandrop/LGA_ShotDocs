@@ -150,6 +150,7 @@ describe('linkOnOpen: guardas y fallas (D613, D617)', () => {
     writeError = null as string | null,
     ownUnsent = false as boolean | 'throw',
     snapshot = null as null | (() => Promise<never>) | { doc: Y.Doc; sv: Uint8Array | undefined },
+    failWritesOnSnapshot = false,
   }) {
     const calls: Call[] = [];
     const deps = {
@@ -165,6 +166,8 @@ describe('linkOnOpen: guardas y fallas (D613, D617)', () => {
           return ownUnsent;
         },
         snapshot: async () => {
+          // Guardar empieza a fallar mientras se lee lo guardado.
+          if (failWritesOnSnapshot) writeError = 'QuotaExceededError';
           if (typeof snapshot === 'function') return snapshot();
           const doc = new Y.Doc();
           if (snapshot) Y.applyUpdate(doc, Y.encodeStateAsUpdate(snapshot.doc));
@@ -209,6 +212,13 @@ describe('linkOnOpen: guardas y fallas (D613, D617)', () => {
     const { deps, calls } = fake({ ownUnsent: true, snapshot: { doc, sv } });
     await linkOnOpen(deps, 'p', [...f, g]);
     expect(by(calls)).toEqual({ unconfirmed: [...f].sort(), pending: [g] });
+  });
+
+  it('guardar empieza a fallar mientras se lee lo guardado: todo por mandar, nada sin confirmar (MF de E14)', async () => {
+    const { doc, f, sv } = report();
+    const { deps, calls } = fake({ ownUnsent: true, snapshot: { doc, sv }, failWritesOnSnapshot: true });
+    await linkOnOpen(deps, 'p', f);
+    expect(by(calls)).toEqual({ unconfirmed: [], pending: [...f].sort() });
   });
 
   it('algo propio sin syncedSV: todo por mandar', async () => {

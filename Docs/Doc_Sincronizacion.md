@@ -782,6 +782,21 @@ selector de proyectos: `Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papele
   `link`, que reactiva el uso. El editor, al volver a ver un archivo (deshacer, pegar), también da vuelta la
   fila en el acto (`ensureLinks`). Los dos pedidos son idempotentes: repetir uno cuya respuesta se perdió no
   cambia nada. Primero van los usos nuevos y después los quitados.
+- **Lo propio que vuelve a poner una foto que la página ya tenía se confirma después de subir** (D691). Deshacer un
+  borrado, mover o duplicar el bloque, pegar una foto de la misma página, *Assign* o *Merge* escriben la foto otra vez
+  con un ítem nuevo de Yjs. Si este dispositivo lo hizo sin red mientras otro quitaba esa foto y mandaba el `unlink`
+  (que pasa: este todavía no subió nada), su fila del uso seguía confirmada y la comparación no la volvía a mirar: el
+  archivo quedaba en la papelera de archivos con la foto en el documento, hasta que el otro dispositivo volviera. Ahora,
+  justo antes de mandar cada envío (`PageDocs.beforePush`, también al reintentarlo), las filas **confirmadas** de las
+  fotos que trae el envío (`mediaIdsInUpdate`) pasan a sin confirmar (`MediaQueue.recheckUses`, guardado antes de
+  subir: vale aunque la app se cierre en el medio). La comparación del mismo ciclo, ya con el envío en el servidor, le
+  pregunta por esa página y manda el `link_page_file` de las que el servidor quitó; si no quitó ninguna, las confirma
+  sin mandar nada (una página de 52 fotos movidas sin red: una lectura y ningún `link`). Después de la subida, un
+  `unlink` de quien no vio lo de acá lo rechaza `p_seen_seq`. Si anotar falla, la subida sigue igual. **Un `link` de
+  más:** si la subida vence (`REQUEST_TIMEOUT`) y el ciclo sigue, la comparación de ese ciclo ve lo propio sin subir
+  (D611) y manda el `link` de esas fotos aunque el servidor las tenga: idempotente. **Lo que no cubre:** mientras este
+  dispositivo sigue sin red nadie sabe que la foto volvió; si en ese rato un dueño o admin la manda a la papelera de
+  Drive, el `link` que sale al volver ya no la recupera (`purged_at`; roadmap, sección C, punto 14, D692).
 - **Nunca se quita mientras haya otro uso sin confirmar.** Un `unlink` de un archivo no sale mientras este
   dispositivo tenga, para el mismo archivo, un uso que el servidor todavía no confirmó: por mandar, detenido
   por un error, esperando (`file_not_found`), sin permiso sobre esa página, o un archivo agregado acá y

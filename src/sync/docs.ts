@@ -173,6 +173,12 @@ export class PageDocs {
    * base todavía no conoce (`SyncEngine`, `MediaQueue.unregistered`).
    */
   holdUpload?: (pageId: string, doc: Y.Doc) => Promise<boolean>;
+  /**
+   * Justo antes de mandar cada envío de una página (también uno armado en una vuelta anterior que se reintenta), con lo
+   * que se manda. Lo usa la papelera de archivos (D691): las fotos que el envío vuelve a poner en la página se confirman
+   * con el servidor después de subir. Si falla, la subida sigue igual: nunca se frena el texto por esto.
+   */
+  beforePush?: (pageId: string, update: Uint8Array) => Promise<void>;
   private readonly unsupportedListeners = new Set<(pageId: string) => void>();
   private readonly renderFailedListeners = new Set<(pageId: string) => void>();
   private readonly removedWritingListeners = new Set<(pageId: string) => void>();
@@ -615,6 +621,11 @@ export class PageDocs {
           saved.doc.destroy();
           state = await this.savePending(pageId, next);
           pending = next;
+        }
+        if (this.beforePush) {
+          await this.beforePush(pageId, pending.update).catch((err) =>
+            console.warn(`Page ${pageId}: no se pudo anotar qué fotos vuelve a poner lo que se sube; se sube igual.`, err),
+          );
         }
         let seq: number;
         try {

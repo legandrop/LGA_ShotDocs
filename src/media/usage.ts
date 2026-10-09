@@ -47,8 +47,16 @@ const OWN_ID = /sdmedia:\/\/([0-9a-fA-F-]{36})/g;
  */
 export function ownMediaIds(doc: Y.Doc, syncedSV: Uint8Array | undefined): Set<string> | null {
   if (!syncedSV) return null;
+  return mediaIdsInUpdate(Y.encodeStateAsUpdate(doc, syncedSV));
+}
+
+/**
+ * Los `sdmedia://` que aparecen en los ítems de un update de Yjs (también en los que el mismo update da por borrados:
+ * sobra antes que faltar). Lo usan `ownMediaIds` y el envío de una página antes de subirlo (D691).
+ */
+export function mediaIdsInUpdate(update: Uint8Array): Set<string> {
   const out = new Set<string>();
-  for (const struct of Y.decodeUpdate(Y.encodeStateAsUpdate(doc, syncedSV)).structs) {
+  for (const struct of Y.decodeUpdate(update).structs) {
     if (!(struct instanceof Y.Item)) continue;
     const content = struct.content as unknown as { getContent(): unknown[]; value?: unknown; embed?: unknown };
     for (const value of [...content.getContent(), content.value, content.embed]) {

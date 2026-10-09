@@ -1190,6 +1190,30 @@ export class MediaQueue {
     return out;
   }
 
+  /**
+   * Lo que se va a subir de la página vuelve a poner estos archivos (deshacer un borrado, mover o duplicar el bloque,
+   * Merge…; D691). Cada fila **confirmada** de ellos en esa página pasa a sin confirmar: la comparación del motor le
+   * pregunta al servidor y manda el `link_page_file` si otro dispositivo quitó el uso mientras tanto (si no, la confirma
+   * sin mandar nada). Sin esto, una fila confirmada no se vuelve a mirar y el archivo quedaba en la papelera con la foto
+   * en el documento. Se guarda antes de subir, así vale aunque la app se cierre entre subir y comparar. Las filas por
+   * mandar, quitadas o ya sin confirmar no se tocan. Devuelve cuántas cambió.
+   */
+  async recheckUses(pageId: string, fileIds: Iterable<string>): Promise<number> {
+    if (!this.db || !this.schemaReady || this.options.noUsage) return 0;
+    const keys = [...new Set([...fileIds].map((id) => id.toLowerCase()))].map((id) => `${pageId}:${id}`);
+    if (keys.length === 0) return 0;
+    const tx = this.db.transaction('links', 'readwrite');
+    let changed = 0;
+    for (const key of keys) {
+      const row = await tx.store.get(key);
+      if (!row || row.removed || row.pending !== 0 || row.unconfirmed) continue;
+      await tx.store.put({ ...row, unconfirmed: true });
+      changed++;
+    }
+    await tx.done;
+    return changed;
+  }
+
   /** La página tiene alguna fila sin confirmar (D601): la comparación tiene que preguntarle al servidor por ella. */
   async hasUnconfirmed(pageId: string): Promise<boolean> {
     if (!this.db) return false;
