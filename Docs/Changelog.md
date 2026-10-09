@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.243 :
+
+Las fotos de la cabecera viva no se podían ver por fuente ni recorrer juntas: la tira mostraba 6 y llevaba a la sección, y el carrete solo sabía armar su lista desde una página. Ahora «All N · by source» abre la galería agrupada como la maqueta (desglose, *Tech scout* y *Creative scout* separados con su fecha, cada sección de cada reporte «Día 59 · Escena 105_027b»; en la locación, cada día; en el día, cada sección), y cada fuente lleva a su lugar resaltado (`photoGallery.ts`, `PhotoSources.tsx`). Tocar una foto abre el carrete con todas las de la galería, de varias páginas: cada una dice su fuente y *Go to place* va a esa foto, aunque comparta párrafo con otras (`photoTarget.ts`); las anotaciones salen de su página. El carrete de una página sigue igual. D466–D477.
+
+[Ver las fotos de escenas, locaciones y días por fuente y recorrerlas en un solo carrete de varias páginas que lleva a cada foto]
+
 v0.242 :
 
 No había un mapa del proyecto ni para la persona ni para un asistente, y la lupa no encontraba una escena: `101-074` no daba nada y `101_074` traía antes una ficha. Ahora la fila *Map* de la barra lateral abre *Locations* en el tiempo, *Scenes* por episodio, *Shoot days* y *Pending* (números que no existen, escenas en dos páginas, secciones con fotos sin número), armados con el índice en el dispositivo, con las reglas de la cabecera viva y sin afirmar ceros mientras lee; cada fila lleva a su página o a la sección. *Copy map* (texto) y *Copy JSON* (`shotdocs.map` v1, documentado) llevan solo lo que se ve. ⌘K pone primero la escena o la locación con el mismo lector (`src/relations/sceneSearch.ts`, también para E7). Quien ve una parte lee «not in the pages you can see», nunca «no existe»; los días cercanos van juntos en la línea sin taparse. D486–D501. `typeMenu.test.tsx` espera con `shown()` en vez de 30 ms fijos (fallaba con la máquina cargada).

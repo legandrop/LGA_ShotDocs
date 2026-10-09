@@ -132,6 +132,12 @@ escenas, el texto que otro escribe sin red en una copia repetida que *Prepare* s
 tanda y no de la suya (la escena equivocada pasa a «shot»); (9) O-b: lo que otro escribe en el TÍTULO preparado
 mientras se hace *Undo* (ventana de segundos) se pierde con el título.
 
+**Anotado en la v0.243 (relaciones en vivo, fotos por fuente y carrete de varias páginas):** (1) las miniaturas de los
+renglones de día y de los extractos van a su lugar, no abren el carrete (D471); (2) anotar desde el carrete de varias
+páginas (hoy solo se ven las anotaciones, D470); (3) las anotaciones de otra página salen de una copia de lo guardado: una
+nueva de otro dispositivo se ve al reabrir el carrete; (4) la leyenda del bloque de cada foto no viaja al carrete de
+varias páginas (el índice no la guarda); (5) dos scoutings del mismo tipo y la misma fecha se rotulan igual.
+
 **Anotado en la v0.242 (relaciones en vivo, el mapa y la lupa):** hecho el punto (2) de «ERSO en vivo» (⌘K con las otras
 formas del número, la escena primero). Queda: (1) *Create* y *Assign* en *Map › Pending* (E7, en la ranura `actions` de
 `PendingRow`); (2) los títulos de día con un nombre de lugar que el registro no tiene: en ERSO 13 de 73 días quedan sin

@@ -10,6 +10,8 @@ import { DayHeader } from './DayHeader';
 import { dayLive } from './dayLive';
 import { useLiveOpen, type FoldKind } from './liveFold';
 import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type OpenQuestion, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
+import { dayGallery, locationGallery, sceneGallery, type Gallery } from './photoGallery';
+import { PhotoSources } from './PhotoSources';
 import './liveHeader.css';
 
 // La cabecera viva de una escena, una locación o un día de rodaje (Docs/Doc_Relaciones.md, secciones 10 y 11; diseño S4
@@ -42,8 +44,17 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   const view = useMemo(() => {
     if (!snap || !kind || !ref) return null;
     const src: LiveSource = { snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) };
-    if (kind === 'day') return { kind, data: dayLive(src, pageId), src } as const;
-    return kind === 'scene' ? ({ kind, data: sceneLive(src, ref) } as const) : ({ kind, data: locationLive(src, ref) } as const);
+    // Las fotos por fuente salen de lo mismo que la cabecera (E8).
+    if (kind === 'day') {
+      const data = dayLive(src, pageId);
+      return { kind, data, src, gallery: dayGallery(src, data) } as const;
+    }
+    if (kind === 'scene') {
+      const data = sceneLive(src, ref);
+      return { kind, data, gallery: sceneGallery(src, data) } as const;
+    }
+    const data = locationLive(src, ref);
+    return { kind, data, gallery: locationGallery(src, data) } as const;
     // La foto cambia con cada revisión; el árbol (títulos) también se lee de la foto de esa revisión.
   }, [snap, kind, ref, pageId, revision, tree, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -51,8 +62,13 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta: las ausencias se dicen «you can
   // see» (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
-  if (view.kind === 'day') return <DayHeader v={view.data} src={view.src} pages={snap.pages.size} partial={partial} />;
-  return view.kind === 'scene' ? <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} /> : <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} />;
+  const photos = { gallery: view.gallery, unread: snap.unread, here: pageId };
+  if (view.kind === 'day') return <DayHeader v={view.data} src={view.src} pages={snap.pages.size} partial={partial} photos={photos} />;
+  return view.kind === 'scene' ? (
+    <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
+  ) : (
+    <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
+  );
 }
 
 // --- Piezas -----------------------------------------------------------------------------------------------------
@@ -359,35 +375,12 @@ export function Empty({ icon, children }: { icon: keyof typeof PATHS; children: 
   );
 }
 
-export function PhotoStrip({ photos, complete, tr }: { photos: PhotoRef[]; complete: boolean; tr: Translate }) {
-  const go = useGo();
-  const caption = (p: PhotoRef) => (p.sourceKind === 'breakdown' ? tr('live.source.breakdown') : p.sourceKind === 'location' ? tr('live.source.location') : p.source);
-  if (!photos.length) {
-    return (
-      <div className="lh-gal">
-        <div className="lh-gal-h">
-          <span className="lbl">{tr('live.photos')}</span>
-          <span className="lh-via">{complete ? tr('live.noPhotos') : tr('live.reading')}</span>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="lh-gal">
-      <div className="lh-gal-h">
-        <span className="lbl">{tr('live.photos')}</span>
-        <span className="lh-via count">{tr('live.photoCount', { count: photos.length })}</span>
-      </div>
-      <div className="lh-strip">
-        {photos.slice(0, 6).map((p) => (
-          <button key={p.id} className="lh-fig" onClick={() => go(p.place)}>
-            <Thumb id={p.id} />
-            <span className="cap">{caption(p)}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+/** Las fotos por fuente de una cabecera (`PhotoSources`) y cuántas páginas faltan leer. */
+export interface HeaderPhotos {
+  gallery: Gallery;
+  unread: number;
+  /** La página de la cabecera (sus fuentes no repiten su título en el tooltip). */
+  here: string;
 }
 
 function AlsoRow({ also, index, tr }: { also: PageChip[]; index: PageChip[]; tr: Translate }) {
@@ -416,7 +409,7 @@ function AlsoRow({ also, index, tr }: { also: PageChip[]; index: PageChip[]; tr:
 
 // --- Escena -----------------------------------------------------------------------------------------------------
 
-function SceneHeader({ v, pages, partial }: { v: SceneLive; pages: number; partial: boolean }) {
+function SceneHeader({ v, pages, partial, photos }: { v: SceneLive; pages: number; partial: boolean; photos: HeaderPhotos }) {
   const tr = useT();
   const go = useGo();
   const [open, setOpenRaw] = useLiveOpen('scene');
@@ -679,7 +672,7 @@ function SceneHeader({ v, pages, partial }: { v: SceneLive; pages: number; parti
       <AlsoRow also={v.also} index={v.indexPages} tr={tr} />
       <Stages defs={defs} open={stage} onToggle={(k) => setStage(stage === k ? null : k)} />
       {panel}
-      <PhotoStrip photos={v.photos} complete={v.complete} tr={tr} />
+      <PhotoSources gallery={photos.gallery} complete={v.complete} unread={photos.unread} here={photos.here} tr={tr} />
       <div className="lh-foot">{tr('live.foot', { count: pages })}</div>
     </section>
   );
@@ -687,7 +680,7 @@ function SceneHeader({ v, pages, partial }: { v: SceneLive; pages: number; parti
 
 // --- Locación ---------------------------------------------------------------------------------------------------
 
-function LocationHeader({ v, pages, partial }: { v: LocationLive; pages: number; partial: boolean }) {
+function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages: number; partial: boolean; photos: HeaderPhotos }) {
   const tr = useT();
   const go = useGo();
   const [open, setOpenRaw] = useLiveOpen('location');
@@ -858,7 +851,7 @@ function LocationHeader({ v, pages, partial }: { v: LocationLive; pages: number;
       <AlsoRow also={v.also} index={v.indexPages} tr={tr} />
       <Stages defs={defs} open={stage} onToggle={(k) => setStage(stage === k ? null : k)} />
       {panel}
-      <PhotoStrip photos={v.photos} complete={v.complete} tr={tr} />
+      <PhotoSources gallery={photos.gallery} complete={v.complete} unread={photos.unread} here={photos.here} tr={tr} />
       <div className="lh-foot">{tr('live.foot', { count: pages })}</div>
     </section>
   );

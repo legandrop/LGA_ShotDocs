@@ -886,6 +886,30 @@ Dentro de la autorización vigente para que cada workspace conserve su identidad
   segundo de atraso o no haber leído lo que llegó por sincronización: con ella, preparar dos veces seguidas duplicaría.
 - **D445 · La barra *Today* sobre el teclado y la ficha-chip del link quedan para E6/E7** (2026-10-08; E5). E5 escribe
   el link con la marca `link` de siempre; cómo se dibuja un link a una escena es del subrayado y de `/`.
+- **D466 · En la escena, una fuente por sección de reporte («Día 59 · Escena 105_027b»), no una por día** (2026-10-08;
+  E8). La maqueta juntaba el día; el encargo pedía la sección, y una sección es un lugar exacto (el Día 76 tiene dos).
+- **D467 · El carrete recibe todas las fotos de la galería aunque haya una fuente elegida** (2026-10-08; E8), empezando
+  por la tocada; cada foto dice su fuente. Se revierte en `PhotoSources` (`entries`).
+- **D468 · Cada foto del carrete lleva a su propio bloque; la fuente elegida, a la sección entera** (2026-10-08; E8).
+- **D469 · En la locación, un grupo por día entero, uno por decorado-página y ninguno vacío** (2026-10-08; E8). La
+  maqueta mostraba «Art (sets)» vacío con su explicación; la fila *Sets* de la cabecera ya lo dice.
+- **D470 · Desde el carrete de varias páginas no se anota; las anotaciones se ven** (2026-10-08; E8), de una copia de
+  lo guardado de cada página (solo lectura).
+- **D471 · Las miniaturas de los renglones de día y de los extractos siguen yendo a su lugar** (2026-10-08; E8): el
+  carrete se abre desde la tira y la galería. Se cambia en `Thumbs` y `ExcerptCard` (`LiveHeader.tsx`).
+- **D472 · Técnico o creativo sale del título; la fecha, del campo *Date*/*Fecha* o del principio del título**
+  (2026-10-08; E8). Sin tipo en el título, «Scouting».
+- **D473 · Con más de una ficha con fotos, una fuente por ficha con su plano** (2026-10-08; E8; la maqueta: un solo
+  «Breakdown»). En ERSO la 105_027 tiene dos fichas con una foto cada una.
+- **D474 · Ir a una foto pasa el id por un módulo aparte (`photoTarget.ts`), no por el pedido de la búsqueda**
+  (2026-10-09; corrección de E8, B1): así el editor y `ResultRequest` no cambian (los tocan otros frentes). La foto en
+  línea se resalta sola y queda centrada aunque crezca al cargar.
+- **D475 · Dos fuentes del mismo tipo con exactamente las mismas fotos son una sola** (2026-10-09; O1): la misma
+  imagen en dos fichas era dos botones con la misma foto.
+- **D476 · En la miniatura, el rótulo corto (el día; el tipo y la fecha del scouting); el entero, en el selector**
+  (2026-10-09; O1). El arte de un decorado: «Art · Negocio de Telas» (O2).
+- **D477 · En el teléfono el selector de fuentes es un renglón que se desliza de costado** (2026-10-09; O1): eran 6
+  renglones a 390 px. La página no se desliza.
 - **D486 · El mapa se abre desde una fila *Map* arriba de *Pages* en la barra lateral, en `/map/<pestaña>`**
   (2026-10-08; E9, Lega la puede cambiar). Como la maqueta; solo en un proyecto con escenas, locaciones o días (en uno
   sin tipos sería una pantalla vacía) y con «N pending» solo si hay alguno. Cada pestaña tiene su dirección (se puede

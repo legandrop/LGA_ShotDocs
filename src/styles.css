@@ -4540,6 +4540,52 @@ svg.sd-markup text {
   user-select: text;
 }
 
+/* El carrete de varias páginas (fotos por fuente): de dónde viene la foto y cómo ir a su lugar. */
+.carrete-origin {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 16px 12px;
+  color: var(--carrete-muted);
+  font-size: 14px;
+  opacity: var(--carrete-fade, 1);
+}
+
+.carrete-origin-from {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carrete-origin-from b {
+  color: var(--carrete-text);
+  font-weight: 600;
+}
+
+.carrete-origin-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 18px;
+  background: var(--carrete-btn);
+  color: var(--carrete-text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.carrete-origin-go:hover {
+  background: var(--carrete-btn-hover);
+}
+
 @media (max-width: 520px) {
   .carrete .annotated-download-menu {
     position: fixed;

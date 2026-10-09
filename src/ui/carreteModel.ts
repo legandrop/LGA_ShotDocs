@@ -30,6 +30,27 @@ export interface CarreteItem {
   name: string;
   /** La leyenda del bloque (puede estar vacía). */
   caption: string;
+  /**
+   * El carrete de varias páginas (las fotos por fuente de la cabecera viva, Docs/Doc_Carrete.md, «Varias páginas»): de
+   * qué página y de qué fuente viene, para el rótulo y para ir a su lugar. Sin esto, el carrete es el de una página.
+   */
+  origin?: CarreteOrigin;
+}
+
+export interface CarreteOrigin {
+  pageId: string;
+  /** El título de la página. */
+  pageTitle: string;
+  /** La fuente, como la rotula la galería («Tech scout 06/01», «Día 59 · Escena 105_027b»). */
+  label: string;
+  /** El bloque de la foto en su página. */
+  blockId: string;
+}
+
+/** Una foto del carrete de varias páginas: el archivo (`sdmedia://<id>`) y de dónde viene. */
+export interface CarreteEntry {
+  mediaId: string;
+  origin: CarreteOrigin;
 }
 
 /** Lo mínimo de un bloque de BlockNote que hace falta leer. */
@@ -56,13 +77,45 @@ export const CARRETE_LEARN_WAIT_MS = 1500;
  */
 export async function carreteItemsOf(
   blocks: readonly BlockLike[],
-  media: { fileInfo(id: string): unknown; isFolder(id: string): boolean; learnInfo(ids: readonly string[]): Promise<void> },
-  opts: { waitMs?: number; onLate?: (items: CarreteItem[]) => void; online?: boolean } = {},
+  media: CarreteMediaInfo,
+  opts: CarreteItemsOptions = {},
 ): Promise<CarreteItem[]> {
-  const unknown = collectCarrete(blocks)
-    .map((item) => item.mediaId)
-    .filter((id): id is string => !!id && !media.fileInfo(id));
-  const now = () => collectCarrete(blocks, (id) => media.isFolder(id));
+  const ids = collectCarrete(blocks).map((item) => item.mediaId);
+  return learnedItems(ids, () => collectCarrete(blocks, (id) => media.isFolder(id)), media, opts);
+}
+
+type CarreteMediaInfo = { fileInfo(id: string): unknown; isFolder(id: string): boolean; learnInfo(ids: readonly string[]): Promise<void> };
+type CarreteItemsOptions = { waitMs?: number; onLate?: (items: CarreteItem[]) => void; online?: boolean };
+
+/**
+ * Las fotos de varias páginas para el carrete (las fotos por fuente de la cabecera viva): una por archivo, en el orden
+ * dado, sin las carpetas (tienen su visor). Lo que no se sabe qué es se averigua como en `carreteItemsOf`. La clave es
+ * `<página>/<archivo>`: la misma foto en dos páginas son dos lugares distintos.
+ */
+export async function carreteItemsOfEntries(entries: readonly CarreteEntry[], media: CarreteMediaInfo, opts: CarreteItemsOptions = {}): Promise<CarreteItem[]> {
+  return learnedItems(
+    entries.map((e) => e.mediaId),
+    () => itemsOfEntries(entries, (id) => media.isFolder(id)),
+    media,
+    opts,
+  );
+}
+
+/** Lo de `carreteItemsOfEntries` sin esperar a averiguar nada (lo que ya se sabe). */
+export function itemsOfEntries(entries: readonly CarreteEntry[], skip?: (mediaId: string) => boolean): CarreteItem[] {
+  const out: CarreteItem[] = [];
+  const seen = new Set<string>();
+  for (const e of entries) {
+    const key = `${e.origin.pageId}/${e.mediaId}`;
+    if (seen.has(key) || skip?.(e.mediaId)) continue;
+    seen.add(key);
+    out.push({ key, blockId: e.origin.blockId, at: null, url: `sdmedia://${e.mediaId}`, source: 'media', mediaId: e.mediaId, name: '', caption: '', origin: e.origin });
+  }
+  return out;
+}
+
+async function learnedItems(ids: readonly (string | null)[], now: () => CarreteItem[], media: CarreteMediaInfo, opts: CarreteItemsOptions): Promise<CarreteItem[]> {
+  const unknown = ids.filter((id): id is string => !!id && !media.fileInfo(id));
   const online = opts.online ?? (typeof navigator === 'undefined' || navigator.onLine !== false);
   if (unknown.length === 0 || !online) return now();
   let timer: ReturnType<typeof setTimeout> | undefined;

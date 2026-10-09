@@ -34,6 +34,9 @@ export const carrete = {
   },
   'carrete.previous': { en: "Previous", es: "Anterior" },
   'carrete.next': { en: "Next", es: "Siguiente" },
+  // El carrete de varias páginas (las fotos por fuente de la cabecera viva).
+  'carrete.from': { en: "From {source}", es: "De {source}" },
+  'carrete.goToPlace': { en: "Go to place", es: "Ir al lugar" },
   'carrete.offlineMissing': {
     en: "You're offline, and this file isn't on this device yet.",
     es: "Estás sin conexión, y este archivo todavía no está en este dispositivo.",

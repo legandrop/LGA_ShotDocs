@@ -5,6 +5,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { collapseControlFor } from '../ui/collapseControl';
 import { blockElement } from '../ui/commentsUi';
 import { setBlockFlasher } from '../ui/flashControl';
+import { takePhotoAim } from './photoTarget';
 
 // El resaltado pasajero de «ir al lugar exacto» (Docs/Doc_Relaciones.md, sección 10): una decoración de ProseMirror sobre
 // los bloques de una sección, que se va sola. Es vista: no toca el documento ni el Y.Doc, no se sincroniza y no sale en
@@ -45,15 +46,34 @@ export function sectionBlocks(doc: PMNode, startId: string, endId: string | null
 /** Cuántos resaltados lleva cada editor: el que vence solo borra si no llegó otro después. */
 const generation = new WeakMap<EditorView, number>();
 
+/** La foto en línea (`photo`) con esa dirección dentro de un bloque: su lugar en el documento, o `null`. */
+export function inlinePhotoIn(doc: PMNode, block: { from: number; to: number }, url: string): { from: number; to: number } | null {
+  let found: { from: number; to: number } | null = null;
+  doc.nodesBetween(block.from, block.to, (node, pos) => {
+    if (found) return false;
+    if (node.type.name === 'photo' && node.attrs.url === url) {
+      found = { from: pos, to: pos + node.nodeSize };
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
 /**
  * Resalta una sección (o un bloque) en el editor que la tiene. Devuelve si la encontró. `cls`: la clase del resaltado
- * (`rel-flash` de la cabecera viva; `comment-flash` de «Ir al bloque» de los comentarios, con su duración).
+ * (`rel-flash` de la cabecera viva; `comment-flash` de «Ir al bloque» de los comentarios, con su duración). `photoUrl`:
+ * en un bloque solo, resalta esa foto en línea (`rel-flash-photo`) en vez del bloque entero; si no está en línea (un
+ * bloque de foto propio), el bloque.
  */
-export function flashPlace(startId: string, endId: string | null | undefined, cls = 'rel-flash', ms = FLASH_MS): boolean {
+export function flashPlace(startId: string, endId: string | null | undefined, cls = 'rel-flash', ms = FLASH_MS, photoUrl?: string): boolean {
   for (const view of views) {
     const blocks = sectionBlocks(view.state.doc, startId, endId);
     if (!blocks.length) continue;
-    const decos = blocks.map((b, i) => Decoration.node(b.from, b.to, { class: i === 0 ? `${cls} ${cls}-first` : cls }));
+    const photo = photoUrl && endId === undefined ? inlinePhotoIn(view.state.doc, blocks[0], photoUrl) : null;
+    const decos = photo
+      ? [Decoration.node(photo.from, photo.to, { class: `${cls}-photo` })]
+      : blocks.map((b, i) => Decoration.node(b.from, b.to, { class: i === 0 ? `${cls} ${cls}-first` : cls }));
     const n = (generation.get(view) ?? 0) + 1;
     generation.set(view, n);
     view.dispatch(view.state.tr.setMeta(key, DecorationSet.create(view.state.doc, decos)).setMeta('addToHistory', false));
@@ -94,6 +114,16 @@ export const placeFlashExtension = createExtension({ key: 'shotdocs-place-flash'
  * la vista ahí y lo resalta. Si el editor todavía no dibujó la página, vuelve a probar un rato.
  */
 export function showPlace(pageId: string, blockId: string, endBlockId: string | null | undefined, tries = 30): void {
+  // Una foto pedida de ese bloque (el carrete de varias páginas, «Go to place»): la vista va a esa foto (sección 13).
+  const mediaId = endBlockId === undefined ? takePhotoAim(pageId, blockId) : null;
+  const url = mediaId ? `sdmedia://${mediaId}` : undefined;
+  /** Lo que hay que mostrar: la foto en línea pedida, o el bloque. */
+  const targetOf = (): HTMLElement | null => {
+    const el = blockElement(blockId);
+    if (!el || !url) return el;
+    const photo = [...el.querySelectorAll<HTMLElement>('.sd-photo[data-url]')].find((p) => p.getAttribute('data-url') === url);
+    return photo ?? el;
+  };
   const attempt = (left: number) => {
     const control = collapseControlFor(pageId);
     if (control?.openSection) control.openSection(blockId);
@@ -104,9 +134,9 @@ export function showPlace(pageId: string, blockId: string, endBlockId: string | 
       return;
     }
     const block: ScrollLogicalPosition = endBlockId === undefined ? 'center' : 'start';
-    el.scrollIntoView?.({ block, behavior: 'smooth' });
-    flashPlace(blockId, endBlockId);
-    keepInView(blockId, block);
+    (targetOf() ?? el).scrollIntoView?.({ block, behavior: 'smooth' });
+    flashPlace(blockId, endBlockId, 'rel-flash', FLASH_MS, url);
+    keepInView(targetOf, block);
   };
   const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn: () => void) => setTimeout(fn, 0);
   raf(() => attempt(tries));
@@ -130,8 +160,8 @@ export const KEEP_IN_VIEW_MS = 6000;
  * unos segundos (B3 de la auditoría de E5: en un día largo con fotos, ir a una sección quedaba miles de píxeles arriba).
  * Compara la posición dentro de lo que se desplaza, no en la pantalla: el desplazamiento suave no cuenta como cambio.
  */
-function keepInView(blockId: string, block: ScrollLogicalPosition, ms = KEEP_IN_VIEW_MS): void {
-  const first = blockElement(blockId);
+function keepInView(targetOf: () => HTMLElement | null, block: ScrollLogicalPosition, ms = KEEP_IN_VIEW_MS): void {
+  const first = targetOf();
   if (!first || typeof window === 'undefined') return;
   const scroller = scrollParent(first);
   const posOf = (el: HTMLElement) => {
@@ -139,6 +169,8 @@ function keepInView(blockId: string, block: ScrollLogicalPosition, ms = KEEP_IN_
     return scroller ? top - scroller.getBoundingClientRect().top + scroller.scrollTop : top + window.scrollY;
   };
   let last = posOf(first);
+  // Centrado, también cuenta el alto: una foto que termina de cargar crece hacia abajo sin moverse, y quedaba a medias.
+  let lastHeight = first.getBoundingClientRect().height;
   let stopped = false;
   const events = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
   const stop = () => {
@@ -149,14 +181,16 @@ function keepInView(blockId: string, block: ScrollLogicalPosition, ms = KEEP_IN_
   const start = Date.now();
   const tick = () => {
     if (stopped) return;
-    const el = blockElement(blockId);
+    const el = targetOf();
     if (!el || Date.now() - start > ms) {
       stop();
       return;
     }
     const now = posOf(el);
-    if (Math.abs(now - last) > 2) {
+    const height = el.getBoundingClientRect().height;
+    if (Math.abs(now - last) > 2 || (block === 'center' && Math.abs(height - lastHeight) > 2)) {
       last = now;
+      lastHeight = height;
       el.scrollIntoView?.({ block, behavior: 'auto' });
     }
     setTimeout(tick, 120);

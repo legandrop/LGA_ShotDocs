@@ -162,6 +162,8 @@ const LIVE_HEADER = '0.238';
 const LIVE_FIELDS = '0.240';
 /** La cabecera del día de rodaje y Prepare tomorrow's report (relaciones en vivo, E5): la versión se pone al publicar. */
 const LIVE_DAY = '0.241';
+/** Las fotos por fuente de la cabecera viva y el carrete de varias páginas (relaciones en vivo, E8). */
+const LIVE_PHOTOS = '0.243';
 /** El mapa del proyecto, Copy map / JSON y la lupa por escenas y locaciones (relaciones en vivo, E9): la versión se pone al publicar. */
 const LIVE_MAP = '0.242';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
@@ -328,6 +330,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.liveDay.text',
     words: ['shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet'],
     since: LIVE_DAY,
+  },
+  {
+    id: 'livePhotos',
+    section: 'find',
+    title: 'help.livePhotos.title',
+    text: 'help.livePhotos.text',
+    words: ['photos', 'fotos', 'by source', 'por fuente', 'gallery', 'galería', 'tech scout', 'creative scout', 'scouting técnico', 'scouting creativo', 'carrete', 'viewer', 'go to place'],
+    since: LIVE_PHOTOS,
   },
   {
     id: 'relationsMap',

@@ -134,6 +134,24 @@ navegador pide ahorrar datos (`Save-Data`), no se precarga nada.
 - Funciona igual en una página de solo lectura (ahí no hay barra).
 - Con el mouse, la lupa (*zoom-in*) aparece sobre la foto elegida (con el editor con foco) o en solo lectura.
 
+## Varias páginas (E8, v0.243)
+
+Las fotos por fuente de la cabecera viva (`Doc_Relaciones.md`, sección 13) abren el carrete con **todas las fotos de la
+galería**, de varias páginas, en el orden de la galería. Es el mismo carrete, con tres cosas opcionales
+(`src/relations/GalleryCarrete.tsx` lo arma; sin ellas, el de una página sigue igual):
+
+- Cada elemento trae `origin` (página, título, rótulo de la fuente, bloque): abajo dice «From Tech scout 06/01» (el
+  título de la página en el tooltip, si agrega algo) y **Go to place** cierra el carrete, saca su entrada del historial
+  y recién después va a esa foto en su página (si está en un párrafo con otras, a ella y resaltada sola; `onGoTo`).
+- Las anotaciones salen del mapa de **su** página (`markupOf`): la página abierta, su documento vivo; las otras, una
+  copia de lo guardado en el dispositivo (`indexSnapshot`, solo para leer), pedida cuando se ve una foto de esa página
+  (`onShow`) y soltada al cerrar. Desde acá no se anota (anotar necesita el editor de la página).
+- La lista es una foto por archivo y página (`itemsOfEntries`, clave `<página>/<archivo>`), sin carpetas; lo que no se
+  sabe qué es se averigua como en el de una página (`carreteItemsOfEntries`).
+
+Sin red: la miniatura o la versión grande guardada, con el aviso de siempre. Cerrar por dos caminos a la vez (la vuelta
+del historial y la espera de respaldo) avisa una sola vez.
+
 ## Pantalla
 
 - A pantalla completa, fondo oscuro en los dos temas (como cualquier visor de fotos), respetando la

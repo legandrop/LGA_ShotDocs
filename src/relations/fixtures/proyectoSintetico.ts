@@ -16,6 +16,8 @@ export type Block =
   /** Un título con links («Escena » + el número como link a la escena, como lo deja Prepare). */
   | { hl: 1 | 2 | 3; runs: Run[] }
   | { p: Run[] | string }
+  /** Un párrafo con fotos en línea (como los reportes importados de Coda: varias fotos en un mismo párrafo). */
+  | { inline: (string | { photo: string })[] }
   | { photo: string; caption?: string }
   | { cell: string }
   /** Una tabla de un renglón (una ficha como las de Coda: «VFX Cat» | «DMP 2.5D, CG»). */
@@ -44,6 +46,12 @@ export async function writeBlocks(d: Device, pageId: string, blocks: Block[]): P
   const toBn = (b: Block): unknown => {
     if ('h' in b) return { type: 'heading', props: { level: b.h }, content: b.text };
     if ('hl' in b) return { type: 'heading', props: { level: b.hl }, content: inline(b.runs) };
+    if ('inline' in b) {
+      return {
+        type: 'paragraph',
+        content: b.inline.map((x) => (typeof x === 'string' ? { type: 'text', text: x, styles: {} } : { type: 'photo', props: { url: `sdmedia://${x.photo}`, name: '', w: 0 } })),
+      };
+    }
     if ('photo' in b) return { type: 'image', props: { url: `sdmedia://${b.photo}`, caption: b.caption ?? '' } };
     if ('cell' in b) return { type: 'table', content: { type: 'tableContent', rows: [{ cells: [b.cell] }] } };
     if ('row' in b) return { type: 'table', content: { type: 'tableContent', rows: [{ cells: b.row }] } };

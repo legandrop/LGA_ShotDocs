@@ -127,9 +127,21 @@ export interface CarreteProps {
    * está). El carrete se cierra y quien lo abrió abre el anotador.
    */
   onAnnotate?: (item: CarreteItem) => void;
+  /**
+   * El carrete de varias páginas (Docs/Doc_Carrete.md, «Varias páginas»): las anotaciones de cada foto salen del mapa de
+   * su página. Con esto, `markup` no se usa. Devuelve `null` mientras no tiene el mapa (la foto se ve sin anotaciones).
+   */
+  markupOf?: (item: CarreteItem) => Y.Map<unknown> | null;
+  /** Avisa qué elemento se ve (para preparar lo de su página, como sus anotaciones). */
+  onShow?: (item: CarreteItem) => void;
+  /**
+   * Ir al lugar de la foto en su página (los elementos con `origin`): el carrete se cierra y, ya cerrado (con la entrada
+   * del historial que abrió sacada), avisa.
+   */
+  onGoTo?: (item: CarreteItem) => void;
 }
 
-export function Carrete({ items, start, loader, online, onClose, markup = null, onAnnotate }: CarreteProps) {
+export function Carrete({ items, start, loader, online, onClose, markup = null, onAnnotate, markupOf, onShow, onGoTo }: CarreteProps) {
   const count = items.length;
   const tr = useT();
   const [index, setIndex] = useState(() => stepIndex(start, 0, count));
@@ -172,11 +184,14 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
   }
 
   const item = items[Math.min(index, items.length - 1)];
+  /** Las anotaciones de un elemento: las de su página (varias páginas) o las de la página del carrete. */
+  const markupFor = (it: CarreteItem | undefined): Y.Map<unknown> | null => (!it ? null : markupOf ? markupOf(it) : markup);
+  const itemMarkup = markupFor(item);
   const view = settled((item && views[item.url]) ?? EMPTY_VIEW);
   const fit = view.natural ? fitSize(view.natural, stage) : null;
   const zoomable = view.kind === 'image' && !!view.preview;
   /** La foto que se ve tiene anotaciones (el botón para ocultarlas solo aparece entonces). */
-  const annotated = useHasMarkup(markup, view.kind === 'image' && !view.file ? (item?.mediaId ?? null) : null);
+  const annotated = useHasMarkup(itemMarkup, view.kind === 'image' && !view.file ? (item?.mediaId ?? null) : null);
   /** Se puede anotar la foto que se ve: una foto del Drive (no un video ni un adjunto) y quien abrió deja. */
   const annotatable = !!onAnnotate && !!item?.mediaId && item.source === 'media' && view.kind === 'image' && !view.file;
 
@@ -235,6 +250,21 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
 
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const onGoToRef = useRef(onGoTo);
+  onGoToRef.current = onGoTo;
+  /** *Go to place*: el elemento al que hay que ir cuando el carrete termine de cerrarse. */
+  const pendingGo = useRef<CarreteItem | null>(null);
+  /** Cerrado: avisa a quien lo abrió y, si se pidió ir a una foto, va (ya sin la entrada del historial del carrete). */
+  const closed = useRef(false);
+  const finishClose = useCallback(() => {
+    // Una sola vez (la vuelta del historial y la espera de respaldo pueden llegar las dos).
+    if (closed.current) return;
+    closed.current = true;
+    onCloseRef.current();
+    const it = pendingGo.current;
+    pendingGo.current = null;
+    if (it) onGoToRef.current?.(it);
+  }, []);
 
   // "Atrás" (Android, el navegador) cierra el carrete: al abrir se suma una entrada al historial, con la
   // misma dirección. Cerrar con la X, Escape o deslizando la saca (`history.back()`), sin salir de la
@@ -244,20 +274,37 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
     const state = history.state as { carrete?: string } | null;
     if (state?.carrete !== token) history.pushState({ ...(state ?? {}), carrete: token }, '');
     const onPop = () => {
-      if ((history.state as { carrete?: string } | null)?.carrete !== token) onCloseRef.current();
+      if ((history.state as { carrete?: string } | null)?.carrete !== token) finishClose();
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [finishClose]);
 
   const requestClose = useCallback(() => {
     if (closing.current) return;
     closing.current = true;
     if ((history.state as { carrete?: string } | null)?.carrete === historyToken.current) {
       history.back();
-      setTimeout(() => mounted.current && onCloseRef.current(), 400);
-    } else onCloseRef.current();
-  }, []);
+      setTimeout(() => mounted.current && finishClose(), 400);
+    } else finishClose();
+  }, [finishClose]);
+
+  /** Ir al lugar de la foto que se ve en su página: cierra y después va. */
+  const goToOrigin = useCallback(() => {
+    const it = live.current.item;
+    if (!it?.origin || !onGoToRef.current) return;
+    pendingGo.current = it;
+    requestClose();
+  }, [requestClose]);
+
+  // Qué se ve (para que quien abrió prepare lo de su página: sus anotaciones).
+  const onShowRef = useRef(onShow);
+  onShowRef.current = onShow;
+  const shownKey = item?.key;
+  useEffect(() => {
+    if (item) onShowRef.current?.(item);
+    // Solo cuando cambia el elemento.
+  }, [shownKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- navegación ---------------------------------------------------------------------------------
 
@@ -655,6 +702,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
       transform: `translate3d(calc(${offset * 100}% + ${offset * GAP}px), ${current ? dismissY : 0}px, 0)`,
     };
     const alt = it.caption || v.name || it.name;
+    const slotMarkup = markupFor(it);
     let body;
     if (v.file) {
       body = fileBody(it, v, current, alt);
@@ -702,9 +750,9 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
           )}
           {/* Las anotaciones, en la misma caja que la foto (ya tiene su proporción y su zoom); nunca sobre la tarjeta
               de la cola (un SVG `data:`: sin copia en el dispositivo, borrada), salvo que ya se vea el original. */}
-          {markup && it.mediaId && sized && v.preview && v.kind === 'image' && !markupHidden &&
+          {slotMarkup && it.mediaId && sized && v.preview && v.kind === 'image' && !markupHidden &&
             (!v.preview.startsWith('data:image/svg') || (showFull && v.fullShown)) && (
-            <CarreteMarkup map={markup} fileId={it.mediaId} size={sized} />
+            <CarreteMarkup map={slotMarkup} fileId={it.mediaId} size={sized} />
           )}
         </div>
       );
@@ -799,10 +847,10 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
             <span className="carrete-btn-label">{tr('carrete.annotate')}</span>
           </button>
         )}
-        {markup && item.mediaId && view.kind === 'image' && !view.file
-          ? <AnnotatedDownload key={item.url} item={item} map={markup} loader={loader} original={downloadLink('carrete-btn', true)} />
+        {itemMarkup && item.mediaId && view.kind === 'image' && !view.file
+          ? <AnnotatedDownload key={item.url} item={item} map={itemMarkup} loader={loader} original={downloadLink('carrete-btn', true)} />
           : downloadLink('carrete-btn', true)}
-        {markup && item.mediaId && view.kind === 'image' && !view.file && <AnnotatedCopy key={`copy:${item.url}`} item={item} map={markup} loader={loader} original={downloadLink('carrete-btn', true)} />}
+        {itemMarkup && item.mediaId && view.kind === 'image' && !view.file && <AnnotatedCopy key={`copy:${item.url}`} item={item} map={itemMarkup} loader={loader} original={downloadLink('carrete-btn', true)} />}
         <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tipRows([{ shortcut: 'carreteClose', action: asAction(tr('common.close')) }])} onClick={requestClose}>
           <CloseIcon size={22} />
         </button>
@@ -869,6 +917,19 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
       </div>
 
       {item.caption && <p className="carrete-caption">{item.caption}</p>}
+      {item.origin && (
+        <div className="carrete-origin">
+          <span className="carrete-origin-from" data-tip={item.origin.pageTitle !== item.origin.label ? item.origin.pageTitle : undefined} data-tip-plain>
+            {tr.rich('carrete.from', { source: <b>{item.origin.label || item.origin.pageTitle}</b> })}
+          </span>
+          {onGoTo && (
+            <button className="carrete-origin-go" onClick={goToOrigin}>
+              {tr('carrete.goToPlace')}
+              <OpenIcon size={16} />
+            </button>
+          )}
+        </div>
+      )}
     </div>,
     document.body,
   );

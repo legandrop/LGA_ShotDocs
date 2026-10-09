@@ -358,7 +358,7 @@ a vivo, E4).
 
 - *Planned at* sigue saliendo de las locaciones que nombra el desglose (D393), no del campo *Locacion Real*; la
   maqueta pone abajo «breakdown: «Estudio | Autos»», el valor crudo del campo. Ahora se podría con `fieldValues`.
-- Fotos por fuente y carrete de varias páginas (E8). La cabecera del día: sección 11 (E5).
+- Fotos por fuente y carrete de varias páginas: hecho en E8 (sección 13). La cabecera del día: sección 11 (E5).
 - `kind.ts` de E2: cuando E1 lo use, la cabecera lo toma solo (lee `registration.roles`).
 
 ## 11. El día de rodaje, *Tomorrow* y *Prepare tomorrow's report* (E5, v0.241)
@@ -574,3 +574,63 @@ no del campo *Locacion Real* (D393; ver «Lo que falta» de la sección 10).
 - *Create* y *Assign* en *Pending* (E7, en la ranura `actions`).
 - Los alias de lugar de los títulos de los días que el registro no reconoce (13 días de ERSO, arriba).
 - Que el asistente de la app reciba el mapa sin copiar y pegar, y que el MCP (fase 5) lo sirva.
+
+## 13. Fotos por fuente y el carrete de varias páginas (E8, v0.243)
+
+La tira de 6 fotos al pie de la cabecera de escena, locación y día dice la fuente de cada una y trae **«All N · by
+source»** (revierte D396): abre la galería con *All* y un botón por fuente con su cantidad, en una grilla de 12 (11 y
+«+N»). Elegir una fuente muestra solo sus fotos y *Go to the section* (o *Go to the photos*, si la fuente es una página
+entera) lleva a su lugar exacto, resaltado como los extractos. **Tocar una foto** (en la tira o en la galería) abre el
+**carrete con todas las fotos de la galería**, de varias páginas, en el orden de la galería, empezando por esa: cada una
+dice «From Tech scout 06/01» y *Go to place* cierra el carrete y va a **esa foto** en su página (`Doc_Carrete.md`,
+«Varias páginas»).
+
+**Ir a una foto (ronda de corrección, B1).** Las fotos de los reportes de Coda van varias en un mismo párrafo (en
+línea): ir al bloque mostraba otra foto. `goToPlace(services, place, mediaId)` anota la foto pedida en
+`src/relations/photoTarget.ts` (sin dependencias: va en la primera carga) y `showPlace` (`placeFlash.ts`, con el editor)
+la toma: lleva la vista a esa `.sd-photo`, centrada (también si crece al cargar), y resalta solo esa foto
+(`rel-flash-photo`); una foto que es un bloque propio, el bloque, como antes. Lo mismo hace *Go to the photos* de una
+fuente de página entera (su primera foto). El pedido de la búsqueda (`ResultRequest`) y el editor no cambiaron.
+
+| Pieza | Archivo |
+|---|---|
+| Qué fuentes y en qué orden (puro, sobre lo que armó la cabecera) | `src/relations/photoGallery.ts` (`sceneGallery`, `locationGallery`, `dayGallery`, `groupLabel`, `scoutKindOf`, `scoutDateOf`) |
+| La tira y la galería | `src/relations/PhotoSources.tsx` (en `LiveHeader.tsx` y `DayHeader.tsx`) + `liveHeader.css` (`lh-seg`, `lh-grid`) |
+| El carrete de varias páginas (se baja aparte) | `src/relations/GalleryCarrete.tsx`; `itemsOfEntries`/`carreteItemsOfEntries` en `src/ui/carreteModel.ts` |
+| Textos y ayuda | `gallery.*` en `src/i18n/relations.ts`, `carrete.from`/`carrete.goToPlace` en `src/i18n/lazy/carrete.ts`; ayuda `livePhotos` (since 0.243) |
+
+**Las fuentes, en el orden de la maqueta.** Escena: el desglose (la página de la escena y cada ficha con fotos; con más
+de una, «Breakdown · ERSO_105_027_010») → cada sección de scouting que la nombra, **técnico y creativo por separado**
+(C7 O7: «Tech scout 06/01», «Creative scout 08/01»; el tipo sale del título, la fecha del campo *Date*/*Fecha* o del
+principio del título: `260106`, `26.01.06`, `2026-01-06`, «06/01») → cada sección de cada reporte, en orden de fecha
+(«Día 59 · Escena 105_027b»). Las fotos de una sección son las de esa sección (el índice las sabe por título; nada de
+«Plates ambulancia» en la 105_027). Locación: la locación misma → sus decorados que son páginas → sus scoutings enteros →
+sus días enteros («Día 59»). Día: lo general del día → cada sección («105_027b», «Plates ambulancia»). El arte de un
+decorado dice «Art · Negocio de Telas». Dos fuentes del mismo tipo con exactamente las mismas fotos (la misma imagen en
+dos fichas) son una sola. En la miniatura va el rótulo corto (el día, el tipo de scouting); la sección queda para el
+selector, que en el teléfono es un renglón que se desliza de costado. Sobre ERSO:
+105_027 da 49 fotos en 6 fuentes (1 + 3 + 15 + 14 + 3 + 13), CENADE 78 (7 + 52 + 19),
+el Día 59 52 (15 + 37).
+
+**Permisos y lo que falta.** Todo sale de la foto del índice, que solo tiene las páginas que la persona ve (filtrada
+contra el árbol, sección 3); además, un grupo cuya página ya no se ve (`title` sin respuesta) no entra. Mientras el
+índice no terminó, la galería dice «more may appear: N pages still being read» (o «… when every page is on this
+device»). Sin red, el carrete muestra la miniatura o la versión grande guardada y su aviso de siempre; las carpetas no
+entran (tienen su visor).
+
+**Pruebas.** `photoGallery.test.ts` (orden, rótulos, técnico y creativo, fechas, cada foto en su bloque y cada grupo en
+su sección, carpetas, varias fichas, locación, día, invitado que ve solo la escena); `liveHeader.test.tsx` (la app
+montada: tira, galería, fuente con su lugar, carrete de varias páginas con *Go to place*); `src/ui/carreteMultiPage.test.tsx`.
+
+**Decisiones:** D466–D477 en `Doc_Decisiones.md`.
+
+### Lo que falta (E8)
+
+- En Chromium con toque emulado, el primer toque después de deslizar en el carrete no hace clic (lo mismo en el carrete
+  de una página: es de antes). Probable causa: la foto grande que tocó el dedo se saca al cambiar de foto y el gesto
+  queda sin terminar. Mirarlo en un iPhone real.
+
+- Las miniaturas de los renglones de día y de los extractos siguen yendo a su lugar (no abren el carrete, D471).
+- Desde el carrete de varias páginas no se anota (D470): anotar va en la página.
+- Las anotaciones de una foto de otra página salen de una copia de lo guardado: una anotación nueva hecha en otro
+  dispositivo mientras el carrete está abierto se ve al volver a abrirlo.

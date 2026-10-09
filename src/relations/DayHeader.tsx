@@ -7,7 +7,8 @@ import { dayShortLabel, headingStyleFor, linkTargetOf, sceneTitleOf, type DayLiv
 import { fold } from './reader';
 import { goToPlace } from './goToPlace';
 import { useLiveOpen } from './liveFold';
-import { Badge, Chip, Ic, Line, LiveDot, PhotoStrip, useFoldFocus, useGo } from './LiveHeader';
+import { Badge, Chip, Ic, Line, LiveDot, useFoldFocus, useGo, type HeaderPhotos } from './LiveHeader';
+import { PhotoSources } from './PhotoSources';
 import type { DayRef, LiveSource } from './liveView';
 import { addToPlan, adjustedPlan, removeFromPlan, usePlanAdjust } from './tomorrowPlan';
 import type { PreparedSection } from './prepareDay';
@@ -423,7 +424,7 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
 
 // --- La cabecera del día ---------------------------------------------------------------------------------------
 
-export function DayHeader({ v, src, pages, partial }: { v: DayLive; src: LiveSource; pages: number; partial: boolean }) {
+export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src: LiveSource; pages: number; partial: boolean; photos: HeaderPhotos }) {
   const tr = useT();
   const [open, setOpenRaw] = useLiveOpen('day');
   const focus = useFoldFocus(open);
@@ -514,7 +515,7 @@ export function DayHeader({ v, src, pages, partial }: { v: DayLive; src: LiveSou
         </dd>
       </dl>
       {v.tomorrow && <Tomorrow v={v} src={src} tr={tr} />}
-      <PhotoStrip photos={v.photos} complete={v.complete} tr={tr} />
+      <PhotoSources gallery={photos.gallery} complete={v.complete} unread={photos.unread} here={photos.here} tr={tr} />
       <div className="lh-foot">{tr('live.foot', { count: pages })}</div>
     </section>
   );

@@ -498,3 +498,139 @@ describe('los campos de las fichas en la cabecera (E3b)', () => {
     expect(header(host)!.querySelector('.lh-chip.set.static')!.tagName).toBe('SPAN');
   });
 });
+
+describe('fotos por fuente y el carrete de varias páginas (E8)', () => {
+  const segs = (lh: HTMLElement) => [...lh.querySelectorAll('.lh-seg button')].map((b) => b.textContent);
+  const caps = (lh: HTMLElement, sel: string) => [...lh.querySelectorAll(`${sel} .lh-fig .cap`)].map((c) => c.textContent);
+
+  it('escena: la tira con su fuente, «All N · by source», un botón por fuente y cada fuente lleva a su sección', async () => {
+    const { built, host, s } = await app('s027');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
+    const lh = header(host)!;
+    expect(caps(lh, '.lh-strip')).toEqual(['Breakdown', 'Breakdown', 'Tech scout 06/01', 'Tech scout 06/01', 'Tech scout 06/01', 'Día 59']);
+    const toggle = lh.querySelector<HTMLButtonElement>('.lh-gal-toggle')!;
+    expect(toggle.textContent).toBe('All 18 · by source');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    click(toggle);
+    expect(segs(header(host)!)).toEqual(['All18', 'Breakdown2', 'Tech scout 06/013', 'Día 59 · Escena 105_027b5', 'Día 70 · Escena 105_027A + 029B4', 'Día 76 · Escena 5-272', 'Día 76 · Escena 5-27A2']);
+    // Todas: 12 lugares, 11 fotos y «+7».
+    expect(header(host)!.querySelectorAll('.lh-grid .lh-fig').length).toBe(11);
+    expect(header(host)!.querySelector('.lh-grid-more')!.textContent).toBe('+7');
+    expect(header(host)!.querySelector('.lh-gal-go')).toBeNull();
+    // Una fuente: sus fotos y cómo ir a su sección (resaltada).
+    click(byText(header(host)!, '.lh-seg button', 'Día 59'));
+    expect(caps(header(host)!, '.lh-grid')).toEqual(Array(5).fill('Día 59'));
+    const spy = vi.spyOn(searchSession(s), 'requestResult');
+    click(header(host)!.querySelector('.lh-gal-go .lh-sec'));
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ pageId: built.ids.d59, term: null, place: { endBlockId: expect.any(String) } }));
+    expect(location.pathname).toBe(pagePath(built.ids.d59));
+    expect(header(host)?.querySelectorAll('[title]').length ?? 0).toBe(0);
+  });
+
+  it('tocar una foto abre el carrete con todas las de la galería, de varias páginas; Go to place va a esa foto', async () => {
+    const { built, host, s } = await app('s027');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
+    // La tercera de la tira (la primera del scouting técnico).
+    click(header(host)!.querySelectorAll('.lh-strip .lh-fig')[2]);
+    await until(() => document.querySelector('.carrete-count'), 'el carrete');
+    expect(document.querySelector('.carrete-count')!.textContent).toBe('3 / 18');
+    expect(document.querySelector('.carrete-origin-from')!.textContent).toBe('From Tech scout 06/01');
+    // El título de la página dice lo mismo que el rótulo: sin tooltip que lo repita.
+    expect(document.querySelector('.carrete-origin-from')!.getAttribute('data-tip')).toBeNull();
+    // Siguiente: pasa del scouting al día 59 sin salir del carrete.
+    const next = () => act(() => document.querySelector<HTMLButtonElement>('button[aria-label="Next"]')!.click());
+    next();
+    next();
+    next();
+    await wait();
+    expect(document.querySelector('.carrete-count')!.textContent).toBe('6 / 18');
+    expect(document.querySelector('.carrete-origin-from')!.textContent).toBe('From Día 59 · Escena 105_027b');
+    expect(document.querySelector('.carrete-origin-from')!.getAttribute('data-tip')).toBe('2026-02-19 | Día 59 | CENADE');
+    // Go to place: cierra y va al bloque de esa foto en el día 59 (solo ese bloque).
+    const spy = vi.spyOn(searchSession(s), 'requestResult');
+    click(document.querySelector('.carrete-origin-go'));
+    await until(() => !document.querySelector('.carrete'), 'el carrete cerrado');
+    await until(() => spy.mock.calls.length > 0, 'el pedido de ir a la foto');
+    const req = spy.mock.calls[0][0];
+    expect(req.pageId).toBe(built.ids.d59);
+    expect(req.place).toEqual({ endBlockId: undefined });
+    expect(location.pathname).toBe(pagePath(built.ids.d59));
+  });
+
+  it('locación y día: sus fuentes, en el orden de la maqueta', async () => {
+    const { built, host } = await app('cenade');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
+    click(header(host)!.querySelector('.lh-gal-toggle'));
+    expect(segs(header(host)!)).toEqual(['All14', 'Tech scout 06/015', 'Día 597', 'Día 602']);
+    await go(built, 'd59');
+    await until(() => header(host)?.querySelector('.lh-badge')?.textContent === 'Shoot day', 'el día');
+    await until(() => header(host)?.querySelector('.lh-gal-toggle'), 'las fotos del día');
+    click(header(host)!.querySelector('.lh-gal-toggle'));
+    expect(segs(header(host)!)).toEqual(['All7', '105_027b5', 'Plates ambulancia2']);
+  });
+});
+
+describe('ronda de corrección (auditoría de E8)', () => {
+  it('B1: Go to place lleva a ESA foto aunque comparta párrafo con otras, y la resalta sola; una foto-bloque, su bloque', async () => {
+    const { d, built, host } = await app('s027');
+    // El Día 70 como los reportes de Coda: ocho fotos en un mismo párrafo.
+    const ocho = await Promise.all(Array.from({ length: 8 }, () => fakePhoto()));
+    await writeBlocks(d, built.ids.d70, [
+      { h: 1, text: 'Escena 105_027A + 029B' },
+      { p: 'Interior de la ambulancia en estudio.' },
+      { inline: ['Fotos de monitor: ', ...ocho.map((photo) => ({ photo }))] },
+    ]);
+    await until(() => header(host)?.textContent?.includes('Live') && header(host)!.querySelector('.lh-gal-toggle')?.textContent?.includes('All 22'), 'la galería con las ocho');
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    // La sexta del párrafo: el carrete la sigue a ella por su id.
+    const target = ocho[5];
+    click(header(host)!.querySelector('.lh-strip .lh-fig'));
+    await until(() => document.querySelector('.carrete-count'), 'el carrete');
+    const label = () => document.querySelector('.carrete-origin-from')!.textContent;
+    // Fuentes: Breakdown 2, Tech scout 3, Día 59 5, y el Día 70 empieza en la 11.
+    for (let i = 0; i < 10 + 5; i++) act(() => document.querySelector<HTMLButtonElement>('button[aria-label="Next"]')!.click());
+    await wait();
+    expect(document.querySelector('.carrete-count')!.textContent).toBe('16 / 22');
+    expect(label()).toBe('From Día 70 · Escena 105_027A + 029B');
+    click(document.querySelector('.carrete-origin-go'));
+    await until(() => !document.querySelector('.carrete'), 'el carrete cerrado');
+    expect(location.pathname).toBe(pagePath(built.ids.d70));
+    const sel = `.sd-photo[data-url="sdmedia://${target}"]`;
+    await until(() => host.querySelector(`${sel}.rel-flash-photo`), 'la foto resaltada');
+    // Solo esa foto: ni el párrafo ni las otras.
+    expect(host.querySelectorAll('.rel-flash-photo').length).toBe(1);
+    expect(host.querySelectorAll('.bn-block-outer.rel-flash').length).toBe(0);
+    // La vista fue a la foto, no al párrafo.
+    expect(spy.mock.contexts.some((el) => (el as Element).matches?.(sel))).toBe(true);
+    // Una foto que es un bloque propio (Día 59): su bloque, como antes.
+    spy.mockClear();
+    await go(built, 's027');
+    await until(() => header(host)?.querySelector('.lh-strip .lh-fig'), 'la cabecera otra vez');
+    click(header(host)!.querySelectorAll('.lh-strip .lh-fig')[5]);
+    await until(() => document.querySelector('.carrete-count'), 'el carrete otra vez');
+    expect(label()).toBe('From Día 59 · Escena 105_027b');
+    click(document.querySelector('.carrete-origin-go'));
+    await until(() => !document.querySelector('.carrete'), 'el carrete cerrado otra vez');
+    await until(() => host.querySelectorAll('.bn-block-outer.rel-flash').length > 0, 'el bloque resaltado');
+    expect(host.querySelectorAll('.bn-block-outer.rel-flash').length).toBe(1);
+    expect(host.querySelector('.bn-block-outer.rel-flash img, .bn-block-outer.rel-flash [data-url]')).not.toBeNull();
+    expect(host.querySelectorAll('.rel-flash-photo').length).toBe(0);
+  });
+
+  it('B1: «Go to the photos» de una fuente de página entera (un día de la locación) va a su primera foto', async () => {
+    const { d, built, host } = await app('cenade');
+    const fotos = await Promise.all(Array.from({ length: 6 }, () => fakePhoto()));
+    await writeBlocks(d, built.ids.d60, [
+      { h: 1, text: 'Escena 105_029a' },
+      { p: 'Primer plano del fugitivo.' },
+      { inline: ['Monitor: ', ...fotos.map((photo) => ({ photo }))] },
+    ]);
+    await until(() => header(host)?.querySelector('.lh-gal-toggle')?.textContent?.includes('All 18'), 'la galería nueva');
+    click(header(host)!.querySelector('.lh-gal-toggle'));
+    click(byText(header(host)!, '.lh-seg button', 'Día 60'));
+    expect(header(host)!.querySelector('.lh-gal-go .lh-sec')!.textContent).toBe('Go to the photos');
+    click(header(host)!.querySelector('.lh-gal-go .lh-sec'));
+    expect(location.pathname).toBe(pagePath(built.ids.d60));
+    await until(() => host.querySelector(`.sd-photo[data-url="sdmedia://${fotos[0]}"].rel-flash-photo`), 'la primera foto resaltada');
+  });
+});

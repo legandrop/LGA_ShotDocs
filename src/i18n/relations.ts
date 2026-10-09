@@ -106,6 +106,29 @@ export const relations = {
   },
   'live.source.breakdown': { en: "Breakdown", es: "Desglose" },
   'live.source.location': { en: "Location", es: "Locación" },
+  // Las fotos por fuente (E8): la tira, la galería y lo que falta.
+  'gallery.allBySource': { en: "All {count} · by source", es: "Todas ({count}) · por fuente" },
+  'gallery.bySource': { en: "by source", es: "por fuente" },
+  'gallery.less': { en: "Less", es: "Menos" },
+  'gallery.all': { en: "All", es: "Todas" },
+  'gallery.general': { en: "General", es: "General" },
+  'gallery.techScout': { en: "Tech scout", es: "Scouting técnico" },
+  'gallery.creativeScout': { en: "Creative scout", es: "Scouting creativo" },
+  'gallery.art': { en: "Art", es: "Arte" },
+  'gallery.moreAria': {
+    en: { one: "{count} more photo", other: "{count} more photos" },
+    es: { one: "{count} foto más", other: "{count} fotos más" },
+  },
+  'gallery.goSection': { en: "Go to the section", es: "Ir a la sección" },
+  'gallery.goPage': { en: "Go to the photos", es: "Ir a las fotos" },
+  'gallery.unread': {
+    en: { one: "more may appear: {count} page still being read", other: "more may appear: {count} pages still being read" },
+    es: { one: "puede haber más: falta leer {count} página", other: "puede haber más: faltan leer {count} páginas" },
+  },
+  'gallery.incomplete': {
+    en: "more may appear when every page is on this device",
+    es: "puede haber más cuando todas las páginas estén en este dispositivo",
+  },
   'live.alsoIn': { en: "Also named in", es: "También la nombran" },
   'live.indexPages': {
     en: { one: "{count} index page", other: "{count} index pages" },
