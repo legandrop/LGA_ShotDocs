@@ -7,6 +7,7 @@ import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { mergeRows } from './merge';
 import { pendingSummary } from './projectMap';
+import { mapPathFrom } from './sceneMentions';
 import { useSlashDraft } from './slashDraft';
 import './mapNav.css';
 
@@ -50,7 +51,8 @@ function MapNavFor({ session }: { session: NonNullable<ReturnType<typeof existin
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
         e.preventDefault();
-        if (!on) navigate(mapPath());
+        // En la vista de una escena (`/map/scenes?scene=…`) también vuelve al mapa (D746).
+        if (!on || location.search) navigate(mapPathFrom(mapPath(), location));
       }}
     >
       <svg className="map-nav-i" viewBox="0 0 24 24" aria-hidden="true">

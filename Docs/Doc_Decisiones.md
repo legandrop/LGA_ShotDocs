@@ -1889,6 +1889,65 @@ hasta salir de la app.
 La marca va solo en el historial de la pestaña: no cambia el documento, el árbol ni la base. Una versión vieja abierta
 ignora la marca. `min_app_version` sigue en 0.256.
 
+### D744 · La sección *Scenes* vive en la barra lateral, debajo de *Map* (2026-10-17)
+**Pedido de Lega:** una sección automática de escenas, con links a todas las páginas que hablan de cada una.
+**Elegí:** un bloque *Scenes* debajo de la fila *Map* y arriba de *Pages*, en todo proyecto con escenas en el registro
+de lo que la persona ve. Lo genera la app desde el índice: no es una página del árbol, no se guarda ni se edita y no
+existe con un link público (como el Mapa). Arriba y no al pie del árbol: en un proyecto grande el pie no se ve.
+
+### D745 · Por episodio, uno abierto a la vez, recordado por proyecto en el dispositivo (2026-10-17)
+**Elegí:** un renglón por episodio con su cantidad; con un solo grupo (un largo, un episodio) las escenas van directo.
+De fábrica la sección abierta y los episodios cerrados (ERSO ocupa 6 renglones). **Un episodio abierto a la vez**:
+abrir otro cierra el anterior, así *Pages* no queda cientos de filas más abajo. Lo plegado se guarda por proyecto en el
+dispositivo (`localStorage`), como lo abierto del árbol; no sigue a la cuenta. Abrir una escena abre su episodio y lleva
+su fila a la vista (también al abrir el cajón del teléfono).
+
+### D746 · La lista de una escena es una vista del Mapa, no una ruta nueva (2026-10-17)
+**Elegí:** `/map/scenes?scene=<código>`, dentro de *Map › Scenes*, con las pestañas arriba y «← All scenes». Sin tocar
+el enrutador (otro frente trabaja ahí) y con lo que el Mapa ya tiene. Como `navigate` ignora lo de después del «?»,
+«All scenes», la pestaña *Scenes* y la fila *Map* van con la barra final (`/map/scenes/`) cuando la ruta es la misma.
+El número de la dirección se lee con el lector de la lupa: `105_055a`, `101-012` o `5055` abren la escena exacta.
+
+### D747 · Los grupos, su orden y una escena repetida (2026-10-17)
+**Elegí:** *The scene and its breakdown* (la escena primero aunque su texto no se nombre, después sus fichas y el resto
+del desglose que la nombra o la linkea), *Locations and scoutings*, *Shoot days* (por fecha; el reporte con su rótulo
+«Día 59»), *Other pages*. Es la etapa que ya calcula el índice (`PageRole.stage`), sin reglas nuevas. Si dos páginas
+tienen el mismo número de escena, las dos van en el primer grupo, la segunda marcada *repeated*, con un aviso arriba que
+lleva a *Map › Pending* (donde se unen); las relaciones siguen usando la primera del árbol.
+
+### D748 · Un link a la escena o a una ficha suya cuenta; las páginas índice van aparte (2026-10-17)
+**Elegí:** una página que linkea la escena, otra página con su número o una ficha suya habla de ella, con el bloque del
+link como lugar (el índice tapa el texto de un link con su destino y una ficha no es una entidad, así que esos links no
+eran menciones). Las páginas que nombran o linkean más de 20 escenas y locaciones (BD Main, una tabla de decorados con
+links a las fichas) van al final en *Index pages*, plegadas, con un tooltip que dice por qué; «N pages» no las cuenta.
+Una ficha o la escena misma nunca van ahí.
+
+### D749 · Cada lugar lleva al bloque exacto, con un extracto corto (2026-10-17)
+**Elegí:** por página, la sección de la escena (título, primer renglón y fotos) o el bloque que la nombra o la linkea
+fuera de esa sección, en el orden de la página; tres y «N more». El extracto (110 caracteres, palabras enteras) se
+centra donde el lector de relaciones encontró la escena o su link, nunca en el número de otra escena; en una tabla,
+solo la fila que la nombra como «rótulo: valor». Un clic va con `goToPlace` (sección resaltada).
+
+### D750 · *Map › Scenes* suma la columna *Pages* (2026-10-17)
+**Elegí:** «N pages» por escena, que despliega la misma lista a lo ancho de la fila. El número sale sin leer texto
+(`scenePageCount`, probado igual al de la lista en todas las escenas); los links se juntan una vez por foto del índice
+(`sceneLinks`) y los extractos se leen recién al desplegar.
+
+### D751 · Sin ceros ni negaciones mientras lee; el invitado lee «you can see» (2026-10-17)
+**Elegí:** mientras el índice lee, «Reading…» al pie de la lista y en la columna (hasta tener más que la escena misma),
+nunca «No other page names it» (D402). Quien ve una parte del proyecto lee «pages you can see» y, para un número fuera de
+su registro, «isn’t in the pages you can see», nunca que no existe (D401).
+
+### D752 · Muchas escenas: de a 60, sin virtualizar (2026-10-17)
+**Elegí:** cada lista de la barra dibuja 60 filas y «Show 60 more»; la escena abierta se dibuja siempre. Con los
+episodios cerrados de fábrica ERSO (226) dibuja 6 renglones; un episodio de 58 abre en 30–130 ms. Virtualizar complicaba
+el foco, el desplazamiento del árbol y el cajón del teléfono sin necesidad medida.
+
+### D753 · Sin atajo, sin paso de tutorial, sin escribir nada (2026-10-17)
+**Elegí:** ayuda nueva *Every page about a scene* (`scenesSection`); sin atajo nuevo (el registro no cambia) ni paso del
+tutorial (no muestra el Mapa). Solo lee el índice: ningún tipo de bloque nuevo, nada en un Y.Doc ni en la base, ninguna
+migración; la versión mínima no cambia.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

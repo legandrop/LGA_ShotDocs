@@ -18,6 +18,7 @@ import { ProjectSwitcher } from './ProjectSwitcher';
 import { LinkHeader } from './LinkHeader';
 import { MentionTreeDot } from './mentionDots';
 import { MapNav } from '../relations/MapNav';
+import { ScenesNav } from '../relations/ScenesNav';
 import { HoldsTag } from '../relations/HoldsTag';
 import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { LinkTreeIcon } from './LinkTreeIcon';
@@ -488,6 +489,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       <OfflineLine />
       {/* El mapa del proyecto (Docs/Doc_Relaciones.md, sección 12): solo en un proyecto con escenas, locaciones o días. */}
       {!linkMode && <MapNav />}
+      {/* La sección automática de escenas (Docs/Doc_Relaciones.md, sección 21): solo en un proyecto con escenas. */}
+      {!linkMode && <ScenesNav />}
 
       <div className="section-title" data-tour="pages">
         <span className="mono-label">{tr('sidebar.pages')}</span>

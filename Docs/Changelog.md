@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.260 :
+
+Encontrar todo lo que se escribió de una escena pedía saber que existía *Map › Scenes*, y aun ahí se veían locaciones y días, no las páginas. El índice ya sabía qué páginas nombran cada escena, pero nada lo mostraba. Ahora la barra lateral tiene una sección automática *Scenes*, debajo de *Map*: escenas por episodio (uno abierto a la vez) con su título en vivo, recordada por proyecto, de a 60 filas. Cada escena abre `/map/scenes?scene=<código>` con todas las páginas que la nombran o la linkean (también a una ficha suya), por etapa, cada lugar con un extracto y un clic al bloque exacto; las páginas índice van aparte y una escena repetida se marca. *Map › Scenes* suma «N pages», que despliega la misma lista. Mientras lee dice «Reading…»; un invitado ve solo lo suyo. Solo lectura del índice. D744–D753.
+
+[Sumar la sección automática de escenas con todas las páginas que hablan de cada una]
+
 v0.259 :
 
 La app no tenía botones para volver a la página anterior: dependía del atrás del navegador, que la app instalada (escritorio y iPhone) no muestra. La barra de arriba suma ‹ y ›, a la izquierda del breadcrumb y también en la práctica, apagados cuando no hay a dónde ir sin salir de la app. Para saberlo, cada entrada del historial lleva una marca de posición: `pushState` y `replaceState` quedan envueltos al arrancar y el máximo se guarda en `sessionStorage`, así recargar conserva atrás y adelante. El carrete y «Show me» marcan su entrada como capa: al cerrarlos, adelante no los reabre. Un doble clic o la tecla mantenida van una sola página. Atajos: Alt+← / Alt+→, y ⌘[ / ⌘] en la Mac; el registro suma teclas propias de la Mac. Ayuda, Doc_Navegacion.md y D738–D743.

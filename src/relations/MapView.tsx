@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { locale, useT } from '../i18n';
 import '../i18n/lazy/map';
-import { mapPath, navigate, pagePath, type MapTab } from '../router';
+import { mapPath, navigate, pagePath, useSearchParam, type MapTab } from '../router';
 import { SEPARATOR } from '../search/extract';
 import { usePermissions, useServices, useTree } from '../services';
 import { copyText } from '../ui/commentsUi';
@@ -20,6 +20,8 @@ import { LinkLocationButton } from './LinkLocation';
 import { MergeButton, MergePendingRows, useMergeRows } from './MergeAction';
 import { contentCounts } from './merge';
 import { twinLabels } from './twinNames';
+import { mapPathFrom, sceneLinks, sceneMentions, scenePageCount, type SceneLinks } from './sceneMentions';
+import { SceneMentionsView } from './SceneMentionsView';
 import './liveHeader.css';
 import './map.css';
 
@@ -124,6 +126,10 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   const snap = session.relations.snapshot(projectId);
   const [filter, setFilter] = useState('');
   useEffect(() => setFilter(''), [tab]);
+  // Una escena abierta en *Scenes* (`/map/scenes?scene=105_027`, desde la sección *Scenes* de la barra lateral): la lista
+  // de las páginas que hablan de ella (Docs/Doc_Relaciones.md, sección 21).
+  const sceneQuery = useSearchParam('scene');
+  const sceneCode = tab === 'scenes' && sceneQuery ? sceneQuery : null;
 
   // La consulta abierta del `/` no cuenta como pendiente (D568): al abrirse o cerrarse, se vuelve a armar.
   const draft = useSlashDraft();
@@ -132,6 +138,20 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
     return projectMap({ snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) });
     // La foto cambia con cada revisión; los títulos se leen del árbol en ese momento.
   }, [snap, revision, tree, session, draft]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Lo que necesita la lista de una escena: la foto (los roles), los títulos del árbol (una página que entra solo por un
+  // link no está en el mapa) y lo leído de cada página (los extractos).
+  const src = useMemo(
+    () => (snap ? { snap, title: (id: string) => tree.get(id)?.title, content: (id: string) => session.index.content(id) } : null),
+    [snap, session, tree],
+  );
+  // Quién linkea cada escena (una ficha, otra página de la escena), una vez por foto: lo usan la columna *Pages* y la lista.
+  const links = useMemo(() => (src ? sceneLinks(src) : null), [src, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+  // El número de la dirección leído con el mismo lector que la lupa (`105_055a`, `101-012`, `5055`): la escena exacta.
+  const resolve = (q: string): string | null => {
+    if (!snap) return null;
+    if (snap.registry.scenes.has(q)) return q;
+    return searchScenes({ snap, title: (id) => tree.get(id)?.title }, q, { loose: false, limit: 1 })[0]?.code ?? null;
+  };
 
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
@@ -202,7 +222,8 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
                   onClick={(e) => {
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
                     e.preventDefault();
-                    navigate(mapPath(x.id), true);
+                    // Desde la vista de una escena (`?scene=`), la misma ruta: vuelve a la lista (D746).
+                    navigate(mapPathFrom(mapPath(x.id), location), true);
                   }}
                 >
                   <Ic name={x.icon} small />
@@ -221,7 +242,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
                 {tr('map.copyJson')}
               </button>
             </span>
-            {tab !== 'pending' && (
+            {tab !== 'pending' && !sceneCode && (
               <label className="mp-filter">
                 <Ic name="filter" small />
                 <input type="text" value={filter} placeholder={tr('map.filter')} aria-label={tr('map.filter')} spellCheck={false} onChange={(e) => setFilter(e.target.value)} />
@@ -232,8 +253,10 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
             <p className="mp-empty">{tr('live.reading')}</p>
           ) : tab === 'locations' ? (
             <Locations data={data} fq={fq} complete={complete} />
+          ) : tab === 'scenes' && sceneCode && src ? (
+            <SceneDetail key={sceneCode} code={resolve(sceneCode) ?? sceneCode} data={data} src={src} links={links} complete={complete} partial={partial} onPlace={(p) => goToPlace(services, p)} />
           ) : tab === 'scenes' ? (
-            <Scenes data={data} fq={fq} codes={codes} complete={complete} partial={partial} />
+            <Scenes data={data} fq={fq} codes={codes} complete={complete} partial={partial} src={src} links={links} onPlace={(p) => goToPlace(services, p)} />
           ) : tab === 'days' ? (
             <Days data={data} fq={fq} codes={codes} registry={snap?.registry ?? null} />
           ) : (
@@ -398,8 +421,36 @@ function Locations({ data, fq, complete }: { data: ProjectMapData; fq: string; c
 
 // --- Scenes: por episodio ------------------------------------------------------------------------------------------
 
-function Scenes({ data, fq, codes, complete, partial }: { data: ProjectMapData; fq: string; codes: Set<string> | null; complete: boolean; partial: boolean }) {
+type SceneSrc = Parameters<typeof sceneMentions>[2];
+
+function Scenes({
+  data,
+  fq,
+  codes,
+  complete,
+  partial,
+  src,
+  links,
+  onPlace,
+}: {
+  data: ProjectMapData;
+  fq: string;
+  codes: Set<string> | null;
+  complete: boolean;
+  partial: boolean;
+  src: SceneSrc | null;
+  links: SceneLinks | null;
+  onPlace: (place: Place) => void;
+}) {
   const tr = useT();
+  // Las escenas con «N pages» desplegado (la lista se arma recién al desplegar: lee los extractos).
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (code: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(code)) next.add(code);
+      return next;
+    });
   const rows = data.scenes.filter((s) => !fq || (codes ? codes.has(s.code) : sceneFilterText(s).includes(fq)));
   const groups = new Map<string, MapScene[]>();
   for (const s of rows) groups.set(s.episode ?? '', [...(groups.get(s.episode ?? '') ?? []), s]);
@@ -413,6 +464,9 @@ function Scenes({ data, fq, codes, complete, partial }: { data: ProjectMapData; 
           {tr('map.colWhere')}
         </span>
         <span role="columnheader">{tr('map.colDays')}</span>
+        <span role="columnheader" data-tip={tr('map.colPagesTip')}>
+          {tr('map.colPages')}
+        </span>
       </div>
       {[...groups].map(([ep, list]) => (
         <div key={ep} role="rowgroup" className="mp-group">
@@ -426,6 +480,9 @@ function Scenes({ data, fq, codes, complete, partial }: { data: ProjectMapData; 
           {list.map((s) => {
             const shotLocs = [...new Set(s.shot.flatMap((x) => x.locs))];
             const plannedOnly = s.plannedAt.filter((l) => !shotLocs.includes(l));
+            const pages = links ? scenePageCount(data, s.code, links) : 1;
+            const expanded = open.has(s.code);
+            const list = expanded && src && links ? sceneMentions(data, s.code, src, { links }) : null;
             return (
               <div key={s.code} className="mp-srow" role="row">
                 <span className="mp-code mono" role="cell">
@@ -471,11 +528,104 @@ function Scenes({ data, fq, codes, complete, partial }: { data: ProjectMapData; 
                     <span className="mp-none">{tr('live.reading')}</span>
                   )}
                 </span>
+                <span className="mp-pg" role="cell">
+                  {/* Un número solo si es cierto: mientras lee, sin «1 page» que después son 12 (D402). */}
+                  {complete || pages > 1 ? (
+                    <button className={`mp-pages${expanded ? ' on' : ''}`} aria-expanded={expanded} onClick={() => toggle(s.code)}>
+                      {tr('map.pagesN', { count: pages })}
+                      <svg className="mp-i s" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d={expanded ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
+                      </svg>
+                    </button>
+                  ) : (
+                    <span className="mp-none">{tr('live.reading')}</span>
+                  )}
+                </span>
+                {list && (
+                  <div className="mp-sexp" role="cell">
+                    <SceneMentionsView list={list} complete={complete} partial={partial} onPlace={onPlace} />
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+// --- Una escena: todas las páginas que hablan de ella -----------------------------------------------------------
+
+function SceneDetail({
+  code,
+  data,
+  src,
+  links,
+  complete,
+  partial,
+  onPlace,
+}: {
+  code: string;
+  data: ProjectMapData;
+  src: SceneSrc;
+  links: SceneLinks | null;
+  complete: boolean;
+  partial: boolean;
+  onPlace: (place: Place) => void;
+}) {
+  const tr = useT();
+  const top = useRef<HTMLDivElement>(null);
+  // Al abrir otra escena (desde la barra lateral, ya en el mapa), la vista vuelve arriba, con las pestañas a la vista.
+  // Con llaves y sin `scrollIntoView`/`scrollTo`: en Chromium pueden devolver una promesa, y React tomaría lo devuelto
+  // por el efecto como su limpieza (la app caía al salir de la vista).
+  useEffect(() => {
+    const main = top.current?.closest<HTMLElement>('.main');
+    if (main) main.scrollTop = 0;
+  }, [code]);
+  const scene = data.scenes.find((s) => s.code === code) ?? null;
+  const list = useMemo(() => (scene && links ? sceneMentions(data, code, src, { links }) : null), [data, code, src, scene, links]);
+  return (
+    <div className="mp-scene" ref={top}>
+      <a
+        className="mp-back"
+        href={mapPath('scenes')}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          navigate(mapPathFrom(mapPath('scenes'), location));
+        }}
+      >
+        <svg className="mp-i s" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 12H5M11 6l-6 6 6 6" />
+        </svg>
+        {tr('map.allScenes')}
+      </a>
+      {!scene || !list ? (
+        // Quien ve una parte del proyecto no puede saber si existe en una página que no ve (D401).
+        <p className="mp-empty">{complete ? tr(partial ? 'map.sceneUnknownSeen' : 'map.sceneUnknown', { code }) : tr('live.reading')}</p>
+      ) : (
+        <>
+          <h2 className="mp-sh">
+            <span className="mp-chip mono">
+              <Ic name="scene" small />
+              {scene.code}
+            </span>
+            {scene.pageId ? (
+              <PageLink pageId={scene.pageId} className="mp-link">
+                {scene.title || scene.code}
+              </PageLink>
+            ) : (
+              <span>{scene.title}</span>
+            )}
+          </h2>
+          <p className="mp-smeta">
+            {scene.episode && <>{tr('live.episode', { ep: scene.episode })} · </>}
+            {complete || list.count > 1 ? tr(partial ? 'map.sceneLedeSeen' : 'map.sceneLede', { count: list.count }) : tr('live.reading')}
+          </p>
+          <SceneMentionsView list={list} complete={complete} partial={partial} onPlace={onPlace} />
+        </>
+      )}
     </div>
   );
 }

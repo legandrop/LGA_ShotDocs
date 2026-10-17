@@ -257,6 +257,10 @@ In development. What works today:
 - *Map*, above the pages: every location in time, every scene with where a report has a section of it, the shoot days
   and what's still pending, built from what the pages say; *Copy map* and *Copy JSON* hand it to an assistant, and the
   search finds a scene by any form of its number (`101-074`, `1074`, `5027b`) or a location by name, first.
+- *Scenes*, under *Map* in the sidebar, appears by itself in every project with scenes: scenes by episode with their
+  live titles, and each one opens every page that names it or links to it or to one of its cards (breakdown, scoutings,
+  shoot days by date, other pages),
+  with a short quote and a click to the exact section; index pages go apart. *Map › Scenes* shows the same list per row.
 - While you write, scene numbers and location names that exist in the project get a subtle dotted underline (nothing
   pops up). Hover one, or tap it with the keyboard closed, for a preview with *Open* and *Make it a link*
   (Ctrl+Alt+K / ⌘⌥K); links to scenes and locations show as chips. On a phone, a shoot day report has a *Today* bar above

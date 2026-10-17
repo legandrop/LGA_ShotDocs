@@ -1213,3 +1213,85 @@ marca ya no vale (otra hora de papelera), así que una unida nunca se lee como c
 (la base fusiona por clave).
 
 **Decisiones:** D641–D660 (ajustadas), D676–D690 y, de la v0.254, D706–D708 en `Doc_Decisiones.md`.
+
+## 21. La sección automática *Scenes* y las páginas de cada escena (v0.260)
+
+Pedido de Lega: «una sección automática de escenas, así los usuarios pueden entrar ahí y tener links a todas las páginas
+que hablan de las escenas». El índice ya lo sabía (`MapScene.mentions`, sección 12), pero el Mapa mostraba días y
+locaciones, no la lista de páginas, y nadie lo encontraba como «la sección de escenas». Todo es lectura del índice: no es
+una página del árbol, no se guarda en ningún documento y no escribe nada.
+
+| Pieza | Archivo |
+|---|---|
+| Las páginas de una escena, por grupo, con lugares y extractos (puro); quién linkea cada escena; las escenas por episodio de la barra | `src/relations/sceneMentions.ts` (`sceneMentions`, `sceneLinks`, `scenePageCount`, `sceneSnippet`, `sceneEpisodes`, `sceneMapPath`, `mapPathFrom`) |
+| La lista (vista de una escena y fila desplegada de *Map › Scenes*) | `src/relations/SceneMentionsView.tsx` + `map.css` (`mp-sm*`) |
+| La sección de la barra lateral | `src/relations/ScenesNav.tsx` + `scenesNav.css` (prefijo `scene-nav`), en `Sidebar.tsx` debajo de *Map* |
+| La vista de una escena | `MapView.tsx` (`SceneDetail`), `/map/scenes?scene=<código>` |
+| Textos y ayuda | `sidebar.scenes*`, `map.scene*`, `map.pagesN`, `map.colPages*`; ayuda `scenesSection` (since 0.260) |
+
+**La sección de la barra lateral.** Debajo de la fila *Map* y arriba de *Pages*, en todo proyecto con escenas en el
+registro de lo que la persona ve (sin escenas o con un link público, no está). Un encabezado `SCENES  226` que la pliega
+entera; adentro, un renglón por episodio (`Episode 101  58`) y, al abrirlo, una fila por escena: número en la columna
+alineada del árbol y título en vivo (`sceneTitleOf`, el mismo de *Map › Scenes*). Con un solo grupo (un largo o un solo
+episodio) las escenas van directo. De fábrica, la sección abierta y los episodios cerrados (ERSO ocupa 6 renglones), y
+un solo episodio abierto a la vez: abrir otro cierra el anterior, así *Pages* no queda cientos de filas más abajo. Lo
+plegado se recuerda por proyecto en el dispositivo (`localStorage` `shotdocs-scenes-nav`). Abrir una escena (desde acá,
+la lupa o un link) abre su episodio, marca su fila y la lleva a la vista (también al abrir el cajón del teléfono).
+Cada lista dibuja 60 filas y «Show 60 more»; la escena abierta se dibuja siempre, aunque esté más abajo. Sale solo del
+registro (no arma el mapa): cuesta lo mismo con 6 escenas que con 226.
+
+**La vista de una escena** (`/map/scenes?scene=105_027`, dentro de *Map › Scenes*: las pestañas siguen arriba y
+«← All scenes» vuelve a la lista). El número de la dirección se lee con el lector de la lupa (`105_055a`, `101-012` o
+`5055` abren la escena exacta). Como `navigate` ignora lo de después del «?», «All scenes», la pestaña *Scenes* y la
+fila *Map* van con la barra final (`mapPathFrom`) cuando la ruta es la misma. Número, título (link a la escena),
+episodio y «N pages talk about it» (sin las índice). Debajo, los grupos, en este orden:
+
+1. *The scene and its breakdown*: la escena primero (con la etiqueta SCENE, aunque su texto no se nombre), sus fichas y las
+   demás páginas del desglose que la nombran o la linkean. Si otra página tiene el mismo número, también va acá con la
+   etiqueta REPEATED, y arriba de los grupos un aviso («2 pages have this scene number») lleva a *Map › Pending*, donde
+   se unen; las relaciones siguen usando la primera del árbol.
+2. *Locations and scoutings*: la locación y lo de adentro (etapas `location` y `scouting`).
+3. *Shoot days*: por fecha; un reporte con su rótulo («Día 59»), un plan con su título.
+4. *Other pages*.
+5. *Index pages* (`index: true`, o más de 20 escenas y locaciones contando las que linkea): aparte, al final, cerradas
+   en un `<details>` con su tooltip. Una ficha nunca va acá aunque nombre mucho.
+
+**Los links cuentan.** El índice tapa el texto de un link con su destino y una ficha no es una entidad, así que una
+página que linkea la escena, otra página con su número o una ficha suya (una tabla de decorados con links a las fichas)
+no tenía mención. `sceneLinks` recorre una vez por foto los links de lo leído (`BlockMeta.links`) y junta, por escena,
+qué páginas la linkean y desde qué bloques; esos bloques son lugares como los que la nombran, y una página que con esos
+links pasa de 20 escenas y locaciones es índice. Una página que entra solo por un link a una ficha (`ERSO | Assets`, un
+decorado) no está en el mapa, que anota solo las que nombran escenas o locaciones: su título sale del árbol.
+
+Cada página es un link a la página; debajo, sus lugares: la sección de la escena («§ Escena 105_027b — Tres tomas… · 5
+photos», con su primer renglón como extracto) o el bloque que la nombra fuera de esa sección («Revisar con dirección la
+105_027…») o la linkea, en el orden de la página, tres y «N more». El extracto se centra donde el lector de relaciones
+(`scan`) encontró la escena o su link, nunca en el número de otra escena del mismo renglón. En una tabla (una ficha), el
+extracto es la fila que la nombra
+como «rótulo: valor» («Shot Name: ERSO_101_074_010»), no la tabla entera. Un lugar lleva al bloque exacto con la sección
+resaltada (`goToPlace`, como la cabecera viva).
+
+**Map › Scenes** suma la columna *Pages*: «N pages» (`scenePageCount`, sin leer texto, con los links de `sceneLinks`)
+despliega la misma lista a lo ancho de la fila; la lista con extractos se arma solo al desplegar.
+
+**Lo que no afirma.** Mientras el índice lee, la lista dice «Reading…» al pie y nunca «No other page names it»; la
+columna muestra «Reading…» hasta tener más que la escena misma (D402). Un invitado lee «N pages you can see talk about
+it», «No other page you can see names it» y, para un número que no está en su registro, «isn’t in the pages you can
+see», nunca «no existe» (D401); el dueño lee «isn’t a scene of this project».
+
+**Medido con ERSO** (920 páginas, 226 escenas en 5 episodios, build local, PC de escritorio, Chromium): la sección
+aparece a los 0,2 s de abrir el proyecto con el caché (1,9 s la primera vez en un perfil nuevo, con las 226); abrir el
+episodio 101 (58 escenas), 30–130 ms; abrir una escena, 0,4 s la primera vez (baja la parte del mapa) y la lista
+completa con el índice al día, 1,1 s; *Map › Scenes* con las 226 filas y sus «N pages», 70–130 ms; desplegar una, 50–110
+ms. Las 226 escenas tienen entre 2 y 20 páginas (ninguna en 0). Sin scroll horizontal a 375 px.
+
+**Pruebas.** `sceneMentions.test.ts` (los grupos y su orden con el proyecto sintético, lugares y extractos, la fila de
+la tabla, un renglón adentro de su propia sección, la página índice aparte, `scenePageCount` igual a la lista en cada
+escena, el invitado, el extracto alrededor del número, las escenas por episodio con 226, los links a la escena y a sus
+fichas, la página índice por links, la escena repetida, una escena con letra y un largo sin episodios) y
+`scenesSection.test.tsx` (la
+app montada: la sección debajo de *Map*, plegar y recordar por proyecto, título en vivo, la vista con sus grupos, ir a la
+sección exacta, *Map › Scenes* con «N pages», un número que no es escena, el invitado, sin escenas, 226 escenas de a
+tandas y la escena abierta siempre visible, «Reading…» sin afirmar ceros, y que salir de la vista no rompe la app).
+
+**Decisiones:** D744–D753 en `Doc_Decisiones.md`.

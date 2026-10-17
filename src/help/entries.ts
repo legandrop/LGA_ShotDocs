@@ -164,6 +164,8 @@ const LIVE_FIELDS = '0.240';
 const LIVE_PHOTOS = '0.243';
 /** El mapa del proyecto, Copy map / JSON y la lupa por escenas y locaciones (relaciones en vivo, E9): la versión se pone al publicar. */
 const LIVE_MAP = '0.242';
+/** La sección automática *Scenes* de la barra lateral y las páginas de cada escena (Doc_Relaciones.md, sección 21). */
+const SCENES_SECTION = '0.260';
 /** El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6). */
 const LIVE_UNDERLINE = '0.244';
 /**
@@ -371,6 +373,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.relationsMap.text',
     words: ['map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'json', 'assistant', 'asistente', 'ai', 'ia'],
     since: LIVE_MAP,
+  },
+  {
+    id: 'scenesSection',
+    section: 'find',
+    title: 'help.scenesSection.title',
+    text: 'help.scenesSection.text',
+    words: ['scenes', 'escenas', 'scene list', 'lista de escenas', 'episode', 'episodio', 'pages', 'páginas', 'mentions', 'menciones', 'where', 'dónde', 'backlinks', 'related', 'relacionado', 'index pages', 'páginas índice'],
+    since: SCENES_SECTION,
   },
   {
     id: 'searchEntities',

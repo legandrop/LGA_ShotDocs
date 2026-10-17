@@ -13,6 +13,14 @@ export const sidebar = {
     es: "Todas las escenas, locaciones y días de rodaje del proyecto, según lo que dicen las páginas",
   },
   'sidebar.mapPending': { en: { one: "{count} pending", other: "{count} pending" }, es: { one: "{count} pendiente", other: "{count} pendientes" } },
+  // La sección automática de escenas (Docs/Doc_Relaciones.md, sección 21).
+  'sidebar.scenes': { en: "Scenes", es: "Escenas" },
+  'sidebar.scenesTip': {
+    en: "Made by the app from what the pages say: each scene opens every page that talks about it",
+    es: "La arma la app con lo que dicen las páginas: cada escena abre todas las páginas que hablan de ella",
+  },
+  'sidebar.scenesMore': { en: { one: "Show {count} more", other: "Show {count} more" }, es: { one: "Mostrar {count} más", other: "Mostrar {count} más" } },
+  'sidebar.scenesNoEpisode': { en: "No episode", es: "Sin episodio" },
   // El rótulo de una carpeta con tipo (Doc_Estructura_Proyecto.md, «Tipo de página»).
   'sidebar.holdsScenes': { en: "Everything created inside is a scene", es: "Todo lo que se crea adentro es una escena" },
   'sidebar.holdsLocations': { en: "Everything created inside is a location", es: "Todo lo que se crea adentro es una locación" },

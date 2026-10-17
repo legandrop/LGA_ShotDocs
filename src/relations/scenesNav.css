@@ -1,0 +1,141 @@
+/* La sección «Scenes» de la barra lateral (Docs/Doc_Relaciones.md, sección 21), con las medidas de las filas del árbol. */
+
+.scene-nav {
+  margin: -4px 0 12px;
+}
+
+.scene-nav-head,
+.scene-nav-ep {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.scene-nav-head {
+  color: var(--muted-2);
+}
+
+.scene-nav-head .mono-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.scene-nav-ep {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.scene-nav-ep .label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-nav-head:hover,
+.scene-nav-ep:hover,
+.scene-nav-row:hover,
+.scene-nav-more:hover {
+  background: var(--hover);
+}
+
+.scene-nav-head svg,
+.scene-nav-ep svg {
+  flex: none;
+  color: var(--muted-2);
+}
+
+.scene-nav-n {
+  flex: none;
+  font: 11px var(--mono);
+  color: var(--faint);
+}
+
+.scene-nav-eps,
+.scene-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Las escenas, con la sangría de un hijo en el árbol (la flecha del episodio + 18 px). */
+.scene-nav-eps .scene-nav-list {
+  padding-left: 18px;
+}
+
+.scene-nav-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px 0 24px;
+  margin-bottom: 1px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 30px;
+  color: var(--text-2);
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.scene-nav-row .code {
+  flex: none;
+  min-width: var(--code-w, auto);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted-2);
+}
+
+.scene-nav-row .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-nav-row.active {
+  background: var(--active);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.scene-nav-row.active .code {
+  color: var(--accent-text);
+}
+
+.scene-nav-more {
+  display: block;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px 0 24px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: 13px var(--font);
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.scene-nav-head:focus-visible,
+.scene-nav-ep:focus-visible,
+.scene-nav-row:focus-visible,
+.scene-nav-more:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

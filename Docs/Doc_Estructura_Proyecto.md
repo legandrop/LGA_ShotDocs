@@ -185,7 +185,8 @@ para él nada tiene tipo. Mostrárselo pide una migración que sume `entity` a l
 2. Un selector de escena al escribir, que conozca los nombres alternativos.
 3. Plantillas *Escena*, *Locación* y *Scouting* (hechas en v0.236: *Scene*, *Location*, *Tech scout*, *Creative scout*), y *New day report* con la locación en el título.
 4. Galería por fuente en la escena y en la locación.
-5. Un Mapa vivo.
+5. Un Mapa vivo. **Hecho en v0.242**; desde v0.260 la barra lateral suma la sección automática *Scenes*: cada escena
+   abre todas las páginas que hablan de ella, por etapa (`Doc_Relaciones.md`, sección 21).
 6. ~~«Repartir por escenas» un reporte, con prueba de que no se pierde nada y que se puede deshacer.~~ **Cerrado en
    v0.246 (D581): no se reparte.** La escena muestra su parte de cada reporte en vivo (puntos 1, 4 y 5) y el reporte
    queda entero; la prueba de que ninguna sección ni foto se pierde en esa vista es `sectionCoverage.test.ts`.

@@ -62,6 +62,9 @@ listas generadas y fechadas; para que se sostenga en los proyectos nuevos, la ap
 3. **Plantillas *Escena*, *Locación* y *Scouting***, y *New day report* con la locación en el título.
 4. **Galería por fuente** en la escena y en la locación (fotos de sus scoutings y días), como vista, sin copiar bloques.
 5. **Mapa vivo** del proyecto. **Hecho en v0.242** (E9, `Doc_Relaciones.md`, sección 12), con *Copy map* / JSON.
+   La sección automática *Scenes* de la barra lateral (todas las páginas de cada escena, por etapa) está **hecha en
+   v0.260** (`Doc_Relaciones.md`, sección 21). Queda, si se pide: lo mismo para locaciones y días, y que la lista de una
+   escena entre en *Copy map* / JSON para un asistente.
 6. **«Repartir por escenas» un reporte.** **Cerrado en v0.246 (R6, D581): no se reparte, la escena lo muestra en vivo.**
    No se mueve ni se copia texto entre páginas (pierde lo que otro dispositivo escribe sin red, rompe comentarios, fotos
    por página y el PDF del día; copiar duplica y envejece). Cada escena ya muestra su parte de cada reporte (texto,
