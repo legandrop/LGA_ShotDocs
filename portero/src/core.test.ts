@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { linkHeaders } from '../../src/linkMode';
 import { Portero as AppPortero } from '../../src/media/portero';
 import {
@@ -12,6 +12,8 @@ import {
   VERIFY_MAX,
   cleanFileName,
   contentDisposition,
+  DRIVE_TIMEOUT_MS,
+  ONCE_STALE_MS,
   folderName,
   inlineType,
   Portero,
@@ -127,6 +129,8 @@ function fakeWorld() {
   let grantedScope = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email openid';
   let n = 0;
   let mediaGets = 0;
+  /** Cuántas veces el portero buscó una carpeta de la app antes de crearla. */
+  let childSearches = 0;
   let metaGets = 0;
   const calls: string[] = [];
   /** Links públicos de la base: el token, qué archivos ve (con su nivel) y si se revocó o llegó a un tope. */
@@ -320,6 +324,18 @@ function fakeWorld() {
             .map(([id, f]) => ({ ...describe(id, f), size: String(f.data.length) })),
         });
       }
+      // Antes de crear una carpeta de la app, la que ya está con ese nombre (o con la marca del proyecto) en su carpeta.
+      const child = /^'([^']+)' in parents and (?:name = '([^']+)'|appProperties has \{ key='sdProject' and value='([^']+)' \}) and mimeType = 'application\/vnd\.google-apps\.folder' and trashed = false$/.exec(q);
+      if (child) {
+        childSearches++;
+        const [, parent, name, project] = child;
+        return jsonRes({
+          files: [...files.entries()]
+            .filter(([id, f]) => f.mime === 'application/vnd.google-apps.folder' && !inTrash(id) && (f.parents.length ? f.parents : ['root']).includes(parent!))
+            .filter(([, f]) => (project ? f.appProperties?.sdProject === project : f.name === name))
+            .map(([id, f]) => describe(id, f)),
+        });
+      }
       const mark = /^mimeType = 'application\/vnd\.google-apps\.folder' and appProperties has \{ key='sdProject' and value='([0-9a-f-]{36})' \}$/.exec(q)?.[1];
       if (!mark) return jsonRes({ error: `unexpected q ${q}` }, 400);
       return jsonRes({
@@ -431,6 +447,7 @@ function fakeWorld() {
     versioned,
     grantOnly: (scope: string) => (grantedScope = scope),
     folders: () => [...files.entries()].filter(([, f]) => f.mime === 'application/vnd.google-apps.folder'),
+    childSearches: () => childSearches,
     /** Cuántas veces se le pidió a Drive el contenido de un archivo. */
     mediaCalls: () => mediaGets,
     /** Cuántas veces se le preguntó a Drive por los datos de un archivo o carpeta. */
@@ -3143,5 +3160,225 @@ describe('portero: link Can edit y la papelera de archivos (entrega 2b)', () => 
     expect(done.linked).toBe(true);
     expect(world.files.get(done.file.id)!.trashed).toBeFalsy();
     expect(world.linkCalls.some((c) => c.path.endsWith('/media_purged'))).toBe(false);
+  });
+});
+
+// --- un llamado a Google que no contesta no cuelga las subidas (v0.261) ---------------------------------------------
+
+describe('portero: una carpeta colgada no cuelga las subidas siguientes (v0.261)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Una promesa con su estado a la vista, para ver si ya terminó sin esperarla. */
+  function track<T>(work: Promise<T>): { promise: Promise<T>; settled: () => boolean } {
+    let done = false;
+    const promise = work.finally(() => (done = true));
+    return { promise, settled: () => done };
+  }
+
+  /** Avisa cuando pasa algo adentro de un pedido (para no adivinar con tiempos). */
+  function signal(): { wait: Promise<void>; fire: () => void } {
+    let fire!: () => void;
+    const wait = new Promise<void>((resolve) => (fire = resolve));
+    return { wait, fire };
+  }
+
+  /** Deja correr lo que no depende del reloj falso (los cuerpos de los pedidos, por ejemplo). */
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 30; i++) await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  /** Adelanta el reloj de a `step` hasta que todo lo de `tracked` terminó (o se pasa de `max`). */
+  async function drain(tracked: { settled: () => boolean }[], step: number, max: number): Promise<void> {
+    for (let t = 0; t <= max && !tracked.every((x) => x.settled()); t += step) {
+      await vi.advanceTimersByTimeAsync(step);
+      await flush();
+    }
+  }
+
+  const rootFolders = (world: World) => world.folders().filter(([, f]) => f.name === 'LGA_ShotDocs');
+  const NAMES = ['2026-09-30', 'LGA_ShotDocs', 'Spot_Coca-Cola_2026'];
+  const names = (world: World) => world.folders().map(([, f]) => f.name).sort();
+  const isCreate = (input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith('/drive/v3/files?fields=id') && init?.method === 'POST';
+
+  it('Google crea la carpeta pero nunca contesta: 504 drive_timeout a los DRIVE_TIMEOUT_MS para quien la creaba y quien esperaba; el reintento usa esa carpeta', async () => {
+    const { world, store } = await setup();
+    for (const f of [FILE_A, FILE_B, FILE_C]) addBaseFile(world, f);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const reached = signal();
+    let hang = true;
+    // La primera creación de carpeta llega a Drive (la carpeta queda creada) pero la respuesta no vuelve nunca, ni
+    // aunque se corte el pedido.
+    const http: typeof fetch = async (input, init) => {
+      if (hang && isCreate(input, init)) {
+        hang = false;
+        await world.http(input, init);
+        reached.fire();
+        return new Promise<Response>(() => undefined);
+      }
+      return world.http(input, init);
+    };
+    // Cada pedido es un Portero nuevo, como en index.ts.
+    const a = track(startFile(new Portero(env, store, http), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' }));
+    await reached.wait;
+    const b = track(startFile(new Portero(env, store, http), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' }));
+    await vi.advanceTimersByTimeAsync(DRIVE_TIMEOUT_MS - 1000);
+    await flush();
+    expect(a.settled()).toBe(false);
+    expect(b.settled()).toBe(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    await drain([a, b], 50, 500);
+    expect(a.settled()).toBe(true);
+    expect(b.settled()).toBe(true);
+    for (const res of [await a.promise, await b.promise]) {
+      expect(res.status).toBe(504);
+      expect(await res.json()).toMatchObject({ code: 'drive_timeout' });
+    }
+    expect(rootFolders(world)).toHaveLength(1);
+
+    // La app reintenta: encuentra la carpeta que Google sí había creado y no hace otra.
+    const searches = world.childSearches();
+    const c = track(startFile(new Portero(env, store, http), 'editor-jwt', { file: FILE_C, size: 1000, day: '2026-09-30' }));
+    await drain([c], 50, 1000);
+    expect((await c.promise).status).toBe(200);
+    expect(world.childSearches()).toBeGreaterThan(searches);
+    expect(names(world)).toEqual(NAMES);
+    expect(store.data.get('google')).toMatchObject({ rootFolder: rootFolders(world)[0]![0] });
+  });
+
+  it('el pedido que creaba la carpeta se cortó y su promesa no termina nunca: el que espera la toma a los ONCE_STALE_MS y no crea otra', async () => {
+    const { world, store } = await setup();
+    addBaseFile(world, FILE_A);
+    addBaseFile(world, FILE_B);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const reached = signal();
+    // El pedido A crea la carpeta en Drive y se corta al anotarla: lo suyo no termina nunca (en Workers, lo que empezó
+    // un pedido cancelado queda así), y el tope de los llamados a Google no lo salva porque ya no está hablando con Google.
+    const cut: Store = {
+      get: (k) => store.get(k),
+      delete: (k) => store.delete(k),
+      put: (k, v) => {
+        if (k === 'google' && (v as { rootFolder?: string }).rootFolder) {
+          reached.fire();
+          return new Promise<void>(() => undefined);
+        }
+        return store.put(k, v);
+      },
+    };
+    const a = track(startFile(new Portero(env, cut, world.http), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' }));
+    await reached.wait;
+    expect(rootFolders(world)).toHaveLength(1);
+    const b = track(startFile(new Portero(env, store, world.http), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' }));
+    // Antes de ONCE_STALE_MS espera (A podría seguir vivo); después la toma.
+    await vi.advanceTimersByTimeAsync(ONCE_STALE_MS - 1000);
+    await flush();
+    expect(b.settled()).toBe(false);
+    await drain([b], 100, 2000);
+    expect(b.settled()).toBe(true);
+    expect((await b.promise).status).toBe(200);
+    expect(a.settled()).toBe(false);
+    // La carpeta que dejó A se usa: una sola de cada una.
+    expect(names(world)).toEqual(NAMES);
+    expect(store.data.get('google')).toMatchObject({ rootFolder: rootFolders(world)[0]![0] });
+  });
+
+  it('mientras quien crea la carpeta sigue hablando con Google, los demás esperan aunque tarde más que ONCE_STALE_MS', async () => {
+    const { world, store } = await setup();
+    addBaseFile(world, FILE_A);
+    addBaseFile(world, FILE_B);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    // Cada llamado a Drive tarda casi el tope de Google: todos juntos, mucho más que ONCE_STALE_MS. Una búsqueda mira
+    // Drive al empezar y una creación crea al terminar: si B tomara la carpeta mientras A la crea, no la vería y haría
+    // otra.
+    const wait = () => new Promise((resolve) => setTimeout(resolve, DRIVE_TIMEOUT_MS - 2000));
+    const slow: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (!url.includes('/drive/v3/files') || url.includes('alt=media')) return world.http(input, init);
+      if ((init?.method ?? 'GET') === 'GET') {
+        const res = await world.http(input, init);
+        await wait();
+        return res;
+      }
+      await wait();
+      return world.http(input, init);
+    };
+    const a = track(startFile(new Portero(env, store, slow), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' }));
+    await vi.advanceTimersByTimeAsync(10);
+    const b = track(startFile(new Portero(env, store, slow), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' }));
+    await drain([a, b], 1000, 20 * DRIVE_TIMEOUT_MS);
+    expect(a.settled() && b.settled()).toBe(true);
+    expect([(await a.promise).status, (await b.promise).status]).toEqual([200, 200]);
+    expect(names(world)).toEqual(NAMES);
+  });
+
+  it('dos subidas a la vez, cada una en su propio Portero (como en Workers), crean una sola carpeta de cada una', async () => {
+    const { world, store } = await setup();
+    for (const f of [FILE_A, FILE_B, FILE_C]) addBaseFile(world, f);
+    // Las creaciones tardan un poco, para que los tres pedidos se crucen.
+    const slow: typeof fetch = async (input, init) => {
+      if (isCreate(input, init)) await new Promise((r) => setTimeout(r, 30));
+      return world.http(input, init);
+    };
+    const results = await Promise.all(
+      [FILE_A, FILE_B, FILE_C].map((f) => startFile(new Portero(env, store, slow), 'editor-jwt', { file: f, size: 1000, day: '2026-09-30' })),
+    );
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
+    expect(names(world)).toEqual(NAMES);
+  });
+
+  it('un error de Drive al crear la carpeta les llega a los que esperaban, y el próximo pedido vuelve a intentar', async () => {
+    const { world, store } = await setup();
+    for (const f of [FILE_A, FILE_B, FILE_C]) addBaseFile(world, f);
+    let fail = true;
+    const flaky: typeof fetch = async (input, init) => {
+      if (fail && isCreate(input, init)) {
+        await new Promise((r) => setTimeout(r, 30));
+        return new Response('{}', { status: 503 });
+      }
+      return world.http(input, init);
+    };
+    const first = await Promise.all([FILE_A, FILE_B].map((f) => startFile(new Portero(env, store, flaky), 'editor-jwt', { file: f, size: 1000, day: '2026-09-30' })));
+    expect(first.map((r) => r.status)).toEqual([502, 502]);
+    expect(world.folders()).toHaveLength(0);
+    fail = false;
+    expect((await startFile(new Portero(env, store, flaky), 'editor-jwt', { file: FILE_C, size: 1000, day: '2026-09-30' })).status).toBe(200);
+    expect(names(world)).toEqual(NAMES);
+  });
+
+  it('el tope de Google solo cubre hasta que empieza a contestar: lo que llega después no se corta', async () => {
+    const { world, store } = await setup();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    // Drive contesta enseguida, y el cuerpo llega mucho después del tope.
+    let aborted = false;
+    const late: typeof fetch = async (input, init) => {
+      const res = await world.http(input, init);
+      if (!String(input).includes('/drive/v3/files/')) return res;
+      init?.signal?.addEventListener('abort', () => (aborted = true));
+      const text = await res.text();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          setTimeout(() => {
+            controller.enqueue(new TextEncoder().encode(text));
+            controller.close();
+          }, DRIVE_TIMEOUT_MS * 2);
+        },
+      });
+      return new Response(body, { status: res.status, headers: res.headers });
+    };
+    world.files.set('oldrootxxxxxxxx', { name: 'LGA_ShotDocs', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: ['root'] });
+    store.data.set('google', { ...(store.data.get('google') as object), rootFolder: 'oldrootxxxxxxxx' });
+    const res = track(
+      call(new Portero(env, store, late), '/upload', {
+        method: 'POST',
+        jwt: 'owner-jwt',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'IMG.MOV', mime: 'video/quicktime', size: 10 }),
+      }),
+    );
+    await drain([res], 1000, 10 * DRIVE_TIMEOUT_MS);
+    expect((await res.promise).status).toBe(200);
+    expect(aborted).toBe(false);
+    expect(rootFolders(world)).toHaveLength(1);
   });
 });

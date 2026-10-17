@@ -282,8 +282,32 @@ export const CACHE_HEAD_PIECES = 2;
 export const CACHE_TAIL_PIECES = 4;
 export const CACHE_FILES = 256;
 
+/**
+ * Lo más que se espera a que Google (Drive o el token) empiece a contestar un pedido. Lo normal es menos de un
+ * segundo; pasado esto el pedido se corta y sale `504 drive_timeout`, que la app reintenta. Solo cubre hasta que
+ * llegan los encabezados: un video que se sirve o se baja sigue llegando todo lo que tarde. Las partes de una subida
+ * no pasan por acá (tienen su propio plazo, `PART_ANSWER_MS`).
+ */
+export const DRIVE_TIMEOUT_MS = 20_000;
+/**
+ * Una búsqueda o creación de carpeta (`once`) sin noticias hace más que esto se da por muerta y la toma el próximo que
+ * la necesite. Mayor que `DRIVE_TIMEOUT_MS`: quien la lleva avisa que sigue vivo con cada llamado a Google, y cada
+ * llamado dura como mucho eso. Con la app cortando a los 60 s, el que espera a uno muerto todavía llega a hacerla.
+ */
+export const ONCE_STALE_MS = DRIVE_TIMEOUT_MS + 10_000;
+/** Cada cuánto mira el que espera si la carpeta ya está (ver `once`). */
+const ONCE_POLL_MS = 50;
+
+/**
+ * Una búsqueda o creación de carpeta en curso (`once`). Quien la lleva es el pedido que la empezó; los demás pedidos
+ * comparten solo el resultado (`result`), nunca una promesa ni un llamado del otro pedido. `beat`: la última vez
+ * que quien la lleva dio señales (cada llamado a Google).
+ */
+type Turn = { beat: number; result?: { value: string } | { error: unknown } };
 /** Carpetas que se están buscando o creando en este momento: dos subidas a la vez no crean dos iguales. */
-const pending = new Map<string, Promise<string>>();
+const turns = new Map<string, Turn>();
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Lo que responde `/verify` por cada archivo: lo que dice Drive, o el error con su `code`. */
 type VerifyResult =
@@ -694,6 +718,8 @@ export class Portero {
   private passSecret: string | null = null;
   /** Llamados a Drive en este pedido (cada pedido crea un Portero nuevo): ver `DRIVE_CALL_BUDGET`. */
   private driveCalls = 0;
+  /** Las búsquedas o creaciones de carpeta (`once`) que lleva este pedido: cada llamado a Google las da por vivas. */
+  private readonly held = new Set<Turn>();
 
   constructor(
     private readonly env: Env,
@@ -994,7 +1020,7 @@ export class Portero {
   private async refresh(scope?: string): Promise<{ token: string; expiresIn?: number }> {
     const google = await this.store.get<Google>('google');
     if (!google || google.broken) throw new HttpError(409, 'Google Drive is not connected.', 'drive_not_connected');
-    const res = await this.http(TOKEN_URL, {
+    const res = await this.google(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -1038,7 +1064,42 @@ export class Portero {
     this.driveCalls++;
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${await this.token()}`);
-    return this.http(path.startsWith('https://') ? path : `${DRIVE}${path}`, { ...init, headers });
+    return this.google(path.startsWith('https://') ? path : `${DRIVE}${path}`, { ...init, headers });
+  }
+
+  /**
+   * Un pedido a Google con tope (`DRIVE_TIMEOUT_MS`) hasta que empieza a contestar: un llamado que Google nunca
+   * contesta no deja colgado el pedido ni, a través de `once`, a todas las subidas que esperan la misma carpeta. Se
+   * corta con su propia señal, sumada a la que traiga `init`. Cada llamado avisa que las carpetas que lleva este
+   * pedido siguen vivas (`beat`).
+   */
+  private async google(url: string, init: RequestInit = {}): Promise<Response> {
+    const stop = new AbortController();
+    const outer = init.signal;
+    const follow = () => stop.abort(outer?.reason);
+    if (outer?.aborted) follow();
+    else outer?.addEventListener('abort', follow, { once: true });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        stop.abort();
+        reject(new HttpError(504, 'Google Drive did not answer in time: trying again shortly.', 'drive_timeout'));
+      }, DRIVE_TIMEOUT_MS);
+    });
+    this.beat();
+    try {
+      return await Promise.race([this.http(url, { ...init, signal: stop.signal }), late]);
+    } finally {
+      // La señal de afuera sigue valiendo para el cuerpo (como si se la hubiera pasado directo a `fetch`).
+      clearTimeout(timer);
+      this.beat();
+    }
+  }
+
+  /** Las carpetas que lleva este pedido (`once`) siguen vivas. */
+  private beat(): void {
+    const now = Date.now();
+    for (const turn of this.held) turn.beat = now;
   }
 
   // --- elegir dónde va la carpeta de la app (solo el dueño) -----------------------------------------
@@ -1109,13 +1170,44 @@ export class Portero {
 
   // --- carpetas ------------------------------------------------------------------------------------
 
-  /** Una sola búsqueda o creación a la vez por carpeta (dos subidas juntas no crean dos iguales). */
-  private once(key: string, work: () => Promise<string>): Promise<string> {
-    const running = pending.get(key);
-    if (running) return running;
-    const started = work().finally(() => pending.delete(key));
-    pending.set(key, started);
-    return started;
+  /**
+   * Una sola búsqueda o creación a la vez por carpeta (dos subidas juntas no crean dos iguales). La hace el pedido que
+   * llega primero, con sus propios llamados; los demás miran cada `ONCE_POLL_MS` si ya está y se llevan el mismo
+   * resultado (o el mismo error). No esperan la promesa del otro pedido: en Workers lo que empezó un pedido queda atado
+   * a él, y si ese pedido se corta (se cerró el navegador) su promesa no termina nunca y dejaba colgadas, hasta que se
+   * reiniciaba el portero, todas las subidas siguientes (v0.261). Si quien la lleva no da señales en
+   * `ONCE_STALE_MS`, la toma el próximo que espera; como cada creación busca antes la carpeta en Drive (`folder`,
+   * `child`), la que haya dejado creada el intento muerto se usa y no queda otra igual.
+   */
+  private async once(key: string, work: () => Promise<string>): Promise<string> {
+    for (;;) {
+      const turn = turns.get(key);
+      if (!turn || Date.now() - turn.beat > ONCE_STALE_MS) break;
+      while (!turn.result && Date.now() - turn.beat <= ONCE_STALE_MS) {
+        await sleep(ONCE_POLL_MS);
+        // Este pedido sigue vivo: lo que ya lleva (una carpeta de afuera que espera a esta) no se da por muerto.
+        this.beat();
+      }
+      if (turn.result) {
+        if ('value' in turn.result) return turn.result.value;
+        throw turn.result.error;
+      }
+      // Quien la llevaba no dio más señales: la toma el primero que lo note (sin esperas entre mirar y tomarla).
+    }
+    const mine: Turn = { beat: Date.now() };
+    turns.set(key, mine);
+    this.held.add(mine);
+    try {
+      const value = await work();
+      mine.result = { value };
+      return value;
+    } catch (error) {
+      mine.result = { error };
+      throw error;
+    } finally {
+      this.held.delete(mine);
+      if (turns.get(key) === mine) turns.delete(key);
+    }
   }
 
   /** La carpeta de la app (`LGA_ShotDocs`), en la carpeta que eligió el dueño o en la raíz. La crea si falta. */
@@ -1189,7 +1281,7 @@ export class Portero {
         const found = await this.look(saved, day);
         if (found && !found.trashed) return saved;
       }
-      const id = await this.create(day, project);
+      const id = (await this.child(day, project)) ?? (await this.create(day, project));
       await this.store.put(key, id);
       return id;
     });
@@ -1219,7 +1311,7 @@ export class Portero {
           return saved.id;
         }
       }
-      const id = await this.create(want, root, { sdProject: media.project_id });
+      const id = (await this.child(want, root, { sdProject: media.project_id })) ?? (await this.create(want, root, { sdProject: media.project_id }));
       await this.store.put(key, { id, name: want } satisfies ProjectFolder);
       return id;
     });
@@ -1269,7 +1361,23 @@ export class Portero {
         return known;
       }
     }
-    return this.create(name, parent);
+    return (await this.child(name, parent)) ?? this.create(name, parent);
+  }
+
+  /**
+   * Antes de crear una carpeta de la app, la que ya está en Drive con ese nombre adentro de `parent` (o, con `mark`,
+   * la que lleva esa marca, aunque el dueño la haya renombrado). Es la que dejó creada un intento anterior que se cortó
+   * antes de anotarla (`once`, v0.261): sin esto quedaban dos iguales. Si hay varias, la más vieja.
+   */
+  private async child(name: string, parent: string | null, mark?: Record<string, string>): Promise<string | null> {
+    const which = mark
+      ? Object.entries(mark).map(([k, v]) => `appProperties has { key=${quoted(k)} and value=${quoted(v)} }`).join(' and ')
+      : `name = ${quoted(name)}`;
+    const q = `${quoted(parent ?? 'root')} in parents and ${which} and mimeType = ${quoted(FOLDER_MIME)} and trashed = false`;
+    const res = await this.drive(`/files?${new URLSearchParams({ q, fields: 'files(id,name)', orderBy: 'createdTime', pageSize: '10' })}`);
+    if (!res.ok) throw new HttpError(502, `Could not look for the folder "${name}" in Google Drive (${res.status}).`);
+    const files = ((await res.json()) as { files?: { id: string; name?: string }[] }).files ?? [];
+    return (mark ? files[0] : files.find((f) => f.name === name))?.id ?? null;
   }
 
   // --- subir (por partes, se puede retomar) ---------------------------------------------------------
@@ -1696,7 +1804,7 @@ export class Portero {
         const found = await this.look(saved, FOLDERS_DIR);
         if (found && !found.trashed) return saved;
       }
-      const id = await this.create(FOLDERS_DIR, project);
+      const id = (await this.child(FOLDERS_DIR, project)) ?? (await this.create(FOLDERS_DIR, project));
       await this.store.put(key, id);
       return id;
     });

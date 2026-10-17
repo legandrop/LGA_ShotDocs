@@ -1948,6 +1948,25 @@ el foco, el desplazamiento del árbol y el cajón del teléfono sin necesidad me
 tutorial (no muestra el Mapa). Solo lee el índice: ningún tipo de bloque nuevo, nada en un Y.Doc ni en la base, ninguna
 migración; la versión mínima no cambia.
 
+### D754 · Llamados a Google con tope de 20 s hasta que contestan (2026-10-17)
+**Elegí:** `DRIVE_TIMEOUT_MS` = 20 s en todo `drive()` y en la renovación del token, solo hasta los encabezados, con
+`504 drive_timeout` (la app lo reintenta como cualquier 5xx). 20 y no 30: lo normal es menos de un segundo, y con la app
+cortando el pedido a los 60 s hacía falta lugar para que quien espera a un pedido muerto (D755) llegue a hacer la
+carpeta. El cuerpo no tiene tope (videos servidos); las partes siguen con su propio plazo (`PART_ANSWER_MS`).
+
+### D755 · Entre pedidos se comparte el resultado de una carpeta, no la promesa (2026-10-17)
+**Elegí:** `once` anota quién crea cada carpeta y su última señal; los demás miran cada 50 ms el resultado y, si no hay
+señales en 30 s (`ONCE_STALE_MS`), la toma el siguiente. Se descartó esperar la promesa del otro pedido con un tope:
+en Workers una promesa empezada por un pedido cortado puede no terminar nunca y su continuación quedaría atada a otro
+pedido; mirar un valor con un temporizador propio no depende de nada del otro pedido. Las señales salen de cada llamado
+a Google, así una creación lenta pero viva no se pisa.
+
+### D756 · Antes de crear una carpeta de la app, buscarla (2026-10-17)
+**Elegí:** por nombre adentro de su carpeta (la de la app, pruebas, `Via_link`, la del día, `Carpetas`) y la del
+proyecto por su marca `sdProject`, sin las de la papelera y la más vieja si hay varias. Cuesta un llamado a Drive solo
+cuando hay que crear. Una carpeta del mismo nombre hecha a mano en ese lugar se adopta; con `drive.file` el portero
+solo ve las que creó la app.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

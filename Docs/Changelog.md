@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.261 :
+
+Importando 2876 archivos, desde un momento todo `POST /upload` al portero quedó sin respuesta hasta que la app lo cortaba a los 60 s; el resto del portero contestaba. Causa: `once` compartía entre pedidos la promesa de quien creaba una carpeta. Si ese pedido se cortaba (el navegador se cerró a mitad de una subida) o Google no le contestaba, la promesa no terminaba nunca y todas las subidas siguientes la esperaban hasta reiniciar el Worker. Ahora cada llamado a Google tiene tope de 20 s hasta que empieza a contestar (`504 drive_timeout`, que la app reintenta); entre pedidos se comparte solo el resultado, y quien no da señales en 30 s cede la carpeta al siguiente. Antes de crear una carpeta se la busca en Drive, así un intento cortado no deja dos iguales. Pruebas con relojes falsos. D754–D756.
+
+[Que una carpeta de Drive que no contesta no cuelgue todas las subidas del portero]
+
 v0.260 :
 
 Encontrar todo lo que se escribió de una escena pedía saber que existía *Map › Scenes*, y aun ahí se veían locaciones y días, no las páginas. El índice ya sabía qué páginas nombran cada escena, pero nada lo mostraba. Ahora la barra lateral tiene una sección automática *Scenes*, debajo de *Map*: escenas por episodio (uno abierto a la vez) con su título en vivo, recordada por proyecto, de a 60 filas. Cada escena abre `/map/scenes?scene=<código>` con todas las páginas que la nombran o la linkean (también a una ficha suya), por etapa, cada lugar con un extracto y un clic al bloque exacto; las páginas índice van aparte y una escena repetida se marca. *Map › Scenes* suma «N pages», que despliega la misma lista. Mientras lee dice «Reading…»; un invitado ve solo lo suyo. Solo lectura del índice. D744–D753.

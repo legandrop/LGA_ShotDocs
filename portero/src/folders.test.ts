@@ -153,6 +153,8 @@ function fakeWorld() {
       const mime = /mimeType = '([^']+)'/.exec(q)?.[1];
       const sdFolder = /key='sdFolder' and value='([^']+)'/.exec(q)?.[1];
       const sdFile = /key='sdFile' and value='([^']+)'/.exec(q)?.[1];
+      const sdProject = /key='sdProject' and value='([^']+)'/.exec(q)?.[1];
+      const named = /name = '([^']+)'/.exec(q)?.[1];
       const sdPaths = [...q.matchAll(/key='sdPath' and value='([^']+)'/g)].map((m) => m[1]);
       let list = [...drive.entries()].filter(([, f]) => !f.trashed);
       if (parents.length) list = list.filter(([, f]) => f.parents.some((p) => parents.includes(p)));
@@ -163,6 +165,8 @@ function fakeWorld() {
       if (mime) list = list.filter(([, f]) => f.mimeType === mime);
       if (sdFolder) list = list.filter(([, f]) => f.appProperties?.sdFolder === sdFolder);
       if (sdFile) list = list.filter(([, f]) => f.appProperties?.sdFile === sdFile);
+      if (sdProject) list = list.filter(([, f]) => f.appProperties?.sdProject === sdProject);
+      if (named) list = list.filter(([, f]) => f.name === named);
       if (sdPaths.length) list = list.filter(([, f]) => sdPaths.includes(f.appProperties?.sdPath ?? ''));
       list.sort(([, a], [, b]) => Number(b.mimeType === FOLDER) - Number(a.mimeType === FOLDER) || a.name.localeCompare(b.name, undefined, { numeric: true }));
       // Paginado como Drive: `pageSize` y un `pageToken` que dice dónde seguir y está atado a la consulta.

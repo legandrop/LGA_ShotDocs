@@ -616,6 +616,34 @@ Drive; las partes llevaron `?stall=1` y la pregunta de cuánto llegó, no. Con 2
 **Lo que queda afuera** (anotado en `Doc_Roadmap.md`, B.11): probarlo en Safari de iPhone y con una red lenta de
 verdad.
 
+### Carpetas una sola vez, sin colgar a nadie (v0.261)
+
+**Qué pasó.** Importando un proyecto de 2876 archivos, desde un momento todo `POST /upload` quedó sin respuesta hasta
+que la app lo cortaba a los 60 s, mientras `/drive/status` y `only: 'known'` contestaban bien. Lo que se colgaba era
+el tramo de carpetas (`rootFolder`, `projectFolder`, `dayIn`). Antes, `once` guardaba en la memoria del Worker la
+**promesa** del pedido que creaba la carpeta y todos los demás la esperaban. En Workers, lo que empezó un pedido queda
+atado a él: si ese pedido se corta (el navegador se cerró a mitad de una subida) o su llamado a Google no contesta
+nunca, esa promesa no termina jamás, y todas las subidas siguientes la esperaban hasta que se reiniciaba el Worker.
+
+**Las reglas desde v0.261:**
+
+- **Todo llamado a Google tiene tope** (`google()`, por `drive()` y el token): `DRIVE_TIMEOUT_MS` = 20 s hasta que
+  empieza a contestar. Pasado eso se corta con su señal (sumada a la que traiga el pedido) y sale `504 drive_timeout`,
+  que la app reintenta. El cuerpo no tiene tope: un video que se sirve sigue llegando. Las partes de una subida no pasan
+  por acá (`PART_ANSWER_MS`).
+- **Entre pedidos se comparte el resultado, nunca una promesa.** `once` deja anotado en la memoria quién está creando
+  la carpeta y cuándo dio señales por última vez (`beat`: cada llamado a Google de ese pedido). Los demás miran cada
+  50 ms si ya está el resultado (el id o el error) y se lo llevan; no esperan nada del otro pedido.
+- **Quien no da señales en `ONCE_STALE_MS` (30 s) se da por muerto** y la carpeta la toma el próximo que la espera.
+  Mientras quien la crea sigue hablando con Google, no se le saca aunque tarde más.
+- **Antes de crear, buscar** (`child`): la carpeta de la app, la de pruebas, `Via_link`, la del día y `Carpetas` por
+  nombre adentro de su carpeta; la del proyecto por su marca `sdProject`. Si un intento muerto llegó a crearla en
+  Drive sin anotarla, se usa esa y no queda otra igual. Es un llamado a Drive más, solo cuando hay que crear.
+
+Lo que queda: si quien crea sigue vivo pero tarda más de 30 s sin hablar con Google (la base o el almacenamiento
+colgados) y otro la toma, los dos podrían buscar a la vez, no verla y crear dos. No se vio nunca y el tope lo hace muy
+raro; una carpeta repetida no pierde nada (se ve en Drive y se junta a mano).
+
 ### Carpetas: nunca hacia arriba (P.9)
 
 Con `drive.file` (hoy) el portero ve solo lo que creó la app; con `drive.readonly` (si Lega lo decide) vería
