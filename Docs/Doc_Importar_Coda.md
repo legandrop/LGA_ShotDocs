@@ -679,6 +679,29 @@ originales sin quitarles nada. Reglas que tiene que cumplir:
 
 Ese paso es propio de cada doc (sabe cómo se escribieron sus escenas y sus locaciones) y no vive en este repo.
 
+### Varios docs en un proyecto (2026-10-17)
+
+Un proyecto puede venir repartido en varios docs de Coda (preproducción, scoutings, reportes de rodaje). Se exporta
+cada uno a su carpeta y el paso intermedio de arriba los junta en **una** carpeta importable con un solo `doc`. Lo que
+costó descubrir con el primero (un largo, tres docs, 1.117 páginas de entrada y 743 importadas):
+
+- **Curar antes de juntar:** buena parte de un doc viejo son copias (tablas duplicadas, información copiada del otro
+  doc, planes repetidos). Se descarta solo lo que está entero en otra página que entra, comparando el texto normalizado
+  y las fotos por contenido (no por id de blob); cada descarte lleva su motivo.
+- **Links entre docs:** los que van a las copias del otro doc se reapuntan al original que entra (`coda-page:`); los
+  que no tienen destino quedan como texto y se listan.
+- **Dos unidades el mismo día no se juntan en una página:** la locación del día sale del título y todas sus secciones
+  serían de cada lugar. La segunda unidad va como día hermano, `AAAA-MM-DD | Día NN U2 | <lugar>`.
+- **Lugares scouteados que no se usaron:** un renglón al principio de su página y de su scouting lo dice, con link a
+  donde se filmó, y su título también, para que nadie lo tome por filmado.
+- **Validar leyendo con la app:** además del validador de conservación, una simulación con las funciones de
+  `src/relations` sobre la salida (tipo y número de cada título, locación de cada día, escena de cada sección) que
+  falla si algo no coincide. Los tipos de carpeta no van en el manifest: se marcan en la app después de importar
+  (*Type*, *Leave out of relations*).
+- **Fotos HEIC sin tocar el `node_modules` del clon:** una copia de `scripts/` (y de `src/media/heifColor.mjs`) en
+  una carpeta aparte, con `heic-convert` y `jsdom` instalados ahí, y `--convert-only` desde esa copia. Así no se
+  mueve el árbol de paquetes mientras corren pruebas en otros worktrees.
+
 ## Cómo quedó
 
 - `scripts/coda-export.mjs` y `scripts/lib/codaExport.mjs` (lo que decide sin red: a qué dirección va el

@@ -1863,6 +1863,23 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    navegador con `preventDefault`; si Safari lo ejecuta igual, habría que no tomar el atajo ahí) y en el iPhone
    instalado. Posible después: mantener apretado ‹ para ver la lista de páginas anteriores, como los navegadores.
    Detalle: [Doc_Navegacion.md](Doc_Navegacion.md).
+32. **Portero: el mismo tipo de cuelgue en otras rutas (auditoría de la v0.261, D754–D756).** (1) `oneAtATime`
+   (mapa `projectWork` de `portero/src/core.ts`) encadena promesas entre pedidos: si se cancela un `/project/trash` o
+   `/project/untrash`, las siguientes operaciones del mismo proyecto esperan hasta que se recicle el isolate. Pasarlo a
+   compartir el resultado, como `once`. `hmacKeys` también comparte promesas (de crypto: riesgo bajo). (2) Faltan
+   pruebas con un pedido muerto para la carpeta del proyecto (por marca), la del día, `Carpetas` y el caso anidado
+   `folder:<archivo>` (cuatro mutaciones sobreviven), y que el Drive falso pruebe la regla de la papelera de `child`.
+   (3) Dos isolates que buscan a la vez todavía pueden crear dos carpetas iguales (el Durable Object podría hacer de
+   candado). (4) En `/project/trash` y `/project/untrash`, `drive_timeout` llega con «trying again shortly» pero la
+   app no reintenta: traducirlo a `drive_failed` en `withProjectCode`. (5) La carpeta del proyecto hallada por la marca
+   se anota con el nombre buscado aunque en Drive tenga otro, y después no se renombra.
+33. **Relaciones: lo que mostró la importación de un largo armado con tres docs (2026-10-17).** (1) El lector toma
+   «Escena 46-47-51» como rango y le da la sección también a 048 y 050 (`reader.ts`, rangos; en `pageRelations.ts` las
+   escondidas son dueñas de la sección): tres números con guion son una lista. Al importar se escribió «Escena 46, 47,
+   51». (2) La caja *Tomorrow* de un día U1 propone el día U2 de la misma fecha. (3) En la cabecera de una escena un día
+   puede salir dos veces (dos secciones el mismo día). (4) Títulos de sección como «120ac», «P55A» o «32RTK» no se leen
+   como escena: al importar se agregó el link dentro del título. (5) Un desglose armado como una tabla de varias escenas
+   en una sola página (sin el número en el título) no cuenta como desglose de cada una.
 
 ### C. Esperan a Lega
 

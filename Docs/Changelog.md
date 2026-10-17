@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.262 :
+
+Importar un largo repartido en tres docs de Coda dejó cosas que no estaban escritas. La guía de importación suma cómo
+se juntan varios docs en un proyecto: curar las copias comparando texto y fotos por contenido, reapuntar los links
+entre docs, no juntar dos unidades del mismo día en una página (la locación sale del título), marcar los lugares
+scouteados que no se usaron, validar leyendo la salida con las funciones de relaciones de la app y convertir las HEIC
+desde una copia aparte del exportador. El roadmap suma lo que la auditoría de la v0.261 dejó en el portero (otra ruta
+que encadena promesas entre pedidos, pruebas que faltan, el mensaje de la papelera) y lo que mostró la importación en
+las relaciones (tres números con guion leídos como rango, *Tomorrow* que propone la segunda unidad). Sin cambios de
+código.
+
+[Anotar cómo se importa un proyecto de varios docs de Coda y lo pendiente del portero y las relaciones]
+
 v0.261 :
 
 Importando 2876 archivos, desde un momento todo `POST /upload` al portero quedó sin respuesta hasta que la app lo cortaba a los 60 s; el resto del portero contestaba. Causa: `once` compartía entre pedidos la promesa de quien creaba una carpeta. Si ese pedido se cortaba (el navegador se cerró a mitad de una subida) o Google no le contestaba, la promesa no terminaba nunca y todas las subidas siguientes la esperaban hasta reiniciar el Worker. Ahora cada llamado a Google tiene tope de 20 s hasta que empieza a contestar (`504 drive_timeout`, que la app reintenta); entre pedidos se comparte solo el resultado, y quien no da señales en 30 s cede la carpeta al siguiente. Antes de crear una carpeta se la busca en Drive, así un intento cortado no deja dos iguales. Pruebas con relojes falsos. D754–D756.
