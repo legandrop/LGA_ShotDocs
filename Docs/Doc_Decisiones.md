@@ -1849,6 +1849,46 @@ Otro clic en la misma página la despliega de nuevo. La preferencia sigue a la c
 cambia contenido ni permisos. Una versión vieja puede omitir esta clave, igual que las otras preferencias nuevas.
 La mínima sigue 0.256; no hay esquema nuevo.
 
+### D738 · Dónde van atrás y adelante (2026-10-17)
+**Pedido de Lega:** botones ‹ › para volver a las páginas anteriores y a las siguientes; la app instalada no tiene los
+del navegador. **Elegí:** en la barra de arriba, a la izquierda del breadcrumb (en el teléfono, después del menú), como
+en un navegador o en Notion; también en la práctica. Apagados cuando no hay a dónde ir dentro de la app. En el teléfono
+la barra pasa a un hueco de 4 px y los dos botones a 30 px: a 375 px el título del breadcrumb conserva unos 55 px (el
+título grande de la página sigue debajo). Detalle: [Doc_Navegacion.md](Doc_Navegacion.md).
+
+### D739 · Registro propio de posición, no la Navigation API (2026-10-17)
+**Qué pasaba:** el navegador no dice si atrás es de la app o del sitio anterior. La Navigation API lo sabe, pero no está
+en todos los Safari que usan los iPhone. **Elegí:** una marca `{ tramo, posición }` en el `state` de cada entrada,
+envolviendo `pushState` y `replaceState` al arrancar (así ningún `replaceState(null, …)` la pierde), y el máximo en
+`sessionStorage` para sobrevivir a una recarga. Ante la duda (un tramo viejo, la caché del navegador), adelante queda
+apagado: un botón de la app nunca saca de la app.
+
+### D740 · Atajos de atrás y adelante (2026-10-17)
+**Elegí:** los de los navegadores: Alt+← y Alt+→ en Windows y Linux, ⌘[ y ⌘] en la Mac (⌘← y ⌘→ mueven el cursor en el
+renglón). No chocan con el editor (BlockNote y Tiptap no los usan). En el anotador ⌘[ y ⌘] siguen cambiando el grosor;
+el carrete sigue usando ← y → para las fotos; con una capa abierta el atajo no actúa. Sin a dónde ir dentro de la app
+el atajo no se frena y el navegador hace lo suyo, como antes. El registro suma `macKeys` para las teclas propias de
+la Mac.
+
+### D741 · El carrete y «Show me» no cuentan como páginas para adelante (2026-10-17)
+**Qué pasaba:** los dos suman una entrada al historial para que atrás los cierre. Después de cerrarlos, adelante
+volvía a esa entrada sin reabrir nada. **Elegí:** marcarlas como capa (`overlayState`); al volver de una, lo de
+adelante se olvida. Atrás de la barra las cierra igual que el atrás del navegador. Durante «Show me» el bloqueador de
+la recorrida tapa la barra: la recorrida pone una copia del ‹ encima, en el mismo lugar, que vuelve igual. Solo donde el ‹ de verdad se vería: no
+con el cajón de páginas abierto (en el teléfono lo tapa) ni si su lugar se cruza con el globito o la barra lateral.
+
+### D742 · Un doble clic no salta dos páginas (2026-10-17)
+**Elegí:** después de un atrás o adelante, otro clic o atajo no hace nada hasta que llegó su vuelta y pasaron 500 ms
+desde el clic (el doble clic de Windows es de hasta 500 ms; si la vuelta no llega, se deja de esperarla a los 2 s).
+Dos clics a 150 ms van una sola página, y dos clics rápidos en la segunda página no sacan la app al sitio anterior.
+Para ir varias páginas atrás alcanza con clics separados por medio segundo. La tecla mantenida (Alt+← o ⌘[ con
+repetición) va una sola página: sus repeticiones se frenan siempre y no navegan, así el navegador no sigue yendo atrás
+hasta salir de la app.
+
+### D743 · Sin versión mínima nueva (2026-10-17)
+La marca va solo en el historial de la pestaña: no cambia el documento, el árbol ni la base. Una versión vieja abierta
+ignora la marca. `min_app_version` sigue en 0.256.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

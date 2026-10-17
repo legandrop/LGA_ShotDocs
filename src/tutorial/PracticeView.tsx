@@ -17,6 +17,7 @@ import { closeFindBar, isFindShortcut, openFindBar, takesFindShortcut } from '..
 import { MoreIcon, PrintIcon, RestoreIcon, SearchIcon, SheetIcon, SignOutIcon } from '../ui/icons';
 import { lazyPart, Part } from '../ui/lazyPart';
 import { menuBelow, useFloating, type MenuPosition } from '../ui/menus';
+import { NavButtons } from '../ui/NavButtons';
 import { NavMenuButton } from '../ui/NavMenuButton';
 import { setNavOpen } from '../ui/navStore';
 import { notify } from '../ui/notice';
@@ -119,6 +120,7 @@ export function PracticeView() {
     <>
       <header className="topbar">
         <NavMenuButton />
+        <NavButtons />
         <nav className="breadcrumbs" aria-label={tr('shell.location')}>
           <span className="crumb current" aria-current="page">
             {crumb}

@@ -22,7 +22,8 @@ import { isDictateShortcut } from '../dictation/dictationUi';
 import { isSearchShortcut } from './projectSearchUi';
 import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
 import { SHORTCUT_FILES, SHORTCUT_RULES } from './shortcutSources';
-import { keyLabel, shortcut, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS, slashBadge, type Shortcut } from './shortcuts';
+import { isNavBackShortcut, isNavForwardShortcut } from '../navHistory';
+import { keyLabel, platformKeys, shortcut, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS, slashBadge, type Shortcut } from './shortcuts';
 
 // El registro único de atajos (Docs/Doc_Tutorial.md, sección 6) contra lo que hace la app de verdad: el editor
 // real (BlockNote, Tiptap y nuestras extensiones), las funciones `is…Shortcut`, los archivos que escuchan teclas
@@ -72,6 +73,9 @@ describe('el registro', () => {
     expect(both('moveUp')).toEqual(['⌘⇧↑', 'Ctrl+Shift+↑']);
     expect(both('findNext')).toEqual(['Enter / F3 / ⌘G', 'Enter / F3 / Ctrl+G']);
     expect(both('findPrev')).toEqual(['⇧↩ / ⇧F3 / ⌘⇧G', 'Shift+Enter / Shift+F3 / Ctrl+Shift+G']);
+    // Atrás y adelante: los de los navegadores en cada plataforma (Docs/Doc_Navegacion.md).
+    expect(both('navBack')).toEqual(['⌘[', 'Alt+←']);
+    expect(both('navForward')).toEqual(['⌘]', 'Alt+→']);
     expect(shortcutLabel('treeEnds', false, 'es')).toBe('Inicio / Fin');
     expect(shortcutLabel('mdHeading')).toBe('#  ##  ###');
     for (const s of SHORTCUTS) {
@@ -93,16 +97,22 @@ describe('el registro', () => {
 
   it('sin choques: las mismas teclas en lugares que se pisan solo con distinto contexto', () => {
     const overlap = (a: Shortcut, b: Shortcut) => a.place === b.place || a.place === 'global' || b.place === 'global';
+    // El anotador es una capa a pantalla entera que toma ⌘[ y ⌘] en la captura de `window` (annotatorKeys.ts): ahí son
+    // el grosor; afuera, atrás y adelante. Los atajos de atrás y adelante no actúan con una capa abierta (navHistory.ts).
+    const ALLOWED = new Set(['navBack y annotateWidthNext: Mod-[', 'navForward y annotateWidthNext: Mod-]']);
     const clashes: string[] = [];
-    for (const [i, a] of SHORTCUTS.entries()) {
-      for (const b of SHORTCUTS.slice(i + 1)) {
-        if (a.source === 'typed' || b.source === 'typed' || !overlap(a, b) || (a.context ?? '') !== (b.context ?? '')) continue;
-        // `global` solo choca con un atajo con modificador (Enter en el editor no es Enter en la barra de buscar).
-        const keysA = new Set(a.keys.map(norm));
-        for (const k of b.keys.map(norm)) {
-          if (!keysA.has(k)) continue;
-          if (a.place !== b.place && !/^(Mod|Ctrl|Alt)-/.test(k)) continue;
-          clashes.push(`${a.id} y ${b.id}: ${k}`);
+    for (const mac of [true, false]) {
+      for (const [i, a] of SHORTCUTS.entries()) {
+        for (const b of SHORTCUTS.slice(i + 1)) {
+          if (a.source === 'typed' || b.source === 'typed' || !overlap(a, b) || (a.context ?? '') !== (b.context ?? '')) continue;
+          // `global` solo choca con un atajo con modificador (Enter en el editor no es Enter en la barra de buscar).
+          const keysA = new Set(platformKeys(a, mac).map(norm));
+          for (const k of platformKeys(b, mac).map(norm)) {
+            if (!keysA.has(k)) continue;
+            if (a.place !== b.place && !/^(Mod|Ctrl|Alt)-/.test(k)) continue;
+            const clash = `${a.id} y ${b.id}: ${k}`;
+            if (!ALLOWED.has(clash)) clashes.push(mac ? `${clash} (Mac)` : clash);
+          }
         }
       }
     }
@@ -216,6 +226,9 @@ const FUNCTIONS: Record<string, { fn: Fn; id: string; keys?: string[] }> = {
   // Deshacer y rehacer en el orden en que editaste (P.26): la línea de tiempo los toma en `window`.
   isUndoShortcut: { fn: isUndoShortcut as Fn, id: 'undo' },
   isRedoShortcut: { fn: isRedoShortcut as Fn, id: 'redo' },
+  // Atrás y adelante (navHistory.ts): Alt+← / Alt+→ fuera de la Mac, ⌘[ / ⌘] en la Mac (la prueba de abajo).
+  isNavBackShortcut: { fn: isNavBackShortcut as Fn, id: 'navBack' },
+  isNavForwardShortcut: { fn: isNavForwardShortcut as Fn, id: 'navForward' },
 };
 
 /** Un evento de teclado sintético para esas teclas, en la Mac (⌘) o en Windows (Ctrl). */
@@ -244,6 +257,22 @@ describe('las funciones is…Shortcut dicen lo mismo que el registro', () => {
           if (k.includes('Mod')) expect(fn(eventFor(k, mac, true) as never, mac), `${name} ${k} al revés, mac=${mac}`).toBe(false);
         }
       }
+    }
+  });
+
+  it('atrás y adelante: las teclas de cada plataforma, y nunca las de la otra', () => {
+    for (const [name, { fn, id }] of Object.entries(FUNCTIONS).filter(([, f]) => shortcut(f.id).macKeys)) {
+      for (const mac of [true, false]) {
+        for (const k of platformKeys(shortcut(id), mac)) {
+          expect(fn(eventFor(k, mac) as never, mac), `${name} ${k} mac=${mac}`).toBe(true);
+          // Las de la otra plataforma no (Alt+← en la Mac mueve por palabras; Ctrl+[ en Windows no es nada).
+          for (const other of platformKeys(shortcut(id), !mac)) expect(fn(eventFor(other, mac) as never, mac), `${name} ${other} en mac=${mac}`).toBe(false);
+        }
+      }
+      // En la Mac, Ctrl+[ no (Ctrl es otra cosa ahí); con Shift tampoco.
+      const macKey = platformKeys(shortcut(id), true)[0];
+      expect(fn(eventFor(macKey, true, true) as never, true), `${name} Ctrl en la Mac`).toBe(false);
+      expect(fn({ ...eventFor(macKey, true), shiftKey: true } as never, true)).toBe(false);
     }
   });
 
@@ -398,7 +427,7 @@ describe('el código contra el registro', () => {
   });
 
   it('cada combinación escrita en el código ("Mod-…", "Shift-…") está en el registro', () => {
-    const registered = new Set(SHORTCUTS.flatMap((s) => s.keys.map(norm)));
+    const registered = new Set(SHORTCUTS.flatMap((s) => [...s.keys, ...(s.macKeys ?? [])].map(norm)));
     const loose: string[] = [];
     for (const [path, code] of sourceFiles()) {
       if (basename(path) === 'shortcuts.ts') continue;
@@ -415,7 +444,7 @@ describe('el código contra el registro', () => {
     for (const [id, files] of Object.entries(SHORTCUT_FILES)) {
       for (const file of files) {
         const set = byFile.get(file) ?? new Set<string>();
-        for (const k of shortcut(id).keys) set.add(keyName(k.split(/-(?!$)/).pop()!));
+        for (const k of [...shortcut(id).keys, ...(shortcut(id).macKeys ?? [])]) set.add(keyName(k.split(/-(?!$)/).pop()!));
         byFile.set(file, set);
       }
     }

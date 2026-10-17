@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { installNavHistory } from './navHistory';
 import { prefs } from './prefs';
 import { App } from './ui/App';
 import { AppBarrier } from './ui/ErrorBarrier';
@@ -21,6 +22,8 @@ import '@fontsource/courier-prime/latin-700.css';
 import './styles.css';
 
 prefs.init();
+// Atrás y adelante adentro de la app (navHistory.ts): antes que cualquier `replaceState`, así cada entrada lleva su marca.
+installNavHistory();
 // `/dictate#<texto>` (el Atajo de iOS, Doc_Dictado.md, V4): el texto se guarda para la hoja y la dirección vuelve al
 // inicio antes de que la app la lea.
 captureDictateLink();

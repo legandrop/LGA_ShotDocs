@@ -101,6 +101,15 @@ export const help = {
   },
 
   // --- Páginas y proyectos ---
+  'help.navButtons.title': { en: "Back and forward", es: "Atrás y adelante" },
+  'help.navButtons.text': {
+    en: "‹ and › at the top of the page take you back to the pages you opened before, and forward again after going back, like in a browser. They also work in the installed app, which has no browser buttons. They're dimmed when there's nowhere to go inside the app. {back} and {forward} do the same.",
+    es: "‹ y › arriba de la página te llevan a las páginas que abriste antes, y otra vez adelante después de volver, como en un navegador. También funcionan en la app instalada, que no tiene los botones del navegador. Se ven apagados cuando no hay a dónde ir dentro de la app. {back} y {forward} hacen lo mismo.",
+  },
+  'help.navButtons.textTouch': {
+    en: "‹ and › at the top of the page take you back to the pages you opened before, and forward again after going back, like in a browser. They also work in the installed app, which has no browser buttons. They're dimmed when there's nowhere to go inside the app.",
+    es: "‹ y › arriba de la página te llevan a las páginas que abriste antes, y otra vez adelante después de volver, como en un navegador. También funcionan en la app instalada, que no tiene los botones del navegador. Se ven apagados cuando no hay a dónde ir dentro de la app.",
+  },
   'help.pagesExpand.title': { en: "Expand subpages when selecting a page", es: "Expandir subpáginas al elegir una página" },
   'help.pagesExpand.text': {
     en: "Clicking a page in the sidebar expands it and shows all its direct subpages. Deeper branches keep their open or closed state. In the account menu, Expand subpages offers On click (the default) or Manual. The arrow still expands or collapses a page; clicking the page again expands it again. This preference follows your account across devices and works offline.",
@@ -760,6 +769,8 @@ export const help = {
   // --- Lo que hace cada atajo (src/help/shortcutTexts.ts) ---
   'shortcut.search': { en: "Search the project (and its projects list)", es: "Buscar en el proyecto (y la lista de proyectos)" },
   'shortcut.find': { en: "Find and replace in the page", es: "Buscar y reemplazar en la página" },
+  'shortcut.navBack': { en: "Back to the page you were on", es: "Volver a la página anterior" },
+  'shortcut.navForward': { en: "Forward again, after going back", es: "Adelante otra vez, después de volver" },
   'shortcut.print': { en: "Export PDF / print the page", es: "Exportar PDF / imprimir la página" },
   'shortcut.history': { en: "Version history of the page", es: "Historial de versiones de la página" },
   'shortcut.newDayReport': {

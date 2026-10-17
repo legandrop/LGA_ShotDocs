@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { helpSeen, useHelpUi } from '../help/helpUi';
 import { checkHelpNews, useHelpNews } from '../help/news';
 import { PRACTICE_PATH } from '../router';
+import { overlayState } from '../navHistory';
 import { capturePlace, restorePlace, type ShowMePlace } from './showMePlace';
 
 // El estado de la recorrida (Docs/Doc_Tutorial.md, sección 4, "Cuándo aparece y dónde se guarda que ya se vio"). Va
@@ -133,7 +134,7 @@ export function showStep(id: string): void {
   // se vuelve con Atrás, así no queda ninguna de más. También desde la vista previa de una plantilla (`/practice?…`),
   // que tiene la misma ruta.
   if (back) {
-    history.pushState({ shotdocsShowMe: true }, '', PRACTICE_PATH);
+    history.pushState(overlayState({ shotdocsShowMe: true }), '', PRACTICE_PATH);
     window.dispatchEvent(new PopStateEvent('popstate'));
   }
 }

@@ -19,6 +19,7 @@ import { Shell } from '../ui/Workspace';
 import { TooltipLayer } from '../ui/Tooltip';
 import { prefs } from '../prefs';
 import { pagePath } from '../router';
+import { installNavHistory } from '../navHistory';
 
 function services(d: Device, userId: string): Services {
   const config = { url: 'https://znlvpuddswymxpffgvbz.supabase.co', publishableKey: 'sb_publishable_test', name: 'Wanka', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) };
@@ -62,6 +63,8 @@ async function main() {
   await A.engine.syncNow();
   // El árbol con Shooting abierto (lo que deja la persona al recorrer los días): Scenes queda cerrada y abajo.
   localStorage.setItem('shotdocs-expanded', JSON.stringify([shooting]));
+  // Atrás y adelante de la barra (navHistory.ts), como en main.tsx: la marca de cada entrada del historial.
+  installNavHistory();
   history.replaceState(null, '', pagePath(index));
   createRoot(document.getElementById('root')!).render(
     <>

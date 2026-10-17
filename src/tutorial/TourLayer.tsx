@@ -9,6 +9,7 @@ import { placeNear, type Rect } from '../ui/floating';
 import { setNavOpen } from '../ui/navStore';
 import { notify } from '../ui/notice';
 import { shortcutLabel } from '../ui/shortcuts';
+import { ShowMeBack } from './ShowMeBack';
 import { stepsFor, TOUR_STEPS, type TourAnchor, type TourStep } from './steps';
 import { continueTour, dismissTour, endShowStep, endTour, onTourSignal, practiceHooks, setTourStep, startTour, useTourUi } from './tourState';
 
@@ -356,6 +357,8 @@ function StepView({ step, index, total, phone, single = false }: { step: TourSte
           )}
         </div>
       </div>
+      {/* «Show me»: el ‹ de la barra queda tapado por el bloqueador; una copia encima, si ahí se vería (ShowMeBack.tsx). */}
+      {single && <ShowMeBack bubble={bubble} />}
       <div className="tour-live" aria-live="polite">
         {single ? tr('tour.liveShowMe', { title }) : tr('tour.live', { n: index + 1, total, title })}
       </div>

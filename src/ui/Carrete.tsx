@@ -6,6 +6,7 @@ import '../i18n/lazy/carrete';
 import { extensionLabel } from '../media/attachments';
 import { formatSize } from '../media/fileTrash';
 import type { MediaKind } from '../media/probe';
+import { overlayState } from '../navHistory';
 import { openInNewTab } from './attachmentOpen';
 import {
   clampZoom,
@@ -272,7 +273,8 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
   useEffect(() => {
     const token = historyToken.current;
     const state = history.state as { carrete?: string } | null;
-    if (state?.carrete !== token) history.pushState({ ...(state ?? {}), carrete: token }, '');
+    // Una entrada de capa (navHistory.ts): al volver de ella, *Forward* de la barra no reabre el carrete cerrado.
+    if (state?.carrete !== token) history.pushState(overlayState({ ...(state ?? {}), carrete: token }), '');
     const onPop = () => {
       if ((history.state as { carrete?: string } | null)?.carrete !== token) finishClose();
     };

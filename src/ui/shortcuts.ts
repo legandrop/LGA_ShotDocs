@@ -22,6 +22,11 @@ export interface Shortcut {
    * que se escribe (`typed`), el texto tal cual ("# ", "/").
    */
   keys: string[];
+  /**
+   * En la Mac, estas teclas en lugar de `keys` (cuando el atajo de cada plataforma es otro, no solo ⌘ por Ctrl: atrás
+   * es Alt+← en Windows y ⌘[ en la Mac, como en los navegadores).
+   */
+  macKeys?: string[];
   place: ShortcutPlace;
   /**
    * Dentro del lugar, cuándo vale (una foto de una fila elegida, una línea de guion, texto elegido): dos atajos
@@ -56,6 +61,10 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'assistant', keys: ['Mod-Alt-j'], place: 'global', owner: 'app', source: 'window' },
   // *Dictate to report* (Docs/Doc_Dictado.md, V1): abrir o cerrar la hoja.
   { id: 'dictate', keys: ['Mod-Alt-Shift-d'], place: 'global', owner: 'app', source: 'window' },
+  // Atrás y adelante adentro de la app (Docs/Doc_Navegacion.md): los de los navegadores en cada plataforma. En la Mac,
+  // ⌘[ y ⌘] (⌘← y ⌘→ mueven el cursor al principio y al final del renglón); el anotador abierto los toma para el grosor.
+  { id: 'navBack', keys: ['Alt-ArrowLeft'], macKeys: ['Mod-['], place: 'global', owner: 'app', source: 'window' },
+  { id: 'navForward', keys: ['Alt-ArrowRight'], macKeys: ['Mod-]'], place: 'global', owner: 'app', source: 'window' },
   { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },
 
   // --- Editor: lo de la app ---
@@ -230,6 +239,11 @@ export function shortcut(id: string): Shortcut {
   return found;
 }
 
+/** Las teclas del atajo en esa plataforma: las de la Mac si tiene otras (`macKeys`). */
+export function platformKeys(s: Shortcut, mac = IS_MAC): string[] {
+  return mac && s.macKeys ? s.macKeys : s.keys;
+}
+
 /** Las teclas de un atajo de ProseMirror del registro (el esquema y las extensiones las importan de acá). */
 export function shortcutKeys(id: string): string[] {
   return shortcut(id).keys;
@@ -292,7 +306,7 @@ export function shortcutLabel(id: string, mac = IS_MAC, lang: 'en' | 'es' = 'en'
     const [first, ...rest] = s.display;
     return keyLabel(first, mac, lang) + rest.join('');
   }
-  return s.keys.map((k) => keyLabel(k, mac, lang)).join(' / ');
+  return platformKeys(s, mac).map((k) => keyLabel(k, mac, lang)).join(' / ');
 }
 
 /** El atajo de cada ítem del menú "/" de BlockNote (por su `key`), del registro. */

@@ -118,6 +118,10 @@ export const shell = {
   'shell.openPages': { en: "Open pages", es: "Abrir páginas" },
   // Con el punto de la ayuda (novedades o la recorrida sin ver): el nombre lo dice, como el del "?" del cajón.
   'shell.openPagesDot': { en: "Open pages (the help has something new)", es: "Abrir páginas (la ayuda tiene algo nuevo)" },
+  // Atrás y adelante adentro de la app (NavButtons.tsx, Docs/Doc_Navegacion.md).
+  'shell.navBack': { en: "Back", es: "Atrás" },
+  'shell.navForward': { en: "Forward", es: "Adelante" },
+  'shell.navigation': { en: "Page history", es: "Historial de páginas" },
   'shell.findInPage': { en: "Find in page", es: "Buscar en la página" },
   // *Dictate to report* (Docs/Doc_Dictado.md): el botón de la barra y el redondo del teléfono.
   'shell.dictate': { en: "Dictate to report", es: "Dictar al reporte" },

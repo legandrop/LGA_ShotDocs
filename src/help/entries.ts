@@ -255,6 +255,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
 
   // --- Páginas y proyectos ---
+  {
+    id: 'navButtons',
+    section: 'pages',
+    title: 'help.navButtons.title',
+    text: 'help.navButtons.text',
+    textTouch: 'help.navButtons.textTouch',
+    keys: { back: 'navBack', forward: 'navForward' },
+    words: ['back', 'forward', 'previous', 'next', 'history', 'navigate', 'atrás', 'adelante', 'anterior', 'siguiente', 'volver', 'historial', 'navegar'],
+    since: '0.259',
+  },
   { id: 'pagesTree', section: 'pages', title: 'help.pagesTree.title', text: 'help.pagesTree.text', showMe: 'pages', since: BEFORE_HELP },
   { id: 'pagesExpand', section: 'pages', title: 'help.pagesExpand.title', text: 'help.pagesExpand.text', words: ['expand', 'subpages', 'click', 'manual', 'account', 'expandir', 'subpáginas', 'clic', 'cuenta'], since: '0.258' },
   { id: 'pagesArrange', section: 'pages', title: 'help.pagesArrange.title', text: 'help.pagesArrange.text', showMe: 'pages', since: BEFORE_HELP },

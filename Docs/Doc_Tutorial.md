@@ -188,7 +188,7 @@ versiones en memoria:
 - Para eso `CommentQueue` y `MediaQueue` se describen con una interfaz (lo que usan los componentes: leer hilos,
   suscribirse, agregar, resolver una dirección, `fileInfo`, `display`), y la práctica implementa solo eso. La
   lista completa de lo que usa `useServices()` (y los ganchos que lo llaman) está en la corrección 1.
-- La barra de arriba en `/practice` muestra la lupa, el ícono de comentarios (dentro del mismo `Provider`) y
+- La barra de arriba en `/practice` muestra atrás y adelante (‹ ›, v0.259, [Navegacion](Doc_Navegacion.md)), la lupa, el ícono de comentarios (dentro del mismo `Provider`) y
   un "⋯" con lo que no toca nada real: tamaño de hoja (solo en memoria), Exportar PDF / Imprimir, *Empezar de
   nuevo* y *Salir de la práctica*.
 - **Contadores:** como nada pasa por `docs`, `media` ni `comments` reales, "cambios sin subir", el aviso al
@@ -843,7 +843,9 @@ Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no mue
 - **Historial del navegador:** `showStep` suma una entrada (`/practice`) y al terminar se vuelve con Atrás
   (`history.back()`), así no queda ninguna de más; Atrás durante el paso vuelve a la página y lo termina. También
   desde la vista previa de una plantilla (`/practice?template=…`), que tiene la misma ruta: el paso va a la práctica y
-  se vuelve a la vista previa.
+  se vuelve a la vista previa. Esa entrada es «de capa» (`overlayState`, v0.259, [Navegacion](Doc_Navegacion.md)): el
+  ‹ de la barra hace lo mismo que Atrás y, al volver, el › no la reabre. Como el bloqueador tapa la barra, la
+  recorrida pone una copia del ‹ encima, en el mismo lugar, solo si ahí se vería (`ShowMeBack.tsx`).
 - **Lo que estaba a la vista vuelve:** la tarjeta "¿Seguimos la recorrida?" o la de primera vez reaparecen al terminar;
   una recorrida en curso queda como tarjeta de retomar (su paso sigue guardado).
 - **Estado:** `showStep(id)` y `endShowStep()` en `src/tutorial/tourState.ts` (`TourUi.only = { id, back, prev }`);

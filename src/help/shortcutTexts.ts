@@ -13,6 +13,8 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   newDayReport: 'shortcut.newDayReport',
   assistant: 'shortcut.assistant',
   dictate: 'shortcut.dictate',
+  navBack: 'shortcut.navBack',
+  navForward: 'shortcut.navForward',
   'titleEnter': 'shortcut.titleEnter',
   comment: 'shortcut.comment',
   question: 'shortcut.question',

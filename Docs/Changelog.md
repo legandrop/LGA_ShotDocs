@@ -1,5 +1,11 @@
 # Changelog — LGA Shot Docs
 
+v0.259 :
+
+La app no tenía botones para volver a la página anterior: dependía del atrás del navegador, que la app instalada (escritorio y iPhone) no muestra. La barra de arriba suma ‹ y ›, a la izquierda del breadcrumb y también en la práctica, apagados cuando no hay a dónde ir sin salir de la app. Para saberlo, cada entrada del historial lleva una marca de posición: `pushState` y `replaceState` quedan envueltos al arrancar y el máximo se guarda en `sessionStorage`, así recargar conserva atrás y adelante. El carrete y «Show me» marcan su entrada como capa: al cerrarlos, adelante no los reabre. Un doble clic o la tecla mantenida van una sola página. Atajos: Alt+← / Alt+→, y ⌘[ / ⌘] en la Mac; el registro suma teclas propias de la Mac. Ayuda, Doc_Navegacion.md y D738–D743.
+
+[Sumar botones de atrás y adelante adentro de la app]
+
 v0.258 :
 
 Elegir una página en la barra lateral abría su contenido pero dejaba sus subpáginas escondidas: había que tocar además la flecha. Ahora el menú de la cuenta suma *Expand subpages*, con *On click* de fábrica y *Manual* para conservar el comportamiento anterior. Un clic en la fila, Enter o Espacio despliegan ese nivel y muestran todas sus hijas directas; las ramas más profundas conservan su estado. La flecha sigue plegando y desplegando, incluso la página abierta, y otro clic en la misma fila la vuelve a desplegar. Recorrer con las flechas mantiene su funcionamiento. La elección se guarda primero en el dispositivo y sigue a la cuenta entre dispositivos, como las demás preferencias; funciona sin red. Ayuda en ambos idiomas y README al día. No cambia páginas, permisos ni formato. D737.

@@ -626,6 +626,21 @@ code {
   display: none;
 }
 
+/* Atrás y adelante (NavButtons.tsx): juntos, a la izquierda del breadcrumb. */
+.nav-buttons {
+  display: inline-flex;
+  flex: none;
+  margin-left: -8px;
+}
+
+.nav-buttons .nav-button {
+  width: 32px;
+}
+
+.nav-buttons .nav-button:disabled {
+  opacity: 0.35;
+}
+
 .breadcrumbs {
   flex: 1;
   display: flex;
@@ -2088,6 +2103,17 @@ code {
   .topbar {
     padding-left: 8px;
     padding-right: 8px;
+    /* Con atrás y adelante (NavButtons.tsx) la barra del teléfono lleva ocho controles: un hueco más chico deja lugar
+       al título de la página en 375 px. */
+    gap: 4px;
+  }
+
+  .nav-buttons {
+    margin-left: 0;
+  }
+
+  .nav-buttons .nav-button {
+    width: 30px;
   }
 
   .sidebar {
@@ -8403,6 +8429,14 @@ button.folder-row-main:hover {
     outline-color: color-mix(in srgb, var(--accent) 45%, transparent);
     outline-offset: 3px;
   }
+}
+
+/* El ‹ de la barra durante «Show me» (TourLayer.tsx, ShowMeBack): encima del bloqueador y del oscurecido, en el lugar
+   del de la barra. */
+.tour-nav-back {
+  position: fixed;
+  z-index: 93;
+  background: var(--bg);
 }
 
 .tour-bubble {

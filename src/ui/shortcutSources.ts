@@ -11,6 +11,9 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   newDayReport: ['dayReportUi.tsx', 'dayReport.ts'],
   assistant: ['AssistantHost.tsx', 'assistantUi.ts'],
   dictate: ['DictationHost.tsx', 'dictationUi.ts'],
+  // Atrás y adelante (Docs/Doc_Navegacion.md): los botones de la barra escuchan el atajo en `window`.
+  navBack: ['NavButtons.tsx', 'navHistory.ts'],
+  navForward: ['NavButtons.tsx', 'navHistory.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
   // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts). En el resto, la línea
   // de tiempo del proyecto (P.26, undoTimelineUi.ts); recién reemplazado, también en el panel de buscar (DH9).

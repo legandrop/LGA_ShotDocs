@@ -47,7 +47,8 @@ cambia nada de lo que se guarda en el documento**: el carrete solo lee la págin
   5×. Al girar el teléfono (o cambiar el tamaño de la ventana) la foto ampliada se vuelve a encuadrar.
 - **"Atrás" cierra el carrete:** al abrirlo se suma una entrada al historial con la misma dirección, así
   el "atrás" de Android o del navegador lo cierra sin salir de la página. Cerrar con la X, Escape o
-  deslizando saca esa entrada (`history.back()`).
+  deslizando saca esa entrada (`history.back()`). Es una entrada «de capa» (`overlayState`, v0.259,
+  [Navegacion](Doc_Navegacion.md)): al cerrar, el › de la barra no reabre el carrete.
 - **Videos:** el reproductor del navegador (`<video controls playsinline>`), sin arrancar solo. Con el
   dedo, deslizar sobre la franja de abajo del video (sus controles) no cambia de elemento; con el mouse,
   el video es solo del reproductor. Las flechas cambian de elemento aunque el foco esté en el video.

@@ -1855,6 +1855,11 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    párrafos, títulos y listas; con borrado concurrente se perdía texto ajeno en 33–64 de cada 100 agendas al azar.
    Se eligió la guarda en la app, en vez de cubrir solo gestos del teclado/arrastre, ampliar el parche de la librería
    o migrar a Yjs 14. Queda la regla de D725: entrar en los hijos de un padre borrado a la vez se borra con ese padre.
+31. **Atrás y adelante (v0.259, D738–D743): lo que queda.** Probado en Chromium (Windows, 1440 y 375 px) y con las
+   pruebas en JSDOM. Falta mirar en una Mac real que ⌘[ y ⌘] no vayan dos veces atrás en Safari (la app frena el del
+   navegador con `preventDefault`; si Safari lo ejecuta igual, habría que no tomar el atajo ahí) y en el iPhone
+   instalado. Posible después: mantener apretado ‹ para ver la lista de páginas anteriores, como los navegadores.
+   Detalle: [Doc_Navegacion.md](Doc_Navegacion.md).
 
 ### C. Esperan a Lega
 

@@ -26,6 +26,7 @@ import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShor
 import { disposeRelationsSession, RelationsRunner } from './relationsUi';
 import { MergeResumer } from '../relations/MergeAction';
 import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
+import { NavButtons } from './NavButtons';
 import { NavMenuButton } from './NavMenuButton';
 import { menuBelow, PAGE_MENU_WIDTH, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
@@ -477,6 +478,7 @@ export function Shell() {
           <>
             <header className="topbar">
               <NavMenuButton />
+              <NavButtons />
               <nav className="breadcrumbs" aria-label={tr('shell.location')}>
                 {crumbs.map((p) => (
                   <span key={p.id}>
