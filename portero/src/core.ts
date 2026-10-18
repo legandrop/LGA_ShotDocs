@@ -290,21 +290,31 @@ export const CACHE_FILES = 256;
  */
 export const DRIVE_TIMEOUT_MS = 20_000;
 /**
+ * Lo mismo para la base del workspace (`rpc`): sus funciones contestan en milisegundos; pasado esto sale
+ * `504 db_error`. Solo hasta los encabezados.
+ */
+export const DB_TIMEOUT_MS = 20_000;
+/**
  * Una búsqueda o creación de carpeta (`once`) sin noticias hace más que esto se da por muerta y la toma el próximo que
- * la necesite. Mayor que `DRIVE_TIMEOUT_MS`: quien la lleva avisa que sigue vivo con cada llamado a Google, y cada
- * llamado dura como mucho eso. Con la app cortando a los 60 s, el que espera a uno muerto todavía llega a hacerla.
+ * la necesite. Mayor que `DRIVE_TIMEOUT_MS` y `DB_TIMEOUT_MS`: quien la lleva avisa que sigue vivo con cada llamado a
+ * Google o a la base, y cada llamado dura como mucho eso. Con la app cortando a los 60 s, el que espera a uno muerto
+ * todavía llega a hacerla.
  */
 export const ONCE_STALE_MS = DRIVE_TIMEOUT_MS + 10_000;
 /** Cada cuánto mira el que espera si la carpeta ya está (ver `once`). */
 const ONCE_POLL_MS = 50;
 
 /**
- * Una búsqueda o creación de carpeta en curso (`once`). Quien la lleva es el pedido que la empezó; los demás pedidos
- * comparten solo el resultado (`result`), nunca una promesa ni un llamado del otro pedido. `beat`: la última vez
- * que quien la lleva dio señales (cada llamado a Google).
+ * Una búsqueda o creación de carpeta en curso (`once`), o el turno de mandar o traer la carpeta de un proyecto
+ * (`oneAtATime`). Quien la lleva es el pedido que la empezó; los demás pedidos comparten solo el resultado (`result`)
+ * o esperan que se libere, nunca una promesa ni un llamado del otro pedido. `beat`: la última vez que quien la lleva
+ * dio señales (cada llamado a Google o a la base).
  */
 type Turn = { beat: number; result?: { value: string } | { error: unknown } };
-/** Carpetas que se están buscando o creando en este momento: dos subidas a la vez no crean dos iguales. */
+/**
+ * Carpetas que se están buscando o creando en este momento (dos subidas a la vez no crean dos iguales) y proyectos
+ * cuya carpeta se está mandando o trayendo (`projectDrive:<id>`).
+ */
 const turns = new Map<string, Turn>();
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -503,9 +513,6 @@ function quoted(value: string): string {
  */
 export const CLOCK_MARGIN_MS = 5 * 60_000;
 
-/** Lo que se está haciendo con la carpeta de cada proyecto: mandar y traer, de a uno por proyecto. */
-const projectWork = new Map<string, Promise<unknown>>();
-
 export class HttpError extends Error {
   constructor(
     readonly status: number,
@@ -546,8 +553,15 @@ function projectPurged(): HttpError {
   return new HttpError(409, 'This project was deleted forever: its folder is not sent or brought back anymore.', 'project_purged');
 }
 
-/** Un error de `/project/trash` o `/project/untrash` sin código (Drive que no contesta, la red) sale con uno. */
+/**
+ * Un error de `/project/trash` o `/project/untrash` sin código (Drive que no contesta, la red) sale con uno. El tope de
+ * Google (`drive_timeout`) sale como `drive_failed`: su texto dice que se reintenta solo, y acá la app no reintenta
+ * (la persona vuelve a apretar; repetirlo termina sin perder nada).
+ */
 function withProjectCode(err: unknown): never {
+  if (err instanceof HttpError && err.code === 'drive_timeout') {
+    throw new HttpError(err.status, 'Google Drive did not answer in time.', 'drive_failed');
+  }
   if (err instanceof HttpError && err.code) throw err;
   if (err instanceof HttpError) {
     throw new HttpError(err.status, err.message, err.status === 401 ? 'session_expired' : 'drive_failed');
@@ -570,16 +584,20 @@ function randomId(bytes = 24): string {
   return b64url(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
-/** La clave de los pases ya importada (un listado de una carpeta firma cientos): por clave, en la instancia. */
-const hmacKeys = new Map<string, Promise<CryptoKey>>();
+/**
+ * La clave de los pases ya importada (un listado de una carpeta firma cientos): por clave, en la instancia. Se guarda
+ * la clave ya lista, nunca la promesa de importarla: entre pedidos no se comparten promesas (ver `once`). Dos pedidos
+ * que llegan juntos la importan cada uno; es cálculo local, sin red.
+ */
+const hmacKeys = new Map<string, CryptoKey>();
 
 async function hmac(secret: string, data: string): Promise<string> {
   let key = hmacKeys.get(secret);
   if (!key) {
-    key = crypto.subtle.importKey('raw', fromB64url(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    key = await crypto.subtle.importKey('raw', fromB64url(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     hmacKeys.set(secret, key);
   }
-  return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', await key, new TextEncoder().encode(data))));
+  return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))));
 }
 
 /**
@@ -718,7 +736,7 @@ export class Portero {
   private passSecret: string | null = null;
   /** Llamados a Drive en este pedido (cada pedido crea un Portero nuevo): ver `DRIVE_CALL_BUDGET`. */
   private driveCalls = 0;
-  /** Las búsquedas o creaciones de carpeta (`once`) que lleva este pedido: cada llamado a Google las da por vivas. */
+  /** Los turnos (`once`, `oneAtATime`) que lleva este pedido: cada llamado a Google o a la base los da por vivos. */
   private readonly held = new Set<Turn>();
 
   constructor(
@@ -799,8 +817,15 @@ export class Portero {
       err instanceof HttpError && [401,403].includes(err.status) ? 'workspace_session' : 'workspace_unavailable'); }
   }
 
-  private rpc(auth: string, fn: string, args: unknown, link?: string, signal?: AbortSignal, appVersion?: string | null): Promise<Response> {
-    return this.http(`${this.env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/${fn}`, {
+  /**
+   * Una función de la base con tope (`DB_TIMEOUT_MS`) hasta que empieza a contestar, como `google()`: una base que no
+   * contesta no deja a quien lleva un turno (`oneAtATime`, `once`) mudo más de `ONCE_STALE_MS`, y nadie le saca el
+   * turno a un pedido vivo (un `/project/trash` y un `/project/untrash` del mismo proyecto no se solapan). Pasado el
+   * tope sale `504 db_error`, que la app reintenta en las subidas y muestra tal cual en la papelera de proyectos.
+   */
+  private async rpc(auth: string, fn: string, args: unknown, link?: string, signal?: AbortSignal, appVersion?: string | null): Promise<Response> {
+    const url = `${this.env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/${fn}`;
+    const init: RequestInit = {
       method: 'POST',
       headers: {
         apikey: this.env.SUPABASE_PUBLISHABLE_KEY,
@@ -812,7 +837,14 @@ export class Portero {
       },
       body: JSON.stringify(args),
       ...(signal ? { signal, cache: 'no-store' as const, redirect: 'manual' as const } : {}),
-    });
+    };
+    // Lo que lleva este pedido sigue vivo al preguntar y al recibir la respuesta.
+    this.beat();
+    try {
+      return await this.capped(url, init, DB_TIMEOUT_MS, () => new HttpError(504, 'The workspace database did not answer in time.', 'db_error'));
+    } finally {
+      this.beat();
+    }
   }
 
   /** Lo que dura un pase para esta persona (o este link). */
@@ -1074,25 +1106,36 @@ export class Portero {
    * pedido siguen vivas (`beat`).
    */
   private async google(url: string, init: RequestInit = {}): Promise<Response> {
+    this.beat();
+    try {
+      return await this.capped(url, init, DRIVE_TIMEOUT_MS, () => new HttpError(504, 'Google Drive did not answer in time: trying again shortly.', 'drive_timeout'));
+    } finally {
+      this.beat();
+    }
+  }
+
+  /**
+   * Un pedido con tope de `ms` hasta que empieza a contestar (después, `late()`). Se corta con su propia señal, sumada a
+   * la que traiga `init`; el cuerpo no tiene tope.
+   */
+  private async capped(url: string, init: RequestInit, ms: number, late: () => HttpError): Promise<Response> {
     const stop = new AbortController();
     const outer = init.signal;
     const follow = () => stop.abort(outer?.reason);
     if (outer?.aborted) follow();
     else outer?.addEventListener('abort', follow, { once: true });
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const late = new Promise<never>((_resolve, reject) => {
+    const tooLate = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
         stop.abort();
-        reject(new HttpError(504, 'Google Drive did not answer in time: trying again shortly.', 'drive_timeout'));
-      }, DRIVE_TIMEOUT_MS);
+        reject(late());
+      }, ms);
     });
-    this.beat();
     try {
-      return await Promise.race([this.http(url, { ...init, signal: stop.signal }), late]);
+      return await Promise.race([this.http(url, { ...init, signal: stop.signal }), tooLate]);
     } finally {
       // La señal de afuera sigue valiendo para el cuerpo (como si se la hubiera pasado directo a `fetch`).
       clearTimeout(timer);
-      this.beat();
     }
   }
 
@@ -1281,7 +1324,7 @@ export class Portero {
         const found = await this.look(saved, day);
         if (found && !found.trashed) return saved;
       }
-      const id = (await this.child(day, project)) ?? (await this.create(day, project));
+      const id = (await this.child(day, project))?.id ?? (await this.create(day, project));
       await this.store.put(key, id);
       return id;
     });
@@ -1311,8 +1354,11 @@ export class Portero {
           return saved.id;
         }
       }
-      const id = (await this.child(want, root, { sdProject: media.project_id })) ?? (await this.create(want, root, { sdProject: media.project_id }));
-      await this.store.put(key, { id, name: want } satisfies ProjectFolder);
+      const found = await this.child(want, root, { sdProject: media.project_id });
+      const id = found?.id ?? (await this.create(want, root, { sdProject: media.project_id }));
+      // La hallada por la marca, con el nombre que tiene en Drive (un intento cortado pudo crearla cuando el proyecto
+      // se llamaba distinto): como cualquier otra que conserva el nombre anotado, la próxima subida la renombra.
+      await this.store.put(key, { id, name: found?.name ?? want } satisfies ProjectFolder);
       return id;
     });
   }
@@ -1361,15 +1407,16 @@ export class Portero {
         return known;
       }
     }
-    return (await this.child(name, parent)) ?? this.create(name, parent);
+    return (await this.child(name, parent))?.id ?? this.create(name, parent);
   }
 
   /**
    * Antes de crear una carpeta de la app, la que ya está en Drive con ese nombre adentro de `parent` (o, con `mark`,
    * la que lleva esa marca, aunque el dueño la haya renombrado). Es la que dejó creada un intento anterior que se cortó
-   * antes de anotarla (`once`, v0.261): sin esto quedaban dos iguales. Si hay varias, la más vieja.
+   * antes de anotarla (`once`, v0.261): sin esto quedaban dos iguales. Si hay varias, la más vieja. Nunca una de la
+   * papelera. Con su nombre en Drive (con `mark` puede no ser `name`).
    */
-  private async child(name: string, parent: string | null, mark?: Record<string, string>): Promise<string | null> {
+  private async child(name: string, parent: string | null, mark?: Record<string, string>): Promise<{ id: string; name: string } | null> {
     const which = mark
       ? Object.entries(mark).map(([k, v]) => `appProperties has { key=${quoted(k)} and value=${quoted(v)} }`).join(' and ')
       : `name = ${quoted(name)}`;
@@ -1377,7 +1424,8 @@ export class Portero {
     const res = await this.drive(`/files?${new URLSearchParams({ q, fields: 'files(id,name)', orderBy: 'createdTime', pageSize: '10' })}`);
     if (!res.ok) throw new HttpError(502, `Could not look for the folder "${name}" in Google Drive (${res.status}).`);
     const files = ((await res.json()) as { files?: { id: string; name?: string }[] }).files ?? [];
-    return (mark ? files[0] : files.find((f) => f.name === name))?.id ?? null;
+    const hit = mark ? files[0] : files.find((f) => f.name === name);
+    return hit ? { id: hit.id, name: hit.name ?? name } : null;
   }
 
   // --- subir (por partes, se puede retomar) ---------------------------------------------------------
@@ -1804,7 +1852,7 @@ export class Portero {
         const found = await this.look(saved, FOLDERS_DIR);
         if (found && !found.trashed) return saved;
       }
-      const id = (await this.child(FOLDERS_DIR, project)) ?? (await this.create(FOLDERS_DIR, project));
+      const id = (await this.child(FOLDERS_DIR, project))?.id ?? (await this.create(FOLDERS_DIR, project));
       await this.store.put(key, id);
       return id;
     });
@@ -2435,17 +2483,33 @@ export class Portero {
     return project;
   }
 
-  /** Mandar y traer la carpeta de un mismo proyecto no se pisan (en este Worker): van de a uno. */
-  private oneAtATime<T>(project: string, work: () => Promise<T>): Promise<T> {
+  /**
+   * Mandar y traer la carpeta de un mismo proyecto no se pisan (en esta instancia del Worker): van de a uno. Con la
+   * misma regla que `once`: entre pedidos se comparte un turno con su última señal, nunca una promesa. Antes se
+   * encadenaban las promesas, y si un `/project/trash` o `/project/untrash` se cortaba, su promesa no terminaba nunca
+   * y todo lo siguiente de ese proyecto esperaba hasta que se reiniciaba el portero (roadmap 32). Quien lleva el turno
+   * da señales con cada llamado a Google o a la base; si no da ninguna en `ONCE_STALE_MS`, lo toma el próximo. Los dos
+   * se pueden repetir sin perder nada (ver `sendProjectFolder`), así que tomar el turno de uno que en realidad seguía
+   * vivo pero mudo es lo mismo que dos instancias a la vez, que ya podía pasar.
+   */
+  private async oneAtATime<T>(project: string, work: () => Promise<T>): Promise<T> {
     const key = `projectDrive:${project}`;
-    const before = projectWork.get(key) ?? Promise.resolve();
-    const run = before.catch(() => undefined).then(work);
-    const settled = run.catch(() => undefined);
-    projectWork.set(key, settled);
-    void settled.then(() => {
-      if (projectWork.get(key) === settled) projectWork.delete(key);
-    });
-    return run;
+    for (;;) {
+      const turn = turns.get(key);
+      if (!turn || Date.now() - turn.beat > ONCE_STALE_MS) break;
+      // Sin `beat()`: a diferencia de `once`, quien espera acá no lleva ningún otro turno.
+      await sleep(ONCE_POLL_MS);
+    }
+    // Sin esperas entre mirar y tomarlo.
+    const mine: Turn = { beat: Date.now() };
+    turns.set(key, mine);
+    this.held.add(mine);
+    try {
+      return await work();
+    } finally {
+      this.held.delete(mine);
+      if (turns.get(key) === mine) turns.delete(key);
+    }
   }
 
   private async sendProjectFolder(
@@ -2718,6 +2782,7 @@ export class Portero {
     try {
       res = await this.rpc(who.auth, 'media_project', { p_project: project });
     } catch (err) {
+      if (err instanceof HttpError) throw err;
       throw new HttpError(502, `The workspace did not answer (${err instanceof Error ? err.message : String(err)}).`, 'db_error');
     }
     if (res.status === 401) throw new HttpError(401, 'Your session expired: sign in again.', 'session_expired');
@@ -2740,6 +2805,7 @@ export class Portero {
     try {
       res = await this.rpc(who.auth, fn, { p_project: project });
     } catch (err) {
+      if (err instanceof HttpError) throw err;
       throw new HttpError(502, `The workspace did not answer (${err instanceof Error ? err.message : String(err)}).`, 'db_error');
     }
     if (res.ok) return;

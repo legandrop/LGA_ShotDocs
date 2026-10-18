@@ -644,6 +644,33 @@ Lo que queda: si quien crea sigue vivo pero tarda más de 30 s sin hablar con Go
 colgados) y otro la toma, los dos podrían buscar a la vez, no verla y crear dos. No se vio nunca y el tope lo hace muy
 raro; una carpeta repetida no pierde nada (se ve en Drive y se junta a mano).
 
+### La misma regla en el resto del portero (v0.263, roadmap 32)
+
+- **Mandar y traer la carpeta de un proyecto** (`/project/trash`, `/project/untrash`) van de a uno por proyecto con
+  un turno como el de `once` (`oneAtATime`, clave `projectDrive:<id>`), ya no encadenando promesas. Antes, si uno de
+  esos pedidos se cortaba, todo lo siguiente de ese proyecto quedaba esperando hasta que se reiniciaba el portero.
+  Ahora el siguiente mira cada 50 ms si el turno se liberó y, si quien lo lleva no da señales en 30 s, lo toma. Los
+  dos se pueden repetir sin perder nada, así que tomarlo de uno vivo pero mudo es lo mismo que dos instancias a la vez.
+- **Las señales salen de cada llamado a Google y a la base** (`rpc`), al preguntar y al recibir la respuesta.
+- **La base también tiene tope** (`rpc`, `DB_TIMEOUT_MS` = 20 s hasta los encabezados, como Google): pasado eso sale
+  `504 db_error` («The workspace database did not answer in time.»), que la app reintenta en las subidas y muestra
+  tal cual en la papelera de proyectos. Así quien lleva un turno da señal al menos cada 20 s mientras habla con la base
+  y nunca pasa 30 s mudo por ella: un `/project/trash` y un `/project/untrash` del mismo proyecto vivos no se solapan
+  (si se solaparan, la base podría quedar con el proyecto restaurado y la carpeta en la papelera de Drive, que Google
+  vacía a los 30 días). Las funciones de la base contestan en milisegundos: el tope no corta nada que deba tardar.
+- **La clave de los pases** (`hmacKeys`) se guarda ya importada, no como promesa. Importarla es cálculo local sin red
+  y no se colgaba, pero así ninguna promesa queda compartida entre pedidos.
+- **El tope de Google en la carpeta de un proyecto** sale como `drive_failed`, no `drive_timeout`: su texto decía
+  «trying again shortly» y ahí nadie reintenta solo (la persona vuelve a apretar). La app muestra los dos igual.
+- **La carpeta del proyecto hallada por su marca se anota con el nombre que tiene en Drive.** Un intento cortado pudo
+  crearla cuando el proyecto se llamaba distinto; antes quedaba anotada con el nombre buscado y nunca se renombraba.
+  Ahora la próxima subida la renombra, como a cualquier carpeta que conserva el nombre que le puso la app.
+- **`child` nunca adopta una carpeta de la papelera** (`trashed = false`); las pruebas lo comprueban con un Drive falso
+  que, sin esa condición, devuelve también las de la papelera.
+
+Lo que todavía queda: dos instancias del Worker que buscan a la vez pueden crear dos carpetas iguales (el turno vive en
+la memoria de cada instancia). Propuesta de candado en el Durable Object: `Doc_Roadmap.md`, punto 32.
+
 ### Carpetas: nunca hacia arriba (P.9)
 
 Con `drive.file` (hoy) el portero ve solo lo que creó la app; con `drive.readonly` (si Lega lo decide) vería

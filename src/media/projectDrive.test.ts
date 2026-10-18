@@ -21,6 +21,8 @@ describe('la carpeta de un proyecto en Drive, en la app', () => {
     expect(err('drive_not_connected', 503)).toContain('not connected');
     expect(err('drive_mismatch', 403)).toContain('does not belong to this project');
     expect(err('drive_failed', 502)).toContain('Try again');
+    // Un portero que deja pasar el tope de Google: acá no se reintenta solo, no se muestra «trying again shortly».
+    expect(err('drive_timeout', 504)).toBe(err('drive_failed', 502));
     expect(err('project_restored')).toContain('restored the project meanwhile');
     expect(err(undefined, 0)).toBe('Could not reach the file server.');
     expect(err('otra_cosa')).toBe('raw');

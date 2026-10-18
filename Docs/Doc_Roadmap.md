@@ -1863,16 +1863,20 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    navegador con `preventDefault`; si Safari lo ejecuta igual, habría que no tomar el atajo ahí) y en el iPhone
    instalado. Posible después: mantener apretado ‹ para ver la lista de páginas anteriores, como los navegadores.
    Detalle: [Doc_Navegacion.md](Doc_Navegacion.md).
-32. **Portero: el mismo tipo de cuelgue en otras rutas (auditoría de la v0.261, D754–D756).** (1) `oneAtATime`
-   (mapa `projectWork` de `portero/src/core.ts`) encadena promesas entre pedidos: si se cancela un `/project/trash` o
-   `/project/untrash`, las siguientes operaciones del mismo proyecto esperan hasta que se recicle el isolate. Pasarlo a
-   compartir el resultado, como `once`. `hmacKeys` también comparte promesas (de crypto: riesgo bajo). (2) Faltan
-   pruebas con un pedido muerto para la carpeta del proyecto (por marca), la del día, `Carpetas` y el caso anidado
-   `folder:<archivo>` (cuatro mutaciones sobreviven), y que el Drive falso pruebe la regla de la papelera de `child`.
-   (3) Dos isolates que buscan a la vez todavía pueden crear dos carpetas iguales (el Durable Object podría hacer de
-   candado). (4) En `/project/trash` y `/project/untrash`, `drive_timeout` llega con «trying again shortly» pero la
-   app no reintenta: traducirlo a `drive_failed` en `withProjectCode`. (5) La carpeta del proyecto hallada por la marca
-   se anota con el nombre buscado aunque en Drive tenga otro, y después no se renombra.
+32. **Portero: dos instancias que crean la misma carpeta a la vez (auditoría de la v0.261, D754–D756).** Hecho en
+   v0.263 (D757–D762, `Doc_Portero.md`, «La misma regla en el resto del portero»): `oneAtATime` con turno y señales (la base también da señal y tiene tope de 20 s),
+   `hmacKeys` sin promesas, pruebas con un pedido muerto para la carpeta del proyecto, la del día, `Carpetas` y el caso
+   anidado `folder:<archivo>`, la regla de la papelera de `child` probada, `drive_timeout` → `drive_failed` en la
+   carpeta de un proyecto y el nombre real de la carpeta hallada por su marca. **Queda (D761):** dos instancias del
+   Worker que buscan a la vez la misma carpeta pueden crear dos (el turno vive en la memoria de cada una). Propuesta,
+   unas 4 h con pruebas y una corrida en workerd: (a) el Durable Object suma `claim(clave, quien, vencimiento)` y
+   `release(clave, quien)`, atómicos por ser un solo objeto (`lock:<clave>` con quien y su última señal, con el reloj
+   del objeto); (b) `once` lo pide solo cuando va a buscar y crear (no en el camino de una carpeta ya anotada, que es
+   casi todo); si lo tiene otra instancia viva, mira cada 500 ms si la carpeta ya quedó anotada (`store.get`) y se la
+   lleva, o toma el candado cuando vence; (c) las señales al objeto, como mucho una cada 10 s mientras se lo tiene, y
+   `release` al terminar; (d) pruebas con dos copias del módulo (cada una con su memoria) contra el mismo
+   almacenamiento, con un pedido muerto y uno lento. Costo: dos o tres escrituras al objeto por carpeta creada. Una
+   carpeta repetida no pierde nada (se ve en Drive), por eso no se hizo a medias en esta tanda.
 33. **Relaciones: lo que mostró la importación de un largo armado con tres docs (2026-10-17).** (1) El lector toma
    «Escena 46-47-51» como rango y le da la sección también a 048 y 050 (`reader.ts`, rangos; en `pageRelations.ts` las
    escondidas son dueñas de la sección): tres números con guion son una lista. Al importar se escribió «Escena 46, 47,

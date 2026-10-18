@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.263 :
+
+Mandar o traer la carpeta de un proyecto borrado encadenaba promesas entre pedidos en el portero: si uno se cortaba,
+todo lo siguiente de ese proyecto esperaba hasta reiniciarlo. Ahora usa el turno con señales de las carpetas, y la
+base, como Google, da señal y tiene tope de 20 s (`504 db_error`), así un pedido vivo nunca queda 30 s mudo ni se
+solapa con otro. La clave de los pases se guarda ya importada. El tope de Google en esa ruta sale como
+`drive_failed`: decía «trying again shortly» y ahí nada se reintenta solo. La carpeta del proyecto hallada por su
+marca se anota con su nombre en Drive, así se renombra después. Pruebas con pedidos muertos o lentos para cada carpeta
+y para la base, y el Drive falso respeta la papelera. El candado entre instancias queda propuesto. D757–D762.
+
+[Que mandar o traer la carpeta de un proyecto no quede colgado por un pedido cortado]
+
 v0.262 :
 
 Importar un largo repartido en tres docs de Coda dejó cosas que no estaban escritas. La guía de importación suma cómo

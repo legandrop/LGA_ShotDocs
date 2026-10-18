@@ -1967,6 +1967,38 @@ proyecto por su marca `sdProject`, sin las de la papelera y la más vieja si hay
 cuando hay que crear. Una carpeta del mismo nombre hecha a mano en ese lugar se adopta; con `drive.file` el portero
 solo ve las que creó la app.
 
+### D757 · Mandar y traer la carpeta de un proyecto: turno con señales, no promesas encadenadas (2026-10-18)
+**Elegí:** `oneAtATime` usa el mismo turno que `once` (`projectDrive:<id>`, mirar cada 50 ms, tomarlo si no hay señales
+en 30 s), sin compartir resultado: cada pedido hace lo suyo, de a uno. Las señales salen también de cada llamado a la
+base (`rpc`), porque estas rutas hablan más con la base que con Google. Tomar el turno de uno vivo pero mudo es lo mismo
+que dos instancias a la vez: los dos pasos se pueden repetir sin perder nada.
+
+### D758 · La clave de los pases se guarda importada (2026-10-18)
+**Elegí:** `hmacKeys` guarda la `CryptoKey` ya lista y no la promesa de importarla. No se colgaba (es cálculo local,
+sin red), pero así no queda ninguna promesa compartida entre pedidos. Dos pedidos que llegan juntos la importan cada uno.
+
+### D759 · El tope de Google en la carpeta de un proyecto sale como `drive_failed` (2026-10-18)
+**Elegí:** `withProjectCode` traduce `drive_timeout` a `drive_failed` (mismo estado HTTP, texto sin «trying again
+shortly»), y la app muestra los dos con el mismo mensaje de `projectDrive.driveFailed`. Ahí nadie reintenta solo: la
+persona vuelve a apretar. Ningún texto nuevo.
+
+### D760 · La carpeta del proyecto hallada por su marca se anota con su nombre real (2026-10-18)
+**Elegí:** anotar el nombre que tiene en Drive. La próxima subida la renombra al nombre del proyecto, como a cualquier
+carpeta que conserva el nombre que le puso la app. Si el dueño la había renombrado a mano y el portero perdió su
+registro, también se renombra: sin el registro no hay forma de distinguir un nombre puesto a mano de uno viejo de la
+app, y la marca dice que es de la app.
+
+### D761 · El candado entre instancias del Worker, después (2026-10-18)
+**Elegí:** no hacerlo en esta tanda. Cambia la interfaz del almacenamiento y el Durable Object, y pide una corrida en
+workerd; una carpeta repetida no pierde nada. Propuesta concreta en `Doc_Roadmap.md`, punto 32.
+
+### D762 · Las funciones de la base con tope de 20 s (2026-10-18)
+**Elegí:** `rpc` corta a los 20 s (`DB_TIMEOUT_MS`, solo hasta los encabezados, con su señal sumada a la que traiga) y
+sale `504 db_error`, un código que ya existía: la app lo reintenta en las subidas (5xx) y en la papelera de proyectos
+muestra el texto, que no promete reintentar. Sin tope, un llamado a la base de más de 30 s dejaba mudo a quien lleva el
+turno de un proyecto y el siguiente lo tomaba con el primero vivo: mandar y traer solapados podían dejar la base y Drive
+desparejos. Quien espera ese turno ya no da señales (no lleva ninguno).
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

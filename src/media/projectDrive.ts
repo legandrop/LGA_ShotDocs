@@ -60,6 +60,9 @@ export function projectDriveError(err: unknown): string {
       case 'drive_mismatch':
         return t('projectDrive.mismatch');
       case 'drive_failed':
+      // El tope de Google: el portero ya lo manda como `drive_failed` (roadmap 32); por las dudas, su texto («trying
+      // again shortly») no se muestra acá, donde nada se reintenta solo.
+      case 'drive_timeout':
         return t('projectDrive.driveFailed');
       case 'not_found':
       case 'not_allowed':

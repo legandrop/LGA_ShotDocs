@@ -4,7 +4,7 @@ import { planFolder } from '../../src/media/folderZip';
 import { Portero as MediaPortero } from '../../src/media/portero';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, PART_ANSWER_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
+import { cleanFileName, cutText, DRIVE_CALL_BUDGET, DRIVE_TIMEOUT_MS, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, ONCE_STALE_MS, PART_ANSWER_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
 
 // Carpetas (P.9, Docs/Doc_Carpetas.md): crear el árbol, abrir las subidas, listar en vivo y, sobre todo, que
 // nadie pueda listar, subir ni bajar nada de afuera del árbol de la carpeta.
@@ -156,7 +156,8 @@ function fakeWorld() {
       const sdProject = /key='sdProject' and value='([^']+)'/.exec(q)?.[1];
       const named = /name = '([^']+)'/.exec(q)?.[1];
       const sdPaths = [...q.matchAll(/key='sdPath' and value='([^']+)'/g)].map((m) => m[1]);
-      let list = [...drive.entries()].filter(([, f]) => !f.trashed);
+      // Como Drive: las de la papelera quedan afuera solo si la consulta lo pide.
+      let list = [...drive.entries()].filter(([, f]) => !/\btrashed = false\b/.test(q) || !f.trashed);
       if (parents.length) list = list.filter(([, f]) => f.parents.some((p) => parents.includes(p)));
       if (parents.length) {
         listQueries.push(q);
@@ -1648,5 +1649,115 @@ describe('carpetas: entrega 3 (Drive que pide ir más despacio, la confianza cor
     // Cada ruta da dos marcas (NFC y NFD): 60 marcas, en consultas de a 40 como mucho.
     const searches = world.calls.slice(calls).filter((x) => x === 'GET www.googleapis.com/drive/v3/files').length;
     expect(searches).toBe(2);
+  });
+});
+
+describe('carpetas: un pedido muerto o lento no deja dos carpetas iguales (roadmap 32)', () => {
+  /** Una carpeta de la app que solo usan estas pruebas: el pedido muerto deja su turno colgado para siempre. */
+  const F3 = '44444444-4444-4444-8444-444444444444';
+
+  function track<T>(work: Promise<T>): { promise: Promise<T>; settled: () => boolean } {
+    let done = false;
+    const promise = work.finally(() => (done = true));
+    return { promise, settled: () => done };
+  }
+
+  function signal(): { wait: Promise<void>; fire: () => void } {
+    let fire!: () => void;
+    const wait = new Promise<void>((resolve) => (fire = resolve));
+    return { wait, fire };
+  }
+
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 30; i++) await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  async function drain(tracked: { settled: () => boolean }[], step: number, max: number): Promise<void> {
+    for (let t = 0; t <= max && !tracked.every((x) => x.settled()); t += step) {
+      await vi.advanceTimersByTimeAsync(step);
+      await flush();
+    }
+  }
+
+  const prep = (p: Portero, file: string) => call(p, '/folder/prepare', 'editor-jwt', { file, name: 'Referencias' });
+  const named = (world: ReturnType<typeof fakeWorld>, name: string) =>
+    [...world.drive.entries()].filter(([, f]) => f.mimeType === FOLDER && f.name === name && !f.trashed);
+  const rootsOf = (world: ReturnType<typeof fakeWorld>, file: string) =>
+    [...world.drive.entries()].filter(([, f]) => f.mimeType === FOLDER && f.appProperties?.sdFile === file);
+
+  it('Carpetas: el pedido que la creaba se cortó al anotarla; el siguiente (adentro de su folder:<archivo>) la toma a los ONCE_STALE_MS y la usa', async () => {
+    const { world, store } = await setup();
+    world.base.set(F3, { name: 'Otra', mime: 'inode/directory', size: 10, drive_id: null, levels: { 'u-editor': 3 } });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const reached = signal();
+    const cut: Store = {
+      get: (k) => store.get(k),
+      delete: (k) => store.delete(k),
+      put: (k, v) => {
+        if (k === `carpetas:${PROJECT}`) {
+          reached.fire();
+          return new Promise<void>(() => undefined);
+        }
+        return store.put(k, v);
+      },
+    };
+    const a = track(prep(new Portero(env, cut, world.http), F3));
+    await reached.wait;
+    expect(named(world, 'Carpetas')).toHaveLength(1);
+    const b = track(prep(new Portero(env, store, world.http), F1));
+    await vi.advanceTimersByTimeAsync(ONCE_STALE_MS - 1000);
+    await flush();
+    expect(b.settled()).toBe(false);
+    await drain([b], 100, 2000);
+    expect(b.settled()).toBe(true);
+    const res = await b.promise;
+    expect(res.status).toBe(200);
+    expect(a.settled()).toBe(false);
+    const carpetas = named(world, 'Carpetas');
+    expect(carpetas).toHaveLength(1);
+    const roots = rootsOf(world, F1);
+    expect(roots).toHaveLength(1);
+    expect(roots[0]![1].parents).toEqual([carpetas[0]![0]]);
+    expect(((await res.json()) as Prepared).root.id).toBe(roots[0]![0]);
+  });
+
+  it('quien espera la carpeta del proyecto y Carpetas adentro de su folder:<archivo> sigue dando señales: otro pedido de la misma carpeta no se la saca', async () => {
+    const { world, store } = await setup();
+    world.base.set(F3, { name: 'Otra', mime: 'inode/directory', size: 10, drive_id: null, levels: { 'u-editor': 3 } });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    // A arma la carpeta del proyecto y Carpetas despacio pero vivo: cada llamado a Drive tarda casi el tope de Google,
+    // todos juntos mucho más que ONCE_STALE_MS.
+    const reached = signal();
+    const slow: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.includes('/drive/v3/files')) {
+        if (url.includes('sdProject')) reached.fire();
+        await new Promise((resolve) => setTimeout(resolve, DRIVE_TIMEOUT_MS - 2000));
+      }
+      return world.http(input, init);
+    };
+    const a = track(prep(new Portero(env, store, slow), F3));
+    // A ya lleva la carpeta del proyecto.
+    for (let i = 0; i < 200; i++) {
+      let fired = false;
+      void reached.wait.then(() => (fired = true));
+      await flush();
+      if (fired) break;
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    // B lleva `folder:F1` y espera a A (sin hablar con Google); C, la misma carpeta, espera a B.
+    const b = track(prep(new Portero(env, store, world.http), F1));
+    await vi.advanceTimersByTimeAsync(200);
+    await flush();
+    const c = track(prep(new Portero(env, store, world.http), F1));
+    await drain([a, b, c], 1000, 30 * DRIVE_TIMEOUT_MS);
+    expect(a.settled() && b.settled() && c.settled()).toBe(true);
+    const [rb, rc] = [await b.promise, await c.promise];
+    expect([rb.status, rc.status]).toEqual([200, 200]);
+    const roots = rootsOf(world, F1);
+    expect(roots).toHaveLength(1);
+    expect(((await rb.json()) as Prepared).root.id).toBe(roots[0]![0]);
+    expect(((await rc.json()) as Prepared).root.id).toBe(roots[0]![0]);
+    expect(named(world, 'Carpetas')).toHaveLength(1);
   });
 });

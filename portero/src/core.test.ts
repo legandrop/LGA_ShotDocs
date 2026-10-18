@@ -12,6 +12,7 @@ import {
   VERIFY_MAX,
   cleanFileName,
   contentDisposition,
+  DB_TIMEOUT_MS,
   DRIVE_TIMEOUT_MS,
   ONCE_STALE_MS,
   folderName,
@@ -325,13 +326,15 @@ function fakeWorld() {
         });
       }
       // Antes de crear una carpeta de la app, la que ya está con ese nombre (o con la marca del proyecto) en su carpeta.
-      const child = /^'([^']+)' in parents and (?:name = '([^']+)'|appProperties has \{ key='sdProject' and value='([^']+)' \}) and mimeType = 'application\/vnd\.google-apps\.folder' and trashed = false$/.exec(q);
+      // Como Drive: sin `trashed = false` también devuelve las de la papelera (una consulta sin esa condición adopta una
+      // carpeta en la papelera y falla la prueba de esa regla, no la forma de la consulta).
+      const child = /^'([^']+)' in parents and (?:name = '([^']+)'|appProperties has \{ key='sdProject' and value='([^']+)' \}) and mimeType = 'application\/vnd\.google-apps\.folder'( and trashed = false)?$/.exec(q);
       if (child) {
         childSearches++;
-        const [, parent, name, project] = child;
+        const [, parent, name, project, live] = child;
         return jsonRes({
           files: [...files.entries()]
-            .filter(([id, f]) => f.mime === 'application/vnd.google-apps.folder' && !inTrash(id) && (f.parents.length ? f.parents : ['root']).includes(parent!))
+            .filter(([id, f]) => f.mime === 'application/vnd.google-apps.folder' && (!live || !inTrash(id)) && (f.parents.length ? f.parents : ['root']).includes(parent!))
             .filter(([, f]) => (project ? f.appProperties?.sdProject === project : f.name === name))
             .map(([id, f]) => describe(id, f)),
         });
@@ -1035,6 +1038,46 @@ describe('portero: archivos de la app', () => {
     expect(world.files.get(second.file.id)!.parents[0]).not.toBe(day);
     expect(world.files.has(day)).toBe(true);
     expect(pathOf(world, second.file.id)).toEqual(['LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-09-30']);
+  });
+
+  it('una carpeta del proyecto en la papelera de Drive no se adopta por su marca: se crea otra; nada se borra', async () => {
+    const { world, store, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 10 });
+    const first = (await uploadFile(p, 'editor-jwt', FILE_A, bytes(10))) as { file: { id: string } };
+    const project = (await store.get<{ id: string }>('project:p-1'))!.id;
+    world.files.get(project)!.trashed = true;
+    addBaseFile(world, FILE_B, { size: 10 });
+    const second = (await uploadFile(p, 'editor-jwt', FILE_B, bytes(10))) as { file: { id: string } };
+    const again = (await store.get<{ id: string }>('project:p-1'))!.id;
+    expect(again).not.toBe(project);
+    expect(world.files.get(again)!.appProperties).toEqual({ sdProject: 'p-1' });
+    expect(world.files.has(project) && world.files.has(first.file.id)).toBe(true);
+    expect(pathOf(world, second.file.id)).toEqual(['LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-09-30']);
+  });
+
+  it('la carpeta del proyecto hallada por su marca se anota con el nombre que tiene en Drive, y la próxima subida la renombra', async () => {
+    const { world, store, p } = await setup();
+    // Un intento anterior la creó cuando el proyecto se llamaba de otra forma, y se cortó antes de anotarla.
+    world.files.set('rootxxxxxxxxxxx', { name: 'LGA_ShotDocs', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: ['root'] });
+    store.data.set('google', { ...(store.data.get('google') as object), rootFolder: 'rootxxxxxxxxxxx' });
+    world.files.set('projxxxxxxxxxxx', {
+      name: 'Nombre_viejo',
+      mime: 'application/vnd.google-apps.folder',
+      data: new Uint8Array(),
+      parents: ['rootxxxxxxxxxxx'],
+      appProperties: { sdProject: 'p-1' },
+    });
+    addBaseFile(world, FILE_A, { size: 10 });
+    const first = (await uploadFile(p, 'editor-jwt', FILE_A, bytes(10))) as { file: { id: string } };
+    expect(pathOf(world, first.file.id)).toEqual(['LGA_ShotDocs', 'Nombre_viejo', '2026-09-30']);
+    expect(store.data.get('project:p-1')).toEqual({ id: 'projxxxxxxxxxxx', name: 'Nombre_viejo' });
+
+    addBaseFile(world, FILE_B, { size: 10 });
+    const second = (await uploadFile(p, 'editor-jwt', FILE_B, bytes(10))) as { file: { id: string } };
+    expect(world.files.get('projxxxxxxxxxxx')!.name).toBe('Spot_Coca-Cola_2026');
+    expect(pathOf(world, second.file.id)).toEqual(['LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-09-30']);
+    expect(store.data.get('project:p-1')).toEqual({ id: 'projxxxxxxxxxxx', name: 'Spot_Coca-Cola_2026' });
+    expect(world.folders().filter(([, f]) => f.appProperties?.sdProject === 'p-1')).toHaveLength(1);
   });
 
   it('dos subidas a la vez a un proyecto y un día nuevos crean una sola carpeta de cada una', async () => {
@@ -3380,5 +3423,162 @@ describe('portero: una carpeta colgada no cuelga las subidas siguientes (v0.261)
     expect((await res.promise).status).toBe(200);
     expect(aborted).toBe(false);
     expect(rootFolders(world)).toHaveLength(1);
+  });
+
+  // --- roadmap 32: las demás carpetas y la carpeta de un proyecto borrado, con un pedido muerto ------------------
+
+  /** El almacenamiento visto por un pedido que se corta al anotar `key`: esa escritura no termina nunca. */
+  function cutAt(store: Store, key: string, reached: () => void): Store {
+    return {
+      get: (k) => store.get(k),
+      delete: (k) => store.delete(k),
+      put: (k, v) => {
+        if (k === key) {
+          reached();
+          return new Promise<void>(() => undefined);
+        }
+        return store.put(k, v);
+      },
+    };
+  }
+
+  for (const [what, key] of [
+    ['la del proyecto (el siguiente la encuentra por su marca)', 'project:p-1'],
+    ['la del día', 'day:p-1:2026-09-30'],
+  ] as const) {
+    it(`${what}: el pedido que la creaba se cortó al anotarla; el siguiente la toma a los ONCE_STALE_MS y usa la que quedó en Drive`, async () => {
+      const { world, store } = await setup();
+      addBaseFile(world, FILE_A);
+      addBaseFile(world, FILE_B);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      const reached = signal();
+      const a = track(startFile(new Portero(env, cutAt(store, key, reached.fire), world.http), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' }));
+      await reached.wait;
+      const b = track(startFile(new Portero(env, store, world.http), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' }));
+      await vi.advanceTimersByTimeAsync(ONCE_STALE_MS - 1000);
+      await flush();
+      expect(b.settled()).toBe(false);
+      await drain([b], 100, 2000);
+      expect(b.settled()).toBe(true);
+      expect((await b.promise).status).toBe(200);
+      expect(a.settled()).toBe(false);
+      // La que dejó A en Drive se usa: una sola de cada una.
+      expect(names(world)).toEqual(NAMES);
+      const kept = store.data.get(key) as string | { id: string };
+      expect(world.files.has(typeof kept === 'string' ? kept : kept.id)).toBe(true);
+    });
+  }
+
+  it('/project/trash: si Google no contesta, sale drive_failed (la app no lo reintenta sola: no dice «trying again shortly»)', async () => {
+    const { world, store } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const hang: typeof fetch = (input, init) =>
+      init?.method === 'PATCH' && String(input).includes('/drive/v3/files/') ? new Promise<Response>(() => undefined) : world.http(input, init);
+    const res = track(projectCall(new Portero(env, store, hang), 'trash', 'owner-jwt'));
+    await drain([res], 1000, 2 * DRIVE_TIMEOUT_MS);
+    expect(res.settled()).toBe(true);
+    const body = (await (await res.promise).json()) as { code: string; error: string };
+    expect(body.code).toBe('drive_failed');
+    expect(body.error).not.toContain('trying again');
+  });
+
+  it('/project/trash y /project/untrash: mientras el primero sigue hablando con Google, el segundo espera aunque tarde más que ONCE_STALE_MS', async () => {
+    const { world, store, folder } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    // Cada llamado a Drive del primero tarda casi el tope de Google: todos juntos, mucho más que ONCE_STALE_MS.
+    const slow: typeof fetch = async (input, init) => {
+      if (String(input).includes('/drive/v3/files')) await new Promise((resolve) => setTimeout(resolve, DRIVE_TIMEOUT_MS - 2000));
+      return world.http(input, init);
+    };
+    const a = track(projectCall(new Portero(env, store, slow), 'trash', 'owner-jwt'));
+    await vi.advanceTimersByTimeAsync(10);
+    const b = track(projectCall(new Portero(env, store, world.http), 'untrash', 'owner-jwt'));
+    await drain([a, b], 1000, 20 * DRIVE_TIMEOUT_MS);
+    expect(a.settled() && b.settled()).toBe(true);
+    expect(await (await a.promise).json()).toMatchObject({ drive: 'trashed' });
+    expect(await (await b.promise).json()).toMatchObject({ drive: 'untrashed', folders: 1 });
+    expect(world.files.get(folder)!.trashed).toBe(false);
+    expect(world.projects.get(PROJ)).toMatchObject({ requested_at: null, trashed_at: null });
+  });
+
+  it('/project/trash: el pedido que la mandaba se cortó y su promesa no termina nunca; el siguiente del mismo proyecto lo toma a los ONCE_STALE_MS', async () => {
+    const { world, store, folder } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const reached = signal();
+    const a = track(projectCall(new Portero(env, cutAt(store, `projectTrash:${PROJ}`, reached.fire), world.http), 'trash', 'owner-jwt'));
+    await reached.wait;
+    const b = track(projectCall(new Portero(env, store, world.http), 'trash', 'owner-jwt'));
+    // Antes de ONCE_STALE_MS espera (A podría seguir vivo); después lo hace.
+    await vi.advanceTimersByTimeAsync(ONCE_STALE_MS - 1000);
+    await flush();
+    expect(b.settled()).toBe(false);
+    await drain([b], 100, 2000);
+    expect(b.settled()).toBe(true);
+    const res = await b.promise;
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ drive: 'trashed', folders: 1 });
+    expect(a.settled()).toBe(false);
+    expect(world.files.get(folder)!.trashed).toBe(true);
+    expect(world.projects.get(PROJ)!.trashed_at).not.toBeNull();
+  });
+
+  // --- roadmap 32, segunda vuelta: la base también da señal y tiene tope -----------------------------------------
+
+  /** Las funciones de la base para la carpeta de un proyecto (no `media_whoami`, que va antes del turno). */
+  const projectFn = (input: RequestInfo | URL) => /\/rest\/v1\/rpc\/(media_project|request_project_drive_trash|project_drive_trashed)$/.test(String(input));
+
+  it('quien lleva el turno de un proyecto y habla sobre todo con la base (cada llamado casi el tope) sigue vivo: el siguiente espera aunque pase más de ONCE_STALE_MS', async () => {
+    const { world, store, folder } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    // Cada llamado a la base tarda casi el tope, y anotar el pedido tarda 13 s más: entre el principio de un llamado a la
+    // base y el próximo llamado a Google pasan más de ONCE_STALE_MS; solo las señales al recibir la respuesta lo cubren.
+    const slowBase: typeof fetch = async (input, init) => {
+      if (projectFn(input)) await new Promise((resolve) => setTimeout(resolve, DB_TIMEOUT_MS - 1000));
+      return world.http(input, init);
+    };
+    let first = true;
+    const slowStore: Store = {
+      get: (k) => store.get(k),
+      delete: (k) => store.delete(k),
+      put: async (k, v) => {
+        if (k === `projectTrash:${PROJ}` && first) {
+          first = false;
+          await new Promise((resolve) => setTimeout(resolve, 13_000));
+        }
+        return store.put(k, v);
+      },
+    };
+    const a = track(projectCall(new Portero(env, slowStore, slowBase), 'trash', 'owner-jwt'));
+    await vi.advanceTimersByTimeAsync(10);
+    const b = track(projectCall(new Portero(env, store, world.http), 'untrash', 'owner-jwt'));
+    await drain([a, b], 1000, 20 * DB_TIMEOUT_MS);
+    expect(a.settled() && b.settled()).toBe(true);
+    expect(await (await a.promise).json()).toMatchObject({ drive: 'trashed' });
+    expect(await (await b.promise).json()).toMatchObject({ drive: 'untrashed', folders: 1 });
+    expect(world.files.get(folder)!.trashed).toBe(false);
+    expect(world.projects.get(PROJ)).toMatchObject({ requested_at: null, trashed_at: null });
+  });
+
+  it('una base que no contesta: 504 db_error a los DB_TIMEOUT_MS (sin «trying again shortly») y el turno del proyecto se libera enseguida', async () => {
+    const { world, store, folder } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const deaf: typeof fetch = (input, init) => (projectFn(input) ? new Promise<Response>(() => undefined) : world.http(input, init));
+    const a = track(projectCall(new Portero(env, store, deaf), 'trash', 'owner-jwt'));
+    await vi.advanceTimersByTimeAsync(DB_TIMEOUT_MS - 1000);
+    await flush();
+    expect(a.settled()).toBe(false);
+    await drain([a], 100, 2000);
+    expect(a.settled()).toBe(true);
+    const res = await a.promise;
+    expect(res.status).toBe(504);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe('db_error');
+    expect(body.error).not.toContain('trying again');
+    // El siguiente no espera los ONCE_STALE_MS de un turno muerto.
+    const b = track(projectCall(new Portero(env, store, world.http), 'trash', 'owner-jwt'));
+    await drain([b], 100, 1000);
+    expect(b.settled()).toBe(true);
+    expect(await (await b.promise).json()).toMatchObject({ drive: 'trashed' });
+    expect(world.files.get(folder)!.trashed).toBe(true);
   });
 });
