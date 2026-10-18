@@ -4,7 +4,7 @@ import { planFolder } from '../../src/media/folderZip';
 import { Portero as MediaPortero } from '../../src/media/portero';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanFileName, cutText, DRIVE_CALL_BUDGET, DRIVE_TIMEOUT_MS, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, ONCE_STALE_MS, PART_ANSWER_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
+import { cleanFileName, cutText, DRIVE_CALL_BUDGET, DRIVE_TIMEOUT_MS, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, LOCK_WAIT_MS, LockTable, ONCE_STALE_MS, PART_ANSWER_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
 
 // Carpetas (P.9, Docs/Doc_Carpetas.md): crear el árbol, abrir las subidas, listar en vivo y, sobre todo, que
 // nadie pueda listar, subir ni bajar nada de afuera del árbol de la carpeta.
@@ -1759,5 +1759,121 @@ describe('carpetas: un pedido muerto o lento no deja dos carpetas iguales (roadm
     expect(((await rb.json()) as Prepared).root.id).toBe(roots[0]![0]);
     expect(((await rc.json()) as Prepared).root.id).toBe(roots[0]![0]);
     expect(named(world, 'Carpetas')).toHaveLength(1);
+  });
+});
+
+describe('carpetas: candado entre instancias en el Durable Object (v0.264)', () => {
+  function track<T>(work: Promise<T>): { promise: Promise<T>; settled: () => boolean } {
+    let done = false;
+    const promise = work.finally(() => (done = true));
+    return { promise, settled: () => done };
+  }
+
+  async function drain(tracked: { settled: () => boolean }[], step: number, max: number): Promise<void> {
+    for (let t = 0; t <= max && !tracked.every((x) => x.settled()); t += step) {
+      await vi.advanceTimersByTimeAsync(step);
+      for (let i = 0; i < 30; i++) await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+
+  /** Otra instancia del Worker: otra copia del módulo, con su propia memoria (`turns`). */
+  async function otherInstance(): Promise<typeof Portero> {
+    vi.resetModules();
+    return (await import('./core')).Portero;
+  }
+
+  /** El almacenamiento con el candado del Durable Object, compartido entre las instancias como el objeto de verdad. */
+  function doStore(store: Store, table: LockTable): Store {
+    return {
+      get: (k) => store.get(k),
+      put: (k, v) => store.put(k, v),
+      delete: (k) => store.delete(k),
+      claim: async (k, h, ms) => table.claim(k, h, ms),
+      release: async (k, h) => table.release(k, h),
+    };
+  }
+
+  const folders = (world: ReturnType<typeof fakeWorld>, test: (f: { name: string; appProperties?: Record<string, string> }) => boolean) =>
+    [...world.drive.entries()].filter(([, f]) => f.mimeType === FOLDER && !f.trashed && test(f));
+
+  async function crossing() {
+    const { world, store } = await setup();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const Other = await otherInstance();
+    // Cada creación tarda un poco, para que las dos instancias se crucen.
+    const slow: typeof fetch = async (input, init) => {
+      if (String(input).endsWith('/drive/v3/files') && init?.method === 'POST') await new Promise((r) => setTimeout(r, 300));
+      return world.http(input, init);
+    };
+    const one = (P: typeof Portero, file: string) => track(call(new P(env, doStore(store, table), slow), '/folder/prepare', 'editor-jwt', { file, name: 'Referencias' }));
+    return { world, Other, one };
+  }
+
+  it('la misma carpeta soltada a la vez en dos instancias: una sola en Drive, y las dos subidas la usan', async () => {
+    const { world, Other, one } = await crossing();
+    const a = one(Portero, F1);
+    const b = one(Other, F1);
+    await drain([a, b], 100, 60_000);
+    const [ra, rb] = [await a.promise, await b.promise];
+    expect([ra.status, rb.status]).toEqual([200, 200]);
+    const roots = folders(world, (f) => f.appProperties?.sdFile === F1);
+    expect(roots).toHaveLength(1);
+    expect(((await ra.json()) as Prepared).root.id).toBe(roots[0]![0]);
+    expect(((await rb.json()) as Prepared).root.id).toBe(roots[0]![0]);
+    expect(folders(world, (f) => f.name === 'Carpetas')).toHaveLength(1);
+  });
+
+  it('dos carpetas distintas del mismo proyecto a la vez en dos instancias: una sola carpeta del proyecto y una sola Carpetas', async () => {
+    const { world, Other, one } = await crossing();
+    const a = one(Portero, F1);
+    const b = one(Other, F2);
+    await drain([a, b], 100, 60_000);
+    expect([(await a.promise).status, (await b.promise).status]).toEqual([200, 200]);
+    expect(folders(world, (f) => f.name === 'Carpetas')).toHaveLength(1);
+    expect(folders(world, (f) => f.appProperties?.sdProject === PROJECT)).toHaveLength(1);
+    expect(folders(world, (f) => f.name === 'LGA_ShotDocs')).toHaveLength(1);
+    expect(folders(world, (f) => !!f.appProperties?.sdFile)).toHaveLength(2);
+  });
+  it('esperar el candado de otra instancia cuenta en el presupuesto del pedido: lo que no entra queda para el siguiente', async () => {
+    const { world, store } = await setup();
+    const F3 = '55555555-5555-4555-8555-555555555555';
+    world.base.set(F3, { name: 'Otra', mime: 'inode/directory', size: 10, drive_id: null, levels: { 'u-editor': 3 } });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const Other = await otherInstance();
+    // A, en otra instancia, crea Carpetas con el candado y se corta al anotarla (su pedido no termina nunca).
+    let reached = false;
+    const base = doStore(store, table);
+    const cut: Store = {
+      ...base,
+      put: (k, v) => {
+        if (k === `carpetas:${PROJECT}`) {
+          reached = true;
+          return new Promise<void>(() => undefined);
+        }
+        return base.put(k, v);
+      },
+    };
+    track(call(new Other(env, cut, world.http), '/folder/prepare', 'editor-jwt', { file: F3, name: 'Otra' }));
+    for (let i = 0; i < 100 && !reached; i++) await new Promise((resolve) => setImmediate(resolve));
+    expect(reached).toBe(true);
+    // B pide 30 subcarpetas: antes espera el candado de Carpetas (unos 15 pedidos al Durable Object).
+    let locks = 0;
+    const counted: Store = { ...base, claim: (k, h, ms) => (locks++, base.claim!(k, h, ms)), release: (k, h) => (locks++, base.release!(k, h)) };
+    const before = world.calls.filter((c) => c.includes('googleapis')).length;
+    const dirs = Array.from({ length: FOLDER_BATCH }, (_, i) => `d${i}`);
+    const b = track(call(new Portero(env, counted, world.http), '/folder/prepare', 'editor-jwt', { file: F1, name: 'Referencias', dirs }));
+    await drain([b], 500, LOCK_WAIT_MS + 5000);
+    const res = await b.promise;
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as Prepared;
+    const google = world.calls.filter((c) => c.includes('googleapis')).length - before;
+    expect(locks).toBeGreaterThan(10);
+    expect(google + locks).toBeLessThanOrEqual(DRIVE_CALL_BUDGET + 4);
+    // Lo que no entró queda para el pedido siguiente (la app lo vuelve a pedir).
+    expect(Object.keys(out.dirs).length).toBeGreaterThan(0);
+    expect(Object.keys(out.dirs).length).toBeLessThan(FOLDER_BATCH);
+    expect(folders(world, (f) => f.name === 'Carpetas')).toHaveLength(1);
   });
 });

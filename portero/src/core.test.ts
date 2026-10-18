@@ -14,6 +14,11 @@ import {
   contentDisposition,
   DB_TIMEOUT_MS,
   DRIVE_TIMEOUT_MS,
+  LOCK_ANSWER_MS,
+  LOCK_POLL_MS,
+  LOCK_RENEW_MS,
+  LOCK_WAIT_MS,
+  LockTable,
   ONCE_STALE_MS,
   folderName,
   inlineType,
@@ -3580,5 +3585,334 @@ describe('portero: una carpeta colgada no cuelga las subidas siguientes (v0.261)
     expect(b.settled()).toBe(true);
     expect(await (await b.promise).json()).toMatchObject({ drive: 'trashed' });
     expect(world.files.get(folder)!.trashed).toBe(true);
+  });
+});
+
+// --- el candado entre instancias del Worker (v0.264) ---------------------------------------------------------------
+
+describe('portero: candado entre instancias en el Durable Object (v0.264)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function track<T>(work: Promise<T>): { promise: Promise<T>; settled: () => boolean } {
+    let done = false;
+    const promise = work.finally(() => (done = true));
+    return { promise, settled: () => done };
+  }
+
+  function signal(): { wait: Promise<void>; fire: () => void } {
+    let fire!: () => void;
+    const wait = new Promise<void>((resolve) => (fire = resolve));
+    return { wait, fire };
+  }
+
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 30; i++) await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  async function drain(tracked: { settled: () => boolean }[], step: number, max: number): Promise<void> {
+    for (let t = 0; t <= max && !tracked.every((x) => x.settled()); t += step) {
+      await vi.advanceTimersByTimeAsync(step);
+      await flush();
+    }
+  }
+
+  /** Otra instancia del Worker: otra copia del módulo, con su propia memoria (`turns`). */
+  async function otherInstance(): Promise<typeof Portero> {
+    vi.resetModules();
+    return (await import('./core')).Portero;
+  }
+
+  /**
+   * El almacenamiento visto desde una instancia, con el candado del Durable Object (`LockTable`, compartido entre las
+   * instancias como el objeto de verdad) y la cuenta de los llamados. `lock`: cómo contesta el objeto el candado; un
+   * número N: falla (`Network connection lost`) los primeros N pedidos del candado y después contesta bien.
+   */
+  function doStore(store: Store, table: LockTable, lock: 'ok' | 'deaf' | 'fails' | 'deafRelease' | number = 'ok') {
+    const count = { get: 0, put: 0, delete: 0, claim: 0, release: 0 };
+    const s: Store = {
+      get: (k) => (count.get++, store.get(k)),
+      put: (k, v) => (count.put++, store.put(k, v)),
+      delete: (k) => (count.delete++, store.delete(k)),
+      claim: async (k, h, ms) => {
+        count.claim++;
+        if (lock === 'deaf') return new Promise<boolean>(() => undefined);
+        if (lock === 'fails') throw new Error('Durable Object reset');
+        if (typeof lock === 'number' && count.claim <= lock) throw new Error('Network connection lost.');
+        return table.claim(k, h, ms);
+      },
+      release: async (k, h) => {
+        count.release++;
+        if (lock === 'deaf' || lock === 'deafRelease') return new Promise<void>(() => undefined);
+        if (lock === 'fails') throw new Error('Durable Object reset');
+        table.release(k, h);
+      },
+    };
+    return { s, count };
+  }
+
+  const isCreate = (input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith('/drive/v3/files?fields=id') && init?.method === 'POST';
+  const NAMES = ['2026-09-30', 'LGA_ShotDocs', 'Spot_Coca-Cola_2026'];
+  const names = (world: World) => world.folders().map(([, f]) => f.name).sort();
+
+  it('dos subidas a la vez en dos instancias crean una sola carpeta de cada una (la segunda espera el candado y usa lo anotado)', async () => {
+    const { world, store } = await setup();
+    for (const f of [FILE_A, FILE_B, FILE_C]) addBaseFile(world, f);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const Other = await otherInstance();
+    // Las creaciones tardan un poco, para que las dos instancias se crucen.
+    const slow: typeof fetch = async (input, init) => {
+      if (isCreate(input, init)) await new Promise((r) => setTimeout(r, 300));
+      return world.http(input, init);
+    };
+    const a = track(startFile(new Portero(env, doStore(store, table).s, slow), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' }));
+    const b = track(startFile(new Other(env, doStore(store, table).s, slow), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' }));
+    const c = track(startFile(new Other(env, doStore(store, table).s, slow), 'editor-jwt', { file: FILE_C, size: 1000, day: '2026-09-30' }));
+    await drain([a, b, c], 100, 60_000);
+    expect([(await a.promise).status, (await b.promise).status, (await c.promise).status]).toEqual([200, 200, 200]);
+    expect(names(world)).toEqual(NAMES);
+    // Quien esperó el candado volvió a mirar lo anotado: no buscó en Drive (una búsqueda por carpeta creada).
+    expect(world.childSearches()).toBe(3);
+  });
+
+  it('el camino de una carpeta ya anotada no pide el candado; crear las tres pide uno y lo suelta por carpeta', async () => {
+    const { world, store } = await setup();
+    addBaseFile(world, FILE_A);
+    addBaseFile(world, FILE_B);
+    const table = new LockTable();
+    const first = doStore(store, table);
+    expect((await startFile(new Portero(env, first.s, world.http), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' })).status).toBe(200);
+    expect(first.count).toMatchObject({ claim: 3, release: 3 });
+    const second = doStore(store, table);
+    expect((await startFile(new Portero(env, second.s, world.http), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' })).status).toBe(200);
+    expect(second.count).toMatchObject({ claim: 0, release: 0 });
+  });
+
+  it('el dueño del candado murió (su pedido no termina nunca): la otra instancia lo toma a los ONCE_STALE_MS y usa la carpeta que dejó', async () => {
+    const { world, store } = await setup();
+    addBaseFile(world, FILE_A);
+    addBaseFile(world, FILE_B);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const Other = await otherInstance();
+    const reached = signal();
+    const base = doStore(store, table).s;
+    const cut: Store = {
+      ...base,
+      put: (k, v) => {
+        if (k === 'project:p-1') {
+          reached.fire();
+          return new Promise<void>(() => undefined);
+        }
+        return base.put(k, v);
+      },
+    };
+    // El muerto, en una copia del módulo que no usa ninguna otra prueba (su turno queda colgado en esa memoria).
+    const a = track(startFile(new Other(env, cut, world.http), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' }));
+    await reached.wait;
+    const b = track(startFile(new Portero(env, doStore(store, table).s, world.http), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' }));
+    await vi.advanceTimersByTimeAsync(ONCE_STALE_MS - 2000);
+    await flush();
+    expect(b.settled()).toBe(false);
+    await drain([b], 500, 10_000);
+    expect(b.settled()).toBe(true);
+    expect((await b.promise).status).toBe(200);
+    expect(a.settled()).toBe(false);
+    expect(names(world)).toEqual(NAMES);
+  });
+
+  it('quien tiene el candado sigue vivo aunque tarde más que ONCE_STALE_MS (lo renueva con sus señales): la otra instancia no crea otra', async () => {
+    const { world, store } = await setup();
+    addBaseFile(world, FILE_A);
+    addBaseFile(world, FILE_B);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const Other = await otherInstance();
+    // Buscar y crear cada carpeta de A tarda casi el tope de Google por llamado: más que ONCE_STALE_MS por carpeta.
+    const reached = signal();
+    const slow: typeof fetch = async (input, init) => {
+      // Crear, o buscar antes de crear (la consulta va en `q`, con los espacios como «+»).
+      const q = new URL(String(input)).searchParams.get('q') ?? '';
+      if (isCreate(input, init) || q.includes(' in parents and ')) {
+        reached.fire();
+        await new Promise((r) => setTimeout(r, DRIVE_TIMEOUT_MS - 2000));
+      }
+      return world.http(input, init);
+    };
+    const mineA = doStore(store, table);
+    const a = track(startFile(new Portero(env, mineA.s, slow), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' }));
+    // B llega cuando A ya tiene el candado de la carpeta de la app.
+    await reached.wait;
+    const b = track(startFile(new Other(env, doStore(store, table).s, world.http), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' }));
+    await drain([a, b], 1000, 20 * DRIVE_TIMEOUT_MS);
+    expect(a.settled() && b.settled()).toBe(true);
+    expect([(await a.promise).status, (await b.promise).status]).toEqual([200, 200]);
+    expect(names(world)).toEqual(NAMES);
+    // Las renovaciones van con las señales y como mucho una cada LOCK_RENEW_MS.
+    expect(mineA.count.claim).toBeLessThanOrEqual(3 + Math.ceil((3 * 2 * DRIVE_TIMEOUT_MS) / LOCK_RENEW_MS));
+    expect(mineA.count.claim).toBeGreaterThan(3);
+  });
+
+  it('/project/trash y /project/untrash desde dos instancias van de a uno: la carpeta termina fuera de la papelera y sin marcas', async () => {
+    const { world, store, folder } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const Other = await otherInstance();
+    // Cada llamado a Drive de A tarda 8 s: A no termina enseguida, pero sí antes de LOCK_WAIT_MS.
+    const slow: typeof fetch = async (input, init) => {
+      if (String(input).includes('/drive/v3/files')) await new Promise((r) => setTimeout(r, 8000));
+      return world.http(input, init);
+    };
+    const a = track(projectCall(new Portero(env, doStore(store, table).s, slow), 'trash', 'owner-jwt'));
+    await vi.advanceTimersByTimeAsync(10);
+    const b = track(projectCall(new Other(env, doStore(store, table).s, world.http), 'untrash', 'owner-jwt'));
+    await drain([a, b], 500, 20 * DRIVE_TIMEOUT_MS);
+    expect(a.settled() && b.settled()).toBe(true);
+    expect(await (await a.promise).json()).toMatchObject({ drive: 'trashed' });
+    expect(await (await b.promise).json()).toMatchObject({ drive: 'untrashed', folders: 1 });
+    expect(world.files.get(folder)!.trashed).toBe(false);
+    expect(world.projects.get(PROJ)).toMatchObject({ requested_at: null, trashed_at: null });
+  });
+
+  it('si la otra instancia sigue mandando la carpeta del proyecto más de LOCK_WAIT_MS, la segunda contesta 503 project_busy sin tocar nada', async () => {
+    const { world, store, folder } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const Other = await otherInstance();
+    const slow: typeof fetch = async (input, init) => {
+      if (String(input).includes('/drive/v3/files')) await new Promise((r) => setTimeout(r, DRIVE_TIMEOUT_MS - 2000));
+      return world.http(input, init);
+    };
+    const a = track(projectCall(new Portero(env, doStore(store, table).s, slow), 'trash', 'owner-jwt'));
+    await vi.advanceTimersByTimeAsync(10);
+    const b = track(projectCall(new Other(env, doStore(store, table).s, world.http), 'untrash', 'owner-jwt'));
+    await drain([b], 500, LOCK_WAIT_MS + 5000);
+    expect(b.settled()).toBe(true);
+    const res = await b.promise;
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'project_busy' });
+    await drain([a], 1000, 20 * DRIVE_TIMEOUT_MS);
+    expect(await (await a.promise).json()).toMatchObject({ drive: 'trashed' });
+    expect(world.files.get(folder)!.trashed).toBe(true);
+  });
+
+  it('el Durable Object no contesta el candado: la subida sigue con el turno de la instancia a los LOCK_ANSWER_MS; mandar la carpeta de un proyecto lo reintenta hasta LOCK_WAIT_MS y no se hace (503 project_busy), sin tocar nada', async () => {
+    const { world, store, folder } = await deletedProject();
+    addBaseFile(world, FILE_C);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const up = track(startFile(new Portero(env, doStore(store, table, 'deaf').s, world.http), 'editor-jwt', { file: FILE_C, size: 1000, day: '2026-10-01' }));
+    await drain([up], 500, 4 * LOCK_ANSWER_MS);
+    expect(up.settled()).toBe(true);
+    expect((await up.promise).status).toBe(200);
+    const before = changes(world, 0).length;
+    const deaf = doStore(store, table, 'deaf');
+    const trash = track(projectCall(new Portero(env, deaf.s, world.http), 'trash', 'owner-jwt'));
+    await drain([trash], 500, LOCK_WAIT_MS - 2 * LOCK_POLL_MS);
+    expect(trash.settled()).toBe(false);
+    await drain([trash], 500, 2 * LOCK_POLL_MS + 2 * LOCK_ANSWER_MS);
+    expect(trash.settled()).toBe(true);
+    expect(deaf.count.claim).toBeGreaterThan(1);
+    const res = await trash.promise;
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'project_busy' });
+    expect(changes(world, 0)).toHaveLength(before);
+    expect(world.files.get(folder)!.trashed).toBeFalsy();
+  });
+
+  it('el Durable Object falla al pedir el candado: la subida sigue enseguida con el turno de la instancia', async () => {
+    const { world, store } = await setup();
+    addBaseFile(world, FILE_A);
+    const res = await startFile(new Portero(env, doStore(store, new LockTable(), 'fails').s, world.http), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' });
+    expect(res.status).toBe(200);
+    expect(names(world)).toEqual(NAMES);
+  });
+  it('el Durable Object falla las primeras veces que se le pide el candado: mandar y traer la carpeta de un proyecto lo reintentan y terminan bien', async () => {
+    const { world, store, folder } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const flaky = doStore(store, table, 3);
+    const trash = track(projectCall(new Portero(env, flaky.s, world.http), 'trash', 'owner-jwt'));
+    await drain([trash], 500, LOCK_WAIT_MS);
+    expect(trash.settled()).toBe(true);
+    expect(await (await trash.promise).json()).toMatchObject({ drive: 'trashed' });
+    expect(flaky.count.claim).toBe(4);
+    expect(world.files.get(folder)!.trashed).toBe(true);
+    const flakyAgain = doStore(store, table, 2);
+    const untrash = track(projectCall(new Portero(env, flakyAgain.s, world.http), 'untrash', 'owner-jwt'));
+    await drain([untrash], 500, LOCK_WAIT_MS);
+    expect(untrash.settled()).toBe(true);
+    expect(await (await untrash.promise).json()).toMatchObject({ drive: 'untrashed' });
+    expect(world.files.get(folder)!.trashed).toBe(false);
+  });
+
+  it('el Durable Object falla siempre al pedir el candado: mandar la carpeta de un proyecto contesta 503 project_busy recién a los LOCK_WAIT_MS, sin tocar nada', async () => {
+    const { world, store, folder } = await deletedProject();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const failing = doStore(store, new LockTable(), 'fails');
+    const before = changes(world, 0).length;
+    const start = Date.now();
+    const trash = track(projectCall(new Portero(env, failing.s, world.http), 'trash', 'owner-jwt'));
+    await drain([trash], 250, LOCK_WAIT_MS - 2 * LOCK_POLL_MS);
+    expect(trash.settled()).toBe(false);
+    await drain([trash], 250, 4 * LOCK_POLL_MS);
+    expect(trash.settled()).toBe(true);
+    expect(Date.now() - start).toBeGreaterThanOrEqual(LOCK_WAIT_MS - LOCK_POLL_MS);
+    const res = await trash.promise;
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'project_busy' });
+    // Una vez cada LOCK_POLL_MS, no más (cuentan en el presupuesto de llamados del pedido).
+    expect(failing.count.claim).toBeLessThanOrEqual(Math.ceil(LOCK_WAIT_MS / LOCK_POLL_MS) + 1);
+    expect(changes(world, 0)).toHaveLength(before);
+    expect(world.files.get(folder)!.trashed).toBeFalsy();
+  });
+
+  it('el Durable Object da el candado pero no contesta al soltarlo: la subida y mandar la carpeta de un proyecto terminan igual (tope LOCK_ANSWER_MS)', async () => {
+    const { world, store, folder } = await deletedProject();
+    addBaseFile(world, FILE_C);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const up = track(startFile(new Portero(env, doStore(store, table, 'deafRelease').s, world.http), 'editor-jwt', { file: FILE_C, size: 1000, day: '2026-10-02' }));
+    await drain([up], 500, 6 * LOCK_ANSWER_MS);
+    expect(up.settled()).toBe(true);
+    expect((await up.promise).status).toBe(200);
+    const trash = track(projectCall(new Portero(env, doStore(store, table, 'deafRelease').s, world.http), 'trash', 'owner-jwt'));
+    await drain([trash], 500, 4 * LOCK_ANSWER_MS);
+    expect(trash.settled()).toBe(true);
+    expect(await (await trash.promise).json()).toMatchObject({ drive: 'trashed' });
+    expect(world.files.get(folder)!.trashed).toBe(true);
+  });
+
+  it('quien espera el candado de otra instancia sigue dando señal: otro pedido de su misma instancia no le saca el turno y se lleva su resultado', async () => {
+    const { world, store } = await setup();
+    for (const f of [FILE_A, FILE_B, FILE_C]) addBaseFile(world, f);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const table = new LockTable();
+    const Other = await otherInstance();
+    // Y, en otra instancia, busca y crea cada carpeta despacio pero vivo (más de ONCE_STALE_MS por carpeta).
+    const reached = signal();
+    const slow: typeof fetch = async (input, init) => {
+      // Crear, o buscar antes de crear (la consulta va en `q`, con los espacios como «+»).
+      const q = new URL(String(input)).searchParams.get('q') ?? '';
+      if (isCreate(input, init) || q.includes(' in parents and ')) {
+        reached.fire();
+        await new Promise((r) => setTimeout(r, DRIVE_TIMEOUT_MS - 2000));
+      }
+      return world.http(input, init);
+    };
+    const y = track(startFile(new Other(env, doStore(store, table).s, slow), 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' }));
+    await reached.wait;
+    // W espera el candado de Y; W2, en la misma instancia que W, espera el turno de W.
+    const w = track(startFile(new Portero(env, doStore(store, table).s, world.http), 'editor-jwt', { file: FILE_B, size: 1000, day: '2026-09-30' }));
+    await vi.advanceTimersByTimeAsync(500);
+    const second = doStore(store, table);
+    const w2 = track(startFile(new Portero(env, second.s, world.http), 'editor-jwt', { file: FILE_C, size: 1000, day: '2026-09-30' }));
+    await drain([y, w, w2], 1000, 20 * DRIVE_TIMEOUT_MS);
+    expect([(await y.promise).status, (await w.promise).status, (await w2.promise).status]).toEqual([200, 200, 200]);
+    expect(names(world)).toEqual(NAMES);
+    // W2 nunca pidió el candado: se llevó lo de W.
+    expect(second.count.claim).toBe(0);
   });
 });

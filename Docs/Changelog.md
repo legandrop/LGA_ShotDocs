@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.264 :
+
+Dos instancias del portero en Cloudflare podían crear a la vez la misma carpeta en Drive (raíz, proyecto, día,
+`Carpetas` o una carpeta soltada), o mandar y traer la misma carpeta de un proyecto solapados: el turno que lo evita
+vivía en la memoria de cada instancia. Ahora el Durable Object del portero da además un candado guardado en su
+almacenamiento (su memoria se pierde al hibernar o al publicar), que se pide solo al crear y siempre al mandar o
+traer, se renueva con las señales de quien lo tiene y vence a los 30 s sin ellas. Si el objeto no contesta o falla,
+una carpeta sigue como antes; mandar o traer lo reintenta hasta 40 s y recién ahí responde que se está haciendo.
+Pruebas con dos copias del módulo, del almacenamiento del objeto y en workerd, también reiniciándolo. D763–D767.
+
+[Que dos instancias del portero no creen la misma carpeta de Drive a la vez]
+
 v0.263 :
 
 Mandar o traer la carpeta de un proyecto borrado encadenaba promesas entre pedidos en el portero: si uno se cortaba,

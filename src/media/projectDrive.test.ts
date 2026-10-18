@@ -24,6 +24,7 @@ describe('la carpeta de un proyecto en Drive, en la app', () => {
     // Un portero que deja pasar el tope de Google: acá no se reintenta solo, no se muestra «trying again shortly».
     expect(err('drive_timeout', 504)).toBe(err('drive_failed', 502));
     expect(err('project_restored')).toContain('restored the project meanwhile');
+    expect(err('project_busy', 503)).toContain('right now');
     expect(err(undefined, 0)).toBe('Could not reach the file server.');
     expect(err('otra_cosa')).toBe('raw');
     expect(projectDriveError(new Error('x'))).toBe('x');

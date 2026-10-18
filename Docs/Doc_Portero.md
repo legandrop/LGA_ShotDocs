@@ -668,8 +668,50 @@ raro; una carpeta repetida no pierde nada (se ve en Drive y se junta a mano).
 - **`child` nunca adopta una carpeta de la papelera** (`trashed = false`); las pruebas lo comprueban con un Drive falso
   que, sin esa condición, devuelve también las de la papelera.
 
-Lo que todavía queda: dos instancias del Worker que buscan a la vez pueden crear dos carpetas iguales (el turno vive en
-la memoria de cada instancia). Propuesta de candado en el Durable Object: `Doc_Roadmap.md`, punto 32.
+### Candado entre instancias del Worker (v0.264)
+
+El turno de `once` y `oneAtATime` vive en la memoria de cada instancia del Worker. Cloudflare puede atender dos
+pedidos en dos instancias a la vez, y cada una creaba su carpeta. Desde v0.264 el Durable Object que ya guarda los datos
+del portero (`Store`, index.ts) da además un candado por clave (`LockTable` en core.ts: `claim` y `release`).
+
+- **En el almacenamiento del objeto, no en su memoria (D766):** Cloudflare descarta la memoria de un objeto que
+  hiberna (a los ~10 s sin pedidos), lo desaloja o lo reinicia al publicar, y un candado en memoria se perdía con su
+  dueño vivo. Se guarda con la API KV sincrónica del objeto (SQLite, claves `candado:<clave>`; `LockRows`): es un solo
+  objeto y no espera nada entre mirar y anotar, así que dos instancias no pueden tomar el mismo. No hace falta ninguna
+  migración (el objeto ya era SQLite; son métodos nuevos de la misma clase). Cada candado guarda de quién es, su
+  última renovación y su vencimiento (el que pidió el dueño); solo su dueño lo suelta (un `release` tardío de un dueño
+  vencido no borra el del siguiente), y al dar uno nuevo se borran los vencidos.
+- **Solo al crear:** `once` le pasa a cada carpeta un `lock()` que se llama justo antes de buscar y crear (raíz,
+  pruebas, `Via_link`, proyecto, día, `Carpetas`, `folder:<archivo>`). El camino de una carpeta ya anotada no lo pide.
+  `oneAtATime` (mandar y traer la carpeta de un proyecto) lo pide siempre.
+- **Mismo contrato que el turno:** quien lo tiene lo renueva con sus señales (`beat`), como mucho una vez cada
+  `LOCK_RENEW_MS` = 5 s y sin esperar la respuesta; entre dos señales pasa como mucho un llamado con tope de 20 s, así
+  que entre dos renovaciones pasan menos de 30 s. Sin renovar en `ONCE_STALE_MS` (30 s), vence y lo toma el próximo.
+- **Quien espera** lo vuelve a pedir cada `LOCK_POLL_MS` = 2 s, como mucho `LOCK_WAIT_MS` = 40 s (20 pedidos). Al
+  tenerlo, `once` vuelve a mirar lo anotado desde el principio: encuentra la carpeta que creó la otra instancia sin
+  buscarla en Drive. Pasado el tope: `503 folder_busy` (la app reintenta la subida) o `503 project_busy` (la app
+  dice que se está mandando o trayendo en este momento; la persona vuelve a apretar). Mientras espera da señal
+  (`beat`): otro pedido de su misma instancia no le saca el turno y se lleva su resultado.
+- **Si el objeto no contesta** (tope `LOCK_ANSWER_MS` = 5 s) o falla: una carpeta sigue con el turno de la instancia
+  (en el peor caso queda una repetida, que no pierde nada, y si el objeto está caído el pedido falla igual en lo que
+  sigue); mandar o traer la carpeta de un proyecto lo toma como un «no» y lo vuelve a pedir cada 2 s dando señal
+  (D767): un corte pasajero («Network connection lost») no lo frena, y recién a los `LOCK_WAIT_MS` = 40 s no se hace
+  (`503 project_busy`), porque solapados pueden dejar la base y Drive desparejos. Si el «sí» se perdió en el camino,
+  el pedido siguiente con el mismo dueño es una renovación y también da «sí». Si da el candado pero no contesta al
+  soltarlo, el pedido termina igual a los 5 s y el candado vence solo.
+- **Probado el adaptador del objeto** (`storeLocks.test.ts`): con un almacenamiento fingido, un candado tomado se ve
+  desde un objeto nuevo sobre el mismo almacenamiento, las claves llevan el prefijo y no tocan las demás, y los
+  vencidos se borran.
+- **Lo que cuesta:** cada pedido al objeto por el candado cuenta en `DRIVE_CALL_BUDGET`, así un pedido de carpetas que
+  esperó deja para el siguiente lo que no entra. Una subida que crea raíz, proyecto y día suma 6 pedidos al objeto (3
+  `claim` y 3 `release`; tenía 13 de lectura y escritura); una que encuentra todo anotado, ninguno (sigue en 8).
+- **Durante una publicación** pueden convivir una instancia vieja (sin candado) y una nueva: la vieja no lo pide (como
+  antes) y la nueva no se cuelga por eso. Si una nueva llega a un objeto viejo sin `claim`, cuenta como objeto que no
+  contesta.
+- Probado también en workerd con dos Workers locales (dos instancias de verdad, cada una con su memoria) contra el
+  mismo Durable Object: con el candado, la segunda espera; sin él, se solapan; con el dueño cortado, la segunda entra
+  a los 30 s. Y matando el proceso del objeto y levantándolo con el mismo estado (como un desalojo o una
+  publicación): el candado de A sigue, B no lo toma y A lo renueva.
 
 ### Carpetas: nunca hacia arriba (P.9)
 

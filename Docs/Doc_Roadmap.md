@@ -1867,16 +1867,9 @@ Supabase Auth y PostgREST la escriben literal, y Storage igual lo frena, O9). Pa
    v0.263 (D757–D762, `Doc_Portero.md`, «La misma regla en el resto del portero»): `oneAtATime` con turno y señales (la base también da señal y tiene tope de 20 s),
    `hmacKeys` sin promesas, pruebas con un pedido muerto para la carpeta del proyecto, la del día, `Carpetas` y el caso
    anidado `folder:<archivo>`, la regla de la papelera de `child` probada, `drive_timeout` → `drive_failed` en la
-   carpeta de un proyecto y el nombre real de la carpeta hallada por su marca. **Queda (D761):** dos instancias del
-   Worker que buscan a la vez la misma carpeta pueden crear dos (el turno vive en la memoria de cada una). Propuesta,
-   unas 4 h con pruebas y una corrida en workerd: (a) el Durable Object suma `claim(clave, quien, vencimiento)` y
-   `release(clave, quien)`, atómicos por ser un solo objeto (`lock:<clave>` con quien y su última señal, con el reloj
-   del objeto); (b) `once` lo pide solo cuando va a buscar y crear (no en el camino de una carpeta ya anotada, que es
-   casi todo); si lo tiene otra instancia viva, mira cada 500 ms si la carpeta ya quedó anotada (`store.get`) y se la
-   lleva, o toma el candado cuando vence; (c) las señales al objeto, como mucho una cada 10 s mientras se lo tiene, y
-   `release` al terminar; (d) pruebas con dos copias del módulo (cada una con su memoria) contra el mismo
-   almacenamiento, con un pedido muerto y uno lento. Costo: dos o tres escrituras al objeto por carpeta creada. Una
-   carpeta repetida no pierde nada (se ve en Drive), por eso no se hizo a medias en esta tanda.
+   carpeta de un proyecto y el nombre real de la carpeta hallada por su marca. **Cerrado en v0.264 (D763–D767):** el
+   candado entre instancias en el Durable Object (`Doc_Portero.md`, «Candado entre instancias del Worker»). Queda
+   solo verlo con el portero publicado: dos subidas a la vez desde dos navegadores a un proyecto nuevo.
 33. **Relaciones: lo que mostró la importación de un largo armado con tres docs (2026-10-17).** (1) El lector toma
    «Escena 46-47-51» como rango y le da la sección también a 048 y 050 (`reader.ts`, rangos; en `pageRelations.ts` las
    escondidas son dueñas de la sección): tres números con guion son una lista. Al importar se escribió «Escena 46, 47,

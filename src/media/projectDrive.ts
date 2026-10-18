@@ -67,6 +67,9 @@ export function projectDriveError(err: unknown): string {
       case 'not_found':
       case 'not_allowed':
         return t('projectDrive.notAllowed');
+      // Otra instancia del portero la está mandando o trayendo (o no se pudo saber): v0.264.
+      case 'project_busy':
+        return t('projectDrive.busy');
       case 'db_outdated':
         return t('projectDrive.outdated');
       case 'project_restored':

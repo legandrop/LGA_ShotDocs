@@ -1999,6 +1999,38 @@ muestra el texto, que no promete reintentar. Sin tope, un llamado a la base de m
 turno de un proyecto y el siguiente lo tomaba con el primero vivo: mandar y traer solapados podían dejar la base y Drive
 desparejos. Quien espera ese turno ya no da señales (no lleva ninguno).
 
+### D763 · El candado entre instancias, en la memoria del Durable Object (2026-10-18)
+**Elegí:** `claim` y `release` en el `Store` que ya existe, con un mapa en memoria (`LockTable`), sin escribir en su
+almacenamiento: no hay migración, no queda nada guardado y no suma escrituras. Si el objeto se reinicia se pierden los
+candados y vuelve lo de antes (una carpeta repetida como mucho). Se pide solo antes de buscar y crear, y siempre en
+mandar o traer la carpeta de un proyecto. **Reemplazada por D766** en lo de la memoria: el resto sigue.
+
+### D764 · Renovar con las señales cada 5 s como mucho; esperar cada 2 s hasta 40 s (2026-10-18)
+**Elegí:** `LOCK_RENEW_MS` = 5 s y no 10: la renovación va con las señales, que pueden estar separadas por un llamado
+de 20 s; con 10 s, dos renovaciones podían quedar a 30 s justos y el candado vencer con su dueño vivo. Quien espera
+pide cada 2 s hasta 40 s (`LOCK_WAIT_MS`): lo que tarda en vencer el de uno muerto, con margen, en 20 pedidos como
+mucho, que cuentan en `DRIVE_CALL_BUDGET`.
+
+### D765 · Si el Durable Object no contesta: carpetas sí, mandar y traer no (2026-10-18)
+**Elegí:** con tope de 5 s por respuesta; una carpeta sigue con el turno de la instancia (lo peor es una repetida, que
+no pierde nada); mandar o traer la carpeta de un proyecto responde `503 project_busy` (texto nuevo en la app,
+`projectDrive.busy`), porque solapados pueden dejar la base y Drive desparejos. Pasado el tope de espera, `folder_busy`
+(la app reintenta) o `project_busy`.
+
+### D766 · El candado, en el almacenamiento del Durable Object y no en su memoria (2026-10-18)
+**Elegí:** guardarlo con la API KV sincrónica del objeto (SQLite, claves `candado:<clave>`), que mira y anota sin
+esperar nada entre medio. En memoria (D763) se perdía cuando Cloudflare hiberna el objeto (a los ~10 s sin pedidos),
+lo desaloja o lo reinicia al publicar, y un dueño vivo pero lento (llamados de hasta 20 s) podía quedarse sin él. Cada
+candado guarda su vencimiento (el de quien lo pidió), solo su dueño lo suelta, y al dar uno nuevo se borran los
+vencidos. Suma una escritura por `claim` y por `release`; el objeto ya era SQLite, no hay migración.
+
+### D767 · Mandar y traer reintentan el candado si el objeto falla, hasta la misma espera de 40 s (2026-10-18)
+**Elegí:** en el modo estricto (`oneAtATime`), un error o el tope de 5 s del Durable Object cuenta como un «no»: se
+vuelve a pedir cada 2 s dando señal, y `project_busy` recién a los 40 s. Reemplaza en eso a D765, que respondía
+`project_busy` al instante: en workerd, un «Network connection lost» pasajero lo daba a los 2–4 s. Si el «sí» se
+perdió en el camino, el pedido siguiente con el mismo dueño es una renovación y también da «sí». Las carpetas siguen
+como en D765.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

@@ -57,6 +57,66 @@ export interface Store {
   get<T>(key: string): Promise<T | undefined>;
   put(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<void>;
+  /**
+   * El candado entre instancias del Worker (v0.264, `LockTable`): lo da el Durable Object, que es uno solo. `claim`
+   * lo toma (o lo renueva, si ya es de `holder`) y dice si lo tiene; `release` lo suelta si todavía es de `holder`. Un
+   * almacenamiento sin estos dos (las pruebas en memoria) no tiene candado: queda solo el turno de la instancia.
+   */
+  claim?(key: string, holder: string, staleMs: number): Promise<boolean>;
+  release?(key: string, holder: string): Promise<void>;
+}
+
+/** Un candado guardado: de quién es, cuándo lo tomó o lo renovó por última vez, y a los cuántos ms vence. */
+export type LockRow = { holder: string; at: number; stale: number };
+
+/**
+ * Dónde guarda sus candados la `LockTable`, con métodos sincrónicos. En el Durable Object, su almacenamiento (la API
+ * KV sincrónica de SQLite, index.ts): sobreviven a que el objeto hiberne, se desaloje o se reinicie con una
+ * publicación. En las pruebas, un mapa (`memoryLockRows`), que se puede pasar a otra `LockTable` para recrearla.
+ */
+export interface LockRows {
+  get(key: string): LockRow | undefined;
+  put(key: string, row: LockRow): void;
+  delete(key: string): void;
+  list(): Iterable<[string, LockRow]>;
+}
+
+export function memoryLockRows(): LockRows {
+  const rows = new Map<string, LockRow>();
+  return {
+    get: (key) => rows.get(key),
+    put: (key, row) => void rows.set(key, { ...row }),
+    delete: (key) => void rows.delete(key),
+    list: () => [...rows.entries()],
+  };
+}
+
+/**
+ * Los candados entre instancias del Durable Object. La verdad está en su almacenamiento (`LockRows`), no en su memoria:
+ * Cloudflare descarta la memoria de un objeto que hiberna (a los ~10 s sin pedidos), lo desaloja a los 70–140 s y lo
+ * reinicia en cada publicación, y con un dueño lento (llamados de hasta 20 s) el candado se perdía (v0.264). Mirar y
+ * anotar son sincrónicos, sin esperar nada entre medio: dos instancias no pueden tomar el mismo a la vez. Un candado
+ * sin renovar en su `stale` está vencido y lo toma el próximo que lo pida; los vencidos se borran al dar uno nuevo.
+ */
+export class LockTable {
+  constructor(private readonly rows: LockRows = memoryLockRows()) {}
+
+  claim(key: string, holder: string, staleMs: number, now = Date.now()): boolean {
+    const stale = Math.min(Math.max(Number(staleMs) || 0, 1_000), 120_000);
+    const current = this.rows.get(key);
+    if (current && current.holder !== holder && now - current.at <= (current.stale || stale)) return false;
+    this.rows.put(key, { holder, at: now, stale });
+    // Uno nuevo (no una renovación): los vencidos de quien murió con el candado no se acumulan.
+    if (current?.holder !== holder) {
+      for (const [k, row] of this.rows.list()) if (k !== key && now - row.at > (row.stale || stale)) this.rows.delete(k);
+    }
+    return true;
+  }
+
+  /** Lo suelta solo si todavía es de `holder` (un dueño vencido no suelta el del que lo tomó después). */
+  release(key: string, holder: string): void {
+    if (this.rows.get(key)?.holder === holder) this.rows.delete(key);
+  }
 }
 
 // Lo guardado, por clave. Las de antes (`google`, `accessToken`, `passSecret`, `upload:*`, `state:*`) se
@@ -303,14 +363,38 @@ export const DB_TIMEOUT_MS = 20_000;
 export const ONCE_STALE_MS = DRIVE_TIMEOUT_MS + 10_000;
 /** Cada cuánto mira el que espera si la carpeta ya está (ver `once`). */
 const ONCE_POLL_MS = 50;
+/**
+ * El candado entre instancias (`LockTable`) se renueva con las señales de quien lo tiene (`beat`), como mucho una vez
+ * cada esto: no suma un llamado al Durable Object por señal. Entre dos señales pasa como mucho un llamado a Google o a
+ * la base (20 s con tope), así que entre dos renovaciones pasan como mucho 5 + 20 s, debajo de `ONCE_STALE_MS`.
+ */
+export const LOCK_RENEW_MS = 5_000;
+/** Cada cuánto vuelve a pedir el candado quien espera a otra instancia (cada pedido es un llamado afuera). */
+export const LOCK_POLL_MS = 2_000;
+/**
+ * Lo más que un pedido espera el candado de otra instancia: lo que tarda en vencer el de una que murió, con margen.
+ * Pasado esto, `503 folder_busy` o `project_busy` (la app lo reintenta o la persona vuelve a apretar). Son como mucho
+ * 20 pedidos al Durable Object, que cuentan en `DRIVE_CALL_BUDGET`.
+ */
+export const LOCK_WAIT_MS = ONCE_STALE_MS + 10_000;
+/** Lo más que se espera una respuesta del Durable Object sobre el candado (lo normal: milisegundos). */
+export const LOCK_ANSWER_MS = 5_000;
 
 /**
  * Una búsqueda o creación de carpeta en curso (`once`), o el turno de mandar o traer la carpeta de un proyecto
  * (`oneAtATime`). Quien la lleva es el pedido que la empezó; los demás pedidos comparten solo el resultado (`result`)
  * o esperan que se libere, nunca una promesa ni un llamado del otro pedido. `beat`: la última vez que quien la lleva
- * dio señales (cada llamado a Google o a la base).
+ * dio señales (cada llamado a Google o a la base). `lock`: el candado entre instancias, si lo tiene (`renewed`: la
+ * última vez que se lo renovó); `lockTried`: ya se lo pidió (aunque el Durable Object no haya contestado).
  */
-type Turn = { beat: number; result?: { value: string } | { error: unknown } };
+type Turn = {
+  beat: number;
+  result?: { value: string } | { error: unknown };
+  lock?: { key: string; holder: string; renewed: number };
+  lockTried?: boolean;
+};
+/** La carpeta la estaba creando otra instancia: se vuelve a mirar lo anotado, ya con el candado (ver `once`). */
+const OTHER_INSTANCE = Symbol('otra instancia');
 /**
  * Carpetas que se están buscando o creando en este momento (dos subidas a la vez no crean dos iguales) y proyectos
  * cuya carpeta se está mandando o trayendo (`projectDrive:<id>`).
@@ -1139,10 +1223,82 @@ export class Portero {
     }
   }
 
-  /** Las carpetas que lleva este pedido (`once`) siguen vivas. */
+  /**
+   * Los turnos que lleva este pedido (`once`, `oneAtATime`) siguen vivos. Si alguno tiene el candado entre instancias,
+   * se lo renueva, como mucho una vez cada `LOCK_RENEW_MS` y sin esperar la respuesta (si se perdió, quien lo tomó
+   * busca antes de crear y no queda otra igual, como entre pedidos de una instancia).
+   */
   private beat(): void {
     const now = Date.now();
-    for (const turn of this.held) turn.beat = now;
+    for (const turn of this.held) {
+      turn.beat = now;
+      const lock = turn.lock;
+      if (lock && now - lock.renewed >= LOCK_RENEW_MS && this.store.claim) {
+        lock.renewed = now;
+        this.driveCalls++;
+        void this.answered(this.store.claim(lock.key, lock.holder, ONCE_STALE_MS)).catch(() => undefined);
+      }
+    }
+  }
+
+  /** Una respuesta del Durable Object sobre el candado, con tope (`LOCK_ANSWER_MS`): nunca deja colgado el pedido. */
+  private answered<T>(work: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('the lock did not answer')), LOCK_ANSWER_MS);
+    });
+    return Promise.race([work, late]).finally(() => clearTimeout(timer));
+  }
+
+  /**
+   * El candado entre instancias para `key`, que se pide solo antes de buscar y crear (o de mandar o traer la carpeta de
+   * un proyecto), nunca en el camino de una carpeta ya anotada. Si lo tiene otra instancia viva, se vuelve a pedir
+   * cada `LOCK_POLL_MS` hasta `LOCK_WAIT_MS` (después, `busy()`); si lo tuvo que esperar y `reread`, avisa con
+   * `OTHER_INSTANCE` para que `once` vuelva a mirar lo anotado (la otra ya la creó). Si el Durable Object no contesta o
+   * falla: con `strict`, se vuelve a pedir igual que con un «no», y `busy()` recién a los `LOCK_WAIT_MS`; sin él, se
+   * sigue solo con el turno de esta instancia (como antes de v0.264: en el peor caso una carpeta repetida, que no
+   * pierde nada).
+   */
+  private async lockFor(key: string, turn: Turn, options: { strict: boolean; reread: boolean; busy: () => HttpError }): Promise<void> {
+    if (turn.lock || turn.lockTried) return;
+    const claim = this.store.claim?.bind(this.store);
+    if (!claim) return;
+    turn.lockTried = true;
+    const holder = randomId(12);
+    const until = Date.now() + LOCK_WAIT_MS;
+    let waited = false;
+    for (;;) {
+      let got = false;
+      try {
+        // Cada pedido al Durable Object es un llamado afuera: cuenta en el presupuesto del pedido.
+        this.driveCalls++;
+        got = await this.answered(claim(key, holder, ONCE_STALE_MS));
+      } catch {
+        // Sin `strict`, se sigue con el turno de esta instancia. Con él, un error o el tope del objeto (un corte de
+        // red, un reinicio) se reintenta como un «no» dentro de la misma espera: `busy()` recién al agotarla. Si el
+        // «sí» se perdió en el camino, el pedido siguiente con el mismo `holder` es una renovación y también da «sí».
+        if (!options.strict) return;
+      }
+      if (got) {
+        turn.lock = { key, holder, renewed: Date.now() };
+        if (waited && options.reread) throw OTHER_INSTANCE;
+        return;
+      }
+      if (Date.now() + LOCK_POLL_MS > until) throw options.busy();
+      waited = true;
+      await sleep(LOCK_POLL_MS);
+      // Este pedido sigue vivo mientras espera (su turno en esta instancia no se da por muerto).
+      this.beat();
+    }
+  }
+
+  /** Suelta el candado entre instancias de `turn`, si lo tiene. Si el Durable Object no contesta, vence solo. */
+  private async unlock(turn: Turn): Promise<void> {
+    const lock = turn.lock;
+    turn.lock = undefined;
+    if (!lock || !this.store.release) return;
+    this.driveCalls++;
+    await this.answered(this.store.release(lock.key, lock.holder)).catch(() => undefined);
   }
 
   // --- elegir dónde va la carpeta de la app (solo el dueño) -----------------------------------------
@@ -1221,8 +1377,12 @@ export class Portero {
    * reiniciaba el portero, todas las subidas siguientes (v0.261). Si quien la lleva no da señales en
    * `ONCE_STALE_MS`, la toma el próximo que espera; como cada creación busca antes la carpeta en Drive (`folder`,
    * `child`), la que haya dejado creada el intento muerto se usa y no queda otra igual.
+   *
+   * Entre instancias del Worker (v0.264): `work` llama a `lock()` justo antes de buscar y crear, y no en el camino de
+   * una carpeta ya anotada. `lock()` pide el candado del Durable Object (`lockFor`); si lo tenía otra instancia, al
+   * tenerlo se vuelve a correr `work` desde el principio, que encuentra anotada la que creó la otra.
    */
-  private async once(key: string, work: () => Promise<string>): Promise<string> {
+  private async once(key: string, work: (lock: () => Promise<void>) => Promise<string>): Promise<string> {
     for (;;) {
       const turn = turns.get(key);
       if (!turn || Date.now() - turn.beat > ONCE_STALE_MS) break;
@@ -1240,26 +1400,37 @@ export class Portero {
     const mine: Turn = { beat: Date.now() };
     turns.set(key, mine);
     this.held.add(mine);
+    const busy = () => new HttpError(503, 'Another upload is creating this folder in Google Drive: trying again shortly.', 'folder_busy');
+    const lock = () => this.lockFor(key, mine, { strict: false, reread: true, busy });
     try {
-      const value = await work();
-      mine.result = { value };
-      return value;
+      for (;;) {
+        try {
+          const value = await work(lock);
+          mine.result = { value };
+          return value;
+        } catch (error) {
+          // La creaba otra instancia: ya con el candado, se vuelve a mirar lo anotado.
+          if (error === OTHER_INSTANCE) continue;
+          throw error;
+        }
+      }
     } catch (error) {
       mine.result = { error };
       throw error;
     } finally {
       this.held.delete(mine);
       if (turns.get(key) === mine) turns.delete(key);
+      await this.unlock(mine);
     }
   }
 
   /** La carpeta de la app (`LGA_ShotDocs`), en la carpeta que eligió el dueño o en la raíz. La crea si falta. */
   private rootFolder(): Promise<string> {
-    return this.once('root', async () => {
+    return this.once('root', async (lock) => {
       const google = await this.store.get<Google>('google');
       if (!google || google.broken) throw new HttpError(409, 'Google Drive is not connected.', 'drive_not_connected');
       const place = await this.store.get<Place>('drivePlace');
-      const root = await this.folder(google.rootFolder, ROOT_FOLDER, place?.id ?? null);
+      const root = await this.folder(google.rootFolder, ROOT_FOLDER, place?.id ?? null, lock);
       if (root !== google.rootFolder) {
         const latest = (await this.store.get<Google>('google')) ?? google;
         await this.store.put('google', { ...latest, rootFolder: root });
@@ -1271,9 +1442,9 @@ export class Portero {
   /** La carpeta de pruebas, adentro de la carpeta de la app en el Drive del dueño. La crea si falta. */
   private async testFolder(): Promise<string> {
     const root = await this.rootFolder();
-    return this.once('test', async () => {
+    return this.once('test', async (lock) => {
       const google = (await this.store.get<Google>('google'))!;
-      const test = await this.folder(google.testFolder, TEST_FOLDER, root);
+      const test = await this.folder(google.testFolder, TEST_FOLDER, root, lock);
       if (test !== google.testFolder) await this.store.put('google', { ...google, testFolder: test });
       return test;
     });
@@ -1306,9 +1477,9 @@ export class Portero {
       }
     }
     const root = await this.rootFolder();
-    const via = await this.once('viaLink', async () => {
+    const via = await this.once('viaLink', async (lock) => {
       const saved = await this.store.get<string>('viaLink');
-      const id = await this.folder(saved, VIA_LINK_FOLDER, root);
+      const id = await this.folder(saved, VIA_LINK_FOLDER, root, lock);
       if (id !== saved) await this.store.put('viaLink', id);
       return id;
     });
@@ -1317,13 +1488,14 @@ export class Portero {
 
   /** `<carpeta>/<AAAA-MM-DD>` (la de un proyecto, o `Via_link`), recordada con `day:<dueño>:<día>`. La crea si falta. */
   private dayIn(owner: string, project: string, day: string): Promise<string> {
-    return this.once(`day:${owner}:${day}`, async () => {
+    return this.once(`day:${owner}:${day}`, async (lock) => {
       const key = `day:${owner}:${day}`;
       const saved = await this.store.get<string>(key);
       if (saved) {
         const found = await this.look(saved, day);
         if (found && !found.trashed) return saved;
       }
+      await lock();
       const id = (await this.child(day, project))?.id ?? (await this.create(day, project));
       await this.store.put(key, id);
       return id;
@@ -1335,7 +1507,7 @@ export class Portero {
     const root = await this.rootFolder();
     // La huella del proyecto, para poner en esta misma carpeta lo que suba un link (`linkDayFolder`, entrega 2b).
     await this.rememberProjectMark(media.project_id);
-    return this.once(`project:${media.project_id}`, async () => {
+    return this.once(`project:${media.project_id}`, async (lock) => {
       const key = `project:${media.project_id}`;
       const want = folderName(media.project_name ?? '');
       const saved = await this.store.get<ProjectFolder>(key);
@@ -1354,6 +1526,7 @@ export class Portero {
           return saved.id;
         }
       }
+      await lock();
       const found = await this.child(want, root, { sdProject: media.project_id });
       const id = found?.id ?? (await this.create(want, root, { sdProject: media.project_id }));
       // La hallada por la marca, con el nombre que tiene en Drive (un intento cortado pudo crearla cuando el proyecto
@@ -1391,7 +1564,7 @@ export class Portero {
     return ((await res.json()) as { id: string }).id;
   }
 
-  private async folder(known: string | undefined, name: string, parent: string | null): Promise<string> {
+  private async folder(known: string | undefined, name: string, parent: string | null, lock: () => Promise<void>): Promise<string> {
     if (known) {
       const found = await this.look(known, name);
       if (found && !found.trashed) {
@@ -1407,6 +1580,7 @@ export class Portero {
         return known;
       }
     }
+    await lock();
     return (await this.child(name, parent))?.id ?? this.create(name, parent);
   }
 
@@ -1845,13 +2019,14 @@ export class Portero {
   /** `LGA_ShotDocs/<Proyecto>/Carpetas`. La crea si falta (una que el dueño mandó a la papelera se vuelve a crear). */
   private async foldersDir(media: MediaFile): Promise<string> {
     const project = await this.projectFolder(media);
-    return this.once(`carpetas:${media.project_id}`, async () => {
+    return this.once(`carpetas:${media.project_id}`, async (lock) => {
       const key = `carpetas:${media.project_id}`;
       const saved = await this.store.get<string>(key);
       if (saved) {
         const found = await this.look(saved, FOLDERS_DIR);
         if (found && !found.trashed) return saved;
       }
+      await lock();
       const id = (await this.child(FOLDERS_DIR, project))?.id ?? (await this.create(FOLDERS_DIR, project));
       await this.store.put(key, id);
       return id;
@@ -1997,12 +2172,14 @@ export class Portero {
     let rootName = rec.drive?.id === root ? rec.drive.name : media.name;
     if (!root) {
       const want = driveFolderName(typeof body.name === 'string' && body.name ? body.name : media.name);
-      root = await this.once(`folder:${file}`, async () => {
+      root = await this.once(`folder:${file}`, async (lock) => {
         const again = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
         if (again.drive) {
           if (!isCreator(who, media, again)) throw new HttpError(403, 'Only the person who added this folder can upload into it.', 'not_creator');
           return again.drive.id;
         }
+        // Desde acá, con el candado entre instancias (si lo tuvo otra, se vuelve a mirar `file:<id>`).
+        await lock();
         // Otra instancia del portero puede haberla creado recién (dos pedidos a la vez): se busca por su marca.
         const q = `mimeType = ${quoted(FOLDER_MIME)} and trashed = false and appProperties has { key='sdFile' and value=${quoted(file)} }`;
         const found = await this.drive(`/files?${new URLSearchParams({ q, fields: 'files(id,name)', pageSize: '10' })}`);
@@ -2489,8 +2666,8 @@ export class Portero {
    * encadenaban las promesas, y si un `/project/trash` o `/project/untrash` se cortaba, su promesa no terminaba nunca
    * y todo lo siguiente de ese proyecto esperaba hasta que se reiniciaba el portero (roadmap 32). Quien lleva el turno
    * da señales con cada llamado a Google o a la base; si no da ninguna en `ONCE_STALE_MS`, lo toma el próximo. Los dos
-   * se pueden repetir sin perder nada (ver `sendProjectFolder`), así que tomar el turno de uno que en realidad seguía
-   * vivo pero mudo es lo mismo que dos instancias a la vez, que ya podía pasar.
+   * se pueden repetir sin perder nada (ver `sendProjectFolder`). Entre instancias, además, el candado del Durable
+   * Object (v0.264, `lockFor`), con las mismas reglas.
    */
   private async oneAtATime<T>(project: string, work: () => Promise<T>): Promise<T> {
     const key = `projectDrive:${project}`;
@@ -2505,10 +2682,23 @@ export class Portero {
     turns.set(key, mine);
     this.held.add(mine);
     try {
+      // Si no se puede saber si otra instancia lo está haciendo (el objeto no contesta), no se hace: mandar y traer
+      // solapados pueden dejar la base y Drive desparejos. La persona vuelve a apretar.
+      await this.lockFor(key, mine, {
+        strict: true,
+        reread: false,
+        busy: () =>
+          new HttpError(
+            503,
+            'The folder of this project is being sent to or brought back from the Google Drive trash right now: try again in a moment.',
+            'project_busy',
+          ),
+      });
       return await work();
     } finally {
       this.held.delete(mine);
       if (turns.get(key) === mine) turns.delete(key);
+      await this.unlock(mine);
     }
   }
 

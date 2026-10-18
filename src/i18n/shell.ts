@@ -207,6 +207,10 @@ export const shell = {
     en: "Google Drive did not answer. Try again: nothing is lost.",
     es: "Google Drive no respondió. Probá de nuevo: no se pierde nada.",
   },
+  'projectDrive.busy': {
+    en: "The folder of this project is being sent to or brought back from the Google Drive trash right now. Try again in a moment: nothing is lost.",
+    es: "La carpeta de este proyecto se está mandando o trayendo de la papelera de Google Drive en este momento. Probá de nuevo en un rato: no se pierde nada.",
+  },
   'projectDrive.notAllowed': {
     en: "Only the workspace owner or an admin who manages this project can do this.",
     es: "Solo el dueño del workspace o un admin que maneja este proyecto puede hacerlo.",

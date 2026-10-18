@@ -10,6 +10,13 @@ declare module 'cloudflare:workers' {
         getAlarm(): Promise<number | null>;
         setAlarm(time: number | Date): Promise<void>;
         deleteAlarm(): Promise<void>;
+        // La API KV sincrónica de los objetos con SQLite (los candados entre instancias, v0.264).
+        kv: {
+          get(key: string): unknown;
+          put(key: string, value: unknown): void;
+          delete(key: string): boolean;
+          list(options?: { prefix?: string }): Iterable<[string, unknown]>;
+        };
       };
       blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>;
       id: DurableObjectId;
@@ -23,6 +30,9 @@ interface DurableObjectStub<T> {
   read(key: string): Promise<unknown>;
   write(key: string, value: unknown): Promise<void>;
   remove(key: string): Promise<void>;
+  // El candado entre instancias (v0.264).
+  claim(key: string, holder: string, staleMs: number): Promise<boolean>;
+  release(key: string, holder: string): Promise<void>;
   __brand?: T;
 }
 
