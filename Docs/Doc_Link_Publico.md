@@ -124,9 +124,10 @@ para los demás.
   `public` no le da `EXECUTE` a `anon` por defecto: hay que darlo explícito (lectura del catálogo de la base real).
 - La app entra solo con código o link de correo; `workspace_settings` no se lee sin sesión (`probeWorkspace` da
   `signInFirst`).
-- Supabase Auth de Wanka (`Doc_Supabase.md`, "Login"): `disable_signup: true`, anónimos apagados
-  (`external_anonymous_users_enabled: false`, con su límite `rate_limit_anonymous_users: 30` por hora por IP), hooks
-  apagados (el de invitaciones existe en la base pero no está conectado), sin captcha.
+- Supabase Auth de Wanka (`Doc_Supabase.md`, "Login"): registro abierto solo para invitados desde el 2026-10-20
+  (`disable_signup: false` con el hook *Before User Created* conectado; antes, cerrado), anónimos apagados
+  (`external_anonymous_users_enabled: false`, con su límite `rate_limit_anonymous_users: 30` por hora por IP), sin
+  captcha.
 
 ## 2. Cómo entra alguien sin cuenta
 
@@ -146,8 +147,8 @@ para los demás.
   `if config.DisableSignup { return ... ErrorCodeSignupDisabled, "Signups not allowed for this instance" }`. Después
   llama al hook *Before User Created* (`triggerBeforeUserCreated`). O sea: para usarlas hay que abrir el registro, y para
   abrirlo sin que entre cualquiera con un correo, antes el hook de invitaciones conectado y probado (`Doc_Supabase.md`,
-  "Abrir el registro solo para invitados", pasos 1 a 7, todavía no hechos en Wanka), y además cambiar el hook para que
-  deje pasar a los anónimos.
+  "Abrir el registro solo para invitados", pasos 1 a 7, hechos en Wanka el 2026-10-20), y además cambiar el hook para
+  que deje pasar a los anónimos.
 - **Para todo el proyecto, no para un link.** Prender los anónimos habilita `POST /auth/v1/signup` sin correo para
   cualquiera que tenga la clave publicable (está en la app, es pública): 30 cuentas por hora por IP (límite de fábrica).
   La documentación de Supabase dice que "se recomienda enfáticamente" un captcha invisible o Turnstile; en Supabase el

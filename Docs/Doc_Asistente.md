@@ -1648,7 +1648,8 @@ deja hacer cosas de la cuenta con el token del tercero. Las dos cosas se prueban
 - **Las llaves de Wanka:** ES256 en uso desde el 2026-09-29 (la HS256, "previously used"); el JWKS público tiene una sola
   llave EC P-256. La validación en el portero anda, y `openid` también andaría (no se pide).
 - La configuración de Auth de Wanka (lectura): `oauth_server_enabled: false`, registro dinámico apagado, sin
-  *Authorization Path*, `disable_signup: true`, hook apagado.
+  *Authorization Path*, `disable_signup: true`, hook apagado (desde el 2026-10-20 el registro está abierto solo para
+  invitados, con el hook *Before User Created* conectado; `Doc_Supabase.md`).
 
 **La API de Auth con el token de un tercero** (el router de `supabase/auth`, `internal/api/api.go`): `/user` (leer y
 cambiar), `/logout`, `/factors` y `/user/oauth/grants` piden solo una sesión válida (`requireAuthentication`) y **no

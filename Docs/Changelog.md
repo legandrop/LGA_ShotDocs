@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.265 :
+
+Una persona invitada desde *Members* (`karmafx@gmail.com`) no podía entrar: la app le decía «No hay ninguna cuenta con
+este correo». La invitación estaba bien y la app también: en el Supabase de Wanka el registro seguía cerrado
+(`disable_signup: true`) y el hook *Before User Created* que deja pasar solo a los invitados nunca se había conectado
+(`Doc_Supabase.md`, «Abrir el registro solo para invitados», pendiente desde el paso 9). Sin cuenta previa, Supabase
+corta el pedido del código antes de mirar la invitación. Se hizo en Wanka, en el orden de la doc: plantilla *Confirm
+signup* con el código (igual a *Magic Link*), hook conectado y probado con el registro cerrado (un correo sin
+invitación rebota con 403 y no crea usuario; el invitado pasa), recién después `disable_signup: false` y la misma
+prueba desde el frente público. Sin cambios de código: solo la doc. D768.
+
+[Abrir el registro de Wanka solo para invitados: conectar el hook de invitaciones]
+
 v0.264 :
 
 Dos instancias del portero en Cloudflare podían crear a la vez la misma carpeta en Drive (raíz, proyecto, día,

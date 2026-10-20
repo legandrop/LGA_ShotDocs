@@ -2031,6 +2031,14 @@ vuelve a pedir cada 2 s dando señal, y `project_busy` recién a los 40 s. Reemp
 perdió en el camino, el pedido siguiente con el mismo dueño es una renovación y también da «sí». Las carpetas siguen
 como en D765.
 
+### D768 · El registro de Wanka se abre solo para invitados, ya (2026-10-20)
+**Elegí:** hacer en Wanka, en la misma sesión, los pasos de «Abrir el registro solo para invitados» de
+`Doc_Supabase.md` (plantilla *Confirm signup* con el código, hook *Before User Created* conectado y probado con el
+registro cerrado, recién después `disable_signup: false`), en vez de invitar a mano desde el panel de Supabase cada
+vez. Lo destapó la primera invitación real: sin cuenta previa, Supabase rechaza el pedido del código antes de mirar
+la invitación, y la app muestra «No hay ninguna cuenta con este correo». Sin esto, *Members* invita pero nadie
+nuevo puede entrar. El paso 9 del plan ya lo preveía (D-09); solo faltaba hacerlo.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

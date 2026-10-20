@@ -626,12 +626,14 @@ Cómo entra la gente:
 
 - La app manda el mail con `signInWithOtp`. Se entra con el **código** (escrito en la app) o con el
   **link** del mail. En el iPhone hace falta el código: el link abre Safari, no la app instalada.
-- **Registro cerrado** (D-09): solo entran cuentas que ya existen o que el dueño invita (Authentication →
-  Users → *Invite user*). Un mail sin cuenta ve el aviso de pedir una invitación. Se abre solo para
-  invitados con el hook *Before User Created* conectado a `private.hook_before_user_created`, que rechaza
-  los correos sin una invitación viva: **primero** el hook conectado y probado, **después** el registro
-  abierto. Al revés, el registro quedaría abierto para cualquiera. Paso a paso: "Abrir el registro solo
-  para invitados", abajo.
+- **Registro abierto solo para invitados** (D-09; en Wanka desde el 2026-10-20, D768): el hook *Before User
+  Created* conectado a `private.hook_before_user_created` rechaza los correos sin una invitación viva en
+  `invitations` (la app muestra el aviso de pedir una invitación), y una persona invitada desde *Members* crea
+  su cuenta al pedir el código. Hasta ese día el registro estaba cerrado (`disable_signup: true`) y un
+  invitado sin cuenta previa veía ese mismo aviso: Supabase corta el pedido antes de mirar la invitación.
+  Orden obligatorio al rearmarlo: **primero** el hook conectado y probado, **después** el registro abierto.
+  Al revés, el registro quedaría abierto para cualquiera. Paso a paso: "Abrir el registro solo para
+  invitados", abajo.
 
 ### Proveedores y registro
 
@@ -641,7 +643,8 @@ Cómo entra la gente:
 - Todo lo demás apagado: teléfono (`external_phone_enabled`), usuarios anónimos
   (`external_anonymous_users_enabled`), Google, Apple, GitHub y el resto de los `external_*_enabled`,
   Web3, SAML (`saml_enabled`), passkeys (`passkey_enabled`) y el servidor OAuth (`oauth_server_enabled`).
-- **Allow new users to sign up** apagado (`disable_signup: true`).
+- **Allow new users to sign up** prendido desde el 2026-10-20 (`disable_signup: false`), con el hook
+  *Before User Created* conectado, que deja crear cuenta solo a los correos invitados. Antes, apagado.
 - **Confirm email** prendido (`mailer_autoconfirm: false`): una cuenta nueva confirma su correo antes de
   entrar, y no se entra con un correo sin verificar (`mailer_allow_unverified_email_sign_ins: false`).
 - **Secure email change** prendido (`mailer_secure_email_change_enabled: true`, la doble confirmación):
@@ -658,18 +661,24 @@ Cómo entra la gente:
   (`mfa_totp_enroll_enabled: false`; `mfa_totp_verify_enabled` sigue de fábrica); la app no los ofrece. Por teléfono
   y WebAuthn, apagados.
 - Hooks: *Custom Access Token* **conectado desde el 2026-10-03** (`hook_custom_access_token_enabled: true`,
-  `hook_custom_access_token_uri: "pg-functions://postgres/private/hook_custom_access_token"`; paso 1 del MCP). Los
-  demás apagados (`hook_*_enabled: false`), incluido *Before User Created* (`hook_before_user_created_enabled` y
-  `hook_before_user_created_uri`); ver "Abrir el registro solo para
-  invitados". Captcha apagado (`security_captcha_enabled: false`).
+  `hook_custom_access_token_uri: "pg-functions://postgres/private/hook_custom_access_token"`; paso 1 del MCP).
+  *Before User Created* **conectado desde el 2026-10-20** (`hook_before_user_created_enabled: true`,
+  `hook_before_user_created_uri: "pg-functions://postgres/private/hook_before_user_created"`; ver "Abrir el
+  registro solo para invitados"). Los demás apagados (`hook_*_enabled: false`). Captcha apagado
+  (`security_captcha_enabled: false`).
 
 ### Abrir el registro solo para invitados
 
-Todavía no se hizo en Wanka. La función del hook viene con `20260930160000_equipo.sql`, pero conectarla es
+**Hecho en Wanka el 2026-10-20** (D768; lo destapó la primera invitación real: el invitado veía «No hay ninguna
+cuenta con este correo»). La función del hook viene con `20260930160000_equipo.sql`, pero conectarla es
 configuración de login: se hace a mano, por la Management API, **en este orden y nunca al revés**. En un
 workspace nuevo, los pasos 4, 5 (una verificación automática; la prueba desde el panel queda a mano) y 7 los
 hace `setup-workspace.mjs --open-invite-signup` ("Preparar un workspace nuevo"); el hook opcional del paso 6
-no lo toca. En Wanka, todo a mano. Qué hace
+no lo toca. En Wanka, todo a mano (el script se niega contra Wanka a propósito). La prueba del paso 5 se hizo
+sin el panel: `POST /auth/v1/invite` con la clave secreta y un correo sin invitación dio 403 «Signups not
+allowed for this email…» sin crear usuario; con el registro abierto, `POST /auth/v1/otp` con la clave
+publicable y ese correo dio lo mismo (la configuración tarda ~1 minuto en propagarse: hasta entonces sigue
+contestando `signup_disabled`). Qué hace
 Supabase (documentación *Before User Created Hook* y código de Supabase Auth): antes de crear una cuenta
 (registro con código o link, invitación desde el panel, proveedores externos, anónimos) llama a
 `select "private"."hook_before_user_created"(evento)` como `supabase_auth_admin`, con el evento
