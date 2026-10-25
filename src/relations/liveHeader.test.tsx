@@ -217,6 +217,9 @@ describe('la cabecera viva en la app', () => {
     await until(() => header(host)?.querySelector('.lh-badge')?.textContent === 'Location', 'la locación');
     expect(header(host)!.classList.contains('closed')).toBe(false);
     expect(header(host)!.textContent).toContain('No report section yet: 104_008, 104_009, 105_025, 105_026');
+    // Los números van en el color de las escenas (D774): un elemento propio dentro de la frase traducida.
+    const codes = header(host)!.querySelector('.lh-noreport-yet .lh-codes')!;
+    expect(codes.textContent).toBe('104_008, 104_009, 105_025, 105_026');
     // Otra escena: plegada.
     await go(built, 's029');
     await until(() => header(host)?.querySelector('.lh-badge')?.textContent === 'Scene', 'otra escena');

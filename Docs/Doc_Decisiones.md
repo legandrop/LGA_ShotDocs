@@ -2081,6 +2081,22 @@ los ámbares de la app.
 Variables `--scene-*` y `--loc-*` de toda la app; el ámbar queda para lo elegido y lo que avisa. En el árbol, solo el
 número de las páginas que son escenas.
 
+### D774 · Una sola regla de colores (2026-10-25)
+**Pedido de Lega:** ¿por qué el scouting tiene color y el reporte de rodaje no? Las cosas con color tendrían que ser las
+que la app reconoce, más los estados (amarillo aviso, verde ok, rojo problema); falta un color de acento que no sea el
+ámbar. Lo eligió con mockups y una revisión independiente.
+**Eligió:**
+- **Entidades:** escenas en frambuesa, locaciones en azul, días y fechas en violeta (`--day-*`). En el texto, una escena
+  o una locación reconocida va escrita en su color y subrayada; un número que no existe, gris de rayas. En la lupa y en
+  *Pending*, un número que no existe va en frambuesa sin relleno y con borde punteado.
+- **Estados:** verde lo hecho (`--ok`, `--ok-bg`, `--ok-line`: *Shot*, *Shot outside the plan*, un día con reporte
+  escrito); ámbar los avisos y las preguntas (`--warn`; las preguntas y la mención propia también); rojo lo que falló en
+  la app (`--danger`: una parte que no bajó, el editor que tiró un error).
+- **Acento turquesa** (`--accent`, `--accent-text`, `--focus`): lo elegido (la raya, el foco), los links y la miga de
+  pan. El monograma del proyecto y el avatar siguen en ámbar: son la marca.
+- **Neutro:** el scouting (una etapa de la locación, no algo que se reconozca en el texto), las etiquetas y los puntos
+  de etapa, las páginas y las menciones de otros.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

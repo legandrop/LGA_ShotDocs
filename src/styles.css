@@ -1,4 +1,4 @@
-/* --- Tokens: papel y tinta (claro), sala de grading (oscuro), acento ámbar --------------------------- */
+/* --- Tokens: papel y tinta (claro), sala de grading (oscuro), acento turquesa ------------------------- */
 
 :root {
   --bg: #fbfaf8;
@@ -14,9 +14,9 @@
   --border-soft: #efece6;
   --hover: rgba(27, 26, 23, 0.05);
   --active: #e9e5dd;
-  --accent: #e8b23a;
-  --accent-text: #8a5700;
-  --focus: rgba(232, 178, 58, 0.35);
+  --accent: #0ea5c4;
+  --accent-text: #0c6a7d;
+  --focus: rgba(14, 165, 196, 0.35);
   --ok: #2f6b45;
   --warn: #7a4b00;
   --warn-bg: #fdf6e8;
@@ -70,8 +70,9 @@
   --border-soft: #242320;
   --hover: rgba(236, 233, 226, 0.05);
   --active: #26251f;
-  --accent-text: #f0c35a;
-  --focus: rgba(232, 178, 58, 0.3);
+  --accent: #22d3ee;
+  --accent-text: #5fd4e8;
+  --focus: rgba(34, 211, 238, 0.3);
   --ok: #7cc496;
   --warn: #f0c35a;
   --warn-bg: #2a2418;
@@ -79,7 +80,7 @@
   --danger: #f28b82;
   --danger-bg: #2e1c1a;
   --danger-border: #5c2e29;
-  --primary-bg: #e8b23a;
+  --primary-bg: #22d3ee;
   --primary-text: #1b1a17;
   --menu-bg: #22211f;
   --menu-border: #34332f;
@@ -141,9 +142,10 @@
   --ink-script: var(--ink-body);
 }
 
-/* El color de las escenas (frambuesa) y el de las locaciones (azul), en toda la app: barra lateral, árbol, lupa, mapa,
-   texto y fichas (Lega, 2026-10-25, D773). Separados del ámbar, que queda para lo elegido y lo que avisa. La hoja
-   impresa va siempre en claro. */
+/* El color de las escenas (frambuesa), el de las locaciones (azul) y el de los días y las fechas (violeta), en toda la
+   app: barra lateral, árbol, lupa, mapa, texto y fichas (Lega, 2026-10-25, D773 y D774). Solo lo que la app reconoce
+   lleva color; los estados van en verde (`--ok`), ámbar (`--warn`) y rojo (`--danger`), y el acento (turquesa) es para
+   lo elegido, los links y el foco. La hoja impresa va siempre en claro. */
 :root,
 .print-view {
   --scene-fg: #a5306d;
@@ -152,6 +154,11 @@
   --loc-fg: #3451b2;
   --loc-bg: #eaeefc;
   --loc-line: #9fb1ec;
+  --day-fg: #6d3fc0;
+  --day-bg: #f1ebfb;
+  --day-line: #bba3e6;
+  --ok-bg: #e7f0ea;
+  --ok-line: #b9d3c1;
 }
 
 :root[data-theme='dark'] {
@@ -161,6 +168,11 @@
   --loc-fg: #9db2ff;
   --loc-bg: rgba(120, 144, 255, 0.14);
   --loc-line: rgba(157, 178, 255, 0.42);
+  --day-fg: #b99cff;
+  --day-bg: rgba(170, 130, 255, 0.14);
+  --day-line: rgba(196, 168, 255, 0.4);
+  --ok-bg: rgba(124, 196, 150, 0.12);
+  --ok-line: rgba(124, 196, 150, 0.32);
 }
 
 :root[data-contrast='more'],
@@ -760,7 +772,7 @@ code {
 }
 
 .sync-pill.busy {
-  color: var(--accent-text);
+  color: var(--muted);
 }
 
 .sync-pill.warn {
@@ -780,7 +792,7 @@ code {
 }
 
 .sync-icon.busy {
-  color: var(--accent-text);
+  color: var(--muted);
 }
 
 .sync-icon.warn {
@@ -1792,11 +1804,12 @@ code {
   }
 }
 
+/* Lo que falló en la app va en rojo (D774): el ámbar es para los avisos que piden algo. */
 /* Una parte que se carga aparte y no se pudo bajar (lazyPart.tsx). */
 .banner.part-error {
-  border-color: var(--warn-border);
-  background: var(--warn-bg);
-  color: var(--warn);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .banner.part-error p {
@@ -1805,9 +1818,9 @@ code {
 
 /* La barrera de error de la página (ErrorBarrier.tsx): el editor tiró un error; el resto de la app sigue. */
 .banner.page-crash {
-  border-color: var(--warn-border);
-  background: var(--warn-bg);
-  color: var(--warn);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .banner.page-crash p {
@@ -1825,9 +1838,9 @@ code {
 /* Una versión del historial que el editor no puede mostrar. */
 .banner.history-version-crash {
   margin-top: 8px;
-  border-color: var(--warn-border);
-  background: var(--warn-bg);
-  color: var(--warn);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 /* La barrera de la app: la pantalla con *Reload* en lugar del blanco. */
@@ -3394,10 +3407,10 @@ code {
   --border-soft: #efece6;
   --hover: rgba(27, 26, 23, 0.05);
   --active: #e9e5dd;
-  --accent-text: #8a5700;
-  --question-bg: #eef2fa;
-  --question-border: #c9d6ee;
-  --question-accent: #3d5f9e;
+  --accent-text: #0c6a7d;
+  --question-bg: #fdf6e8;
+  --question-border: #f0d2a0;
+  --question-accent: #7a4b00;
   background: #ffffff;
   color: #1b1a17;
   font-family: var(--font);
@@ -3477,7 +3490,7 @@ code {
 }
 
 .print-view.print-view .bn-container .question-line {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%233d5f9e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%237a4b00' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
 }
 
 /* Una imagen nunca pasa del ancho imprimible ni del alto de una hoja (en pantalla, igual: ver .page.sheet). */
@@ -5000,23 +5013,24 @@ button.link.danger {
 
 :root {
   --comments-width: 360px;
-  --question-bg: #eef2fa;
-  --question-border: #c9d6ee;
-  --question-accent: #3d5f9e;
-  --comment-flash: rgba(232, 178, 58, 0.22);
-  /* Las menciones (`@lega`): azul de las preguntas; la propia, con el ámbar del acento. */
-  --mention-bg: rgba(61, 95, 158, 0.12);
-  --mention-text: #2f4f8c;
+  /* Las preguntas, en el ámbar de los avisos (D774): el azul se confundía con el de las locaciones. */
+  --question-bg: #fdf6e8;
+  --question-border: #f0d2a0;
+  --question-accent: #7a4b00;
+  --comment-flash: rgba(14, 165, 196, 0.18);
+  /* Las menciones (`@lega`): en tinta; la propia, en ámbar (te pide algo). */
+  --mention-bg: rgba(27, 26, 23, 0.06);
+  --mention-text: #1b1a17;
   --mention-me-bg: rgba(232, 178, 58, 0.3);
 }
 
 :root[data-theme='dark'] {
-  --question-bg: #1c2230;
-  --question-border: #2d3a54;
-  --question-accent: #9db8ea;
-  --comment-flash: rgba(232, 178, 58, 0.16);
-  --mention-bg: rgba(157, 184, 234, 0.16);
-  --mention-text: #b7cdf2;
+  --question-bg: #2a2418;
+  --question-border: #5a4520;
+  --question-accent: #f0c35a;
+  --comment-flash: rgba(34, 211, 238, 0.14);
+  --mention-bg: rgba(236, 233, 226, 0.08);
+  --mention-text: #ece9e2;
   --mention-me-bg: rgba(232, 178, 58, 0.26);
 }
 
@@ -5028,14 +5042,14 @@ button.link.danger {
   border: 1px solid var(--question-border);
   border-radius: 8px;
   background-color: var(--question-bg);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%233d5f9e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%237a4b00' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: 10px 9px;
   background-size: 17px 17px;
 }
 
 :root[data-theme='dark'] .bn-container .question-line {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%239db8ea' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23f0c35a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
 }
 
 .editor-host {
@@ -6545,7 +6559,7 @@ button.primary.danger {
 .sd-collapse-toggle.only-you,
 .sd-collapse-toggle.only-you:hover:not(:disabled),
 .sd-collapse-toggle.only-you:focus-visible {
-  color: var(--accent-text);
+  color: var(--warn);
 }
 
 /* En pantallas táctiles se ve siempre, tenue (no hay mouse que pase por el título). */
@@ -6937,10 +6951,11 @@ button.primary.danger {
   white-space: nowrap;
 }
 
+/* La locación, ficha como la escena (D774). */
 .search-entity-chip.loc {
   font-family: var(--font);
-  border-color: var(--border);
-  background: none;
+  border-color: var(--loc-line);
+  background: var(--loc-bg);
   color: var(--loc-fg);
 }
 
@@ -8850,7 +8865,7 @@ button.folder-row-main:hover {
   --annotator-text: #ece9e2;
   --annotator-muted: #b3ada3;
   --annotator-hover: rgba(255, 255, 255, 0.14);
-  --annotator-on: rgba(232, 178, 58, 0.28);
+  --annotator-on: rgba(34, 211, 238, 0.28);
   position: fixed;
   inset: 0;
   z-index: 96;
@@ -8945,8 +8960,8 @@ button.folder-row-main:hover {
 .annotator-status {
   padding: 4px 10px;
   border-radius: 6px;
-  background: rgba(232, 178, 58, 0.18);
-  color: #f4d48a;
+  background: rgba(34, 211, 238, 0.18);
+  color: #a5f0fb;
 }
 
 .annotator-done {
@@ -9093,7 +9108,7 @@ button.folder-row-main:hover {
 }
 
 .annotator-ui .annotator-band {
-  fill: rgba(232, 178, 58, 0.08);
+  fill: rgba(34, 211, 238, 0.08);
 }
 
 .annotator-brush {
@@ -9386,7 +9401,7 @@ button.folder-row-main:hover {
   border: none;
   background: none;
   font-size: 12px;
-  color: var(--accent-text);
+  color: var(--warn);
   padding: 6px 8px 0;
   text-align: left;
   text-decoration: underline;
@@ -9417,8 +9432,9 @@ button.folder-row-main:hover {
   height: 20px;
   padding: 0 5px;
   border-radius: 10px;
-  background: var(--accent);
-  color: var(--text);
+  /* Notas por ubicar: un aviso (D774). */
+  background: var(--warn);
+  color: var(--bg);
   font-size: 12px;
   font-weight: 600;
   line-height: 20px;
@@ -9446,7 +9462,7 @@ button.folder-row-main:hover {
 }
 
 .tree-row.active .tree-holds {
-  color: var(--accent-text);
+  color: var(--muted);
 }
 
 /* *Leave out of relations* (D540): el rótulo largo en castellano («Dejar fuera de las relaciones») va en un solo renglón: el

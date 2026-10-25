@@ -174,8 +174,11 @@ const LIVE_MAP = '0.269';
 const SCENES_SECTION = '0.269';
 /** *Pages* se pliega entera desde su título (D770, v0.267) y, al bajar, lo de arriba queda fijo (D771). */
 const PAGES_FOLD = '0.268';
-/** El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6). */
-const LIVE_UNDERLINE = '0.244';
+/**
+ * El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6): llegó en
+ * v0.244 y sube con el texto en el color de cada cosa (D774).
+ */
+const LIVE_UNDERLINE = '0.271';
 /**
  * Lo que quedaba del `/`, *Create*, *Assign*, *Today* y *Tomorrow* (relaciones en vivo, E11): *Undo* de *Assign*,
  * *Assign* en *Map › Pending* y crear el reporte de mañana desde *Tomorrow*. Sube `liveDay` (antes 0.241, E5) y

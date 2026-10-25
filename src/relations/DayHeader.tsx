@@ -88,9 +88,10 @@ function StatusPill({ row, tr }: { row: Extract<DayRow, { kind: 'scene' }>; tr: 
       </span>
     );
   }
+  // Filmada fuera del plan es una buena noticia con una nota: verde, como filmada (D774).
   if (row.status === 'notInPlan') {
     return (
-      <span className="lh-st warn" data-tip={tr('day.notInPlanTip')}>
+      <span className="lh-st shot" data-tip={tr('day.notInPlanTip')}>
         {tr('day.notInPlan')}
       </span>
     );
@@ -342,7 +343,12 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
         <Ic name="day" small />
         <span>
           {tr.rich('day.tomorrow', { day: <b data-tip={tomorrowTip}>{dayShortLabel(t.day)}</b> })}
-          {t.day.date && dayShortLabel(t.day) === t.day.label && <> · {longDate(t.day.date).split(' ').slice(0, 3).join(' ')}</>}
+          {t.day.date && dayShortLabel(t.day) === t.day.label && (
+            <>
+              {' · '}
+              <span className="date">{longDate(t.day.date).split(' ').slice(0, 3).join(' ')}</span>
+            </>
+          )}
         </span>
         <LocChips day={t.day} src={src} tr={tr} />
       </div>

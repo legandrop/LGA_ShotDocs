@@ -847,7 +847,7 @@ function Pending({
               actions={<MergeButton pair={d} className="mp-btn" />}
               head={
                 <>
-                  <span className="mp-chip mono">
+                  <span className={`mp-chip mono${d.kind === 'day' ? ' day' : ''}`}>
                     <Ic name={d.kind === 'day' ? 'day' : 'scene'} small />
                     {d.code}
                   </span>

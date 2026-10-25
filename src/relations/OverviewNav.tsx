@@ -306,7 +306,12 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
                 onClick={(e) => openPage(e, d.pageId)}
               >
                 <span className="code">{labels[i]}</span>
-                <span className="title" data-tip={d.locs.join(' + ') || title || undefined} data-tip-plain data-tip-overflow>
+                <span
+                  className={d.locs.length ? 'title locs' : 'title'}
+                  data-tip={d.locs.join(' + ') || title || undefined}
+                  data-tip-plain
+                  data-tip-overflow
+                >
                   {d.locs.join(' + ') || title}
                 </span>
               </a>

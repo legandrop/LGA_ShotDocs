@@ -288,6 +288,8 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(day.querySelector('.code')!.textContent).toBe('Día 59');
     // El tooltip (solo si está cortado) es lo mismo que la fila muestra: las locaciones del día.
     expect(day.querySelector<HTMLElement>('.title')!.dataset.tip).toBe(day.querySelector('.title')!.textContent);
+    // Las locaciones del día, en su color (D774).
+    expect(day.querySelector('.title')!.classList.contains('locs')).toBe(true);
     click(day);
     await wait();
     expect(location.pathname).toBe(pagePath(built.ids.d59));

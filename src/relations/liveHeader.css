@@ -14,29 +14,20 @@
   --lh-loc-line: var(--loc-line);
 }
 
+/* `--lh-day-*` es la ficha neutra (una página, un scouting); el violeta de los días es `--day-*` (D774). */
+
 :root {
-  /* «Filmada»: el verde de hecho (`--ok`), que antes compartía con las locaciones (D773). */
-  --lh-shot-bg: #e7f0ea;
-  --lh-shot-line: #b9d3c1;
   --lh-day-bg: #efece6;
   --lh-day-fg: #3a3833;
   --lh-day-line: #dcd7cd;
-  --lh-scout-bg: #e9eef5;
-  --lh-scout-fg: #3d5478;
-  --lh-scout-line: #c7d3e5;
-  --lh-flash: rgba(232, 178, 58, 0.16);
+  --lh-flash: rgba(14, 165, 196, 0.14);
 }
 
 :root[data-theme='dark'] {
-  --lh-shot-bg: rgba(124, 196, 150, 0.12);
-  --lh-shot-line: rgba(124, 196, 150, 0.32);
   --lh-day-bg: rgba(236, 233, 226, 0.07);
   --lh-day-fg: #d6d2c9;
   --lh-day-line: rgba(236, 233, 226, 0.16);
-  --lh-scout-bg: rgba(150, 178, 225, 0.12);
-  --lh-scout-fg: #aec4ea;
-  --lh-scout-line: rgba(150, 178, 225, 0.3);
-  --lh-flash: rgba(232, 178, 58, 0.12);
+  --lh-flash: rgba(34, 211, 238, 0.12);
 }
 
 .lh {
@@ -250,7 +241,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--faint-2);
 }
 
 .lh-kv {
@@ -315,23 +306,31 @@
   font-weight: 400;
 }
 
+/* La fecha de una ficha de día también es un día (D774). */
+.lh .lh-chip.day .n {
+  color: inherit;
+  opacity: 0.8;
+}
+
 .lh .lh-chip.loc {
   background: var(--lh-loc-bg);
   color: var(--lh-loc-fg);
   border-color: var(--lh-loc-line);
 }
 
-.lh .lh-chip.day,
-.lh .lh-chip.pg {
+/* Un día de rodaje, en violeta. Una página o un scouting (una etapa de la locación, no algo que la app reconozca en el
+   texto), neutros: solo las escenas, las locaciones y los días llevan color (D774). */
+.lh .lh-chip.day {
+  background: var(--day-bg);
+  color: var(--day-fg);
+  border-color: var(--day-line);
+}
+
+.lh .lh-chip.pg,
+.lh .lh-chip.scout {
   background: var(--lh-day-bg);
   color: var(--lh-day-fg);
   border-color: var(--lh-day-line);
-}
-
-.lh .lh-chip.scout {
-  background: var(--lh-scout-bg);
-  color: var(--lh-scout-fg);
-  border-color: var(--lh-scout-line);
 }
 
 /* Un decorado: chip sin relleno, del color del texto (como la maqueta); el nombre largo baja de renglón. */
@@ -485,8 +484,8 @@
 
 .lh-st.shot {
   color: var(--ok);
-  border-color: var(--lh-shot-line);
-  background: var(--lh-shot-bg);
+  border-color: var(--ok-line);
+  background: var(--ok-bg);
 }
 
 /* También la nombran (y las páginas índice, plegadas) */
@@ -545,9 +544,10 @@
   flex: none;
 }
 
+/* Que una etapa tenga contenido es información, no un aviso ni lo elegido: neutro (D774). */
 .lh-stage.has .dot {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--muted-2);
+  border-color: var(--muted-2);
 }
 
 .lh-stage .sv {
@@ -636,11 +636,7 @@
   font: 10.5px var(--mono);
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--accent-text);
-}
-
-.lh-ex .tag.scout {
-  color: var(--lh-scout-fg);
+  color: var(--muted-2);
 }
 
 .lh-ex .tt {
@@ -965,17 +961,19 @@
 }
 
 /* --- El día de rodaje y «Tomorrow» (sección 11; maqueta c_dia.html) --- */
+/* El día y sus fechas, en violeta (D774): el rótulo, la fecha y el día anterior y el siguiente. */
 .lh-badge.day {
-  background: var(--lh-day-bg);
-  color: var(--lh-day-fg);
+  background: var(--day-bg);
+  color: var(--day-fg);
 }
 
 .lh-meta.day {
   flex: 0 1 auto;
+  color: var(--day-fg);
 }
 
 .lh .lh-tbtn.nav {
-  color: var(--muted);
+  color: var(--day-fg);
 }
 
 .lh-facts {
@@ -1053,10 +1051,11 @@
   flex-wrap: wrap;
 }
 
-/* Planeada sin sección todavía: un aviso, en ámbar (D773). */
+/* Planeada sin sección todavía: el aviso del día, en ámbar con fondo (D773, D774). */
 .lh-st.plan {
   color: var(--warn);
   border-color: var(--warn-border);
+  background: var(--warn-bg);
 }
 
 .lh-st.warn {
@@ -1115,8 +1114,13 @@
   color: var(--text-2);
 }
 
+/* El día de mañana y su fecha, en violeta (D774). */
+.lh-tomorrow .th b,
+.lh-tomorrow .th .date {
+  color: var(--day-fg);
+}
+
 .lh-tomorrow .th b {
-  color: var(--text);
   font-weight: 600;
 }
 
@@ -1502,8 +1506,10 @@
   --rel-pend: #8f8a81;
 }
 
-/* Punteado sutil, sin cambiar el lugar de nada: solo la línea de abajo (ni relleno ni borde). */
+/* Punteado sutil, sin cambiar el lugar de nada: la línea de abajo y el texto en el color de lo que es (ni relleno ni
+   borde; Lega, 2026-10-25, D774). Solo en pantalla: la hoja impresa lo deja como lo escribió la persona. */
 .editor .rel-u {
+  color: var(--lh-scene-fg);
   text-decoration-line: underline;
   text-decoration-style: dotted;
   text-decoration-color: var(--lh-scene-fg);
@@ -1514,11 +1520,13 @@
 }
 
 .editor .rel-u.loc {
+  color: var(--lh-loc-fg);
   text-decoration-color: var(--lh-loc-fg);
 }
 
-/* Lo que no existe en el proyecto (un pendiente): gris, de rayas. */
+/* Lo que no existe en el proyecto (un pendiente): gris, de rayas, con el texto como está. */
 .editor .rel-u.pend {
+  color: inherit;
   text-decoration-style: dashed;
   text-decoration-color: var(--rel-pend);
   text-decoration-thickness: 1px;
@@ -1605,6 +1613,7 @@
 
 @media print {
   .editor .rel-u {
+    color: inherit;
     text-decoration: none;
     background: none;
   }
@@ -2036,4 +2045,14 @@ button.rel-cant.trash,
   .lh-tomorrow .rep {
     padding-right: 60px;
   }
+}
+
+/* En las líneas de la cabecera, lo que la app reconoce va en su color aunque no sea una ficha (D774): las locaciones
+   de cada día y los números de las escenas que todavía no tienen sección. */
+.lh .lh-via.lh-locs {
+  color: var(--lh-loc-fg);
+}
+
+.lh .lh-codes {
+  color: var(--lh-scene-fg);
 }

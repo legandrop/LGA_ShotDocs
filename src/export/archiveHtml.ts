@@ -47,7 +47,7 @@ html.sd-archive body { padding: 24px 12px 48px; font-family: system-ui, -apple-s
 .sd-archive .print-view { position: static; left: auto; top: auto; visibility: visible; pointer-events: auto; contain: none; margin: 0 auto; padding: var(--sd-sheet-margin, 20mm); box-sizing: content-box; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); }
 .sd-archive-nav, .sd-archive-foot { max-width: 900px; margin: 0 auto 14px; font-size: 13px; color: #5e5a52; }
 .sd-archive-foot { margin: 14px auto 0; font-size: 12px; }
-.sd-archive-nav a, .sd-archive-index a { color: #8a5700; }
+.sd-archive-nav a, .sd-archive-index a { color: #0e7490; }
 .sd-archive-nav .sep { margin: 0 6px; color: #b8b3a8; }
 .sd-archive-link { display: contents; }
 .sd-archive .bn-visual-media-wrapper:has(> .sd-archive-name) { flex-wrap: wrap; }

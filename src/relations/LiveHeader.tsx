@@ -715,7 +715,7 @@ function SceneHeader({ v, pages, partial, photos }: { v: SceneLive; pages: numbe
                   <span className="dl-main">
                     <DayChip day={d.day} />
                     {d.day.locs.length > 0 && (
-                      <span className="lh-via" data-tip={tr('live.perDayTitle')}>
+                      <span className="lh-via lh-locs" data-tip={tr('live.perDayTitle')}>
                         {d.day.locs.join(' + ')}
                       </span>
                     )}
@@ -931,7 +931,13 @@ function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages:
               <span className="lh-none">{absent(tr('live.noShootDays'))}</span>
             </div>
           )}
-          {v.noReport.length > 0 && !reading && <div className="lh-via lh-noreport-yet">{tr(partial ? 'live.noReportYetSeen' : 'live.noReportYet', { codes: v.noReport.join(', ') })}</div>}
+          {v.noReport.length > 0 && !reading && (
+            <div className="lh-via lh-noreport-yet">
+              {tr.rich(partial ? 'live.noReportYetSeen' : 'live.noReportYet', {
+                codes: <span className="lh-codes">{v.noReport.join(', ')}</span>,
+              })}
+            </div>
+          )}
         </div>
       </div>
       <AlsoRow also={v.also} index={v.indexPages} tr={tr} />

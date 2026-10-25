@@ -255,12 +255,14 @@
   background: var(--hover);
 }
 
+/* Lo que la app reconoce va en su color en todas las tablas (D774): la locación en azul, el día y la fecha en
+   violeta. */
 .mp-nm {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  color: var(--text);
+  color: var(--lh-loc-fg);
 }
 
 .mp-nm > .mp-i {
@@ -277,7 +279,7 @@
 
 .mp-sc {
   display: inline-flex;
-  color: var(--lh-scout-fg);
+  color: var(--muted-2);
 }
 
 .mp-ct {
@@ -312,17 +314,19 @@
   border-left: 1px dashed var(--border);
 }
 
+/* Un día con su reporte escrito es un hecho: verde; sin nada escrito, el contorno neutro (D774). */
 .mp-dot {
   display: inline-block;
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--lh-loc-fg);
-  border: 1.5px solid var(--lh-loc-fg);
+  background: var(--ok);
+  border: 1.5px solid var(--ok);
 }
 
 .mp-dot.e {
   background: var(--surface);
+  border-color: var(--faint-2);
 }
 
 .mp-dots {
@@ -373,6 +377,12 @@
   border-color: var(--lh-loc-line);
   background: var(--lh-loc-bg);
   color: var(--lh-loc-fg);
+}
+
+.mp-chip.day {
+  border-color: var(--day-line);
+  background: var(--day-bg);
+  color: var(--day-fg);
 }
 
 .mp-chip.out {
@@ -433,7 +443,16 @@
 
 .mp-date {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--day-fg);
+}
+
+.mp-dt .mp-link,
+.mp-scenes .mp-dd .mp-link {
+  color: var(--day-fg);
+}
+
+.mp-days .mp-ls {
+  color: var(--lh-loc-fg);
 }
 
 .mp-st,
@@ -452,13 +471,18 @@
   overflow-wrap: anywhere;
 }
 
+/* La locación siempre en azul; «· report» en verde (un hecho), «· planned» apagado (D774). */
+.mp-lt {
+  color: var(--lh-loc-fg);
+}
+
 .mp-lt i {
   font-style: normal;
   color: var(--faint);
 }
 
-.mp-lt.shot {
-  color: var(--lh-loc-fg);
+.mp-lt.shot i {
+  color: var(--ok);
 }
 
 .mp-dd {

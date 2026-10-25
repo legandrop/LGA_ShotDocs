@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.271 :
+
+Los colores no seguían una regla: el scouting tenía un azul propio y los días iban en gris, el ámbar era a la vez el
+acento (lo elegido, los links) y el aviso, y una misma locación salía azul o gris según la pantalla. Lega fijó la
+regla con un mockup: solo lo que la app reconoce lleva color (escenas frambuesa, locaciones azul, días y fechas
+violeta `--day-*`), y en el texto va escrito en su color además del subrayado; los estados, verde (hecho), ámbar
+(avisos y preguntas) y rojo (lo que falló); un acento turquesa para lo elegido, los links y el foco. El scouting y las
+etiquetas de etapa, neutros; *Shot outside the plan* en verde, *Planned, no section* en ámbar con fondo; los carteles
+de error en rojo. D774.
+
+[Colores con una sola regla: entidades, estados y un acento turquesa]
+
 v0.270 :
 
 Los números de escena iban en el mismo ámbar que la fila elegida, los pendientes y los avisos, y no se distinguían; las

@@ -262,8 +262,8 @@ In development. What works today:
   live titles, and each one opens every page that names it or links to it or to one of its cards (breakdown, scoutings,
   shoot days by date, other pages),
   with a short quote and a click to the exact section; index pages go apart. *Overview › Scenes* shows the same list per row.
-- While you write, scene numbers and location names that exist in the project get a subtle dotted underline (nothing
-  pops up). Hover one, or tap it with the keyboard closed, for a preview with *Open* and *Make it a link*
+- While you write, scene numbers and location names that exist in the project are written in their color with a subtle
+  dotted underline (nothing pops up). Hover one, or tap it with the keyboard closed, for a preview with *Open* and *Make it a link*
   (Ctrl+Alt+K / ⌘⌥K); links to scenes and locations show as chips. On a phone, a shoot day report has a *Today* bar above
   the keyboard with the day's scenes, its location, the camera and dictation.
 - Type `/e 027` or `/l cen` to link a scene or a location (it shows as a chip). A number that doesn't exist yet can be
