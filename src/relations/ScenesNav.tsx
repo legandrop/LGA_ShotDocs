@@ -6,6 +6,7 @@ import { useServices, useTree } from '../services';
 import { CollapseIcon, ExpandIcon } from '../ui/icons';
 import { setNavOpen, useNavOpen } from '../ui/navStore';
 import { useCurrentProject } from '../ui/project';
+import { revealRow } from '../ui/treeNav';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { sceneEpisodes, sceneMapPath } from './sceneMentions';
 import './scenesNav.css';
@@ -99,11 +100,13 @@ function ScenesNavFor({ session }: { session: NonNullable<ReturnType<typeof exis
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, activeEp, projectId]);
   // La fila de la escena abierta se lleva a la vista al abrirla y al abrir el cajón del teléfono (ahí la sección puede estar
-  // muy abajo). Con llaves: en Chromium `scrollIntoView` puede devolver una promesa y React la tomaría como limpieza.
+  // muy abajo), debajo de lo que queda pegado arriba (*Scenes* y su episodio: `revealRow`, D771), sin mover nada más.
   const navOpen = useNavOpen();
   const activeRow = useRef<HTMLAnchorElement | null>(null);
   useEffect(() => {
-    activeRow.current?.scrollIntoView?.({ block: 'nearest' });
+    const row = activeRow.current;
+    const nav = row?.closest<HTMLElement>('.sidebar');
+    if (row && nav) revealRow(row, nav);
   }, [active, navOpen]);
   if (!groups.length) return null;
 
@@ -154,7 +157,7 @@ function ScenesNavFor({ session }: { session: NonNullable<ReturnType<typeof exis
 
   return (
     <div className="scene-nav" style={{ '--code-w': `${codeWidth}ch` } as CSSProperties}>
-      <button className="scene-nav-head nav-title" aria-expanded={!fold.closed} onClick={() => update({ ...fold, closed: !fold.closed })}>
+      <button className="scene-nav-head nav-title sticky-head" aria-expanded={!fold.closed} onClick={() => update({ ...fold, closed: !fold.closed })}>
         <span className="nav-title-label" data-tip={tr('sidebar.scenesTip')}>
           {tr('sidebar.scenes')}
         </span>
@@ -171,7 +174,7 @@ function ScenesNavFor({ session }: { session: NonNullable<ReturnType<typeof exis
               return (
                 <li key={g.ep}>
                   <button
-                    className="scene-nav-ep"
+                    className={`scene-nav-ep${isOpen ? ' sticky-head' : ''}`}
                     aria-expanded={isOpen}
                     onClick={() => update({ ...fold, eps: isOpen ? [] : [g.ep] })}
                   >

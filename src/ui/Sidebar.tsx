@@ -267,7 +267,14 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     if (activeId && tree.isDescendant(activeId, id)) browse.current(id);
     else if (pending) browse.current(tree.isDescendant(pending, id) ? id : pending);
   };
-  const focusRow = (id: string, preventScroll = false) => rowEls.current.get(id)?.focus({ preventScroll });
+  /** Pone el foco en la fila; si no, la trae a la vista con `revealRow` (que cuenta las madres pegadas arriba). */
+  const focusRow = (id: string, preventScroll = false) => {
+    const el = rowEls.current.get(id);
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const nav = navEl.current;
+    if (!preventScroll && nav && revealRow(el, nav)) ownScrollUntil.current = Date.now() + 150;
+  };
 
   async function newPage(parentId: string | null) {
     const id = await tree.create(parentId, '', projectId);
@@ -294,7 +301,11 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     if (!canDrop(page.id)) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const y = (e.clientY - rect.top) / rect.height;
-    const zone: DropZone = y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
+    // Una madre pegada arriba (D771) no está en su lugar: antes o después de ella sería muy lejos de lo que se ve.
+    // Ahí solo se suelta adentro.
+    const home = e.currentTarget.parentElement?.getBoundingClientRect().top ?? rect.top;
+    const stuck = rect.top - home > 1;
+    const zone: DropZone = stuck ? 'inside' : y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
     if (!allowedZone(page, zone)) {
       if (drop?.id === page.id) setDrop(null);
       return;
@@ -383,8 +394,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           aria-level={depth + 1}
           aria-expanded={children.length ? open : undefined}
           aria-label={page.title || tr('common.untitled')}
-          className={`tree-row${children.length ? ' parent' : ''}${page.id === activeId ? ' active' : ''}${menu?.id === page.id ? ' menu-open' : ''}${renaming === page.id ? ' renaming' : ''}${dropClass}`}
-          style={{ paddingLeft: 4 + depth * 18 }}
+          className={`tree-row${children.length ? ' parent' : ''}${children.length && open ? ' sticky-head' : ''}${page.id === activeId ? ' active' : ''}${menu?.id === page.id ? ' menu-open' : ''}${renaming === page.id ? ' renaming' : ''}${dropClass}`}
+          style={{ paddingLeft: 4 + depth * 18, '--depth': depth } as CSSProperties}
           data-tip={split ? page.title : undefined}
           data-tip-plain
           draggable={renaming !== page.id && perms.canManagePage(page.id)}
@@ -536,7 +547,10 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       {/* La sección automática de escenas (Docs/Doc_Relaciones.md, sección 21): solo en un proyecto con escenas. */}
       {!linkMode && <ScenesNav />}
 
-      <div className="section-title" data-tour="pages">
+      {/* *Pages* en su propio bloque: su título (y cada madre abierta) queda arriba al bajar mientras se ve lo de
+          adentro, y se va con el final del árbol (pedido de Lega, 2026-10-25). */}
+      <div className="pages-section">
+      <div className="section-title sticky-head" data-tour="pages">
         <button className="nav-title pages-head" aria-expanded={!pagesClosed} onClick={() => foldPages(!pagesClosed)}>
           <span className="nav-title-label">{tr('sidebar.pages')}</span>
           {pagesClosed ? <ExpandIcon size={14} /> : <CollapseIcon size={14} />}
@@ -567,6 +581,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           <PlusIcon size={16} /> {tr('common.newPage')}
         </button>
       )}
+      </div>
 
       {!linkMode && <IndexProgress />}
       <div className="sidebar-spacer" />

@@ -2055,6 +2055,16 @@ que no se pliega, quedaría corrido); *Pages* plegada se recuerda por proyecto e
 abrir otra página del mismo proyecto (un link, la búsqueda, Atrás), como el árbol sigue a la página abierta; cambiar de
 proyecto no la despliega, plegarla con una página abierta la deja plegada y el tour, al señalar el árbol, la despliega. La fila finita era la columna de la barra achicando *Map* hasta la altura del texto.
 
+### D771 · Al bajar por la barra, lo de arriba queda fijo (2026-10-25)
+**Pedido de Lega:** «siempre tengo que ver al padre»: con muchas escenas, al bajar se iba *Scenes* y quedaba una lista
+de escenas sin saber de qué; adentro de *Pages*, al bajar por Preproducción › Decorados se perdía dónde estaba.
+**Elegí:** encabezados pegajosos (`position: sticky`). *Scenes* y *Pages* quedan arriba mientras se ve algo de su lista;
+debajo, apiladas, las madres abiertas (el episodio, cada página abierta de arriba) mientras se ve algo de lo suyo. Cada
+una se pega dentro de su bloque, así que al terminar su lista se va sola: al pasar de *Scenes* a *Pages* el título de
+*Scenes* y su episodio se van y queda *Pages* (no se apilan las dos secciones, que dejarían poca lista a la vista).
+*Map* no se pega (no tiene nada adentro). Llevar una fila a la vista (seguir a la página abierta, las flechas, la
+escena abierta) la deja debajo de lo pegado (`topCover` en `treeNav.ts`).
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

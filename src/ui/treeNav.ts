@@ -177,6 +177,31 @@ export function revealDelta(
  * mostrar la barra fuera de la pantalla. Con el cajón cerrado (corrido de costado con `transform`) las medidas de
  * arriba abajo valen igual: queda desplazado para cuando se abra. Devuelve cuánto desplazó.
  */
+/**
+ * Lo que tapa el borde de arriba para `row`: los títulos y las madres abiertas que se le pegan encima al bajar
+ * (`.sticky-head`, D771). Son las que están en los bloques que contienen a la fila y van antes que ella.
+ */
+export function topCover(row: HTMLElement, container: HTMLElement): number {
+  let cover = 0;
+  for (let node = row.parentElement; node && node !== container; node = node.parentElement) {
+    for (const child of node.children) {
+      if (child === row || child.contains(row) || !child.classList.contains('sticky-head')) continue;
+      if (child.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING) cover += child.getBoundingClientRect().height;
+    }
+  }
+  return cover;
+}
+
+/** Dónde arranca lo pegado, desde el borde de arriba de la barra: su margen de arriba más `--sticky-top`. */
+function stickyStart(container: HTMLElement): number {
+  try {
+    const style = getComputedStyle(container);
+    return (parseFloat(style.paddingTop) || 0) + (parseFloat(style.getPropertyValue('--sticky-top')) || 0);
+  } catch {
+    return 0;
+  }
+}
+
 function bottomCover(container: HTMLElement): number {
   try {
     return parseFloat(getComputedStyle(container).scrollPaddingBottom) || 0;
@@ -192,9 +217,14 @@ export function revealRow(row: HTMLElement, container: HTMLElement): number {
   // Sin caja (el árbol no se dibuja, `display: none`): no hay nada que medir.
   if (!r.height || !c.height) return 0;
   const top = c.top + container.clientTop;
+  // Arriba, lo que queda pegado (el título de la sección y las madres abiertas): la fila tiene que quedar debajo. Lo
+  // pegado arranca donde dice `--sticky-top` contado desde el margen de arriba de la barra (en el iPhone, el de la
+  // cámara: `env(safe-area-inset-top)`).
+  const stack = topCover(row, container);
+  const covered = stack ? stack + Math.max(0, stickyStart(container)) : 0;
   // Lo que tapa el borde de abajo (el renglón «Reading…» de las relaciones lo anuncia con `scroll-padding-bottom`).
-  const covered = bottomCover(container);
-  let delta = revealDelta(r, { top, bottom: top + container.clientHeight - covered });
+  const below = bottomCover(container);
+  let delta = revealDelta(r, { top: top + covered, bottom: top + container.clientHeight - below });
   // Hacia arriba, si la fila cabe en la primera pantalla del contenido, se vuelve al principio: así reaparece también
   // el encabezado (el selector de proyectos) en vez de quedar la fila pegada al borde con el encabezado escondido.
   if (delta < 0) {

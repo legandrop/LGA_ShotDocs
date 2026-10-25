@@ -1,7 +1,9 @@
 // Arnés de prueba visual (solo para desarrollo: no entra en el build ni se publica; se abre con el servidor de
 // desarrollo en /src/dev/barra-lateral.html). La app de verdad (Shell) sobre el servidor en memoria de las pruebas, sin
 // login ni red, con el proyecto sintético de las relaciones (escenas, locaciones y días): sirve para mirar los títulos
-// de la barra lateral (Map, Scenes, Pages) y la selección de *Map* contra la de una página. `?map` abre el mapa.
+// de la barra lateral (Map, Scenes, Pages) y la selección de *Map* contra la de una página. `?map` abre el mapa; `?muchas`
+// suma 120 escenas al episodio 5 y una rama *Preproducción › Decorados* con 80 páginas, para ver qué queda pegado arriba
+// al bajar (D771).
 import { createRoot } from 'react-dom/client';
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
@@ -38,6 +40,14 @@ async function main() {
   const A = await makeDevice(server);
   await A.engine.syncNow();
   const built = await buildProject(A, fakePhoto, { days: true });
+  if (new URLSearchParams(location.search).has('muchas')) {
+    for (let i = 100; i < 220; i++) await A.tree.create(built.ids.ep5, `${i} | Escena de prueba ${i}`, built.projectId);
+    const pre = await A.tree.create(null, '3 | Preproducción', built.projectId);
+    const deco = await A.tree.create(pre, 'Decorados', built.projectId);
+    for (let i = 1; i <= 80; i++) await A.tree.create(deco, `Decorado ${String(i).padStart(2, '0')}`, built.projectId);
+    await A.tree.create(pre, 'Vestuario', built.projectId);
+    localStorage.setItem('shotdocs-expanded', JSON.stringify([pre, deco]));
+  }
   await A.engine.syncNow();
   // El proyecto sintético como el elegido (en `/map` no hay página abierta que lo diga).
   localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [server.ownerId]: built.projectId }));

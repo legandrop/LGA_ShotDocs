@@ -1231,7 +1231,8 @@ una página del árbol, no se guarda en ningún documento y no escribe nada.
 | La vista de una escena | `MapView.tsx` (`SceneDetail`), `/map/scenes?scene=<código>` |
 | Textos y ayuda | `sidebar.scenes*`, `map.scene*`, `map.pagesN`, `map.colPages*`; ayuda `scenesSection` (since 0.260) |
 
-**La sección de la barra lateral.** Debajo de la fila *Map* y arriba de *Pages*, en todo proyecto con escenas en el
+**La sección de la barra lateral.** (Desde v0.268, D771, su título y el episodio abierto quedan pegados arriba al bajar
+mientras se ve algo de su lista.) Debajo de la fila *Map* y arriba de *Pages*, en todo proyecto con escenas en el
 registro de lo que la persona ve (sin escenas o con un link público, no está). Un encabezado `SCENES  226` que la pliega
 entera; adentro, un renglón por episodio (`Episode 101  58`) y, al abrirlo, una fila por escena: número en la columna
 alineada del árbol y título en vivo (`sceneTitleOf`, el mismo de *Map › Scenes*). Con un solo grupo (un largo o un solo

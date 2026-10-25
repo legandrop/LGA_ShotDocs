@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.268 :
+
+Al bajar por la barra lateral se perdía dónde se estaba: con muchas escenas, el título *Scenes* se iba y quedaba una
+lista de escenas sin su episodio; en *Pages*, adentro de Preproducción › Decorados, solo se veían los decorados. Ahora
+los títulos *Scenes* y *Pages* y cada madre abierta (el episodio, cada página abierta de arriba) quedan pegados arriba
+(`position: sticky`, clase `sticky-head`) mientras se ve algo de lo suyo, apilados por profundidad y con fondo opaco;
+cada uno se pega dentro de su bloque (`.scene-nav`, el `li` de la madre, el nuevo `.pages-section`), así que al terminar
+su lista se va solo y al pasar de *Scenes* a *Pages* queda *Pages*. Seguir a la página abierta, las flechas y la escena
+abierta dejan la fila debajo de lo pegado (`topCover` en `treeNav.ts`, con el margen de la cámara del iPhone); sobre
+una madre pegada solo se suelta adentro. `?muchas` en el arnés. D771.
+
+[Barra lateral: el título y las madres abiertas quedan fijos arriba al bajar]
+
 v0.267 :
 
 En la barra lateral, *Map*, *Scenes* y *Pages* se veían distintos (Map con ícono y letra normal, los otros dos en

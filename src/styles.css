@@ -809,7 +809,52 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  padding: 0 4px 2px 0;
+  padding: 0 4px 0 0;
+}
+
+/* Al bajar por la barra siempre se ve dónde se está (pedido de Lega, 2026-10-25, D771): el título de *Scenes* y el de
+   *Pages* quedan arriba mientras se ve algo de su lista, y debajo, apiladas, las madres abiertas (un episodio, una
+   página con las de adentro) mientras se ve algo de lo suyo. Cada una se pega dentro de su bloque (`.scene-nav`, el
+   `li` de la madre, `.pages-section`), así que al terminar su lista se va sola y entra la siguiente: al pasar de
+   *Scenes* a *Pages* queda solo *Pages*. Fondo opaco (la barra), así lo de abajo no se ve a través. */
+.sidebar {
+  /* Se pegan contra el borde de la barra, no debajo de su margen de arriba (los 16 px; en el iPhone queda el de la
+     isla o la cámara). */
+  --sticky-top: -16px;
+  --sticky-head-h: 32px;
+  --sticky-row-h: 32px;
+}
+
+.sidebar .sticky-head {
+  position: sticky;
+  top: var(--sticky-top);
+  z-index: 30;
+  background-color: var(--sidebar-bg);
+}
+
+/* El color de pasar el mouse es transparente: encima del fondo de la barra. El título de *Pages* no: se tiñen su botón,
+   la lupa y el «+», cada uno con su forma. */
+.sidebar .sticky-head:not(.section-title):hover {
+  background: linear-gradient(var(--hover), var(--hover)) var(--sidebar-bg);
+}
+
+.sidebar .tree-row.sticky-head {
+  top: calc(var(--sticky-top) + var(--sticky-head-h) + var(--depth, 0) * var(--sticky-row-h));
+  /* Las de más arriba tapan a las de adentro cuando se van. */
+  z-index: calc(29 - var(--depth, 0));
+}
+
+.sidebar .tree-row.sticky-head.active {
+  background: var(--active);
+}
+
+.sidebar .tree-row.sticky-head.drop-inside {
+  background: color-mix(in srgb, var(--accent) 22%, var(--sidebar-bg));
+}
+
+.sidebar .scene-nav-ep.sticky-head {
+  top: calc(var(--sticky-top) + var(--sticky-head-h));
+  z-index: 29;
 }
 
 /* Los títulos de la barra lateral: *Map*, *Scenes* y *Pages* (pedido de Lega, 2026-10-25). Oscuros, en mayúsculas,
@@ -2211,6 +2256,11 @@ code {
   .tree-row,
   .nav-title {
     height: 40px;
+  }
+
+  .sidebar {
+    --sticky-head-h: 40px;
+    --sticky-row-h: 40px;
   }
 
   .breadcrumbs .crumb:not(.current),
