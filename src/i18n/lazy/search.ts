@@ -17,8 +17,8 @@ export const search = {
   'search.entScene': { en: "Scene", es: "Escena" },
   'search.entSceneEp': { en: "Scene · Episode {ep}", es: "Escena · Episodio {ep}" },
   'search.entLocation': { en: "Location", es: "Locación" },
-  'search.entPendingSeen': { en: "Not in the pages you can see · Map › Pending", es: "No está en las páginas que ves · Mapa › Pendientes" },
-  'search.entPending': { en: "Doesn’t exist yet · Map › Pending", es: "Todavía no existe · Mapa › Pendientes" },
+  'search.entPendingSeen': { en: "Not in the pages you can see · Overview › Pending", es: "No está en las páginas que ves · Panorama › Pendientes" },
+  'search.entPending': { en: "Doesn’t exist yet · Overview › Pending", es: "Todavía no existe · Panorama › Pendientes" },
   'search.none': { en: "No results in this project", es: "Sin resultados en este proyecto" },
   'search.searching': { en: "Searching…", es: "Buscando…" },
   'search.missingOnline': {

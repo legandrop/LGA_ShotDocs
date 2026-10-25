@@ -4,7 +4,7 @@ import type { Dict } from '../types';
 // El mapa del proyecto (Docs/Doc_Relaciones.md, sección 12; se carga aparte, con la vista).
 
 export const map = {
-  'map.title': { en: "Map", es: "Mapa" },
+  'map.title': { en: "Overview", es: "Panorama" },
   'map.lede': { en: "Built on this device from every page of the project", es: "Armado en este dispositivo con todas las páginas del proyecto" },
   'map.ledePartial': { en: "Built on this device from the pages you can see", es: "Armado en este dispositivo con las páginas que ves" },
   'map.reading': { en: "Reading {ready} of {total}…", es: "Leyendo {ready} de {total}…" },
@@ -16,17 +16,17 @@ export const map = {
   'map.tabScenes': { en: "Scenes", es: "Escenas" },
   'map.tabDays': { en: "Shoot days", es: "Días de rodaje" },
   'map.tabPending': { en: "Pending", es: "Pendientes" },
-  'map.copy': { en: "Copy map", es: "Copiar mapa" },
+  'map.copy': { en: "Copy overview", es: "Copiar panorama" },
   'map.copyTip': {
     en: "Every scene, location and shoot day as text, to paste into an assistant or a document. Only what you can see.",
     es: "Todas las escenas, locaciones y días como texto, para pegar en un asistente o un documento. Solo lo que ves.",
   },
   'map.copyJson': { en: "Copy JSON", es: "Copiar JSON" },
   'map.copyJsonTip': {
-    en: "The same map as JSON (shotdocs.map, version 1), with where each thing is named: for an assistant or a script",
-    es: "El mismo mapa en JSON (shotdocs.map, versión 1), con dónde se nombra cada cosa: para un asistente o un script",
+    en: "The same overview as JSON (shotdocs.map, version 1), with where each thing is named: for an assistant or a script",
+    es: "El mismo panorama en JSON (shotdocs.map, versión 1), con dónde se nombra cada cosa: para un asistente o un script",
   },
-  'map.copied': { en: "Map copied: {scenes}, {locations}", es: "Mapa copiado: {scenes}, {locations}" },
+  'map.copied': { en: "Overview copied: {scenes}, {locations}", es: "Panorama copiado: {scenes}, {locations}" },
   'map.copiedReading': { en: "Copied while this device is still reading the project: something may be missing", es: "Copiado mientras este dispositivo todavía lee el proyecto: puede faltar algo" },
   'map.copyFailed': { en: "Couldn’t copy: the browser didn’t allow it", es: "No se pudo copiar: el navegador no lo permitió" },
   'map.filter': { en: "Filter by name, number or date", es: "Filtrar por nombre, número o fecha" },
@@ -105,10 +105,10 @@ export const map = {
   'map.nothingPendingSeen': { en: "Nothing pending in the pages you can see.", es: "Nada pendiente en las páginas que ves." },
   'map.noMatch': { en: "Nothing matches the filter.", es: "Nada coincide con el filtro." },
   'map.empty': {
-    en: "This project has no scenes, locations or shoot days yet. In a folder’s menu, Type › Pages created inside are: Scenes, Locations or Shoot days. The map fills in by itself.",
-    es: "Este proyecto todavía no tiene escenas, locaciones ni días de rodaje. En el menú de una carpeta, Tipo › Lo que se crea adentro es: Escenas, Locaciones o Días de rodaje. El mapa se llena solo.",
+    en: "This project has no scenes, locations or shoot days yet. In a folder’s menu, Type › Pages created inside are: Scenes, Locations or Shoot days. The overview fills in by itself.",
+    es: "Este proyecto todavía no tiene escenas, locaciones ni días de rodaje. En el menú de una carpeta, Tipo › Lo que se crea adentro es: Escenas, Locaciones o Días de rodaje. El panorama se llena solo.",
   },
-  'map.unavailable': { en: "The map isn’t available here.", es: "El mapa no está disponible acá." },
+  'map.unavailable': { en: "The overview isn’t available here.", es: "El panorama no está disponible acá." },
   // Las páginas que hablan de una escena (Docs/Doc_Relaciones.md, sección 21): la vista de una escena y «N pages».
   'map.colPages': { en: "Pages", es: "Páginas" },
   'map.colPagesTip': {
@@ -150,7 +150,7 @@ export const map = {
     en: { one: "{count} page has this scene number.", other: "{count} pages have this scene number." },
     es: { one: "{count} página tiene este número de escena.", other: "{count} páginas tienen este número de escena." },
   },
-  'map.sceneTwinsGo': { en: "Merge them in Map › Pending", es: "Unilas en Mapa › Pendientes" },
+  'map.sceneTwinsGo': { en: "Merge them in Overview › Pending", es: "Unilas en Panorama › Pendientes" },
   'map.sceneBlock': { en: "Go to the block", es: "Ir al bloque" },
   'map.sceneMore': { en: { one: "{count} more", other: "{count} more" }, es: { one: "{count} más", other: "{count} más" } },
   'map.sceneNone': { en: "No other page names it yet.", es: "Ninguna otra página la nombra todavía." },

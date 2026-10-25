@@ -2065,6 +2065,14 @@ una se pega dentro de su bloque, así que al terminar su lista se va sola: al pa
 *Map* no se pega (no tiene nada adentro). Llevar una fila a la vista (seguir a la página abierta, las flechas, la
 escena abierta) la deja debajo de lo pegado (`topCover` en `treeNav.ts`).
 
+### D772 · *Overview*: el mapa con sus partes adentro, en la barra (2026-10-25)
+**Pedido de Lega:** *Scenes* era un acceso a una parte del mapa y no tenía sentido que fueran secciones paralelas; tocar
+*Scenes* tendría que abrir también su vista; ¿qué pasa con *Locations* y las otras partes?; ¿otro nombre que *Map*?
+**Eligió:** la opción A del mockup: un solo bloque *Overview* (*Panorama*) con *Locations*, *Scenes*, *Shoot days* y
+*Pending* adentro, como páginas del árbol (el nombre abre su vista y despliega su lista, la flecha solo pliega), una
+sola parte desplegada a la vez y la marca *AUTO*. El nombre cambia en toda la app (barra, vista, copiar, ayuda); la
+ruta `/map` y el formato `shotdocs.map` quedan. Detalle: `Doc_Relaciones.md`, sección 22.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

@@ -16,11 +16,11 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, type Built } from './fixtures/proyectoSintetico';
 import { SceneMentionsView } from './SceneMentionsView';
 import type { SceneMentionList } from './sceneMentions';
-import { SCENES_PAGE } from './ScenesNav';
+import { OVERVIEW_PAGE as SCENES_PAGE } from './OverviewNav';
 
-// La sección Scenes de la barra lateral y la lista de las páginas de una escena (Docs/Doc_Relaciones.md, sección 21), en
-// la app de verdad: aparece sola en un proyecto con escenas, por episodio y plegable (recordado por proyecto), cada escena
-// abre sus páginas por etapa con el lugar exacto, Map › Scenes despliega la misma lista con «N pages», un invitado ve solo
+// *Overview* de la barra lateral con *Scenes* adentro (Docs/Doc_Relaciones.md, secciones 21 y 22) y la lista de las
+// páginas de una escena, en la app de verdad: aparece sola en un proyecto con escenas, por episodio y plegable (recordado por proyecto), cada escena
+// abre sus páginas por etapa con el lugar exacto, Overview › Scenes despliega la misma lista con «N pages», un invitado ve solo
 // lo suyo, mientras lee no afirma nada, y con muchas escenas dibuja de a tandas. Nada de esto escribe.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -110,6 +110,7 @@ const click = (el: Element | null | undefined) => act(() => (el as HTMLElement).
 const eps = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('.scene-nav-ep')];
 const sceneRows = (host: HTMLElement) => [...host.querySelectorAll<HTMLAnchorElement>('.scene-nav-row')];
 const complete = (host: HTMLElement) => !!host.querySelector('.mp-title') && !host.querySelector('.mp-reading');
+const scenesPart = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.ov-part')].find((p) => p.querySelector('.ov-part-name')?.textContent === 'Scenes');
 
 async function owner(): Promise<{ d: Device; built: Built }> {
   const d = await makeDevice(new FakeServer());
@@ -118,19 +119,21 @@ async function owner(): Promise<{ d: Device; built: Built }> {
   return { d, built };
 }
 
-describe('la sección Scenes de la barra lateral', () => {
+describe('Overview y Scenes en la barra lateral', () => {
   it('por episodio, plegable y recordada por proyecto; cada escena abre todas sus páginas, por etapa, y lleva al lugar exacto', async () => {
     const { d, built } = await owner();
     const { host } = mount(d, pagePath(built.ids.notas));
     await shown(() => expect(eps(host).length).toBe(3));
-    const head = host.querySelector<HTMLButtonElement>('.scene-nav-head')!;
-    // Arriba de Pages, debajo de Map; con un tooltip de la app (nunca `title=`), el total y los episodios cerrados.
+    const head = scenesPart(host)!;
+    // Adentro de Overview, arriba de Pages (D772); con un tooltip de la app (nunca `title=`), el total y los episodios
+    // cerrados. De fábrica, Scenes es la parte desplegada.
     expect(head.textContent).toBe('Scenes24');
     expect(head.querySelector('[data-tip]')!.getAttribute('data-tip')).toContain('every page that talks about it');
     expect(host.querySelectorAll('.sidebar [title]').length).toBe(0);
     const nav = host.querySelector('.sidebar')!;
-    const order = [...nav.querySelectorAll('.map-nav, .scene-nav, .section-title')].map((x) => x.className.split(' ')[0]);
-    expect(order).toEqual(['map-nav', 'scene-nav', 'section-title']);
+    const order = [...nav.querySelectorAll('.ov-nav, .section-title')].map((x) => (x.classList.contains('ov-nav') ? 'overview' : 'pages'));
+    expect(order).toEqual(['overview', 'pages']);
+    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Scenes', 'Shoot days']);
     expect(eps(host).map((b) => [b.textContent, b.getAttribute('aria-expanded')])).toEqual([
       ['Episode 10118', 'false'],
       ['Episode 1042', 'false'],
@@ -203,14 +206,14 @@ describe('la sección Scenes de la barra lateral', () => {
     expect(asked).toEqual([expect.objectContaining({ pageId: built.ids.d59, term: null, place: { endBlockId: expect.any(String) } })]);
 
     // Lo plegado se recuerda por proyecto: al volver a montar, el 105 sigue abierto; plegar la sección entera, también.
-    expect(JSON.parse(localStorage.getItem('shotdocs-scenes-nav')!)[built.projectId]).toEqual({ closed: false, eps: ['105'] });
-    click(host.querySelector('.scene-nav-head'));
+    expect(JSON.parse(localStorage.getItem('shotdocs-overview-nav')!)[built.projectId]).toEqual({ closed: false, part: 'scenes', eps: ['105'] });
+    click(scenesPart(host)!.querySelector('.toggle'));
     expect(eps(host)).toEqual([]);
     for (const r of roots.splice(0)) act(() => r.unmount());
     const again = mount(d, pagePath(built.ids.notas)).host;
-    await shown(() => expect(again.querySelector('.scene-nav-head')).toBeTruthy());
+    await shown(() => expect(scenesPart(again)).toBeTruthy());
     expect(eps(again)).toEqual([]);
-    click(again.querySelector('.scene-nav-head'));
+    click(scenesPart(again)!.querySelector('.toggle'));
     expect(eps(again).map((b) => b.getAttribute('aria-expanded'))).toEqual(['false', 'false', 'true']);
     // Un episodio a la vez (D745): abrir el 104 cierra el 105, así Pages no queda muy abajo.
     click(eps(again)[1]);
@@ -218,18 +221,18 @@ describe('la sección Scenes de la barra lateral', () => {
     expect(sceneRows(again).map((r) => r.querySelector('.code')!.textContent)).toEqual(['104_008', '104_009']);
   });
 
-  it('Map, Scenes y Pages son títulos iguales; Pages se pliega, se recuerda por proyecto y abrir una página la despliega', async () => {
+  it('Overview y Pages son títulos iguales; Pages se pliega, se recuerda por proyecto y abrir una página la despliega', async () => {
     const { d, built } = await owner();
     // En `/map` no hay página abierta que diga el proyecto: el elegido en el dispositivo.
     localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [d.remote.userId]: built.projectId }));
     const { host } = mount(d, mapPath());
-    await shown(() => expect(host.querySelector('.map-nav') && host.querySelector('.scene-nav-head')).toBeTruthy());
-    // Los tres con la misma letra de título; *Map* sin ícono y elegida como una página.
+    await shown(() => expect(host.querySelector('.ov-head')).toBeTruthy());
+    // Los dos con la misma letra de título (D770, D772); en `/map`, Locations elegida como una página y desplegada sola.
     const titles = [...host.querySelectorAll('.sidebar .nav-title')];
-    expect(titles.map((t) => t.querySelector('.nav-title-label')!.textContent)).toEqual(['Map', 'Scenes', 'Pages']);
-    const map = host.querySelector('.map-nav')!;
-    expect(map.querySelector('svg')).toBeNull();
-    expect(map.classList.contains('on')).toBe(true);
+    expect(titles.map((t) => t.querySelector('.nav-title-label')!.textContent)).toEqual(['Overview', 'Pages']);
+    await shown(() => expect(host.querySelector('.ov-part.on .ov-part-name')!.textContent).toBe('Locations'));
+    expect(host.querySelector('.ov-part.on .ov-part-name')!.getAttribute('aria-current')).toBe('page');
+    expect([...host.querySelectorAll('.ov-part .toggle[aria-expanded="true"]')]).toHaveLength(1);
     // Pages, plegada: sin filas del árbol, y lo recuerda al volver a montar.
     const pages = () => host.querySelector<HTMLButtonElement>('.pages-head')!;
     expect(pages().getAttribute('aria-expanded')).toBe('true');
@@ -269,10 +272,63 @@ describe('la sección Scenes de la barra lateral', () => {
     expect(again.querySelector('.pages-head')!.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('Map › Scenes: «N pages» despliega la misma lista; un número que no es escena no dice nada falso', async () => {
+  it('Overview: el nombre de una parte abre su vista y despliega solo esa; la flecha solo pliega; el título pliega todo', async () => {
     const { d, built } = await owner();
     const { host } = mount(d, pagePath(built.ids.notas));
-    await shown(() => expect(host.querySelector('.map-nav')).toBeTruthy());
+    await shown(() => expect(scenesPart(host)).toBeTruthy());
+    const part = (name: string) => [...host.querySelectorAll<HTMLElement>('.ov-part')].find((p) => p.querySelector('.ov-part-name')!.textContent === name)!;
+    const open = () => [...host.querySelectorAll('.ov-part .toggle[aria-expanded="true"]')].map((b) => b.closest('.ov-part')!.querySelector('.ov-part-name')!.textContent);
+    expect(open()).toEqual(['Scenes']);
+    // *Shoot days*: abre su pestaña, lista los días (cada uno a su página) y pliega *Scenes*.
+    click(part('Shoot days').querySelector('.ov-part-name'));
+    await shown(() => expect(location.pathname).toBe('/map/days'));
+    expect(open()).toEqual(['Shoot days']);
+    expect(part('Shoot days').classList.contains('on')).toBe(true);
+    const day = host.querySelector<HTMLAnchorElement>(`.ov-list a[href="${pagePath(built.ids.d59)}"]`)!;
+    expect(day.querySelector('.code')!.textContent).toBe('Día 59');
+    // El tooltip (solo si está cortado) es lo mismo que la fila muestra: las locaciones del día.
+    expect(day.querySelector<HTMLElement>('.title')!.dataset.tip).toBe(day.querySelector('.title')!.textContent);
+    click(day);
+    await wait();
+    expect(location.pathname).toBe(pagePath(built.ids.d59));
+    expect(day.classList.contains('active')).toBe(true);
+    // La flecha solo pliega: no cambia de vista.
+    click(part('Shoot days').querySelector('.toggle'));
+    expect(open()).toEqual([]);
+    expect(location.pathname).toBe(pagePath(built.ids.d59));
+    // El título pliega el bloque entero (y se recuerda); tocar el nombre lo vuelve a abrir en la parte desplegada o, sin
+    // ninguna, en *Locations*.
+    click(host.querySelector('.ov-fold'));
+    expect(host.querySelector('.ov-parts')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('shotdocs-overview-nav')!)[built.projectId]).toMatchObject({ closed: true });
+    click(host.querySelector('.ov-head'));
+    await shown(() => expect(host.querySelector('.ov-parts')).toBeTruthy());
+    expect(location.pathname).toBe('/map');
+  });
+
+  it('Overview sin locaciones: `/map` no pliega Scenes y el título abre la primera parte con algo', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const projectId = await d.tree.createProject('Corto');
+    const folder = await d.tree.create(null, 'Escenas', projectId);
+    await d.tree.setPatch(folder, { settings: { holds: 'scene' } as PageSettings });
+    for (let i = 1; i <= 3; i++) await d.tree.create(folder, `${String(i).padStart(3, '0')} | Escena ${i}`, projectId);
+    await d.engine.syncNow();
+    const { host } = mount(d, pagePath(folder));
+    await shown(() => expect(scenesPart(host)).toBeTruthy());
+    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Scenes']);
+    act(() => navigate(mapPath()));
+    await wait();
+    expect(scenesPart(host)!.querySelector('.toggle')!.getAttribute('aria-expanded')).toBe('true');
+    expect(JSON.parse(localStorage.getItem('shotdocs-overview-nav') ?? '{}')[projectId]?.part ?? 'scenes').toBe('scenes');
+    click(scenesPart(host)!.querySelector('.toggle'));
+    expect(host.querySelector('.ov-head .nav-title-label')!.getAttribute('href')).toBe('/map/scenes');
+  });
+
+  it('Overview › Scenes: «N pages» despliega la misma lista; un número que no es escena no dice nada falso', async () => {
+    const { d, built } = await owner();
+    const { host } = mount(d, pagePath(built.ids.notas));
+    await shown(() => expect(host.querySelector('.ov-nav')).toBeTruthy());
     act(() => navigate(mapPath('scenes')));
     await shown(() => expect(complete(host) && host.querySelectorAll('.mp-srow:not(.head)').length).toBe(24));
     const row = [...host.querySelectorAll<HTMLElement>('.mp-srow:not(.head)')].find((r) => r.textContent!.startsWith('105_027'))!;
@@ -306,12 +362,12 @@ describe('la sección Scenes de la barra lateral', () => {
       act(() => navigate(`/map/scenes?scene=${q}`));
       await shown(() => expect(host.querySelector('.mp-scene .mp-sh')?.textContent, q).toBe('105_027La ambulancia empieza a zigzaguear'));
     }
-    // Desde la vista de una escena, la pestaña Scenes vuelve a la lista y la fila Map al mapa (O1).
+    // Desde la vista de una escena, la pestaña Scenes vuelve a la lista y Locations de la barra a su pestaña (O1).
     click(host.querySelector('.mp-tab[href="/map/scenes"]'));
     await shown(() => expect(host.querySelectorAll('.mp-srow:not(.head)').length).toBe(24));
     act(() => navigate('/map/scenes?scene=105_027'));
     await shown(() => expect(host.querySelector('.mp-scene .mp-sm')).toBeTruthy());
-    click(host.querySelector('.map-nav'));
+    click(host.querySelector('.ov-part-name[href="/map"]'));
     await shown(() => expect(location.pathname + location.search).toBe('/map'));
     await shown(() => expect(host.querySelector('.mp-lrow:not(.head)')).toBeTruthy());
     // Nada se escribió en los documentos.
@@ -366,7 +422,7 @@ describe('la sección Scenes de la barra lateral', () => {
     const { host } = mount(d, pagePath(page));
     await shown(() => expect(host.querySelector('.page-title')).toBeTruthy());
     await wait(300);
-    expect(host.querySelector('.scene-nav')).toBeNull();
+    expect(host.querySelector('.ov-nav')).toBeNull();
   });
 
   it('226 escenas sin episodios: dibuja de a tandas, la abierta siempre se ve, y es rápido', async () => {

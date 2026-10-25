@@ -76,8 +76,8 @@ export const menus = {
   // Fuera de las relaciones (D540): la casilla debajo de *Type*.
   'leaveOut.menu': { en: "Leave out of relations", es: "Dejar fuera de las relaciones" },
   'leaveOut.tip': {
-    en: "Its pages stop counting for scenes, locations and the Map.\nFor archives and backups that repeat names.",
-    es: "Sus páginas dejan de contar para escenas, locaciones y el Mapa.\nPara archivos y copias que repiten nombres.",
+    en: "Its pages stop counting for scenes, locations and the Overview.\nFor archives and backups that repeat names.",
+    es: "Sus páginas dejan de contar para escenas, locaciones y el Panorama.\nPara archivos y copias que repiten nombres.",
   },
   'leaveOut.inheritedTip': {
     en: "“{title}” is left out, with everything inside",

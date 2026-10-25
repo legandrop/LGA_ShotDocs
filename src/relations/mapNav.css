@@ -1,18 +1,142 @@
-/* La fila «Map» de la barra lateral (Docs/Doc_Relaciones.md, sección 12): un título de la barra (`nav-title`, en
-   styles.css) que se elige como una página del árbol. */
+/* *Overview* en la barra lateral (Docs/Doc_Relaciones.md, secciones 12 y 21; D772): el título (`nav-title`, en
+   styles.css, como *Pages*) y sus cuatro partes, con las filas de la lista de escenas (`scenesNav.css`). */
 
-.map-nav {
-  margin: 0 0 10px;
+.ov-head {
+  margin: 0 0 2px;
 }
 
-/* Elegida, como la fila de una página (`.tree-row.active`). */
-.map-nav.on {
-  background: var(--active);
-  box-shadow: inset 2px 0 0 var(--accent);
+.ov-auto {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: 9.5px var(--mono);
+  letter-spacing: 0.04em;
+  line-height: 15px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.ov-head .nav-title-label {
+  text-decoration: none;
+}
+
+.ov-fold {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+
+.ov-fold:hover {
+  background: var(--hover);
 }
 
 .map-nav-count {
   margin-left: auto;
   font: 11px var(--mono);
   color: var(--warn);
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+/* En el título, el número es su propio link a *Pending*. */
+a.map-nav-count:hover {
+  text-decoration: underline;
+}
+
+a.map-nav-count:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.ov-parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Una parte: como el renglón de un episodio, elegida como una página del árbol. */
+.ov-part {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 4px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ov-part:hover {
+  background: var(--hover);
+}
+
+.ov-part.on {
+  background: var(--active);
+  font-weight: 500;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.ov-part .toggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+
+.ov-part .toggle-space {
+  flex: none;
+  width: 20px;
+}
+
+.ov-part-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ov-part .scene-nav-n,
+.ov-part .map-nav-count {
+  margin-left: auto;
+}
+
+.ov-part:focus-within,
+.ov-head:focus-within {
+  outline: none;
+}
+
+.ov-part-name:focus-visible,
+.ov-head .nav-title-label:focus-visible,
+.ov-fold:focus-visible,
+.ov-part .toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* Lo de adentro de una parte, un nivel más adentro (la flecha de la parte + 18 px). */
+.ov-parts .scene-nav-eps,
+.ov-parts > li > .scene-nav-list {
+  padding-left: 18px;
 }

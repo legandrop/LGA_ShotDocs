@@ -143,7 +143,7 @@ describe('Leave out of relations en el menú ⋯ (D540)', () => {
     const box = await shown(() => item(host)!);
     expect(box.getAttribute('role')).toBe('menuitemcheckbox');
     expect(box.getAttribute('aria-checked')).toBe('false');
-    expect(box.getAttribute('data-tip')).toContain('Map');
+    expect(box.getAttribute('data-tip')).toContain('Overview');
     act(() => box.click());
     await shown(() => expect(d.tree.get(ids.scene)!.settings).toEqual({ ...before, graph: false }));
     expect(closed.n).toBe(1);

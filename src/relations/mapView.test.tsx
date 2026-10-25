@@ -19,8 +19,8 @@ import { canMergeWith } from './MergeAction';
 import { metaStore, pendingMerges } from './mergeJob';
 
 // El mapa en la app de verdad (Docs/Doc_Relaciones.md, sección 12) y la lupa por entidades (Docs/Doc_Buscar.md,
-// «Escenas y locaciones primero»): la fila Map de la barra lateral, las cuatro pestañas, cada fila lleva a su página o al
-// lugar exacto, Copy map / Copy JSON con solo lo que se ve, la escena primero en ⌘K, y que nada de esto escribe.
+// «Escenas y locaciones primero»): Overview en la barra lateral (D772), las cuatro pestañas, cada fila lleva a su página o al
+// lugar exacto, Copy overview / Copy JSON con solo lo que se ve, la escena primero en ⌘K, y que nada de esto escribe.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -172,21 +172,24 @@ function key(target: EventTarget, init: KeyboardEventInit) {
 }
 
 describe('el mapa en la app', () => {
-  it('la fila Map de la barra lateral abre las Locations en el tiempo; cada fila lleva a su página', async () => {
+  it('Locations de Overview en la barra lateral abre las Locations en el tiempo; cada fila lleva a su página', async () => {
     const { built, host } = await app((b) => pagePath(b.ids.s027));
-    await until(() => host.querySelector('.map-nav'), 'la fila Map');
-    const nav = host.querySelector<HTMLAnchorElement>('.map-nav')!;
-    expect(nav.getAttribute('href')).toBe('/map');
-    expect(nav.textContent).toContain('Map');
+    await until(() => host.querySelector('.ov-head'), 'Overview');
+    const head = host.querySelector<HTMLElement>('.ov-head')!;
+    expect(head.querySelector('.nav-title-label')!.textContent).toBe('Overview');
     // Un tooltip de la app, nunca `title=`; el pendiente sin número (Plates) se cuenta.
-    expect(nav.dataset.tip).toBeTruthy();
+    expect(head.querySelector<HTMLElement>('.nav-title-label')!.dataset.tip).toBeTruthy();
     // El mismo número que la pestaña Pending: acá, la sección «Plates ambulancia» sin número (O4).
-    await until(() => nav.querySelector('.map-nav-count'), 'el número de la fila Map');
-    expect(nav.querySelector('.map-nav-count')!.textContent).toBe('1 pending');
+    await until(() => head.querySelector('.map-nav-count'), 'el número de Overview');
+    expect(head.querySelector('.map-nav-count')!.textContent).toBe('1 pending');
+    // El número es su propio link a *Pending*, no al resto del título.
+    expect(head.querySelector('.map-nav-count')!.getAttribute('href')).toBe('/map/pending');
+    const nav = host.querySelector<HTMLAnchorElement>('.ov-part-name[href="/map"]')!;
+    expect(nav.textContent).toBe('Locations');
     click(nav);
     await until(() => complete(host) && rows(host, '.mp-lrow').length === 2, 'el mapa completo');
     expect(location.pathname).toBe('/map');
-    expect(host.querySelector('.crumb.current')!.textContent).toBe('Map');
+    expect(host.querySelector('.crumb.current')!.textContent).toBe('Overview');
     expect(host.querySelector('.mp-lede')!.textContent).toContain('6 scenes · 2 locations · 6 shoot days');
     const [cenade, arenera] = rows(host, '.mp-lrow');
     expect(cenade.querySelector('.mp-nm')!.textContent).toBe('CENADE');
@@ -217,7 +220,7 @@ describe('el mapa en la app', () => {
     expect(location.pathname).toBe(pagePath(built.ids.arenera));
   });
 
-  it('la consulta abierta del / no cuenta en la fila Map ni en Pending; al cerrarse, sí (D568)', async () => {
+  it('la consulta abierta del / no cuenta en Overview ni en Pending; al cerrarse, sí (D568)', async () => {
     const { built, host } = await app(
       () => mapPath('pending'),
       async (dev, b) => {
@@ -370,13 +373,13 @@ describe('el mapa en la app', () => {
     expect(asked).toEqual([expect.objectContaining({ pageId: built.ids.d59, term: null, place: { endBlockId: null } })]);
   });
 
-  it('Copy map y Copy JSON: el portapapeles con lo que se ve, sin escribir nada en los documentos', async () => {
+  it('Copy overview y Copy JSON: el portapapeles con lo que se ve, sin escribir nada en los documentos', async () => {
     const { d, built, host } = await app(() => mapPath());
     await until(() => complete(host) && rows(host, '.mp-lrow').length === 2, 'el mapa completo');
     const doc = await d.docs.open(built.ids.d59);
     const before = Y.encodeStateVector(doc);
     const [copyText, copyJson] = [...host.querySelectorAll<HTMLButtonElement>('.mp-actions .mp-btn')];
-    expect(copyText.textContent).toBe('Copy map');
+    expect(copyText.textContent).toBe('Copy overview');
     expect(copyJson.textContent).toBe('Copy JSON');
     expect(copyText.dataset.tip).toBeTruthy();
     click(copyText);
@@ -393,7 +396,7 @@ describe('el mapa en la app', () => {
     d.docs.close(built.ids.d59);
   });
 
-  it('un proyecto sin escenas, locaciones ni días no tiene la fila Map', async () => {
+  it('un proyecto sin escenas, locaciones ni días no tiene Overview', async () => {
     const d = await makeDevice(new FakeServer());
     devices.push(d);
     const projectId = await d.tree.createProject('Notas sueltas');
@@ -403,10 +406,10 @@ describe('el mapa en la app', () => {
     const host = mount(d, pagePath(page));
     await until(() => host.querySelector('.page-title'), 'la página');
     await wait(300);
-    expect(host.querySelector('.map-nav')).toBeNull();
+    expect(host.querySelector('.ov-nav')).toBeNull();
   });
 
-  it('un invitado que ve solo una escena: su Map tiene solo esa escena', async () => {
+  it('un invitado que ve solo una escena: su Overview tiene solo esa escena', async () => {
     const server = new FakeServer();
     server.enableTeam();
     const owner = await makeDevice(server);
@@ -447,8 +450,8 @@ describe('el mapa en la app', () => {
     await guest.engine.syncNow();
     await guest.engine.syncNow();
     const host = mount(guest, pagePath(built.ids.d70));
-    await until(() => host.querySelector('.map-nav'), 'la fila Map');
-    click(host.querySelector('.map-nav'));
+    await until(() => host.querySelector('.ov-nav'), 'Overview');
+    click(host.querySelector('.ov-head'));
     await until(() => complete(host), 'el mapa del invitado');
     click(host.querySelector('.mp-tab[href="/map/pending"]'));
     await until(() => host.querySelector('.mp-pcard'), 'el pendiente');
@@ -466,7 +469,7 @@ describe('el mapa en la app', () => {
     await until(() => document.querySelector('.search-panel input'), 'el panel');
     type(document.querySelector<HTMLInputElement>('.search-panel input')!, '105_029');
     await until(() => document.querySelector('.search-entity'), 'la entidad');
-    expect(document.querySelector('.search-entity .search-entity-why')!.textContent).toBe('Not in the pages you can see · Map › Pending');
+    expect(document.querySelector('.search-entity .search-entity-why')!.textContent).toBe('Not in the pages you can see · Overview › Pending');
   });
 });
 
@@ -500,7 +503,7 @@ describe('la lupa ⌘K: escenas y locaciones primero', () => {
 
   it('cualquier forma del número pone la escena primero; Enter la abre; el texto se sigue buscando', async () => {
     const { built, host } = await app((b) => pagePath(b.ids.d59));
-    await until(() => host.querySelector('.map-nav'), 'las relaciones');
+    await until(() => host.querySelector('.ov-nav'), 'las relaciones');
     for (const q of ['105_027', '105-027', '5027', '5027b']) {
       await search(host, q);
       await until(() => first()?.classList.contains('search-entity'), `la escena con «${q}»`);
@@ -528,11 +531,11 @@ describe('la lupa ⌘K: escenas y locaciones primero', () => {
     expect(document.querySelector('.search-panel')).toBeNull();
   });
 
-  it('un número que no existe va a Map › Pending', async () => {
+  it('un número que no existe va a Overview › Pending', async () => {
     const { host } = await app((b) => pagePath(b.ids.d59), async (dev, b) => {
       await writeBlocks(dev, b.ids.notas, [{ p: 'Falta la Escena 105_120.' }]);
     });
-    await until(() => host.querySelector('.map-nav'), 'las relaciones');
+    await until(() => host.querySelector('.ov-nav'), 'las relaciones');
     await search(host, '105_120');
     await until(() => first()?.querySelector('.search-entity-chip.pending'), 'el pendiente');
     key(document.querySelector('.search-panel input')!, { key: 'Enter' });

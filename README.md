@@ -254,13 +254,14 @@ In development. What works today:
 - Scenes, locations and shoot days: *Type* in a folder's menu sets what's created inside it, the folder shows a small
   SCENES, LOCATIONS or SHOOT DAYS label, and its pages are marked as such, with the scene number taken from the title
   (`101_074`). A scene's breakdown cards, a location's scouts and a day's plan count as part of it.
-- *Map*, above the pages: every location in time, every scene with where a report has a section of it, the shoot days
-  and what's still pending, built from what the pages say; *Copy map* and *Copy JSON* hand it to an assistant, and the
+- *Overview*, above the pages: every location in time, every scene with where a report has a section of it, the shoot
+  days and what's still pending, built from what the pages say; in the sidebar it lists its locations, scenes and shoot
+  days, one part open at a time. *Copy overview* and *Copy JSON* hand it to an assistant, and the
   search finds a scene by any form of its number (`101-074`, `1074`, `5027b`) or a location by name, first.
-- *Scenes*, under *Map* in the sidebar, appears by itself in every project with scenes: scenes by episode with their
+- *Scenes*, inside *Overview* in the sidebar, appears by itself in every project with scenes: scenes by episode with their
   live titles, and each one opens every page that names it or links to it or to one of its cards (breakdown, scoutings,
   shoot days by date, other pages),
-  with a short quote and a click to the exact section; index pages go apart. *Map › Scenes* shows the same list per row.
+  with a short quote and a click to the exact section; index pages go apart. *Overview › Scenes* shows the same list per row.
 - While you write, scene numbers and location names that exist in the project get a subtle dotted underline (nothing
   pops up). Hover one, or tap it with the keyboard closed, for a preview with *Open* and *Make it a link*
   (Ctrl+Alt+K / ⌘⌥K); links to scenes and locations show as chips. On a phone, a shoot day report has a *Today* bar above
@@ -268,11 +269,11 @@ In development. What works today:
 - Type `/e 027` or `/l cen` to link a scene or a location (it shows as a chip). A number that doesn't exist yet can be
   created right there, in its folder, only when it's safe (you see the whole project, you're online and it isn't
   anywhere, not even in the trash); a report section without a scene number gets *Assign* to say which scene it is, and
-  so does a mistyped number in *Map › Pending*, with *Undo*. On the last shoot day, the *Tomorrow* card creates and
+  so does a mistyped number in *Overview › Pending*, with *Undo*. On the last shoot day, the *Tomorrow* card creates and
   prepares tomorrow's report in one step.
 - A location's other names (what the crew calls it, the abbreviations in day titles) go in an *Other names* line on its
   page (or come from *Link to a location…* on a shoot day whose title names none), and are recognized only where they are
-  written; *Leave out of relations* in the page menu keeps archives and old copies out of scenes, locations and the Map.
+  written; *Leave out of relations* in the page menu keeps archives and old copies out of scenes, locations and the Overview.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
 Connecting other AI apps (MCP) comes later. The plan, the decisions and the roadmap are in

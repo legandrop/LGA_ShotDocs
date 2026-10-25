@@ -812,8 +812,8 @@ code {
   padding: 0 4px 0 0;
 }
 
-/* Al bajar por la barra siempre se ve dónde se está (pedido de Lega, 2026-10-25, D771): el título de *Scenes* y el de
-   *Pages* quedan arriba mientras se ve algo de su lista, y debajo, apiladas, las madres abiertas (un episodio, una
+/* Al bajar por la barra siempre se ve dónde se está (pedido de Lega, 2026-10-25, D771): el título de *Overview* (con su parte
+   desplegada) y el de *Pages* quedan arriba mientras se ve algo de su lista, y debajo, apiladas, las madres abiertas (un episodio, una
    página con las de adentro) mientras se ve algo de lo suyo. Cada una se pega dentro de su bloque (`.scene-nav`, el
    `li` de la madre, `.pages-section`), así que al terminar su lista se va sola y entra la siguiente: al pasar de
    *Scenes* a *Pages* queda solo *Pages*. Fondo opaco (la barra), así lo de abajo no se ve a través. */
@@ -823,6 +823,7 @@ code {
   --sticky-top: -16px;
   --sticky-head-h: 32px;
   --sticky-row-h: 32px;
+  --sticky-part-h: 30px;
 }
 
 .sidebar .sticky-head {
@@ -852,12 +853,22 @@ code {
   background: color-mix(in srgb, var(--accent) 22%, var(--sidebar-bg));
 }
 
-.sidebar .scene-nav-ep.sticky-head {
+/* *Overview*: la parte abierta debajo del título y, en *Scenes*, el episodio abierto debajo de ella. */
+.sidebar .ov-part.sticky-head {
   top: calc(var(--sticky-top) + var(--sticky-head-h));
   z-index: 29;
 }
 
-/* Los títulos de la barra lateral: *Map*, *Scenes* y *Pages* (pedido de Lega, 2026-10-25). Oscuros, en mayúsculas,
+.sidebar .ov-part.sticky-head.on {
+  background: var(--active);
+}
+
+.sidebar .scene-nav-ep.sticky-head {
+  top: calc(var(--sticky-top) + var(--sticky-head-h) + var(--sticky-part-h));
+  z-index: 28;
+}
+
+/* Los títulos de la barra lateral: *Overview* y *Pages* (pedido de Lega, 2026-10-25; antes *Map*, *Scenes* y *Pages*). Oscuros, en mayúsculas,
    alineados a la izquierda en el mismo lugar y del alto de una fila del árbol; la flecha de plegar va después del
    título, así ninguno se corre. `flex: none`: en una barra larga (cientos de páginas) la columna achicaba la fila de
    *Map* a la altura del texto. */

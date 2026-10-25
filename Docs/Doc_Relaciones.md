@@ -473,11 +473,11 @@ guarda ni se escribe en un documento.
 | Lo que se copia: JSON y texto | `src/relations/projectMap.ts` (`mapJson`, `mapText`, `MAP_FORMAT`, `MAP_VERSION`) |
 | Buscar escenas y locaciones por cualquier forma (puro; también para E7: `/`, *Tomorrow*, *Assign*) | `src/relations/sceneSearch.ts` (`searchScenes`, `searchLocations`, `findEntities`) |
 | La vista | `src/relations/MapView.tsx` + `map.css` (prefijo `mp-`), ruta `/map/<pestaña>` (`src/router.ts`, `mapPath`), se baja aparte |
-| La fila *Map* de la barra lateral | `src/relations/MapNav.tsx` + `mapNav.css` (en `Sidebar.tsx`, arriba de *Pages*) |
+| *Overview* en la barra lateral (antes la fila *Map*; sección 22) | `src/relations/OverviewNav.tsx` + `mapNav.css` (en `Sidebar.tsx`, arriba de *Pages*) |
 | La lupa | `src/ui/ProjectSearch.tsx` (grupo *Scenes and locations*) |
 | Textos y ayuda | `src/i18n/lazy/map.ts`, `sidebar.map*`, `search.ent*`; ayuda `relationsMap` y `searchEntities` (since 0.242) |
 
-**La fila *Map*.** Arriba del árbol, como en la maqueta, solo en un proyecto con escenas, locaciones o días de rodaje
+**La fila *Map*** (desde v0.269 es el título de *Overview*, con las partes adentro: sección 22)**.** Arriba del árbol, como en la maqueta, solo en un proyecto con escenas, locaciones o días de rodaje
 (lo que dice el registro de lo que la persona ve); suma «N pending» si hay alguno, nunca un cero, con el mismo número que
 la pestaña *Pending* (`pendingSummary`: números que no existen + duplicadas + secciones sin número). Con un link público
 no hay mapa (`/map` lleva a la página compartida). Desde v0.267 (D770) es un título de la barra como *Scenes* y
@@ -996,7 +996,7 @@ entera (faltan 0 «planeada en», 69 de 70 días con lugar, decorados como la ve
 |---|---|
 | *Undo* de *Assign* (anclas, verificar, deshacer) y *Assign* en varias páginas | `src/relations/assign.ts` (`AssignSpan`, `undoAssignInDoc`, `captureNewLinks`, `assignMentionEverywhere`, `undoAssignEverywhere`) |
 | Los avisos con *Undo* | `EntityActions.tsx` (`assignNotice`, `undoAction`), `RelPeek.tsx` (el adelanto) |
-| La consulta abierta del `/` | `src/relations/slashDraft.ts`; la anota `slashRelations.tsx`, la descuentan `projectMap.ts`, `MapView.tsx` y `MapNav.tsx` |
+| La consulta abierta del `/` | `src/relations/slashDraft.ts`; la anota `slashRelations.tsx`, la descuentan `projectMap.ts`, `MapView.tsx` y `OverviewNav.tsx` |
 | El fondo del subrayado con el mouse movido | `src/relations/hoverGate.ts` (`data-rel-mouse` en `.editor`), `liveHeader.css` |
 | La tarjeta del día sin día siguiente | `src/relations/tomorrowNew.ts` (`proposeTomorrow`, `nextDayTitle`, `createTomorrow`, `undoTomorrow`), `DayHeader.tsx` (`TomorrowNew`) |
 
@@ -1111,7 +1111,7 @@ el árbol viejo no pisa una papelera puesta a propósito), `cededBanner.test.tsx
 | La copia en el Y.Doc, qué copia (`planCopy`) y su *Undo* (se baja al unir) | `src/relations/mergeWrite.ts` (`blockSignature`, `blocksToCopy`, `planCopy`, `copyIntoDoc`, `intactCopy`, `undoCopyInDoc`, `derivedId`, `separatorBlock`) |
 | Los nombres de dos páginas con el mismo título | `src/relations/twinNames.ts` (`twinLabels`, `roleNames`, `sameTitle`) |
 | El trabajo en orden, anotado para seguir, y el *Undo* | `src/relations/mergeJob.ts` (`runMerge`, `continueMerge`, `resumeMerges`, `undoMerge`, `mergeDepsFrom`) |
-| El botón, el adelanto, los avisos, las filas de *Pending*, «Also in», seguir al volver la red | `src/relations/MergeAction.tsx`, `merge.css`; en `MapView.tsx`, `MapNav.tsx`, `LiveHeader.tsx`, `PageView.tsx`, `TrashView.tsx`, `Workspace.tsx` |
+| El botón, el adelanto, los avisos, las filas de *Pending*, «Also in», seguir al volver la red | `src/relations/MergeAction.tsx`, `merge.css`; en `MapView.tsx`, `OverviewNav.tsx`, `LiveHeader.tsx`, `PageView.tsx`, `TrashView.tsx`, `Workspace.tsx` |
 
 **Qué hace.** Con un número de escena en dos páginas (o dos reportes del día con el mismo título), *Map › Pending* y la
 cabecera viva de las dos («Also in «…» · Merge…») ofrecen *Merge…*. El adelanto muestra las dos (bloques, fotos,
@@ -1227,11 +1227,11 @@ una página del árbol, no se guarda en ningún documento y no escribe nada.
 |---|---|
 | Las páginas de una escena, por grupo, con lugares y extractos (puro); quién linkea cada escena; las escenas por episodio de la barra | `src/relations/sceneMentions.ts` (`sceneMentions`, `sceneLinks`, `scenePageCount`, `sceneSnippet`, `sceneEpisodes`, `sceneMapPath`, `mapPathFrom`) |
 | La lista (vista de una escena y fila desplegada de *Map › Scenes*) | `src/relations/SceneMentionsView.tsx` + `map.css` (`mp-sm*`) |
-| La sección de la barra lateral | `src/relations/ScenesNav.tsx` + `scenesNav.css` (prefijo `scene-nav`), en `Sidebar.tsx` debajo de *Map* |
+| La lista de la barra lateral (desde v0.269, *Scenes* adentro de *Overview*: sección 22) | `src/relations/OverviewNav.tsx` + `scenesNav.css` (prefijo `scene-nav`) |
 | La vista de una escena | `MapView.tsx` (`SceneDetail`), `/map/scenes?scene=<código>` |
 | Textos y ayuda | `sidebar.scenes*`, `map.scene*`, `map.pagesN`, `map.colPages*`; ayuda `scenesSection` (since 0.260) |
 
-**La sección de la barra lateral.** (Desde v0.268, D771, su título y el episodio abierto quedan pegados arriba al bajar
+**La sección de la barra lateral** (desde v0.269, *Scenes* adentro de *Overview*, con lo plegado en `shotdocs-overview-nav`: sección 22)**.** (Desde v0.268, D771, su título y el episodio abierto quedan pegados arriba al bajar
 mientras se ve algo de su lista.) Debajo de la fila *Map* y arriba de *Pages*, en todo proyecto con escenas en el
 registro de lo que la persona ve (sin escenas o con un link público, no está). Un encabezado `SCENES  226` que la pliega
 entera; adentro, un renglón por episodio (`Episode 101  58`) y, al abrirlo, una fila por escena: número en la columna
@@ -1305,3 +1305,33 @@ lista en su orden, sin las páginas índice. Cada una sale sola, como página ra
 las de la papelera; PDF y zip como desde una página, con el título «Scene <código>». Mientras el índice lee, el botón
 está apagado (la ventana se lleva la lista de ese momento). Pruebas: `exportPagesGroup.test.tsx`
 (el PDF y el zip con las páginas justas) y `scenesSection.test.tsx` (el botón pide las 9 páginas de la lista).
+
+## 22. *Overview* en la barra lateral: el mapa con sus partes adentro (v0.269, D772)
+
+Pedido de Lega: *Scenes* era solo un acceso a una parte del mapa, pero en la barra aparecía al mismo nivel que *Map*,
+como si fueran cosas distintas; tocarla no abría nada, y *Locations* y *Shoot days* no tenían acceso. Eligió la opción A
+del mockup y el nombre *Overview* (en castellano *Panorama*): el mapa del proyecto pasa a llamarse así en la barra, en la
+vista del centro, en la miga de pan, en los botones de copiar y en la ayuda. La ruta sigue siendo `/map` y el JSON sigue
+siendo `shotdocs.map`.
+
+| Pieza | Archivo |
+|---|---|
+| El bloque y sus partes | `src/relations/OverviewNav.tsx` (`OverviewNav`, `readFold`, `OVERVIEW_PAGE`) + `mapNav.css` (prefijo `ov-`) y `scenesNav.css` |
+| Los días de la lista (la misma lista liviana de la cabecera viva, sin armar el mapa) | `src/relations/dayLive.ts` (`dayList`, `dayShortLabel`) |
+| Textos | `sidebar.map`, `sidebar.auto`, `sidebar.locations`, `sidebar.days`, `sidebar.pending`, `map.title`, `map.copy*` |
+
+**El bloque.** Un título `OVERVIEW` con la marca `AUTO` (se arma solo, no se edita; lo dice su tooltip), la flecha que
+lo pliega entero y, si hay, `N pending`. Adentro, las cuatro partes de la vista del centro, cada una con su número:
+*Locations* (por nombre; cada fila a la página de la locación), *Scenes* (por episodio, como la sección 21), *Shoot
+days* (la etiqueta corta del día y sus locaciones; cada fila a su página) y *Pending* (sin lista: solo abre su pestaña).
+Una parte vacía no aparece; el bloque entero, solo en un proyecto con escenas, locaciones o días.
+
+**Cómo se toca, como una página del árbol.** Clic en el nombre de una parte abre su pestaña en el centro y despliega su
+lista; la flecha solo pliega o despliega, sin cambiar de vista. Clic en el título abre el mapa en la parte desplegada
+(o en *Locations*). **Una sola parte desplegada a la vez:** abrir una pliega las otras, así *Pages* no queda cientos de
+filas más abajo. La vista del centro manda: abrir una pestaña (desde la barra, desde la vista, por la dirección) o una
+escena despliega su parte (y el episodio de la escena). La fila de la página abierta (una locación, un día) se marca
+como en el árbol. Lo plegado (el bloque, la parte y el episodio) se recuerda por proyecto en el dispositivo
+(`localStorage` `shotdocs-overview-nav`; reemplaza a `shotdocs-scenes-nav`, que se ignora). De fábrica, el bloque
+abierto con *Scenes* desplegada. Al bajar, el título y la parte desplegada quedan pegados arriba (D771). Cada lista
+dibuja 60 filas y «Show 60 more», y la fila abierta siempre se ve.

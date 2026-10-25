@@ -162,13 +162,16 @@ const LIVE_HEADER = '0.238';
 const LIVE_FIELDS = '0.240';
 /** Las fotos por fuente de la cabecera viva y el carrete de varias páginas (relaciones en vivo, E8). */
 const LIVE_PHOTOS = '0.243';
-/** El mapa del proyecto, Copy map / JSON y la lupa por escenas y locaciones (relaciones en vivo, E9): la versión se pone al publicar. */
-const LIVE_MAP = '0.242';
+/**
+ * El panorama del proyecto (antes *Map*), Copy overview / JSON y la lupa por escenas y locaciones (relaciones en vivo,
+ * E9): llegó en v0.242 y sube con el bloque *Overview* de la barra (D772).
+ */
+const LIVE_MAP = '0.269';
 /**
  * La sección automática *Scenes* de la barra lateral y las páginas de cada escena (Doc_Relaciones.md, sección 21): llegó
- * en v0.260 y sube con *Export…* en la vista de una escena (D769).
+ * en v0.260, sube con *Export…* en la vista de una escena (D769) y pasa adentro de *Overview* (D772).
  */
-const SCENES_SECTION = '0.266';
+const SCENES_SECTION = '0.269';
 /** *Pages* se pliega entera desde su título (D770, v0.267) y, al bajar, lo de arriba queda fijo (D771). */
 const PAGES_FOLD = '0.268';
 /** El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6). */
@@ -384,7 +387,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.relationsMap.title',
     text: 'help.relationsMap.text',
-    words: ['map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'json', 'assistant', 'asistente', 'ai', 'ia'],
+    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
     since: LIVE_MAP,
   },
   {

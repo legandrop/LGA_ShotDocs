@@ -1,7 +1,7 @@
 // Arnés de prueba visual (solo para desarrollo: no entra en el build ni se publica; se abre con el servidor de
 // desarrollo en /src/dev/barra-lateral.html). La app de verdad (Shell) sobre el servidor en memoria de las pruebas, sin
 // login ni red, con el proyecto sintético de las relaciones (escenas, locaciones y días): sirve para mirar los títulos
-// de la barra lateral (Map, Scenes, Pages) y la selección de *Map* contra la de una página. `?map` abre el mapa; `?muchas`
+// de la barra lateral (Overview, Pages), las partes de *Overview* y su selección contra la de una página. `?map` abre el mapa; `?muchas`
 // suma 120 escenas al episodio 5 y una rama *Preproducción › Decorados* con 80 páginas, para ver qué queda pegado arriba
 // al bajar (D771).
 import { createRoot } from 'react-dom/client';

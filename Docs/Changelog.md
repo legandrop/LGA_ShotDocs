@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.269 :
+
+En la barra lateral, *Scenes* aparecía al mismo nivel que *Map* aunque es una de sus partes; tocarla solo la plegaba, y
+*Locations* y *Shoot days* no tenían acceso. Ahora hay un solo bloque, *Overview* (*Panorama*), con la marca *AUTO* y
+sus cuatro partes adentro: *Locations*, *Scenes* (por episodio), *Shoot days* y *Pending*. Como en el árbol, el nombre
+abre su pestaña y despliega su lista, y la flecha solo pliega; una sola parte desplegada a la vez, y la vista del
+centro manda (abrir una pestaña o una escena despliega su parte; una vacía no pliega nada). En el teléfono, el nombre
+cierra el cajón como una página; la flecha no. Sale del registro, sin armar el mapa entero
+(`OverviewNav.tsx`, reemplaza a `MapNav` y `ScenesNav`; lo plegado en `shotdocs-overview-nav`). El mapa se llama
+*Overview* en toda la app (vista, miga de pan, *Copy overview*, ayuda); la ruta `/map` y `shotdocs.map` no cambian. D772.
+
+[Barra lateral: Overview con Locations, Scenes, Shoot days y Pending adentro, y el mapa pasa a llamarse Overview]
+
 v0.268 :
 
 Al bajar por la barra lateral se perdía dónde se estaba: con muchas escenas, el título *Scenes* se iba y quedaba una

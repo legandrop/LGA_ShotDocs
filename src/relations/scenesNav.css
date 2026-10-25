@@ -21,15 +21,6 @@
   -webkit-user-select: none;
 }
 
-.scene-nav-head {
-  width: 100%;
-}
-
-/* El total, a la derecha del título. */
-.scene-nav-head .scene-nav-n {
-  margin-left: auto;
-}
-
 .scene-nav-ep {
   font-size: 14px;
   color: var(--text);

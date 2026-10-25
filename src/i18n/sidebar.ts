@@ -6,18 +6,22 @@ export const sidebar = {
   'sidebar.collapse': { en: "Collapse", es: "Plegar" },
   'sidebar.expand': { en: "Expand", es: "Desplegar" },
   'sidebar.moreActions': { en: "More actions", es: "Más acciones" },
-  // El mapa del proyecto (Docs/Doc_Relaciones.md, sección 12).
-  'sidebar.map': { en: "Map", es: "Mapa" },
+  // *Overview*, el panorama del proyecto (Docs/Doc_Relaciones.md, secciones 12 y 21; D772).
+  'sidebar.map': { en: "Overview", es: "Panorama" },
+  'sidebar.auto': { en: "Auto", es: "Auto" },
+  'sidebar.locations': { en: "Locations", es: "Locaciones" },
+  'sidebar.days': { en: "Shoot days", es: "Días de rodaje" },
+  'sidebar.pending': { en: "Pending", es: "Pendientes" },
   'sidebar.mapTip': {
-    en: "Every scene, location and shoot day of the project, from what the pages say",
-    es: "Todas las escenas, locaciones y días de rodaje del proyecto, según lo que dicen las páginas",
+    en: "Made by the app from what the pages say; you don’t edit it. Every scene, location and shoot day of the project",
+    es: "Lo arma la app con lo que dicen las páginas; no se edita. Todas las escenas, locaciones y días de rodaje del proyecto",
   },
   'sidebar.mapPending': { en: { one: "{count} pending", other: "{count} pending" }, es: { one: "{count} pendiente", other: "{count} pendientes" } },
-  // La sección automática de escenas (Docs/Doc_Relaciones.md, sección 21).
+  // *Scenes* adentro de *Overview* (Docs/Doc_Relaciones.md, sección 21).
   'sidebar.scenes': { en: "Scenes", es: "Escenas" },
   'sidebar.scenesTip': {
-    en: "Made by the app from what the pages say: each scene opens every page that talks about it",
-    es: "La arma la app con lo que dicen las páginas: cada escena abre todas las páginas que hablan de ella",
+    en: "Each scene opens every page that talks about it",
+    es: "Cada escena abre todas las páginas que hablan de ella",
   },
   'sidebar.scenesMore': { en: { one: "Show {count} more", other: "Show {count} more" }, es: { one: "Mostrar {count} más", other: "Mostrar {count} más" } },
   'sidebar.scenesNoEpisode': { en: "No episode", es: "Sin episodio" },

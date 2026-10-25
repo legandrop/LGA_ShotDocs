@@ -17,8 +17,7 @@ import { useCurrentProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { LinkHeader } from './LinkHeader';
 import { MentionTreeDot } from './mentionDots';
-import { MapNav } from '../relations/MapNav';
-import { ScenesNav } from '../relations/ScenesNav';
+import { OverviewNav } from '../relations/OverviewNav';
 import { HoldsTag } from '../relations/HoldsTag';
 import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { LinkTreeIcon } from './LinkTreeIcon';
@@ -42,7 +41,7 @@ function readExpanded(): Set<string> {
   }
 }
 
-/** *Pages* plegada, por proyecto, en este dispositivo (como *Scenes*, `shotdocs-scenes-nav`). */
+/** *Pages* plegada, por proyecto, en este dispositivo (como *Overview*, `shotdocs-overview-nav`). */
 const PAGES_FOLD_KEY = 'shotdocs-pages-nav';
 
 function readPagesFolded(): Record<string, boolean> {
@@ -542,10 +541,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       {linkMode ? <LinkHeader /> : <ProjectSwitcher />}
       <SyncBadge />
       <OfflineLine />
-      {/* El mapa del proyecto (Docs/Doc_Relaciones.md, sección 12): solo en un proyecto con escenas, locaciones o días. */}
-      {!linkMode && <MapNav />}
-      {/* La sección automática de escenas (Docs/Doc_Relaciones.md, sección 21): solo en un proyecto con escenas. */}
-      {!linkMode && <ScenesNav />}
+      {/* *Overview* (Docs/Doc_Relaciones.md, secciones 12 y 21; D772): locaciones, escenas, días y pendientes, armados con
+          lo que dicen las páginas; solo en un proyecto con escenas, locaciones o días. */}
+      {!linkMode && <OverviewNav />}
 
       {/* *Pages* en su propio bloque: su título (y cada madre abierta) queda arriba al bajar mientras se ve lo de
           adentro, y se va con el final del árbol (pedido de Lega, 2026-10-25). */}
