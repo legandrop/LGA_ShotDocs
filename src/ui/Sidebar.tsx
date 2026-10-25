@@ -19,6 +19,7 @@ import { LinkHeader } from './LinkHeader';
 import { MentionTreeDot } from './mentionDots';
 import { OverviewNav } from '../relations/OverviewNav';
 import { HoldsTag } from '../relations/HoldsTag';
+import { kindReader } from '../relations/kind';
 import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { LinkTreeIcon } from './LinkTreeIcon';
 import { useLinkMode } from '../linkMode';
@@ -348,6 +349,10 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     }
   }
 
+  // Qué es cada página (para el color del número de una escena, D773): un solo lector por dibujo, que recuerda lo
+  // que ya leyó; uno por fila recorría las hermanas de cada escena (cientos de escenas: N² por dibujo).
+  const kinds = kindReader(tree);
+
   /** Una lista de hermanas: si corresponde, con los títulos divididos y la columna del código alineada. */
   function renderList(parentId: string | null, pages: PageRow[], depth: number, role: 'tree' | 'group') {
     const split = splitEnabled(tree, parentId) ? splitSiblings(pages) : null;
@@ -449,7 +454,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             />
           ) : split ? (
             <span className="label">
-              <span className="code">{split.code}</span>
+              {/* El número de una escena va en el color de las escenas (D773); el de un episodio o una carpeta, no. */}
+              <span className={kinds.kindOf(page.id).kind === 'scene' ? 'code scene' : 'code'}>{split.code}</span>
               <span className="title">{split.name}</span>
             </span>
           ) : (

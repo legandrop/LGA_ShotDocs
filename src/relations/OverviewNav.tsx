@@ -265,7 +265,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const locationsBody = () => {
     const { n, button } = more('l', lists.locations.length, lists.locations.findIndex((l) => !!l.pageId && l.pageId === activePage));
     return (
-      <ul className="scene-nav-list ov-list">
+      <ul className="scene-nav-list ov-list ov-locs">
         {lists.locations.slice(0, n).map((l) => {
           const on = !!l.pageId && l.pageId === activePage;
           return (
@@ -293,7 +293,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     const labels = lists.days.map((d) => dayShortLabel(d));
     const width = Math.max(0, ...labels.map((l) => l.length));
     return (
-      <ul className="scene-nav-list ov-list" style={{ '--code-w': `${width}ch` } as CSSProperties}>
+      <ul className="scene-nav-list ov-list ov-days" style={{ '--code-w': `${width}ch` } as CSSProperties}>
         {lists.days.slice(0, n).map((d, i) => {
           const on = d.pageId === activePage;
           const title = tree.get(d.pageId)?.title ?? '';

@@ -306,6 +306,19 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(location.pathname).toBe('/map');
   });
 
+  it('el número de una escena en el árbol lleva su color (D773); el de su episodio, no', async () => {
+    const { d, built } = await owner();
+    const { host } = mount(d, pagePath(built.ids.s027));
+    await shown(() => expect(host.querySelector('.sidebar .tree-row.active .code')).toBeTruthy());
+    const code = (row: Element) => row.querySelector('.code')!;
+    const active = host.querySelector('.sidebar .tree-row.active')!;
+    expect(code(active).textContent).toBe('027');
+    expect(code(active).classList.contains('scene')).toBe(true);
+    const rows = [...host.querySelectorAll('.sidebar .tree-row')];
+    const episode = rows.find((r) => r.querySelector('.code')?.textContent === '105')!;
+    expect(code(episode).classList.contains('scene')).toBe(false);
+  });
+
   it('Overview sin locaciones: `/map` no pliega Scenes y el título abre la primera parte con algo', async () => {
     const d = await makeDevice(new FakeServer());
     devices.push(d);

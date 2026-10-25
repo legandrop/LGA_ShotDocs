@@ -1,14 +1,23 @@
 /* La cabecera viva de escena y locación (Docs/Doc_Relaciones.md, sección 10). Medidas y colores de la maqueta aprobada
-   (S4 «D»): un tono por tipo de entidad, derivado del acento y de --ok. Todo con el prefijo lh- para no chocar con el
-   resto de la app. */
+   (S4 «D»): un tono por tipo de entidad (escena y locación, de toda la app desde D773). Todo con el prefijo lh- para no
+   chocar con el resto de la app. */
+
+/* Escena y locación toman los colores de toda la app (`--scene-*`, `--loc-*` en styles.css, D773); también en la hoja
+   impresa, que va en claro. */
+:root,
+.print-view {
+  --lh-scene-bg: var(--scene-bg);
+  --lh-scene-fg: var(--scene-fg);
+  --lh-scene-line: var(--scene-line);
+  --lh-loc-bg: var(--loc-bg);
+  --lh-loc-fg: var(--loc-fg);
+  --lh-loc-line: var(--loc-line);
+}
 
 :root {
-  --lh-scene-bg: #fbf1d9;
-  --lh-scene-fg: #8a5700;
-  --lh-scene-line: #e9cf8f;
-  --lh-loc-bg: #e7f0ea;
-  --lh-loc-fg: #2f6b45;
-  --lh-loc-line: #b9d3c1;
+  /* «Filmada»: el verde de hecho (`--ok`), que antes compartía con las locaciones (D773). */
+  --lh-shot-bg: #e7f0ea;
+  --lh-shot-line: #b9d3c1;
   --lh-day-bg: #efece6;
   --lh-day-fg: #3a3833;
   --lh-day-line: #dcd7cd;
@@ -19,12 +28,8 @@
 }
 
 :root[data-theme='dark'] {
-  --lh-scene-bg: rgba(232, 178, 58, 0.13);
-  --lh-scene-fg: #f0c35a;
-  --lh-scene-line: rgba(232, 178, 58, 0.34);
-  --lh-loc-bg: rgba(124, 196, 150, 0.12);
-  --lh-loc-fg: #8fd0a6;
-  --lh-loc-line: rgba(124, 196, 150, 0.32);
+  --lh-shot-bg: rgba(124, 196, 150, 0.12);
+  --lh-shot-line: rgba(124, 196, 150, 0.32);
   --lh-day-bg: rgba(236, 233, 226, 0.07);
   --lh-day-fg: #d6d2c9;
   --lh-day-line: rgba(236, 233, 226, 0.16);
@@ -479,9 +484,9 @@
 }
 
 .lh-st.shot {
-  color: var(--lh-loc-fg);
-  border-color: var(--lh-loc-line);
-  background: var(--lh-loc-bg);
+  color: var(--ok);
+  border-color: var(--lh-shot-line);
+  background: var(--lh-shot-bg);
 }
 
 /* También la nombran (y las páginas índice, plegadas) */
@@ -1048,9 +1053,10 @@
   flex-wrap: wrap;
 }
 
+/* Planeada sin sección todavía: un aviso, en ámbar (D773). */
 .lh-st.plan {
-  color: var(--lh-scene-fg);
-  border-color: var(--lh-scene-line);
+  color: var(--warn);
+  border-color: var(--warn-border);
 }
 
 .lh-st.warn {
@@ -1094,9 +1100,10 @@
 .lh-tomorrow {
   margin: 0 14px 14px;
   padding: 12px;
-  border: 1px solid var(--lh-scene-line);
+  /* En ámbar, lo que pide hacer algo: sus fichas de escena (frambuesa) se separan del fondo (D773). */
+  border: 1px solid var(--warn-border);
   border-radius: 10px;
-  background: var(--lh-scene-bg);
+  background: var(--warn-bg);
 }
 
 .lh-tomorrow .th {

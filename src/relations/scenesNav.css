@@ -84,7 +84,7 @@
   min-width: var(--code-w, auto);
   font-family: var(--mono);
   font-size: 12px;
-  color: var(--muted-2);
+  color: var(--scene-fg);
 }
 
 .scene-nav-row .title {
@@ -100,10 +100,6 @@
   color: var(--text);
   font-weight: 500;
   box-shadow: inset 2px 0 0 var(--accent);
-}
-
-.scene-nav-row.active .code {
-  color: var(--accent-text);
 }
 
 .scene-nav-more {

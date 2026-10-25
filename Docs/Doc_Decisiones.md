@@ -2073,6 +2073,14 @@ escena abierta) la deja debajo de lo pegado (`topCover` en `treeNav.ts`).
 sola parte desplegada a la vez y la marca *AUTO*. El nombre cambia en toda la app (barra, vista, copiar, ayuda); la
 ruta `/map` y el formato `shotdocs.map` quedan. Detalle: `Doc_Relaciones.md`, sección 22.
 
+### D773 · Escenas en frambuesa, locaciones en azul (2026-10-25)
+**Pedido de Lega:** un color propio para los números de escena (el ámbar se confundía con la fila elegida y los avisos),
+y las locaciones no deberían ser verdes. Eligió con un selector interactivo, viendo las dos cosas juntas y al lado de
+los ámbares de la app.
+**Eligió:** escenas en frambuesa (`#a5306d` en claro, `#ff9ccc` en oscuro) y locaciones en azul (`#3451b2`, `#9db2ff`).
+Variables `--scene-*` y `--loc-*` de toda la app; el ámbar queda para lo elegido y lo que avisa. En el árbol, solo el
+número de las páginas que son escenas.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

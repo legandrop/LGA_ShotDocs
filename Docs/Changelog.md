@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.270 :
+
+Los números de escena iban en el mismo ámbar que la fila elegida, los pendientes y los avisos, y no se distinguían; las
+locaciones iban en verde. Lega eligió con un selector de colores: escenas en frambuesa y locaciones en azul, en claro y
+en oscuro. Son variables de toda la app (`--scene-*`, `--loc-*` en `styles.css`, también en la hoja impresa, en claro);
+la cabecera viva, el texto, el mapa y la lupa las toman de ahí. En la barra, frambuesa el número de cada escena en
+*Overview › Scenes* y en el árbol, solo en las páginas que son escenas (un `kindReader` por dibujo); azul los nombres de
+*Overview › Locations*. El ámbar queda para lo elegido y lo que avisa (*Tomorrow*, *Planned*), y *Shot* vuelve al verde
+de hecho (`--ok`). D773.
+
+[Escenas en frambuesa y locaciones en azul en toda la app]
+
 v0.269 :
 
 En la barra lateral, *Scenes* aparecía al mismo nivel que *Map* aunque es una de sus partes; tocarla solo la plegaba, y

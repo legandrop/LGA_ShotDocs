@@ -141,6 +141,28 @@
   --ink-script: var(--ink-body);
 }
 
+/* El color de las escenas (frambuesa) y el de las locaciones (azul), en toda la app: barra lateral, árbol, lupa, mapa,
+   texto y fichas (Lega, 2026-10-25, D773). Separados del ámbar, que queda para lo elegido y lo que avisa. La hoja
+   impresa va siempre en claro. */
+:root,
+.print-view {
+  --scene-fg: #a5306d;
+  --scene-bg: #fbeaf3;
+  --scene-line: #e3a3c6;
+  --loc-fg: #3451b2;
+  --loc-bg: #eaeefc;
+  --loc-line: #9fb1ec;
+}
+
+:root[data-theme='dark'] {
+  --scene-fg: #ff9ccc;
+  --scene-bg: rgba(255, 140, 200, 0.13);
+  --scene-line: rgba(255, 156, 204, 0.4);
+  --loc-fg: #9db2ff;
+  --loc-bg: rgba(120, 144, 255, 0.14);
+  --loc-line: rgba(157, 178, 255, 0.42);
+}
+
 :root[data-contrast='more'],
 :root[data-contrast='more'] .print-view {
   --ink-bold: var(--ink-light-more-bold);
@@ -1018,6 +1040,11 @@ code {
 
 .tree-row.active .code {
   color: var(--accent-text);
+}
+
+/* El número de una escena va en el color de las escenas (D773), también elegida. */
+.tree-row .code.scene {
+  color: var(--scene-fg);
 }
 
 .tree-row .title {
@@ -6901,9 +6928,9 @@ button.primary.danger {
   max-width: 55%;
   padding: 1px 7px;
   border-radius: 6px;
-  border: 1px solid var(--warn-border);
-  background: var(--warn-bg);
-  color: var(--accent-text);
+  border: 1px solid var(--scene-line);
+  background: var(--scene-bg);
+  color: var(--scene-fg);
   font: 500 12.5px var(--mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6914,7 +6941,7 @@ button.primary.danger {
   font-family: var(--font);
   border-color: var(--border);
   background: none;
-  color: var(--ok);
+  color: var(--loc-fg);
 }
 
 .search-entity-chip.pending {
