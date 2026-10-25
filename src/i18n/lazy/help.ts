@@ -117,8 +117,8 @@ export const help = {
   },
   'help.pagesTree.title': { en: "Pages inside pages", es: "Páginas adentro de páginas" },
   'help.pagesTree.text': {
-    en: "Every page can hold text and other pages, as deep as you need; a folder is just a page with no text. + next to Pages creates one; + on a row creates one inside it. The sidebar follows the page you open by a link, a search or Back: it unfolds the pages above it and scrolls to its row.",
-    es: "Cada página puede tener texto y otras páginas adentro, sin límite; una carpeta es una página sin texto. El + al lado de Páginas crea una; el + de un renglón, una adentro. La barra lateral sigue a la página que abrís por un link, una búsqueda o Atrás: despliega las de arriba y se desplaza hasta su renglón.",
+    en: "Every page can hold text and other pages, as deep as you need; a folder is just a page with no text. + next to Pages creates one; + on a row creates one inside it. The sidebar follows the page you open by a link, a search or Back: it unfolds the pages above it and scrolls to its row. Tap Pages to fold the whole tree (each project remembers it on this device); opening a page unfolds it again.",
+    es: "Cada página puede tener texto y otras páginas adentro, sin límite; una carpeta es una página sin texto. El + al lado de Páginas crea una; el + de un renglón, una adentro. La barra lateral sigue a la página que abrís por un link, una búsqueda o Atrás: despliega las de arriba y se desplaza hasta su renglón. Tocá Páginas para plegar todo el árbol (cada proyecto lo recuerda en este dispositivo); abrir una página lo vuelve a desplegar.",
   },
   'help.pagesArrange.title': { en: "Reorder, rename, move", es: "Ordenar, renombrar, mover" },
   'help.pagesArrange.text': {

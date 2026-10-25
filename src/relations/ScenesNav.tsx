@@ -154,11 +154,11 @@ function ScenesNavFor({ session }: { session: NonNullable<ReturnType<typeof exis
 
   return (
     <div className="scene-nav" style={{ '--code-w': `${codeWidth}ch` } as CSSProperties}>
-      <button className="scene-nav-head" aria-expanded={!fold.closed} onClick={() => update({ ...fold, closed: !fold.closed })}>
-        {fold.closed ? <ExpandIcon size={14} /> : <CollapseIcon size={14} />}
-        <span className="mono-label" data-tip={tr('sidebar.scenesTip')}>
+      <button className="scene-nav-head nav-title" aria-expanded={!fold.closed} onClick={() => update({ ...fold, closed: !fold.closed })}>
+        <span className="nav-title-label" data-tip={tr('sidebar.scenesTip')}>
           {tr('sidebar.scenes')}
         </span>
+        {fold.closed ? <ExpandIcon size={14} /> : <CollapseIcon size={14} />}
         <span className="scene-nav-n">{total}</span>
       </button>
       {!fold.closed &&

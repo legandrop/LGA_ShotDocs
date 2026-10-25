@@ -2047,6 +2047,14 @@ rodaje que no hablan de la escena), y sin las páginas índice (nombran decenas 
 cada escena). El PDF y el zip se llaman «Scene 115»; el zip se anota como `page` en su manifiesto, así que vuelve a
 Shot Docs como cualquier otro. Pedido de Lega: «así no tengo que entrar y exportar una por una».
 
+### D770 · Map, Scenes y Pages: tres títulos iguales en la barra, y Pages se pliega (2026-10-25)
+**Pedido de Lega:** los tres más oscuros, en mayúsculas y alineados a la izquierda, porque son los títulos importantes de
+la barra; *Map* sin su ícono; *Pages* plegable como *Scenes*; y *Map* elegida con la misma selección que una página
+(en una barra larga se veía finita). **Elegí:** la flecha de plegar va después del título (si fuera adelante, *Map*,
+que no se pliega, quedaría corrido); *Pages* plegada se recuerda por proyecto en el dispositivo y se despliega sola al
+abrir otra página del mismo proyecto (un link, la búsqueda, Atrás), como el árbol sigue a la página abierta; cambiar de
+proyecto no la despliega, plegarla con una página abierta la deja plegada y el tour, al señalar el árbol, la despliega. La fila finita era la columna de la barra achicando *Map* hasta la altura del texto.
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

@@ -480,7 +480,9 @@ guarda ni se escribe en un documento.
 **La fila *Map*.** Arriba del árbol, como en la maqueta, solo en un proyecto con escenas, locaciones o días de rodaje
 (lo que dice el registro de lo que la persona ve); suma «N pending» si hay alguno, nunca un cero, con el mismo número que
 la pestaña *Pending* (`pendingSummary`: números que no existen + duplicadas + secciones sin número). Con un link público
-no hay mapa (`/map` lleva a la página compartida).
+no hay mapa (`/map` lleva a la página compartida). Desde v0.267 (D770) es un título de la barra como *Scenes* y
+*Pages* (`nav-title` en `styles.css`: mayúsculas, oscuro, sin ícono, alineado con los otros dos) y, elegida, se ve como
+una página del árbol (fondo y rayita); no se achica en una barra larga (`flex: none`).
 
 **Las pestañas** (mismas reglas que la cabecera viva: «filmada» = una sección de un reporte; la locación de un día, la
 de su título, D398; «planeada en» = lo que nombra su desglose, D393):

@@ -218,6 +218,57 @@ describe('la sección Scenes de la barra lateral', () => {
     expect(sceneRows(again).map((r) => r.querySelector('.code')!.textContent)).toEqual(['104_008', '104_009']);
   });
 
+  it('Map, Scenes y Pages son títulos iguales; Pages se pliega, se recuerda por proyecto y abrir una página la despliega', async () => {
+    const { d, built } = await owner();
+    // En `/map` no hay página abierta que diga el proyecto: el elegido en el dispositivo.
+    localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [d.remote.userId]: built.projectId }));
+    const { host } = mount(d, mapPath());
+    await shown(() => expect(host.querySelector('.map-nav') && host.querySelector('.scene-nav-head')).toBeTruthy());
+    // Los tres con la misma letra de título; *Map* sin ícono y elegida como una página.
+    const titles = [...host.querySelectorAll('.sidebar .nav-title')];
+    expect(titles.map((t) => t.querySelector('.nav-title-label')!.textContent)).toEqual(['Map', 'Scenes', 'Pages']);
+    const map = host.querySelector('.map-nav')!;
+    expect(map.querySelector('svg')).toBeNull();
+    expect(map.classList.contains('on')).toBe(true);
+    // Pages, plegada: sin filas del árbol, y lo recuerda al volver a montar.
+    const pages = () => host.querySelector<HTMLButtonElement>('.pages-head')!;
+    expect(pages().getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelectorAll('.sidebar .tree-row').length).toBeGreaterThan(0);
+    click(pages());
+    expect(pages().getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelectorAll('.sidebar .tree-row')).toHaveLength(0);
+    expect(JSON.parse(localStorage.getItem('shotdocs-pages-nav')!)).toEqual({ [built.projectId]: true });
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    const again = mount(d, mapPath()).host;
+    await shown(() => expect(again.querySelector('.pages-head')).toBeTruthy());
+    expect(again.querySelector('.pages-head')!.getAttribute('aria-expanded')).toBe('false');
+    expect(again.querySelectorAll('.sidebar .tree-row')).toHaveLength(0);
+    // Abrir una página (acá, por la dirección, como un link) despliega Pages con su fila elegida.
+    act(() => navigate(pagePath(built.ids.notas)));
+    await wait();
+    expect(again.querySelector('.pages-head')!.getAttribute('aria-expanded')).toBe('true');
+    expect(again.querySelector('.sidebar .tree-row.active')!.textContent).toContain('Notas de dirección');
+    expect(localStorage.getItem('shotdocs-pages-nav')).toBe('{}');
+    // Plegarla con la página abierta queda plegada aunque el árbol cambie.
+    click(again.querySelector('.pages-head'));
+    await act(() => d.tree.rename(built.ids.notas, 'Notas de dirección 2'));
+    await wait();
+    expect(again.querySelector('.pages-head')!.getAttribute('aria-expanded')).toBe('false');
+    // Abrir una página de otro proyecto (cambiar de proyecto) no despliega ni borra lo plegado del primero.
+    const other = await d.tree.createProject('Otro');
+    const page = await d.tree.create(null, 'Suelta', other);
+    act(() => navigate(pagePath(page)));
+    await wait();
+    expect(JSON.parse(localStorage.getItem('shotdocs-pages-nav')!)).toEqual({ [built.projectId]: true });
+    act(() => navigate(pagePath(built.ids.notas)));
+    await wait();
+    expect(again.querySelector('.pages-head')!.getAttribute('aria-expanded')).toBe('false');
+    // El tour (o «Mostrame») que señala el árbol lo despliega.
+    act(() => void window.dispatchEvent(new CustomEvent('shotdocs:tour-anchor', { detail: 'pages' })));
+    await wait();
+    expect(again.querySelector('.pages-head')!.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('Map › Scenes: «N pages» despliega la misma lista; un número que no es escena no dice nada falso', async () => {
     const { d, built } = await owner();
     const { host } = mount(d, pagePath(built.ids.notas));

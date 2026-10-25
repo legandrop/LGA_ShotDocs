@@ -4,7 +4,6 @@
   margin: -4px 0 12px;
 }
 
-.scene-nav-head,
 .scene-nav-ep {
   display: flex;
   align-items: center;
@@ -23,12 +22,12 @@
 }
 
 .scene-nav-head {
-  color: var(--muted-2);
+  width: 100%;
 }
 
-.scene-nav-head .mono-label {
-  flex: 1;
-  min-width: 0;
+/* El total, a la derecha del título. */
+.scene-nav-head .scene-nav-n {
+  margin-left: auto;
 }
 
 .scene-nav-ep {
@@ -44,14 +43,12 @@
   white-space: nowrap;
 }
 
-.scene-nav-head:hover,
 .scene-nav-ep:hover,
 .scene-nav-row:hover,
 .scene-nav-more:hover {
   background: var(--hover);
 }
 
-.scene-nav-head svg,
 .scene-nav-ep svg {
   flex: none;
   color: var(--muted-2);
@@ -132,7 +129,6 @@
   cursor: pointer;
 }
 
-.scene-nav-head:focus-visible,
 .scene-nav-ep:focus-visible,
 .scene-nav-row:focus-visible,
 .scene-nav-more:focus-visible {

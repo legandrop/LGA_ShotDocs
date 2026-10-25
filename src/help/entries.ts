@@ -169,6 +169,8 @@ const LIVE_MAP = '0.242';
  * en v0.260 y sube con *Export…* en la vista de una escena (D769).
  */
 const SCENES_SECTION = '0.266';
+/** *Pages* se pliega entera desde su título (pedido de Lega, 2026-10-25, D770). */
+const PAGES_FOLD = '0.267';
 /** El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6). */
 const LIVE_UNDERLINE = '0.244';
 /**
@@ -270,7 +272,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     words: ['back', 'forward', 'previous', 'next', 'history', 'navigate', 'atrás', 'adelante', 'anterior', 'siguiente', 'volver', 'historial', 'navegar'],
     since: '0.259',
   },
-  { id: 'pagesTree', section: 'pages', title: 'help.pagesTree.title', text: 'help.pagesTree.text', showMe: 'pages', since: BEFORE_HELP },
+  {
+    id: 'pagesTree',
+    section: 'pages',
+    title: 'help.pagesTree.title',
+    text: 'help.pagesTree.text',
+    showMe: 'pages',
+    words: ['fold', 'plegar', 'collapse', 'colapsar', 'sidebar', 'barra lateral'],
+    since: PAGES_FOLD,
+  },
   { id: 'pagesExpand', section: 'pages', title: 'help.pagesExpand.title', text: 'help.pagesExpand.text', words: ['expand', 'subpages', 'click', 'manual', 'account', 'expandir', 'subpáginas', 'clic', 'cuenta'], since: '0.258' },
   { id: 'pagesArrange', section: 'pages', title: 'help.pagesArrange.title', text: 'help.pagesArrange.text', showMe: 'pages', since: BEFORE_HELP },
   {

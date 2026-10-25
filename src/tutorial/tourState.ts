@@ -3,6 +3,9 @@ import { helpSeen, useHelpUi } from '../help/helpUi';
 import { checkHelpNews, useHelpNews } from '../help/news';
 import { PRACTICE_PATH } from '../router';
 import { overlayState } from '../navHistory';
+
+/** El paso del tour que señala un ancla (`data-tour`): quien la esconde (*Pages* plegada, en la barra) la muestra. */
+export const TOUR_ANCHOR_EVENT = 'shotdocs:tour-anchor';
 import { capturePlace, restorePlace, type ShowMePlace } from './showMePlace';
 
 // El estado de la recorrida (Docs/Doc_Tutorial.md, sección 4, "Cuándo aparece y dónde se guarda que ya se vio"). Va

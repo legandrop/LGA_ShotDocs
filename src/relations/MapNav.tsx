@@ -11,7 +11,8 @@ import { mapPathFrom } from './sceneMentions';
 import { useSlashDraft } from './slashDraft';
 import './mapNav.css';
 
-// La fila *Map* de la barra lateral (Docs/Doc_Relaciones.md, sección 12): arriba del árbol, como en la maqueta. Aparece
+// La fila *Map* de la barra lateral (Docs/Doc_Relaciones.md, sección 12): arriba del árbol, como en la maqueta, con la
+// letra de los títulos de la barra (`nav-title`, igual que *Scenes* y *Pages*) y la selección de una página. Aparece
 // solo en un proyecto con escenas, locaciones o días de rodaje (lo que dice el registro de lo que la persona ve), y suma
 // cuántos pendientes hay si hay alguno (nunca un cero), con el mismo número que la pestaña *Pending*. Con un link público no hay mapa.
 
@@ -44,7 +45,7 @@ function MapNavFor({ session }: { session: NonNullable<ReturnType<typeof existin
   const on = route.name === 'map';
   return (
     <a
-      className={`map-nav${on ? ' on' : ''}`}
+      className={`map-nav nav-title${on ? ' on' : ''}`}
       href={mapPath()}
       aria-current={on ? 'page' : undefined}
       data-tip={tr('sidebar.mapTip')}
@@ -55,10 +56,7 @@ function MapNavFor({ session }: { session: NonNullable<ReturnType<typeof existin
         if (!on || location.search) navigate(mapPathFrom(mapPath(), location));
       }}
     >
-      <svg className="map-nav-i" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14" />
-      </svg>
-      <span className="map-nav-label">{tr('sidebar.map')}</span>
+      <span className="nav-title-label">{tr('sidebar.map')}</span>
       {pending > 0 && <span className="map-nav-count">{tr('sidebar.mapPending', { count: pending })}</span>}
     </a>
   );

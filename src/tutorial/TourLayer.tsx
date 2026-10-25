@@ -11,7 +11,7 @@ import { notify } from '../ui/notice';
 import { shortcutLabel } from '../ui/shortcuts';
 import { ShowMeBack } from './ShowMeBack';
 import { stepsFor, TOUR_STEPS, type TourAnchor, type TourStep } from './steps';
-import { continueTour, dismissTour, endShowStep, endTour, onTourSignal, practiceHooks, setTourStep, startTour, useTourUi } from './tourState';
+import { continueTour, dismissTour, endShowStep, endTour, onTourSignal, practiceHooks, setTourStep, startTour, TOUR_ANCHOR_EVENT, useTourUi } from './tourState';
 
 // El motor de la recorrida (Docs/Doc_Tutorial.md, sección 4): propio, sin librerías. Un foco de luz (un solo `div`
 // con una sombra enorme que oscurece el resto) que se desliza de un ancla a otra, y un globito con *Atrás*,
@@ -224,8 +224,10 @@ function StepView({ step, index, total, phone, single = false }: { step: TourSte
     };
   }, []);
 
-  // Lo de antes de cada paso: el cajón del teléfono, el cursor en el renglón vacío.
+  // Lo de antes de cada paso: el cajón del teléfono, el cursor en el renglón vacío, y que se vea lo que señala (*Pages*
+  // plegada se despliega: `TOUR_ANCHOR_EVENT`, lo escucha la barra lateral).
   useEffect(() => {
+    if (step.anchor && 'tour' in step.anchor) window.dispatchEvent(new CustomEvent(TOUR_ANCHOR_EVENT, { detail: step.anchor.tour }));
     // En el cuadro siguiente: al seguir desde otra página, el Shell cierra el cajón al cambiar de dirección (en el
     // mismo dibujo, después de este efecto).
     const frame = phone ? requestAnimationFrame(() => setNavOpen(!!step.drawer)) : 0;

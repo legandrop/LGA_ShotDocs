@@ -6,7 +6,7 @@ import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 import { openHelp } from '../help/helpUi';
-import { useHelpDot } from '../tutorial/tourState';
+import { TOUR_ANCHOR_EVENT, useHelpDot } from '../tutorial/tourState';
 import { AccountIcon, CollapseIcon, ExpandIcon, HelpIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { AccountMenu, menuBelow, PAGE_MENU_WIDTH, PageMenu, type MenuPosition } from './menus';
 import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
@@ -39,6 +39,18 @@ function readExpanded(): Set<string> {
     return new Set(JSON.parse(localStorage.getItem(EXPANDED_KEY) ?? '[]') as string[]);
   } catch {
     return new Set();
+  }
+}
+
+/** *Pages* plegada, por proyecto, en este dispositivo (como *Scenes*, `shotdocs-scenes-nav`). */
+const PAGES_FOLD_KEY = 'shotdocs-pages-nav';
+
+function readPagesFolded(): Record<string, boolean> {
+  try {
+    const all = JSON.parse(localStorage.getItem(PAGES_FOLD_KEY) ?? '{}') as unknown;
+    return all && typeof all === 'object' && !Array.isArray(all) ? (all as Record<string, boolean>) : {};
+  } catch {
+    return {};
   }
 }
 
@@ -119,6 +131,18 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const [drop, setDrop] = useState<{ id: string; zone: DropZone } | null>(null);
   // La fila con el foco del teclado mientras el foco está en el árbol (fuera del árbol, `null`).
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [pagesFolded, setPagesFolded] = useState(readPagesFolded);
+  const pagesClosed = pagesFolded[projectId] === true;
+  const foldPages = (closed: boolean, project = projectId) => {
+    const next = { ...readPagesFolded(), [project]: closed };
+    if (!closed) delete next[project];
+    setPagesFolded(next);
+    try {
+      localStorage.setItem(PAGES_FOLD_KEY, JSON.stringify(next));
+    } catch {
+      // Recordar lo plegado es solo una comodidad.
+    }
+  };
   const rowEls = useRef(new Map<string, HTMLDivElement>());
   const navEl = useRef<HTMLElement>(null);
   // La página que el árbol mismo está por abrir (un clic en su fila, Enter, las flechas, plegar una madre): esa
@@ -169,6 +193,26 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     const ids = tree.ancestors(activeId).map((p) => p.id);
     setExpanded((prev) => (ids.every((id) => prev.has(id)) ? prev : new Set([...prev, ...ids])));
   }, [activeId, tree, revision]);
+
+  // Con *Pages* plegada, abrir otra página (un link, la búsqueda, atrás) la despliega: la página abierta se ve en el
+  // árbol. Solo cuando cambia la página abierta, no al arrancar (lo plegado se recuerda) ni con cada cambio del árbol.
+  // Cambiar de proyecto abre su última página: eso no cuenta (lo plegado de cada proyecto se recuerda).
+  const shownPage = useRef({ id: activeId, project: projectId });
+  useLayoutEffect(() => {
+    const before = shownPage.current;
+    shownPage.current = { id: activeId, project: projectId };
+    if (before.id === activeId) return;
+    const project = activeId ? tree.get(activeId)?.workspace_id : undefined;
+    if (project && project === before.project && pagesFolded[project] === true) foldPages(false, project);
+  }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // El tour y «Mostrame» señalan el árbol: plegado no se vería.
+  useEffect(() => {
+    const onAnchor = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === 'pages' && pagesFolded[projectId] === true) foldPages(false);
+    };
+    window.addEventListener(TOUR_ANCHOR_EVENT, onAnchor);
+    return () => window.removeEventListener(TOUR_ANCHOR_EVENT, onAnchor);
+  });
 
   // Lo que no abrió el árbol mismo deja su fila a la vista en el árbol (pedido de Lega, "el árbol sigue a la página").
   // Antes de pintar (`useLayoutEffect`), sin saltos: si la fila ya se ve, no se mueve nada (`revealRow`). Si todavía no
@@ -448,8 +492,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   }
 
   const roots = tree.roots(projectId);
-  // Las filas que se ven, en orden: lo que recorren las flechas.
-  const rows = visibleRows(roots, (id) => tree.children(id), expanded);
+  // Las filas que se ven, en orden: lo que recorren las flechas (ninguna con *Pages* plegada).
+  const rows = pagesClosed ? [] : visibleRows(roots, (id) => tree.children(id), expanded);
   const visible = new Set(rows.map((r) => r.id));
   const tabStop =
     focusId && visible.has(focusId) ? focusId : activeId && visible.has(activeId) ? activeId : (rows[0]?.id ?? null);
@@ -493,7 +537,10 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       {!linkMode && <ScenesNav />}
 
       <div className="section-title" data-tour="pages">
-        <span className="mono-label">{tr('sidebar.pages')}</span>
+        <button className="nav-title pages-head" aria-expanded={!pagesClosed} onClick={() => foldPages(!pagesClosed)}>
+          <span className="nav-title-label">{tr('sidebar.pages')}</span>
+          {pagesClosed ? <ExpandIcon size={14} /> : <CollapseIcon size={14} />}
+        </button>
         <span className="section-actions">
           {/* Buscar en el proyecto (Docs/Doc_Buscar.md, sección 7): a la izquierda del "+", también para quien
               no puede crear páginas. */}
@@ -514,8 +561,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           )}
         </span>
       </div>
-      {renderList(null, roots, 0, 'tree')}
-      {roots.length === 0 && canCreateRoot && (
+      {!pagesClosed && renderList(null, roots, 0, 'tree')}
+      {!pagesClosed && roots.length === 0 && canCreateRoot && (
         <button className="empty-new" onClick={() => void newPage(null)}>
           <PlusIcon size={16} /> {tr('common.newPage')}
         </button>

@@ -808,7 +808,61 @@ code {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px 6px 8px;
+  gap: 4px;
+  padding: 0 4px 2px 0;
+}
+
+/* Los títulos de la barra lateral: *Map*, *Scenes* y *Pages* (pedido de Lega, 2026-10-25). Oscuros, en mayúsculas,
+   alineados a la izquierda en el mismo lugar y del alto de una fila del árbol; la flecha de plegar va después del
+   título, así ninguno se corre. `flex: none`: en una barra larga (cientos de páginas) la columna achicaba la fila de
+   *Map* a la altura del texto. */
+.nav-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.nav-title:hover {
+  background: var(--hover);
+}
+
+.nav-title:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.nav-title-label {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.nav-title > svg {
+  flex: none;
+  color: var(--muted-2);
+}
+
+/* *Pages*: el título se pliega y ocupa lo que dejan la lupa y el «+». */
+.section-title .pages-head {
+  flex: 1;
 }
 
 .section-actions {
@@ -817,7 +871,7 @@ code {
   gap: 2px;
 }
 
-.section-title button {
+.section-actions button {
   border: none;
   width: 28px;
   height: 28px;
@@ -2154,7 +2208,8 @@ code {
     padding-inline: var(--gutter) !important;
   }
 
-  .tree-row {
+  .tree-row,
+  .nav-title {
     height: 40px;
   }
 

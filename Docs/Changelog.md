@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.267 :
+
+En la barra lateral, *Map*, *Scenes* y *Pages* se veían distintos (Map con ícono y letra normal, los otros dos en
+gris chico), no estaban alineados y *Pages* no se plegaba. Además, *Map* elegida tenía un fondo finito: en una barra
+larga (cientos de páginas) la columna achicaba esa fila hasta la altura del texto. Ahora los tres son títulos iguales
+(`nav-title`: mayúsculas, oscuros, mismo alto y mismo margen izquierdo), con la flecha de plegar después del título;
+*Map* va sin ícono, no se achica (`flex: none`) y elegida se ve como una página del árbol, con fondo y rayita. *Pages*
+se pliega desde su título, se recuerda por proyecto (`shotdocs-pages-nav`) y vuelve a desplegarse al abrir otra página
+del mismo proyecto (cambiar de proyecto no cuenta) o cuando el tour la señala. Arnés `src/dev/barra-lateral.html`.
+Ayuda de *Pages* al día. D770.
+
+[Barra lateral: Map, Scenes y Pages como títulos iguales, Pages plegable y Map elegida como una página]
+
 v0.266 :
 
 Para tener en un archivo todo lo de una escena había que entrar a cada página que habla de ella y exportarla una por
