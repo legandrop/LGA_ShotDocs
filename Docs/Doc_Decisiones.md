@@ -2159,3 +2159,8 @@ cosa.
 - **D-08 · Formato por defecto de un proyecto nuevo.** Opción indicada: libre. El formato no se guarda
   en el proyecto: se fija por proyecto en sus páginas raíz y lo heredan las de abajo
   (`pages.settings.format`, `Plan_ShotDocs.md`, sección 10).
+
+### D775 · Encabezado 1 al doble del texto (2026-10-25)
+**Pedido de Lega:** que el Encabezado 1 sea más grande que ahora.
+**Quedó:** el H1 mide el doble del cuerpo (32px con texto mediano; antes 1.75, 28px), siempre 1px por debajo del
+título de la página (en el teléfono y en el PDF el tope manda). H2 a H6 no cambian.

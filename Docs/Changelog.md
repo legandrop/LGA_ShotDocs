@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.272 :
+
+El Encabezado 1 se veía chico: con texto mediano medía 28px (1.75 del cuerpo), apenas más que el H2 (24px) y lejos
+del título de la página (40px). Lega lo pidió más grande. Ahora el H1 mide el doble del cuerpo: 32px con texto
+mediano, 30px con chico y 36px con grande; H2 a H6 no cambian. Tiene su propio escalón (`--sd-h1-step` en
+`styles.css`) con el mismo tope que el resto: siempre 1px por debajo del título, así que en el teléfono (título de
+28px) queda en 27px como antes y en el PDF (título de 32px) en 31px. D775.
+
+[Encabezado 1 más grande: el doble del texto]
+
 v0.271 :
 
 Los colores no seguían una regla: el scouting tenía un azul propio y los días iban en gris, el ámbar era a la vez el

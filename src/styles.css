@@ -1969,13 +1969,15 @@ code {
   letter-spacing: -0.01em;
   line-height: 1.3;
 }
-/* H1–H4: 1.75/1.5/1.3125/1.125 del cuerpo. Si el título de la página es más chico (móvil),
-   se comprime solo lo que crece sobre H5: conserva la progresión y H5/H6 no cambian.
+/* H1–H4: 2/1.5/1.3125/1.125 del cuerpo (H1 a 2 desde v0.272, pedido de Lega). Si el título de la página es más
+   chico (móvil), se comprime solo lo que crece sobre H5: conserva la progresión y H5/H6 no cambian.
    El límite se resuelve acá, bajo el --title-size real de la página o del PDF. */
 .bn-container {
-  --sd-heading-step: min(calc(var(--doc-size) * 0.75), calc(var(--title-size) - 1px - var(--doc-size)));
+  --sd-heading-room: calc(var(--title-size) - 1px - var(--doc-size));
+  --sd-heading-step: min(calc(var(--doc-size) * 0.75), var(--sd-heading-room));
+  --sd-h1-step: min(var(--doc-size), var(--sd-heading-room));
 }
-.bn-container [data-content-type='heading'] h1 { font-size: calc(var(--doc-size) + var(--sd-heading-step)); }
+.bn-container [data-content-type='heading'] h1 { font-size: calc(var(--doc-size) + var(--sd-h1-step)); }
 .bn-container [data-content-type='heading'] h2 { font-size: calc(var(--doc-size) + var(--sd-heading-step) * 2 / 3); }
 .bn-container [data-content-type='heading'] h3 { font-size: calc(var(--doc-size) + var(--sd-heading-step) * 5 / 12); }
 .bn-container [data-content-type='heading'] h4 { font-size: calc(var(--doc-size) + var(--sd-heading-step) / 6); }
