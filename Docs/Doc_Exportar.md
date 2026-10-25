@@ -1,5 +1,9 @@
 # Exportar una página o un proyecto entero (P.22)
 
+**Desde una escena (v0.266, D769).** Además del menú de una página y del de un proyecto, la vista de una escena del mapa
+abre la misma ventana con un grupo de páginas sueltas (destino `pages`: cada una sin las de adentro, como raíz). El PDF
+y el zip salen con el título del grupo; el zip nunca aplana una raíz única. Detalle en `Doc_Relaciones.md`, sección 21.
+
 ## Títulos largos y cierre de la ventana
 
 La cabecera conserva el título completo y corta entre caracteres si no tiene espacios. Cuando el nombre del ZIP y las acciones no entran, pasan a otro renglón para mantener *Close* dentro del diálogo. En un teléfono una ventana alta mantiene su desplazamiento vertical habitual. No cambia la preparación del archivo, la cancelación ni los dispositivos que admiten ZIP.

@@ -12,7 +12,7 @@ import { keepsPageSizes, touchDevice } from '../export/printSupport';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import type { PageTree } from '../sync/tree';
 import { isPrintShortcut } from './printPage';
-import { sizeLabel } from './pageFormat';
+import { pageFormat, sizeLabel } from './pageFormat';
 import { appArchiveMedia, zipAllowed } from '../export/exportZip';
 import { planFiles, type PlanFiles } from '../export/planFiles';
 import { ExportZipPanel } from './ExportZip';
@@ -37,9 +37,31 @@ import { Permissions } from '../sync/access';
 // entra en un PDF de este dispositivo, sale en partes, una por vez (D84: la siguiente se arma al pedirla, soltando la
 // anterior); y al terminar, la lista de las páginas que fallaron, cada una con su link y *Export again* (D88).
 
-export type ExportTarget = { kind: 'page' | 'project'; id: string };
+// Desde el mapa (Doc_Relaciones.md, sección 21): las páginas que hablan de una escena, en un solo PDF o zip. Cada una va
+// sola, sin las de adentro, como página raíz de lo exportado; el título es el del grupo («Scene 115»).
+
+export type ExportTarget =
+  | { kind: 'page' | 'project'; id: string }
+  /** Páginas sueltas: `id` distingue el grupo (`scene:115`), `title` lo nombra. */
+  | { kind: 'pages'; id: string; title: string; ids: string[] };
 
 type Scope = 'page' | 'branch' | 'project';
+
+/** Las páginas sueltas de un grupo, en su orden, cada una sin las de adentro; sin repetidas ni las de la papelera. */
+function pagesPlan(tree: PageTree, ids: readonly string[]): ExportPlanPage[] {
+  const seen = new Set<string>();
+  const out: ExportPlanPage[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const row = tree.get(id);
+    if (!row || tree.isTrashed(id)) continue;
+    const format = pageFormat(tree, id);
+    // Sola: raíz de lo exportado, sin encabezado de nada de arriba (regla 2).
+    out.push({ id, title: row.title, depth: 0, parent: null, header: [], format: { size: format.size, landscape: format.landscape } });
+  }
+  return out;
+}
 
 type Phase =
   | { name: 'choose' }
@@ -52,6 +74,7 @@ type Failure = { id: string; title: string; reason: 'error' | 'photos' | 'timeou
 
 /** Las páginas de una elección (la raíz sola, la rama o el proyecto). */
 function planFor(tree: PageTree, target: ExportTarget, scope: Scope): ExportPlanPage[] {
+  if (target.kind === 'pages') return pagesPlan(tree, target.ids);
   if (target.kind === 'project') return exportPlan(tree, 'project', target.id);
   const branch = exportPlan(tree, 'page', target.id);
   return scope === 'page' ? branch.slice(0, 1) : branch;
@@ -128,7 +151,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
       live = false;
     };
   }, [plan, linkMode, media.enabled, status.online, client, tree]);
-  const title = target.kind === 'project' ? (tree.project(target.id)?.name ?? '') : (tree.get(target.id)?.title ?? '');
+  const title = target.kind === 'pages' ? target.title : target.kind === 'project' ? (tree.project(target.id)?.name ?? '') : (tree.get(target.id)?.title ?? '');
   const shownTitle = title.trim() || tr('common.untitled');
   const [failures, setFailures] = useState<Failure[]>([]);
   /** El diálogo de imprimir ya se abrió para el PDF listo (en un táctil no se abre solo: hasta entonces, nada lo suelta). */
@@ -237,7 +260,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
         setSelectionChanged(true);
         return;
       }
-      const freshTitle = onlyId ? what[0].title : now.target.kind === 'project' ? (now.tree.project(now.target.id)?.name ?? '') : (now.tree.get(now.target.id)?.title ?? '');
+      const freshTitle = onlyId ? what[0].title : now.target.kind === 'pages' ? now.target.title : now.target.kind === 'project' ? (now.tree.project(now.target.id)?.name ?? '') : (now.tree.get(now.target.id)?.title ?? '');
       setSelectionChanged(false);
       void buildPrepared(from, part, onlyId, what, freshTitle, now, key, current);
     }, () => !initial.tree.titleRests().some((rest) => pages().some((page) => page.id === rest.pageId)), true);
@@ -404,7 +427,11 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
               </fieldset>
             ) : (
               <p className="muted export-subtitle">
-                {target.kind === 'project' ? tr('exportDialog.project', { count: plan.length }) : tr('exportDialog.thisPage')}
+                {target.kind === 'pages'
+                  ? tr('exportDialog.pages', { count: plan.length })
+                  : target.kind === 'project'
+                    ? tr('exportDialog.project', { count: plan.length })
+                    : tr('exportDialog.thisPage')}
               </p>
             )}
             {!zipBusy && (
@@ -426,6 +453,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
                 kind={target.kind}
                 project={target.kind === 'project' ? { id: target.id, name: title } : null}
                 title={title}
+                replan={target.kind === 'pages' ? (now) => pagesPlan(now, target.ids) : undefined}
                 onBusy={setZipBusy}
                 onClose={props.onClose}
               />

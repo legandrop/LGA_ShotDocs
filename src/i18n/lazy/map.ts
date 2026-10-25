@@ -117,6 +117,12 @@ export const map = {
   },
   'map.pagesN': { en: { one: "{count} page", other: "{count} pages" }, es: { one: "{count} página", other: "{count} páginas" } },
   'map.allScenes': { en: "All scenes", es: "Todas las escenas" },
+  'map.sceneExport': { en: "Export…", es: "Exportar…" },
+  'map.sceneExportTip': {
+    en: "All the pages that talk about the scene in one PDF or zip, without the index pages",
+    es: "Todas las páginas que hablan de la escena en un solo PDF o zip, sin las páginas índice",
+  },
+  'map.sceneExportTitle': { en: "Scene {code}", es: "Escena {code}" },
   'map.sceneLede': {
     en: { one: "{count} page talks about it", other: "{count} pages talk about it" },
     es: { one: "{count} página habla de ella", other: "{count} páginas hablan de ella" },

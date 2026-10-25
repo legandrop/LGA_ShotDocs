@@ -2039,6 +2039,14 @@ vez. Lo destapó la primera invitación real: sin cuenta previa, Supabase rechaz
 la invitación, y la app muestra «No hay ninguna cuenta con este correo». Sin esto, *Members* invita pero nadie
 nuevo puede entrar. El paso 9 del plan ya lo preveía (D-09); solo faltaba hacerlo.
 
+### D769 · Exportar las páginas de una escena desde el mapa (2026-10-25)
+**Elegí:** un botón *Export…* en la vista de una escena (`/map/scenes?scene=<código>`) que abre la misma ventana de
+exportar con todas las páginas de la lista, en el orden en que se ven, en un solo PDF o zip. Cada página va sola, sin
+las de adentro (la lista ya trae las fichas y los días que la nombran; sumar las de adentro metería días enteros de
+rodaje que no hablan de la escena), y sin las páginas índice (nombran decenas de escenas: un plan general entero por
+cada escena). El PDF y el zip se llaman «Scene 115»; el zip se anota como `page` en su manifiesto, así que vuelve a
+Shot Docs como cualquier otro. Pedido de Lega: «así no tengo que entrar y exportar una por una».
+
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
 Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de

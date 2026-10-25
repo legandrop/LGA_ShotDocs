@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.266 :
+
+Para tener en un archivo todo lo de una escena había que entrar a cada página que habla de ella y exportarla una por
+una (una escena de un largo llega a tener 14). La vista de una escena del mapa (`/map/scenes?scene=<código>`) suma *Export…*, que abre
+la misma ventana de exportar con todas las páginas de su lista, en el orden en que se ven: un solo PDF con su índice o
+un solo zip, con las mismas opciones que desde una página. Cada página va sola, sin las de adentro, sin repetidas ni las
+de la papelera, y quedan afuera las páginas índice (nombran decenas de escenas). El PDF y el zip se llaman «Scene 115»;
+el zip vuelve a Shot Docs como cualquier otro. La ventana de exportar acepta un destino nuevo, `pages` (páginas
+sueltas), y el zip lo arma como varias páginas raíz, sin aplanar aunque sea una. Mientras el índice lee, el botón
+está apagado. Pruebas del PDF, del zip, del zip de una sola página y del botón. D769.
+
+[Exportar en un solo PDF o zip todas las páginas de una escena desde el mapa]
+
 v0.265 :
 
 Una persona invitada desde *Members* (`karmafx@gmail.com`) no podía entrar: la app le decía «No hay ninguna cuenta con

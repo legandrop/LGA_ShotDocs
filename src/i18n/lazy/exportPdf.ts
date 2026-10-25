@@ -50,6 +50,10 @@ export const exportPdf = {
     en: { one: "The whole project ({count} page)", other: "The whole project ({count} pages)" },
     es: { one: "El proyecto entero ({count} página)", other: "El proyecto entero ({count} páginas)" },
   },
+  'exportDialog.pages': {
+    en: { one: "{count} page, without the pages inside it", other: "{count} pages, each without the pages inside it" },
+    es: { one: "{count} página, sin las de adentro", other: "{count} páginas, cada una sin las de adentro" },
+  },
   'exportDialog.pdf': { en: "PDF — to share", es: "PDF — para compartir" },
   'exportDialog.pdfNote': {
     en: "One PDF with a contents page that links to each page; every page keeps its page size and sheet breaks. Photos go as they were taken, at full resolution. If it is too much for one PDF on this device, it comes out in parts (Part 1, Part 2…), split between pages.",

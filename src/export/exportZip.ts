@@ -294,6 +294,11 @@ export interface ZipOptions {
   /** El título de la raíz de lo exportado (el proyecto, o la página raíz de la rama: nunca nada de arriba). */
   title: string;
   kind: 'page' | 'project';
+  /**
+   * La raíz única va suelta, con el nombre del zip (de fábrica, con `page`). Páginas sueltas de un grupo (las de una
+   * escena) nunca: cada una conserva su título aunque sea una sola.
+   */
+  flatRoot?: boolean;
   /** El proyecto, solo si se exporta entero (una rama no lo nombra: regla 2). */
   project?: { id: string; name: string } | null;
   plan: ExportPlanPage[];
@@ -515,7 +520,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
   const root = rootFolderName(options.title);
   // Las rutas largas de Windows (O1): cada carpeta y cada nombre se acortan para entrar en `pathLimit`.
   const limit = pathLimit(root);
-  const slots = pageSlots(plan, { flatRoot: options.kind === 'page', root, limit });
+  const slots = pageSlots(plan, { flatRoot: options.flatRoot ?? options.kind === 'page', root, limit });
   const inside = new Set(plan.map((p) => p.id));
   const names = new FileNames(limit);
   const out = new ArchiveOut(options.target, root);

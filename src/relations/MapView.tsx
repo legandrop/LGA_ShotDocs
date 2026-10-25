@@ -6,6 +6,7 @@ import { SEPARATOR } from '../search/extract';
 import { usePermissions, useServices, useTree } from '../services';
 import { copyText } from '../ui/commentsUi';
 import { notify } from '../ui/notice';
+import { openExportPages } from '../ui/ExportHost';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession, useIndexProgress } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
@@ -585,6 +586,8 @@ function SceneDetail({
   }, [code]);
   const scene = data.scenes.find((s) => s.code === code) ?? null;
   const list = useMemo(() => (scene && links ? sceneMentions(data, code, src, { links }) : null), [data, code, src, scene, links]);
+  // Lo que se exporta: las páginas de la lista en el orden en que se ven, sin las páginas índice.
+  const exportIds = useMemo(() => (list ? list.groups.filter((g) => g.id !== 'index').flatMap((g) => g.pages.map((p) => p.pageId)) : []), [list]);
   return (
     <div className="mp-scene" ref={top}>
       <a
@@ -619,10 +622,20 @@ function SceneDetail({
               <span>{scene.title}</span>
             )}
           </h2>
-          <p className="mp-smeta">
-            {scene.episode && <>{tr('live.episode', { ep: scene.episode })} · </>}
-            {complete || list.count > 1 ? tr(partial ? 'map.sceneLedeSeen' : 'map.sceneLede', { count: list.count }) : tr('live.reading')}
-          </p>
+          <div className="mp-sbar">
+            <p className="mp-smeta">
+              {scene.episode && <>{tr('live.episode', { ep: scene.episode })} · </>}
+              {complete || list.count > 1 ? tr(partial ? 'map.sceneLedeSeen' : 'map.sceneLede', { count: list.count }) : tr('live.reading')}
+            </p>
+            {/* Todas las páginas de la lista en un PDF o un zip, sin las páginas índice (nombran decenas de escenas). Mientras el
+                índice lee, apagado: la lista todavía puede crecer y la ventana se lleva la de ese momento. */}
+            <button className="mp-btn" data-tip={tr('map.sceneExportTip')} disabled={!complete || exportIds.length === 0} onClick={() => openExportPages(`scene:${scene.code}`, tr('map.sceneExportTitle', { code: scene.code }), exportIds)}>
+              <svg className="mp-i s" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+              </svg>
+              {tr('map.sceneExport')}
+            </button>
+          </div>
           <SceneMentionsView list={list} complete={complete} partial={partial} onPlace={onPlace} />
         </>
       )}

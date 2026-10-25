@@ -169,6 +169,20 @@ describe('la sección Scenes de la barra lateral', () => {
     const idx = view.querySelector<HTMLDetailsElement>('details.mp-smidx')!;
     expect(idx.open).toBe(false);
     expect(idx.querySelector('summary')!.textContent).toBe('Index pages 1');
+    // *Export…* pide la ventana con las 9 páginas de la lista, en su orden y sin la página índice.
+    const exported: { kind: string; id: string; title: string; ids: string[] }[] = [];
+    const onExport = (e: Event) => exported.push((e as CustomEvent).detail);
+    window.addEventListener('shotdocs:export', onExport);
+    try {
+      click([...view.querySelectorAll('button')].find((b) => b.textContent === 'Export…')!);
+    } finally {
+      window.removeEventListener('shotdocs:export', onExport);
+    }
+    const listed = [...view.querySelectorAll<HTMLAnchorElement>('.mp-sm > :not(details) a[href^="/p/"]')].map((a) => a.getAttribute('href')!.slice(3));
+    expect(exported).toHaveLength(1);
+    expect(exported[0]).toMatchObject({ kind: 'pages', id: 'scene:105_027', title: 'Scene 105_027' });
+    expect(exported[0].ids).toHaveLength(9);
+    expect(exported[0].ids).toEqual([...new Set(listed)]);
     // El filtro de la lista no está en la vista de una escena.
     expect(host.querySelector('.mp-filter')).toBeNull();
     // Un lugar lleva a la sección exacta del día (el mismo pedido que la búsqueda, lo toma el editor).

@@ -1295,3 +1295,10 @@ sección exacta, *Map › Scenes* con «N pages», un número que no es escena, 
 tandas y la escena abierta siempre visible, «Reading…» sin afirmar ceros, y que salir de la vista no rompe la app).
 
 **Decisiones:** D744–D753 en `Doc_Decisiones.md`.
+
+**Exportar la escena (v0.266, D769).** En la vista de una escena, *Export…* (al lado de «N pages talk about it») abre la
+ventana de exportar (`openExportPages` de `ExportHost.tsx`, destino `pages` de `ExportDialog.tsx`) con las páginas de la
+lista en su orden, sin las páginas índice. Cada una sale sola, como página raíz, sin las de adentro, sin repetidas ni
+las de la papelera; PDF y zip como desde una página, con el título «Scene <código>». Mientras el índice lee, el botón
+está apagado (la ventana se lleva la lista de ese momento). Pruebas: `exportPagesGroup.test.tsx`
+(el PDF y el zip con las páginas justas) y `scenesSection.test.tsx` (el botón pide las 9 páginas de la lista).

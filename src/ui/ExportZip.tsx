@@ -5,6 +5,7 @@ import '../i18n/lazy/exportZip';
 import { appComments } from '../export/exportComments';
 import { ExportCancelled, ExportEditor } from '../export/exportEditor';
 import { exportPlan, type ExportPlanPage } from '../export/exportPages';
+import type { PageTree } from '../sync/tree';
 import {
   appArchiveMedia,
   buildZip,
@@ -59,11 +60,14 @@ interface Opened {
 
 export interface ExportZipProps {
   plan: ExportPlanPage[];
-  kind: 'page' | 'project';
+  /** `pages`: páginas sueltas (las que hablan de una escena), cada una como raíz; el zip lo anota como `page`. */
+  kind: 'page' | 'project' | 'pages';
   /** El proyecto (solo cuando se exporta entero: una rama no lo nombra). */
   project: { id: string; name: string } | null;
   /** El título de la raíz de lo exportado. */
   title: string;
+  /** Con `pages`: vuelve a armar lo elegido con el árbol de ahora (para ver que no cambió antes de escribir). */
+  replan?: (tree: PageTree) => ExportPlanPage[];
   /** Trabajando: la ventana no se cierra con Escape ni tocando afuera. */
   onBusy: (busy: boolean) => void;
   onClose: () => void;
@@ -183,8 +187,10 @@ export function ExportZipPanel(props: ExportZipProps) {
     const pages = () => {
       const now = live.current;
       const ids = new Set(now.props.plan.map((p) => p.id));
-      const target = now.props.kind === 'project' ? now.props.project?.id : now.props.plan[0]?.id;
-      return target ? exportPlan(now.tree, now.props.kind, target).filter((p) => ids.has(p.id)) : [];
+      if (now.props.replan) return now.props.replan(now.tree).filter((p) => ids.has(p.id));
+      const kind = now.props.kind === 'project' ? 'project' : 'page';
+      const target = kind === 'project' ? now.props.project?.id : now.props.plan[0]?.id;
+      return target ? exportPlan(now.tree, kind, target).filter((p) => ids.has(p.id)) : [];
     };
     const metadata = () => JSON.stringify([live.current.props.project ? live.current.tree.project(live.current.props.project.id)?.name : null, pages().map((page) => [page.title, page.header])]);
     const titleReady = () => !initial.tree.titleRests().some((rest) => pages().some((page) => page.id === rest.pageId));
@@ -226,7 +232,7 @@ export function ExportZipPanel(props: ExportZipProps) {
       const plan = pages();
       const permission = new Permissions(now.tree, now.services.access.get(), now.services.user.id);
       if (!plan.length || !zipAllowed(permission) || plan.some((page) => permission.pageLevel(page.id) < 1)) throw Error(t('exportDialog.empty'));
-      const title = now.props.kind === 'project' ? (now.tree.project(now.props.project!.id)?.name ?? '') : (now.tree.get(plan[0].id)?.title ?? '');
+      const title = now.props.kind === 'pages' ? now.props.title : now.props.kind === 'project' ? (now.tree.project(now.props.project!.id)?.name ?? '') : (now.tree.get(plan[0].id)?.title ?? '');
       const project = now.props.project ? { id: now.props.project.id, name: title } : null;
       preparedKey = metadata();
       const { docs, media, mediaDb, comments, commentsDb, user, engine } = now.services;
@@ -263,7 +269,8 @@ export function ExportZipPanel(props: ExportZipProps) {
       check();
       const result = await buildZip({
         title,
-        kind: now.props.kind,
+        kind: now.props.kind === 'project' ? 'project' : 'page',
+        flatRoot: now.props.kind === 'page',
         project,
         plan,
         rows: (id) => now.tree.get(id),
