@@ -653,7 +653,9 @@ En el editor de la página abierta (maqueta `d_escribir.html` y `c_dia.html`). T
 
 **El subrayado.** El texto de cada bloque, como lo lee el índice (los links a páginas tapados), pasa por el mismo lector
 (`scan`) con lo que existe en la foto del índice. Escena o locación reconocida: punteado sutil (el color de su tipo);
-un pendiente (`105_120`): gris de rayas. Lo que ya es link (a una página o afuera) no se subraya; tampoco la propia
+un pendiente (`105_120`): gris de rayas. La palabra pegada antes de un número de escena («Escena 59», «Sc. 74»; no
+«plano») entra en el mismo tramo, en su color (`sceneWordStart` de `reader.ts`, D776): volverlo link la incluye y queda una
+sola ficha «Escena 59». El lector y el índice siguen marcando solo el número. Lo que ya es link (a una página o afuera) no se subraya; tampoco la propia
 escena o locación en su página, ni nada en una página con `graph: false`. Son decoraciones de ProseMirror: no están en el
 Y.Doc, no viajan, no se copian, no salen en el PDF (la exportación no las tiene) ni al imprimir. Lo escrito acá corre lo
 dibujado en la misma transacción, salvo lo que la edición tocó por dentro (reemplazar con buscar, escribir en el medio

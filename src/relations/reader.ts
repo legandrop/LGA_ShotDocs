@@ -268,6 +268,22 @@ const RE_FLAT_WORD = new RegExp(`${SCENE_WORD}(\\d{1,3})${SUF}(?=_|\\b)`, 'giu')
 const RE_FLAT_HEAD = /^([\s(\[«"'·•:–-]*)(\d{1,3})([A-Za-z]?)(?=$|[^\w])/;
 const RE_FLAT_SHOT = /\b[A-Z]{2,6}_(\d{3})([A-Za-z]?)_\d{2,4}\b/g;
 
+const RE_SCENE_WORD = new RegExp(SCENE_WORD, 'giu');
+
+/**
+ * Dónde empieza la palabra que dice «escena» pegada antes de un número reconocido que va de `s` a `e` («Escena 59»,
+ * «Sc. 74A», «esc 27»), o `s` si no hay. Para dibujar la mención entera en el editor (D776): el lector y el índice siguen
+ * marcando solo el número.
+ */
+export function sceneWordStart(text: string, s: number, e: number): number {
+  // Con las URLs tapadas, como las lee `scan`: «…/escena 105_027» escrito sin link no presta su «escena».
+  const masked = text.slice(0, e).replace(MASK, (u) => ' '.repeat(u.length));
+  RE_SCENE_WORD.lastIndex = Math.max(0, s - 32);
+  let m: RegExpExecArray | null;
+  while ((m = RE_SCENE_WORD.exec(masked)) && m.index < s) if (m.index + m[0].length === s) return m.index;
+  return s;
+}
+
 /** Lo que separa las partes de un lugar (D531): `|`, `,`, `;`, `/`, `+`, `·`, paréntesis, `:` y « - » / « – ». */
 const PLACE_SEP = /[|,;/+·():]| [-–] /;
 

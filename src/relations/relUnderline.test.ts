@@ -128,10 +128,10 @@ describe('el subrayado pasivo', () => {
     const e = mount(doc);
     await tick();
     expect(drawn(e)).toEqual([
-      '105_027b:rel-u',
+      'Escena 105_027b:rel-u',
       '5029a:rel-u',
       '105_026:rel-u',
-      '105_120:rel-u pend',
+      'Escena 105_120:rel-u pend',
       'CENADE:rel-u loc',
       // El link a 105_029 es una ficha, sin subrayado.
       '105_029:rel-chip scene',
@@ -142,6 +142,41 @@ describe('el subrayado pasivo', () => {
     await tick(UNDERLINE_WAIT_MS + 50);
     expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toBe(before);
     expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).not.toMatch(/rel-|underline/);
+  });
+
+  it('«Escena 27» se dibuja entero, palabra y número, en un párrafo y en un título; «plano» y lo que ya es link, no (D776)', async () => {
+    const doc = new Y.Doc();
+    const e = mount(doc);
+    e.replaceBlocks(e.document, [
+      { type: 'paragraph', content: 'escena escena 105_027 y Sc. 105_026, el plano 5029a. Escena 105_029' },
+      { type: 'heading', props: { level: 2 }, content: 'Escena: 105_026' },
+      { type: 'paragraph', content: ['Escena ', link('105_027', `/p/${PAGES['105_027']}`), ' y Escena 105_026 + 029'] },
+    ] as never);
+    await tick(UNDERLINE_WAIT_MS + 80);
+    expect(drawn(e)).toEqual([
+      'escena 105_027:rel-u',
+      'Sc. 105_026:rel-u',
+      '5029a:rel-u',
+      'Escena 105_029:rel-u',
+      'Escena: 105_026:rel-u',
+      '105_027:rel-chip scene',
+      'Escena 105_026:rel-u',
+      '029:rel-u',
+    ]);
+    // Una URL escrita sin link no presta su «escena»; un salto de línea en el medio corta el tramo.
+    const bits = (b: { text: string }[]) => {
+      const d = new Y.Doc();
+      const x = mount(d, { underline: false });
+      x.replaceBlocks(x.document, [{ type: 'paragraph', content: b }] as never);
+      const doc2 = view(x).state.doc;
+      return buildUnderlines(doc2, info).decos.map((dd) => doc2.textBetween(dd.from, dd.to, '⏎', '⏎'));
+    };
+    expect(bits([{ type: 'text', text: 'ver https://x.com/escena 105_027', styles: {} } as never])).toEqual(['105_027']);
+    expect(bits([{ type: 'text', text: 'Escena\n105_027', styles: {} } as never])).toEqual(['105_027']);
+    // Volverlo link lo toma entero: queda una sola ficha «Escena 105_029».
+    const v = view(e);
+    expect(makeLinkAt(v, drawnRange(e, 'Escena 105_029').from + 1)).toBe(true);
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_029']}">Escena 105_029</link>`);
   });
 
   it('lo escrito acá corre lo dibujado (sin parpadeo ni mover el cursor) y medio segundo después se vuelve a leer', async () => {
@@ -201,7 +236,7 @@ describe('el subrayado pasivo', () => {
     const tr = view(e).state.tr.insert(0, view(e).state.schema.nodes.blockContainer.create(null, view(e).state.schema.nodes.paragraph.create(null, view(e).state.schema.text('Nota nueva.'))));
     const after = tr.doc;
     const mapped = mapThroughReplace(set, before, after).find().map((d) => after.textBetween(d.from, d.to));
-    expect(mapped).toEqual(['105_027b', '5029a', '105_026', '105_120', 'CENADE', '105_029']);
+    expect(mapped).toEqual(['Escena 105_027b', '5029a', '105_026', 'Escena 105_120', 'CENADE', '105_029']);
     // Sin cambios: el mismo conjunto.
     expect(mapThroughReplace(set, before, before)).toBe(set);
   });
@@ -256,8 +291,8 @@ describe('volver link un subrayado', () => {
     await tick();
     const v = view(e);
     const before = doc.getXmlFragment(CONTENT_FRAGMENT).toString();
-    expect(makeLinkAt(v, drawnRange(e, '105_120').from + 1)).toBe(false);
-    expect(makeLinkAt(v, 3)).toBe(false);
+    expect(makeLinkAt(v, drawnRange(e, 'Escena 105_120').from + 1)).toBe(false);
+    expect(makeLinkAt(v, drawnRange(e, '5029a').from - 3)).toBe(false);
     expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toBe(before);
     expect(underlineAt(v.state, drawnRange(e, '105_026').to)?.spec).toMatchObject({ kind: 'scene', ref: '105_026', pageId: PAGES['105_026'] });
   });
@@ -274,11 +309,11 @@ describe('volver link un subrayado', () => {
     const at = (pos: number) => v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, pos)));
     const before = doc.getXmlFragment(CONTENT_FRAGMENT).toString();
     try {
-      at(drawnRange(e, '105_120').from + 2);
+      at(drawnRange(e, 'Escena 105_120').from + 2);
       expect(press()).toBe(true);
       at(drawnRange(e, '105_029').from + 2);
       expect(press()).toBe(true);
-      at(4);
+      at(drawnRange(e, '5029a').from - 3);
       expect(press()).toBe(true);
       expect(notices).toEqual(['105_120 doesn’t exist yet: nothing to link to', 'It’s already a link', 'Nothing to link here']);
       // En solo lectura la tecla sigue su camino, sin aviso.
@@ -344,15 +379,15 @@ describe('Assign desde el adelanto de un pendiente y el link de lo creado desde 
     await tick();
     const va = view(ea);
     // Sin destino, un pendiente no se vuelve link (E6).
-    expect(makeLinkAt(va, drawnRange(ea, '105_120').from)).toBe(false);
-    const anchor = anchorOf(va.state, drawnRange(ea, '105_120').from, '105_120');
+    expect(makeLinkAt(va, drawnRange(ea, 'Escena 105_120').from)).toBe(false);
+    const anchor = anchorOf(va.state, drawnRange(ea, 'Escena 105_120').from, '105_120');
     eb.insertBlocks([{ type: 'paragraph', content: 'Nota de B arriba.' }] as never, eb.document[0], 'before');
     await tick(10);
     const at = locateUnderline(va.state, anchor);
     expect(at).not.toBeNull();
     expect(makeLinkAt(va, at!, '105_120', { pageId: PAGES['105_026'] })).toBe(true);
-    expect(a.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_026']}">105_120</link>`);
-    expect(b.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_026']}">105_120</link>`);
+    expect(a.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_026']}">Escena 105_120</link>`);
+    expect(b.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`<link href="/p/${PAGES['105_026']}">Escena 105_120</link>`);
     // Con otro ref (el subrayado ya no dice eso), no.
     expect(makeLinkAt(va, drawnRange(ea, 'CENADE').from, '105_120', { pageId: PAGES['105_026'] })).toBe(false);
   });
@@ -367,10 +402,10 @@ describe('Assign desde el adelanto de un pendiente y el link de lo creado desde 
     const eb = mount(b, { underline: false });
     await tick();
     const va = view(ea);
-    const anchor = anchorOf(va.state, drawnRange(ea, '105_120').from, '105_120');
+    const anchor = anchorOf(va.state, drawnRange(ea, 'Escena 105_120').from, '105_120');
     const href = `/p/${PAGES['105_026']}`;
     const spans = captureNewLinks(a, anchor.blockId!, href, () => makeLinkAt(va, locateUnderline(va.state, anchor)!, '105_120', { pageId: PAGES['105_026'] }));
-    expect(spans!.map((s) => s.text)).toEqual(['105_120']);
+    expect(spans!.map((s) => s.text)).toEqual(['Escena 105_120']);
     eb.insertBlocks([{ type: 'paragraph', content: 'Nota de B arriba.' }] as never, eb.document[0], 'before');
     await tick(10);
     expect(undoAssignInDoc(a, spans!)).toBe('undone');
@@ -389,7 +424,7 @@ describe('Assign desde el adelanto de un pendiente y el link de lo creado desde 
     await tick();
     const v = view(e);
     const block = e.document[1].id;
-    const from = drawnRange(e, '105_120').from;
+    const from = drawnRange(e, 'Escena 105_120').from;
     const at = anchorOf(v.state, from, '');
     expect(at.blockId).toBe(block);
     expect(linkTextInBlock(v, { blockId: block, offset: at.offset }, '105_120', `/p/${PAGES['105_027']}`)).toBe(true);

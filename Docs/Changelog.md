@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.273 :
+
+Al escribir «Escena 59», solo el 59 quedaba en el color de la escena: el lector marca el número y la palabra quedaba
+afuera, en un párrafo y en un título. Ahora el subrayado toma también la palabra pegada antes («Escena», «Esc.», «Sc.»,
+«Scene»; no «plano» ni «toma»), en su color y con su punteado; el lector y el índice no cambian. Volverlo link (⌘⌥K o
+*Make it a link*) toma el tramo entero, así que queda una sola ficha «Escena 59», como las que dejó la importación de
+Coda. Además, el título de la escena que sigue a la ficha en un título («· PUENTES PLATES») quedaba unos 5px más arriba
+que ella: con `overflow` su línea de base es el borde de la caja, y `0.15em` la subía de más; ahora `-0.14em` la centra
+con la ficha en cualquier nivel. Ayuda al día. D776.
+
+[«Escena» en el color de su número y el título en vivo centrado con la ficha]
+
 v0.272 :
 
 El Encabezado 1 se veía chico: con texto mediano medía 28px (1.75 del cuerpo), apenas más que el H2 (24px) y lejos

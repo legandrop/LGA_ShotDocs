@@ -1289,7 +1289,9 @@
   line-height: 1.4;
   color: var(--muted-2);
   letter-spacing: 0;
-  vertical-align: 0.15em;
+  /* Centrado con la ficha de la escena que va antes (D776). Con `overflow` la línea de base es el borde de abajo de la
+     caja, no la del texto: 0.15em lo dejaba ~5px más arriba que la ficha en un H1. Todo va en em: vale en cada nivel. */
+  vertical-align: -0.14em;
   user-select: none;
   white-space: nowrap !important;
 }

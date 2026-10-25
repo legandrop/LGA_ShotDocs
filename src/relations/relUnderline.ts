@@ -9,7 +9,7 @@ import { linkedPageId, SEPARATOR, unitPos, unitsFromPM, type BlockMeta, type PMU
 import { sceneTitleOf } from './dayLive';
 import { placeUnits } from './fields';
 import type { LiveSource } from './liveView';
-import { scan, type Hit, type Registry } from './reader';
+import { scan, sceneWordStart, type Hit, type Registry } from './reader';
 import { underlineKey, UNDERLINE_NOW, type UnderlineSpec, type UnderlineState } from './relLink';
 import { slashDraft, subscribeSlashDraft } from './slashDraft';
 import './liveHeader.css';
@@ -147,13 +147,19 @@ export function buildUnderlines(doc: PMNode, info: UnderlineInfo | null, memo?: 
     if (!hits) hits = scan(info.R, text, inPlace ? { heading, ep: info.ep, dayTitle: true } : { heading, ep: info.ep });
     next.set(mkey, hits);
     const queryAt = draft && unit.field === 'text' && doc.nodeAt(unit.blockPos)?.attrs.id === draft.blockId ? unit.text.lastIndexOf(draft.query) : -1;
+    let drawnTo = 0;
     for (const h of hits) {
       if (h.hidden) continue;
       if (queryAt >= 0 && h.kind === 'pending' && h.s >= queryAt && draft!.codes.includes(h.ref)) continue;
       if (info.self && h.kind === info.self.kind && h.ref === info.self.ref) continue;
       // Lo que ya es link (a una página o afuera) no lleva subrayado.
       if (links.some((l) => l.start < h.e && l.end > h.s)) continue;
-      const from = unitPos(unit, h.s);
+      // «Escena 59»: la palabra va con el número, en su color y en el mismo subrayado (D776); volverlo link la incluye.
+      let s = h.kind === 'loc' ? h.s : sceneWordStart(text, h.s, h.e);
+      // Ni por encima de lo ya dibujado, de un link o de un salto de línea (sería un link partido en dos fichas).
+      if (s < drawnTo || links.some((l) => l.start < h.s && l.end > s) || unit.text.slice(s, h.s).includes(SEPARATOR)) s = h.s;
+      drawnTo = h.e;
+      const from = unitPos(unit, s);
       const to = unitPos(unit, h.e);
       if (to <= from) continue;
       const pageId = h.kind === 'pending' ? null : info.pageOf(h.kind, h.ref);

@@ -176,9 +176,9 @@ const SCENES_SECTION = '0.269';
 const PAGES_FOLD = '0.268';
 /**
  * El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6): llegó en
- * v0.244 y sube con el texto en el color de cada cosa (D774).
+ * v0.244, sube con el texto en el color de cada cosa (D774) y con «Escena» dibujada junto a su número (D776).
  */
-const LIVE_UNDERLINE = '0.271';
+const LIVE_UNDERLINE = '0.273';
 /**
  * Lo que quedaba del `/`, *Create*, *Assign*, *Today* y *Tomorrow* (relaciones en vivo, E11): *Undo* de *Assign*,
  * *Assign* en *Map › Pending* y crear el reporte de mañana desde *Tomorrow*. Sube `liveDay` (antes 0.241, E5) y

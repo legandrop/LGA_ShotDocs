@@ -2164,3 +2164,12 @@ cosa.
 **Pedido de Lega:** que el Encabezado 1 sea más grande que ahora.
 **Quedó:** el H1 mide el doble del cuerpo (32px con texto mediano; antes 1.75, 28px), siempre 1px por debajo del
 título de la página (en el teléfono y en el PDF el tope manda). H2 a H6 no cambian.
+
+### D776 · «Escena» va con su número, y el título en vivo centrado con la ficha (2026-10-25)
+**Pedido de Lega:** al escribir «Escena 59», que la palabra también quede en el color de la escena, en un párrafo y en un
+título; y que el título de la escena que sigue a la ficha («· PUENTES PLATES») no quede más arriba que ella.
+**Quedó:** el subrayado de una escena o un pendiente toma también la palabra pegada antes («Escena», «Esc.», «Sc.»,
+«Scene»; no «plano» ni «toma»): un solo tramo, en su color y con su punteado. El lector y el índice siguen marcando solo
+el número. Volverlo link (⌘⌥K o *Make it a link*) toma el tramo entero, así que queda una sola ficha «Escena 59», como
+las que trajo la importación de Coda. El título en vivo baja a `vertical-align: -0.14em` (antes `0.15em`): su centro
+queda a menos de 1px del de la ficha en cualquier nivel de título.
