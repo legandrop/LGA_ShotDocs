@@ -947,7 +947,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
 
   // --- Colapsar ---
-  { id: 'collapse', section: 'collapse', title: 'help.collapse.title', text: 'help.collapse.text', keys: { collapse: 'collapse' }, since: BEFORE_HELP },
+  { id: 'collapse', section: 'collapse', title: 'help.collapse.title', text: 'help.collapse.text', keys: { collapse: 'collapse' }, since: '0.274' },
   {
     id: 'collapseEveryone',
     section: 'collapse',

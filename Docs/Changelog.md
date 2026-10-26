@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.274 :
+
+El triángulo para colapsar una sección solo aparecía al pasar el mouse por el título (o si estaba colapsada o difería
+de la vista compartida). Lega lo quiere siempre a la vista en los títulos grandes: en un Encabezado 1 y un 2 ahora se
+ve siempre, con opacidad entera también en pantallas táctiles (clase `always` en `CollapseToggles.tsx`); H3 a H6
+siguen igual. El ámbar cuando tu vista difiere de la compartida no cambia. Ayuda y `Doc_Colapsar.md` al día; prueba
+nueva en `collapsePage.test.tsx`. Suma `Docs/Plan_Estructura_Etapas.md`: el plan para que el árbol sea por etapas,
+como en Coda, con los tipos y los links por contenido (en auditoría). D777.
+
+[Triángulo siempre visible en H1 y H2, y plan del árbol por etapas]
+
 v0.273 :
 
 Al escribir «Escena 59», solo el 59 quedaba en el color de la escena: el lector marca el número y la palabra quedaba

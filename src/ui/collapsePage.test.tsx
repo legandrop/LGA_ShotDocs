@@ -116,7 +116,7 @@ async function mount(value: Services, pageId: string): Promise<{ host: HTMLEleme
 }
 
 /** Una página con dos escenas; la primera tiene una pregunta adentro. */
-async function scenesPage() {
+async function scenesPage(levels: [number, number] = [2, 2]) {
   const server = new FakeServer();
   server.enableComments();
   const owner = await makeDevice(server);
@@ -129,10 +129,10 @@ async function scenesPage() {
   ) as unknown as BlockNoteEditor;
   editor.mount(document.createElement('div'));
   editor.replaceBlocks(editor.document, [
-    { type: 'heading', props: { level: 2 }, content: 'Escena 1' },
+    { type: 'heading', props: { level: levels[0] }, content: 'Escena 1' },
     { type: 'paragraph', content: 'Plano general.' },
     { type: 'paragraph', props: paragraphProps('question') as never, content: '¿De noche?' },
-    { type: 'heading', props: { level: 2 }, content: 'Escena 2' },
+    { type: 'heading', props: { level: levels[1] }, content: 'Escena 2' },
     { type: 'paragraph', content: 'Interior.' },
   ]);
   const ids = editor.document.map((b) => b.id);
@@ -193,6 +193,13 @@ describe('colapsar en la página', () => {
     await act(async () => collapseControlFor(page)!.setAll(false));
     await wait();
     expect(hiddenCount(again.host)).toBe(0);
+  });
+
+  it('en un H1 o un H2 el triángulo se ve siempre; en un H3, solo con el mouse encima (D777)', async () => {
+    const { owner, page } = await scenesPage([1, 3]);
+    const { host } = await mount(services(owner, 'owner'), page);
+    await until(() => toggles(host).length === 2);
+    expect(toggles(host).map((b) => b.classList.contains('always'))).toEqual([true, false]);
   });
 
   it('en solo lectura también se colapsa (para vos), sin subir nada; la pregunta escondida no tiene botón en el margen', async () => {

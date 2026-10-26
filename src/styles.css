@@ -6541,6 +6541,8 @@ button.primary.danger {
 }
 
 .sd-collapse-toggle.shown,
+/* H1 y H2: siempre a la vista (D777). */
+.sd-collapse-toggle.always,
 .sd-collapse-toggle.collapsed,
 .sd-collapse-toggle.shared-collapsed,
 .sd-collapse-toggle.only-you,
@@ -6570,6 +6572,7 @@ button.primary.danger {
   transition: none;
 }
 
+.sd-touch .sd-collapse-toggle.always,
 .sd-touch .sd-collapse-toggle.collapsed,
 .sd-touch .sd-collapse-toggle.shared-collapsed,
 .sd-touch .sd-collapse-toggle.only-you {

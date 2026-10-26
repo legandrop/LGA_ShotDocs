@@ -2173,3 +2173,8 @@ título; y que el título de la escena que sigue a la ficha («· PUENTES PLATES
 el número. Volverlo link (⌘⌥K o *Make it a link*) toma el tramo entero, así que queda una sola ficha «Escena 59», como
 las que trajo la importación de Coda. El título en vivo baja a `vertical-align: -0.14em` (antes `0.15em`): su centro
 queda a menos de 1px del de la ficha en cualquier nivel de título.
+
+### D777 · El triángulo de un H1 y un H2 se ve siempre (2026-10-25)
+**Pedido de Lega:** en el Encabezado 1 y el 2, el triángulo para colapsar se ve siempre, no solo con el mouse encima.
+**Quedó:** clase `always` en `CollapseToggles.tsx` para H1 y H2 (opacidad entera, también en pantallas táctiles); H3 a
+H6 siguen como antes. El ámbar cuando tu vista difiere de la compartida no cambia.

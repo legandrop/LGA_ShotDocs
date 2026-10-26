@@ -12,9 +12,10 @@ import { tipRows } from './tipRows';
 // El triángulo de cada título (P.11, Docs/Doc_Colapsar.md, sección 3). Una capa encima del editor, como el
 // margen de comentarios: no entra al documento (no molesta al escribir) y anda igual en solo lectura. Con el
 // mouse, aparece al pasar por el título o por su margen (la franja de la izquierda donde están el triángulo y
-// los puntos, así se llega del título al triángulo sin que desaparezca); colapsado, se ve siempre. En pantallas
-// táctiles se ve siempre, tenue. Gris; con el mouse encima, del color del título. La zona del clic queda entera en
-// el margen izquierdo, sin tapar el texto (corrección 14); las medidas, en gutterLayout.ts.
+// los puntos, así se llega del título al triángulo sin que desaparezca); colapsado, o en un H1 o un H2 (D777), se ve
+// siempre. En pantallas táctiles se ve siempre, tenue (H1 y H2, enteros). Gris; con el mouse encima, del color del
+// título. La zona del clic queda entera en el margen izquierdo, sin tapar el texto (corrección 14); las medidas, en
+// gutterLayout.ts.
 //
 // Para todos (entrega 2, Doc_Colapsar.md §3 y §4): quien puede editar colapsa o abre para todos con Shift+clic, y
 // el triángulo queda visible si la vista compartida está colapsada. Si tu vista difiere, usa el acento;
@@ -34,6 +35,8 @@ interface Toggle {
   /** Colapsado para todos (el mapa de la página). */
   forAll: boolean;
   onlyYou: boolean;
+  /** Un H1 o un H2: el triángulo se ve siempre, no solo con el mouse encima (Lega, 2026-10-25, D777). */
+  always: boolean;
   title: string;
 }
 
@@ -177,6 +180,7 @@ export function CollapseToggles({
         box: g.box,
         color: getComputedStyle(text).color,
         ...headingCollapse(editor.prosemirrorState, id),
+        always: text.tagName === 'H1' || text.tagName === 'H2',
         title: (text.textContent ?? '').trim(),
       });
       nextBands.push({ id, top: r.top - base.top, bottom: r.bottom - base.top, left: editorLeft - base.left, right: r.right - base.left });
@@ -240,7 +244,7 @@ export function CollapseToggles({
           <button
             key={t.id}
             type="button"
-            className={`sd-collapse-toggle${t.collapsed ? ' collapsed' : ''}${t.forAll ? ' shared-collapsed' : ''}${t.onlyYou ? ' only-you' : ''}${hovered === t.id ? ' shown' : ''}`}
+            className={`sd-collapse-toggle${t.collapsed ? ' collapsed' : ''}${t.forAll ? ' shared-collapsed' : ''}${t.onlyYou ? ' only-you' : ''}${t.always ? ' always' : ''}${hovered === t.id ? ' shown' : ''}`}
             data-id={t.id}
             style={{ top: t.top, left: t.left, width: t.box, height: t.box, ['--sd-heading-color' as string]: t.color }}
             aria-expanded={!t.collapsed}

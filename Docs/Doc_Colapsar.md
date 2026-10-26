@@ -11,14 +11,14 @@ puntos, el triángulo y "Borrar".
 
 ## Qué se pide
 
-**Indicador vigente (v0.209):** la dirección del triángulo siempre muestra tu vista local. Permanece visible si la vista compartida está colapsada, incluso cuando la abriste solo para vos, y cuando los dos estados difieren. En ese caso usa el tono de acento legible de cada tema, también al pasar el mouse o enfocar; el tooltip y la etiqueta accesible explican ambos estados. La vista compartida es la referencia común: otra persona puede tener su propio ajuste local. Con estados iguales conserva el color normal; cuando ambos están abiertos en computadora puede aparecer solo al pasar el mouse. No se agrega un pin manual general ni se cambia el guardado de los estados.
+**Indicador vigente (v0.209):** la dirección del triángulo siempre muestra tu vista local. Permanece visible si la vista compartida está colapsada, incluso cuando la abriste solo para vos, y cuando los dos estados difieren. En ese caso usa el tono de acento legible de cada tema, también al pasar el mouse o enfocar; el tooltip y la etiqueta accesible explican ambos estados. La vista compartida es la referencia común: otra persona puede tener su propio ajuste local. Con estados iguales conserva el color normal; cuando ambos están abiertos en computadora puede aparecer solo al pasar el mouse, salvo en un H1 o un H2, donde se ve siempre (D777). No se agrega un pin manual general ni se cambia el guardado de los estados.
 
 1. Todo título (H1, H2, H3…) colapsa y abre **la sección que tiene abajo**, con un **triángulo lleno** a su
    izquierda (ni contorno ni chevron): apunta a la derecha colapsado y abajo abierto.
 2. Colapsar un título esconde todo lo que sigue **hasta el próximo título de su nivel o mayor**: un H1 esconde
    sus H2 y H3 con lo suyo. Los títulos de adentro **guardan su propio estado** cuando se vuelve a abrir el de
    afuera.
-3. El triángulo aparece al pasar el mouse por el título; si está colapsado localmente o en la vista compartida, o los estados difieren, se ve siempre. Nada que
+3. En un H1 o un H2 el triángulo se ve siempre (D777, v0.274). En los demás aparece al pasar el mouse por el título; si está colapsado localmente o en la vista compartida, o los estados difieren, se ve siempre. Nada que
    activar: todos los títulos lo tienen.
 4. **Por defecto es de cada persona**: un filtro de su vista, los demás no ven ningún cambio.
 5. **Shift+clic colapsa o abre la vista compartida**; cada persona puede ajustar su vista local. Solo quien puede editar la página; el
@@ -101,7 +101,7 @@ Decidido (Lega):
   triángulo lleno (SVG), de unos 10 px, del **color del título** (`currentColor`, así respeta el
   color de texto del bloque), centrado en el primer renglón, en el margen izquierdo junto al texto. Zona
   para el mouse de 24×24 px. Abierto: apunta abajo, se ve al pasar el mouse por el título (suave) y fuerte
-  sobre el triángulo. Colapsado: apunta a la derecha y se ve siempre.
+  sobre el triángulo; en un H1 o un H2, siempre (D777). Colapsado: apunta a la derecha y se ve siempre.
 - **Choque con el menú lateral de BlockNote** (el tirador ⋮⋮ y el "+", que aparecen a la izquierda del bloque
   al pasar el mouse): los dos quieren el mismo lugar. Propuesta: en los títulos el menú lateral se corre unos
   20 px a la izquierda y el triángulo queda pegado al texto, como en Coda. Se decide con una maqueta.
@@ -130,7 +130,7 @@ mismo de todos los tooltips con gesto o atajo (Doc_Decisiones.md, D226).
 En inglés: *Click or ⌘⌥↩: collapse just for you / Shift+click or ⌘⌥⇧↩: for everyone*, etc. Quien solo ve o comenta
 ve solo el primer renglón de acción; en una pantalla táctil, sin atajos (*Click: …*). Una explicación adicional indica si tu vista está abierta o colapsada y cómo está la vista compartida. Cuando difieren, el triángulo usa el tono de acento; cuando coinciden, el color normal. El color acompaña esa explicación y no la sustituye.
 
-**Teléfono y pantallas táctiles** (sin mouse ni Shift): el triángulo **se ve siempre, tenue**, en todos los
+**Teléfono y pantallas táctiles** (sin mouse ni Shift): el triángulo **se ve siempre, tenue** (entero en un H1 o un H2, D777), en todos los
 títulos (`pointer: coarse` o el diseño del teléfono, `isPhoneLayout`); un toque colapsa o abre **para vos**;
 zona de toque de 32 px que no tape el principio del texto. Para todos, solo desde la computadora (más adelante
 se puede sumar un toque largo con un menú).

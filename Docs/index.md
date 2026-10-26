@@ -13,6 +13,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 |---|---|
 | [`Plan_ShotDocs.md`](Plan_ShotDocs.md) | El plan de arranque: qué es la app, la arquitectura, el modelo de datos, la sincronización offline, los permisos para compartir, las plantillas, el autohosteo y las fases. Lo que se cierra pasa a los otros documentos. |
 | [`Plan_Workspaces.md`](Plan_Workspaces.md) | El plan de workspaces, equipo, invitados, archivos en Drive, copia de seguridad y hosting, con su orden de trabajo (sección 10) y cómo se hace cada paso (sección 11). |
+| [`Plan_Estructura_Etapas.md`](Plan_Estructura_Etapas.md) | El árbol por etapas como en Coda (notas, breakdown, scouting, pruebas, planeamiento, rodaje): el tipo de cada página por su marca o la de su carpeta, los links por contenido (escena, locación y decorado como tercera entidad), el plan unido a su día por la fecha, y cómo se reacomodan ERSO y VLLF. Reemplaza ES2 y ES6 de `Doc_Estructura_Proyecto.md` cuando quede implementado. |
 | [`Doc_Decisiones.md`](Doc_Decisiones.md) | Las decisiones tomadas y las que siguen abiertas, numeradas `D-XX`. |
 | [`Doc_Roadmap.md`](Doc_Roadmap.md) | Lo que falta, por orden de importancia. |
 | [`Doc_Supabase.md`](Doc_Supabase.md) | Cómo está armado el backend: configuración del proyecto, migraciones, pruebas de permisos y login. |
