@@ -6,6 +6,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import type { PageSettings } from '../sync/types';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { locationLive, sceneLive, type LiveSource } from './liveView';
+import { scoutList } from './scoutList';
 import { fieldDate } from './fields';
 import { cardFields, findFields, pageFields, RelationIndex } from './relationIndex';
 
@@ -354,3 +355,86 @@ describe('permisos', () => {
     expect(v.questions.length).toBe(2);
   });
 });
+
+describe('scouting y pruebas por contenido (Plan_Estructura_Etapas.md, parte 2)', () => {
+  it('el scouting sacado de su locación a una carpeta Scouting sigue conectado por su título', async () => {
+    const { d, built } = await setup();
+    const folder = await d.tree.create(null, '2 | Scouting', built.projectId);
+    await d.tree.setPatch(folder, { settings: { holds: 'scouting' } });
+    await d.tree.move(built.ids.scout, folder);
+    await d.tree.rename(built.ids.scout, 'Tech scout 06/01 | CENADE');
+    const { src } = await indexed(d, built.projectId);
+    expect(src.snap.registration.roles.get(built.ids.scout)?.doc).toBe('scouting');
+    const loc = locationLive(src, 'CENADE');
+    expect(loc.scouts.map((s) => [s.title, s.photos])).toEqual([['Tech scout 06/01 | CENADE', 5]]);
+    // No se repite en «Also named in» ni se toma por un decorado.
+    expect(loc.also.map((p) => p.title)).not.toContain('Tech scout 06/01 | CENADE');
+    expect(loc.sets.map((s) => s.title)).not.toContain('Tech scout 06/01 | CENADE');
+    // La escena que nombra lo sigue viendo; la que no, por la locación donde se filmó.
+    expect(sceneLive(src, '105_027').scoutPages.map((s) => s.title)).toEqual(['Tech scout 06/01 | CENADE']);
+    expect(sceneLive(src, '105_029').scoutsVia.map((s) => [s.title, s.loc])).toEqual([['Tech scout 06/01 | CENADE', 'CENADE']]);
+  });
+
+  it('un recorrido por varias locaciones: las de sus títulos de sección; una página suelta sin marca no cuenta', async () => {
+    const { d, built } = await setup();
+    const folder = await d.tree.create(null, 'Pruebas', built.projectId);
+    await d.tree.setPatch(folder, { settings: { holds: 'test' } });
+    const tour = await d.tree.create(folder, '26.01.20 | Prueba de grúa', built.projectId);
+    await writeBlocks(d, tour, [{ h: 1, text: 'CENADE' }, { p: 'Grúa por el portón norte.' }, { h: 1, text: 'La Arenera (estudio)' }, { p: 'Fondo azul.' }]);
+    const loose = await d.tree.create(null, 'Notas sueltas', built.projectId);
+    await writeBlocks(d, loose, [{ h: 1, text: 'CENADE' }, { p: 'Algo.' }]);
+    const { src } = await indexed(d, built.projectId);
+    expect(locationLive(src, 'CENADE').scouts.map((s) => s.title)).toContain('26.01.20 | Prueba de grúa');
+    expect(locationLive(src, 'La Arenera (estudio)').scouts.map((s) => s.title)).toEqual(['26.01.20 | Prueba de grúa']);
+    expect(locationLive(src, 'CENADE').scouts.map((s) => s.title)).not.toContain('Notas sueltas');
+  });
+
+  it('marcado en la página (sin carpeta): el campo Locación con link', async () => {
+    const { d, built } = await setup();
+    const page = await d.tree.create(null, '26.02.03 | Scouting', built.projectId);
+    await d.tree.setPatch(page, { settings: { entity: { kind: 'scouting' } } });
+    await writeBlocks(d, page, [{ p: 'Locación: CENADE' }, { p: 'Recorrido.' }]);
+    const { src } = await indexed(d, built.projectId);
+    expect(src.snap.registration.roles.get(page)?.doc).toBe('scouting');
+    expect(locationLive(src, 'CENADE').scouts.map((s) => s.title)).toContain('26.02.03 | Scouting');
+  });
+
+  it('Overview › Scouting: por fecha, con sus locaciones; sin los grupos ni las subpáginas; lo de antes también', async () => {
+    const { d, built } = await setup();
+    const folder = await d.tree.create(null, '2 | Scouting', built.projectId);
+    await d.tree.setPatch(folder, { settings: { holds: 'scouting' } });
+    const enero = await d.tree.create(folder, 'Enero', built.projectId);
+    const a = await d.tree.create(enero, '26.01.29 | Scouting | La Arenera (estudio)', built.projectId);
+    await d.tree.create(a, 'Fotos', built.projectId);
+    await d.tree.create(folder, '260105 | Scouting | CENADE', built.projectId);
+    const pruebas = await d.tree.create(null, 'Pruebas', built.projectId);
+    await d.tree.setPatch(pruebas, { settings: { holds: 'test' } });
+    await d.tree.create(pruebas, 'Comparación de técnicas', built.projectId);
+    // Un scouting con fecha adentro de su locación, como antes (ES2).
+    await d.tree.rename(built.ids.scout, '2026-01-06 | Tech scout');
+    const { src } = await indexed(d, built.projectId);
+    expect(scoutList(src).map((s) => [s.date, s.title, s.doc, s.locs])).toEqual([
+      ['2026-01-05', '260105 | Scouting | CENADE', 'scouting', ['CENADE']],
+      ['2026-01-06', '2026-01-06 | Tech scout', 'scouting', ['CENADE']],
+      ['2026-01-29', '26.01.29 | Scouting | La Arenera (estudio)', 'scouting', ['La Arenera (estudio)']],
+      [null, 'Comparación de técnicas', 'test', []],
+    ]);
+  });
+
+  it('Overview › Scouting: una prueba sin fecha con fotos adentro se lista ella; las fechas que no existen no cuentan', async () => {
+    const { d, built } = await setup();
+    const pruebas = await d.tree.create(null, 'Pruebas', built.projectId);
+    await d.tree.setPatch(pruebas, { settings: { holds: 'test' } });
+    const comp = await d.tree.create(pruebas, 'Comparación de técnicas', built.projectId);
+    await writeBlocks(d, comp, [{ p: 'Tres técnicas para el auto.' }]);
+    await d.tree.create(comp, 'Fotos', built.projectId);
+    await d.tree.create(pruebas, '26.02.31 | Prueba', built.projectId);
+    const { src } = await indexed(d, built.projectId);
+    const list = scoutList(src).filter((s) => s.doc === 'test');
+    expect(list.map((s) => [s.date, s.title])).toEqual([
+      [null, '26.02.31 | Prueba'],
+      [null, 'Comparación de técnicas'],
+    ]);
+  });
+});
+

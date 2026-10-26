@@ -157,7 +157,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
   const complete = !!data?.complete;
-  const counts = data ? mapCounts(data) : { scenes: 0, locations: 0, days: 0, pending: 0, duplicates: 0, unnumbered: 0, toResolve: 0 };
+  const counts = data ? mapCounts(data) : { scenes: 0, locations: 0, days: 0, scoutings: 0, pending: 0, duplicates: 0, unnumbered: 0, toResolve: 0 };
   // Lo que llegó tarde a una página unida (E16) también espera en *Pending*.
   const merges = useMergeRows().length;
   const projectName = tree.project(projectId)?.name ?? tr('project.defaultName');
@@ -184,6 +184,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   const tabs: { id: MapTab; icon: keyof typeof ICONS; label: string; n: number }[] = [
     { id: 'locations', icon: 'loc', label: tr('map.tabLocations'), n: counts.locations },
     { id: 'scenes', icon: 'scene', label: tr('map.tabScenes'), n: counts.scenes },
+    { id: 'scouting', icon: 'scout', label: tr('map.tabScouting'), n: counts.scoutings },
     { id: 'days', icon: 'day', label: tr('map.tabDays'), n: counts.days },
     { id: 'pending', icon: 'warn', label: tr('map.tabPending'), n: counts.toResolve + merges },
   ];
@@ -258,6 +259,8 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
             <SceneDetail key={sceneCode} code={resolve(sceneCode) ?? sceneCode} data={data} src={src} links={links} complete={complete} partial={partial} onPlace={(p) => goToPlace(services, p)} />
           ) : tab === 'scenes' ? (
             <Scenes data={data} fq={fq} codes={codes} complete={complete} partial={partial} src={src} links={links} onPlace={(p) => goToPlace(services, p)} />
+          ) : tab === 'scouting' ? (
+            <Scoutings data={data} fq={fq} />
           ) : tab === 'days' ? (
             <Days data={data} fq={fq} codes={codes} registry={snap?.registry ?? null} />
           ) : (
@@ -697,6 +700,43 @@ function Days({ data, fq, codes, registry }: { data: ProjectMapData; fq: string;
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// --- Scouting: los scoutings y pruebas por fecha (Plan_Estructura_Etapas.md) -------------------------------------------
+
+function Scoutings({ data, fq }: { data: ProjectMapData; fq: string }) {
+  const tr = useT();
+  if (!data.scoutings.length) return <p className="mp-empty">{tr('map.noScoutings')}</p>;
+  const rows = data.scoutings.filter((s) => !fq || fold(`${s.date ?? ''} ${s.title} ${s.locs.join(' ')}`).includes(fq));
+  if (!rows.length) return <p className="mp-empty">{tr('map.noMatch')}</p>;
+  return (
+    <div className="mp-grid mp-days" role="table">
+      <div className="mp-drow head" role="row">
+        <span role="columnheader">{tr('map.colDate')}</span>
+        <span role="columnheader">{tr('map.colReport')}</span>
+        <span role="columnheader">{tr('map.colLocation')}</span>
+        <span role="columnheader" />
+      </div>
+      {rows.map((s) => (
+        <div key={s.pageId} className="mp-drow" role="row">
+          <span className="mp-date mono" role="cell">
+            {s.date ?? '—'}
+          </span>
+          <span className="mp-dt" role="cell">
+            <PageLink pageId={s.pageId} className="mp-link" tip={s.title}>
+              {s.title}
+            </PageLink>
+          </span>
+          <span className="mp-ls" role="cell">
+            {s.locs.length ? s.locs.join(', ') : <span className="mp-none">{tr('map.noLocationNamed')}</span>}
+          </span>
+          <span className="mp-dd" role="cell">
+            {s.doc === 'test' && <span className="mp-tag">{tr('map.test')}</span>}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

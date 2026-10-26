@@ -220,6 +220,28 @@ describe('el mapa en la app', () => {
     expect(location.pathname).toBe(pagePath(built.ids.arenera));
   });
 
+  it('Scouting: los scoutings y pruebas por fecha con sus locaciones, en la vista y en la barra lateral', async () => {
+    const { host } = await app(
+      () => '/map/scouting',
+      async (d, b) => {
+        const folder = await d.tree.create(null, '2 | Scouting', b.projectId);
+        await d.tree.setPatch(folder, { settings: { holds: 'scouting' } });
+        await d.tree.create(folder, '26.01.05 | Scouting | La Arenera (estudio)', b.projectId);
+        const test = await d.tree.create(null, 'Comparación de técnicas', b.projectId);
+        await d.tree.setPatch(test, { settings: { entity: { kind: 'test' } } });
+      },
+    );
+    await until(() => complete(host) && rows(host, '.mp-drow').length === 2, 'la pestaña Scouting');
+    expect(host.querySelector('.mp-tab.on')!.textContent).toContain('Scouting');
+    expect(rows(host, '.mp-drow').map((r) => [...r.querySelectorAll('[role="cell"]')].map((c) => c.textContent))).toEqual([
+      ['2026-01-05', '26.01.05 | Scouting | La Arenera (estudio)', 'La Arenera (estudio)', ''],
+      ['—', 'Comparación de técnicas', 'No location named', 'Test'],
+    ]);
+    // «Tech scout 06/01», adentro de CENADE y sin año en el título, sigue en la cabecera de la locación pero no acá.
+    const part = [...host.querySelectorAll<HTMLElement>('.ov-part')].find((p) => p.querySelector('.ov-part-name')?.textContent === 'Scouting')!;
+    expect(part.querySelector('.scene-nav-n')!.textContent).toBe('2');
+  });
+
   it('la consulta abierta del / no cuenta en Overview ni en Pending; al cerrarse, sí (D568)', async () => {
     const { built, host } = await app(
       () => mapPath('pending'),

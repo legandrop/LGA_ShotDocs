@@ -369,8 +369,9 @@ describe('la ventana Templates y Apply template…', () => {
       'Location',
       'Tech scout',
       'Creative scout',
+      'Test report',
     ]);
-    expect(dialog!.querySelectorAll('li .muted').length).toBe(7);
+    expect(dialog!.querySelectorAll('li .muted').length).toBe(8);
     click(dialog!.querySelector('[data-template="prepro"] button.primary'));
     await applied(device, page, BUILTIN_PREPRO);
     expect(document.querySelector('.templates-dialog')).toBeNull();

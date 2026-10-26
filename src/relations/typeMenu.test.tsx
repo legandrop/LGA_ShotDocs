@@ -164,6 +164,37 @@ describe('Type en el menú de la página', () => {
   });
 });
 
+describe('Scouting y pruebas en Type (Plan_Estructura_Etapas.md)', () => {
+  it('la carpeta de scouting: el rótulo, lo de adentro sin marca escrita, y la página dice «By folder»', async () => {
+    const { device, server } = await setup();
+    const folder = await device.tree.create(null, '2 | Scouting');
+    const enero = await device.tree.create(folder, 'Enero');
+    const scout = await device.tree.create(enero, '26.01.29 | Scouting | Palomar');
+    const host = menu(device, server, folder, { n: 0 });
+    act(() => button(host, 'Type')!.click());
+    act(() => button(host, 'Scouting reports')!.click());
+    await shown(() => expect(device.tree.get(folder)?.settings?.holds).toBe('scouting'));
+    expect(device.tree.get(scout)?.settings?.entity).toBeUndefined();
+    const tag = mount(device, server, <HoldsTag pageId={folder} />);
+    await shown(() => expect(tag.querySelector('.tree-holds')?.textContent).toBe('Scouting'));
+    expect(tag.querySelector('.tree-holds')?.getAttribute('data-tip')).toBe('Everything inside, at any depth, is a scouting report: it links to the locations it names');
+    const page = menu(device, server, scout, { n: 0 });
+    expect(button(page, 'Type')?.querySelector('.check')?.textContent).toBe('Scouting report');
+    act(() => button(page, 'Type')!.click());
+    expect(button(page, 'Scouting report')?.getAttribute('aria-checked')).toBe('true');
+    expect(button(page, 'Scouting report')?.querySelector('.check')?.textContent).toBe('By folder');
+  });
+
+  it('una página suelta como prueba', async () => {
+    const { device, server } = await setup();
+    const page = await device.tree.create(null, 'Comparación de técnicas');
+    const host = menu(device, server, page, { n: 0 });
+    act(() => button(host, 'Type')!.click());
+    act(() => button(host, 'Test report')!.click());
+    await shown(() => expect(device.tree.get(page)?.settings?.entity).toEqual({ kind: 'test' }));
+  });
+});
+
 describe('Type solo para quien puede cambiar la fila (O6)', () => {
   async function guest(level: 'view' | 'comment' | 'edit') {
     const { device: owner, server } = await setup();

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
-import { BUILTIN_LOCATION, BUILTIN_SCENE } from '../templates/builtinIds';
+import { BUILTIN_LOCATION, BUILTIN_SCENE, BUILTIN_TECH_SCOUT, BUILTIN_TEST } from '../templates/builtinIds';
 import { installEntityMarks, markFolderHolds, markFromTemplate, placedEntity, setPageType, templateEntity } from './entitySync';
 import { pageKind } from './kind';
 
@@ -250,5 +250,43 @@ describe('compatibilidad y sincronización', () => {
     await a.engine.syncNow();
     expect(server.pages.get(cenade)?.settings).toEqual({ entity: { kind: 'location' } });
     expect(server.pages.get(locs)?.settings).toEqual({ holds: 'location' });
+  });
+});
+
+describe('scouting y pruebas (Plan_Estructura_Etapas.md)', () => {
+  it('la carpeta no escribe marca en lo de adentro; la página sí; mover adentro de una locación no la pisa', async () => {
+    const d = await device(new FakeServer());
+    const scouting = await d.tree.create(null, '2 | Scouting');
+    const s1 = await d.tree.create(scouting, '26.01.29 | Scouting | Palomar');
+    await markFolderHolds(d.tree, scouting, 'scouting');
+    expect(d.tree.get(scouting)?.settings?.holds).toBe('scouting');
+    expect(entity(d, s1)).toBeUndefined();
+    expect(pageKind(d.tree, s1)).toMatchObject({ kind: 'doc', doc: 'scouting', folder: scouting });
+    // Una página creada adentro tampoco se marca: la toma de la carpeta al leer.
+    const s2 = await d.tree.create(scouting, '26.02.03 | Scouting | CENADE');
+    expect(entity(d, s2)).toBeUndefined();
+
+    const prueba = await d.tree.create(null, 'Comparación de técnicas');
+    await setPageType(d.tree, prueba, 'test');
+    expect(entity(d, prueba)).toEqual({ kind: 'test' });
+    const locs = await d.tree.create(null, 'Locaciones');
+    await markFolderHolds(d.tree, locs, 'location');
+    await d.tree.move(prueba, locs);
+    expect(entity(d, prueba)).toEqual({ kind: 'test' });
+    expect(pageKind(d.tree, prueba)).toMatchObject({ kind: 'doc', doc: 'test' });
+
+    // Marcar la carpeta como días le saca el documento.
+    await markFolderHolds(d.tree, scouting, 'day');
+    expect(d.tree.get(scouting)?.settings?.holds).toBeUndefined();
+  });
+
+  it('*Tech scout* y *Test report* marcan la página como scouting y prueba', async () => {
+    const d = await device(new FakeServer());
+    const a = await d.tree.create(null, 'Recorrido');
+    await markFromTemplate(d.tree, a, BUILTIN_TECH_SCOUT);
+    expect(entity(d, a)).toEqual({ kind: 'scouting' });
+    const b = await d.tree.create(null, 'Prueba de grúa');
+    await markFromTemplate(d.tree, b, BUILTIN_TEST);
+    expect(entity(d, b)).toEqual({ kind: 'test' });
   });
 });

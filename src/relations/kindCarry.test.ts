@@ -52,7 +52,7 @@ describe('la tira de plantillas según el lugar', () => {
     expect(stripKinds(tree, 'esc')).toEqual(['scene', 'prepro', 'shot']);
     expect(stripKinds(tree, 'ficha')).toEqual(['shot', 'prepro']);
     expect(stripKinds(tree, 'loc')).toEqual(['location']);
-    expect(stripKinds(tree, 'scout')).toEqual(['techScout', 'creativeScout']);
+    expect(stripKinds(tree, 'scout')).toEqual(['techScout', 'creativeScout', 'testReport']);
     expect(stripKinds(tree, 'dia')).toEqual(['onset']);
     expect(stripKinds(tree, 'suelta')).toEqual(DEFAULT_STRIP);
   });

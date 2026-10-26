@@ -70,15 +70,17 @@ export interface PageSettings {
    * guion bajo). `false`: se dijo a mano que no es nada de eso (gana sobre la carpeta). No se hereda: se lee en la página
    * misma (nunca con `resolveSetting`), así la sabe también quien ve la página sin su carpeta. Lo lee
    * `src/relations/kind.ts`.
+   * Desde v0.275 también un documento de una etapa (Docs/Plan_Estructura_Etapas.md): `'scouting'`, `'test'` o `'plan'`.
+   * Una versión vieja lo lee como un tipo que no conoce y no lo pisa.
    */
-  entity?: { kind: 'scene' | 'location' | 'day'; code?: string } | false;
+  entity?: { kind: 'scene' | 'location' | 'day' | 'scouting' | 'test' | 'plan'; code?: string } | false;
   /**
    * La carpeta da el tipo a lo que se crea adentro: escenas, locaciones o días de rodaje. No se hereda. Los días usan la
    * carpeta de reportes (`dayReports`): marcar una carpeta como de días escribe `dayReports` y no esta clave; `'day'` acá
    * se lee igual (cuenta como carpeta de reportes salvo que `dayReports` sea `false`). Se lee con `holdsOf` de
    * `src/relations/kind.ts`, nunca suelta.
    */
-  holds?: 'scene' | 'location' | 'day' | false;
+  holds?: 'scene' | 'location' | 'day' | 'scouting' | 'test' | 'plan' | false;
   /**
    * La copia vacía de un reporte del día que este dispositivo mandó a la papelera porque otro creó el mismo día a la vez
    * (D580, D626): a qué página cedió (`to`) y la hora de esa papelera (`at`). Si alguien escribe en ella, cualquier

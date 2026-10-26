@@ -10,6 +10,7 @@ import { existingRelationsSession } from '../ui/relationsUi';
 import { revealRow } from '../ui/treeNav';
 import { dayList, dayShortLabel } from './dayLive';
 import { mergeRows } from './merge';
+import { scoutList } from './scoutList';
 import { pendingSummary } from './projectMap';
 import { mapPathFrom, sceneEpisodes, sceneMapPath } from './sceneMentions';
 import { useSlashDraft } from './slashDraft';
@@ -17,8 +18,8 @@ import './mapNav.css';
 import './scenesNav.css';
 
 // *Overview* en la barra lateral (Docs/Doc_Relaciones.md, secciones 12 y 21; D772): un solo bloque que arma la app con
-// lo que dicen las páginas, con sus cuatro partes adentro, las mismas pestañas de la vista del centro: *Locations*,
-// *Scenes*, *Shoot days* y *Pending*. Reemplaza a la fila *Map* y a la sección *Scenes*, que eran hermanas aunque las
+// lo que dicen las páginas, con sus partes adentro, las mismas pestañas de la vista del centro: *Locations*,
+// *Scenes*, *Scouting* (los scoutings y pruebas por fecha, Plan_Estructura_Etapas.md), *Shoot days* y *Pending*. Reemplaza a la fila *Map* y a la sección *Scenes*, que eran hermanas aunque las
 // escenas son una parte del mapa. Como en el árbol de páginas: clic en el nombre abre su vista (y despliega su lista);
 // la flecha solo pliega o despliega. Una sola parte abierta a la vez (pedido de Lega): abrir una cierra las otras. Sale
 // del registro de lo que la persona ve (no arma el mapa entero), aparece solo en un proyecto con escenas, locaciones o
@@ -28,8 +29,8 @@ const FOLD_KEY = 'shotdocs-overview-nav';
 /** Cuántas filas de una lista se dibujan antes de «Show N more» (ERSO tiene episodios de 40 a 60). */
 export const OVERVIEW_PAGE = 60;
 
-type Part = 'locations' | 'scenes' | 'days';
-const PARTS: readonly Part[] = ['locations', 'scenes', 'days'];
+type Part = 'locations' | 'scenes' | 'scouting' | 'days';
+const PARTS: readonly Part[] = ['locations', 'scenes', 'scouting', 'days'];
 
 /**
  * Lo plegado de un proyecto: el bloque entero, la parte abierta (una sola) y el episodio abierto de *Scenes* (uno solo,
@@ -110,7 +111,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     const scenes = sceneEpisodes(snap.registry.scenes.values(), title);
     const locations = [...snap.registry.locations.values()].sort((a, b) => a.name.localeCompare(b.name, locale()));
     const days = dayList({ snap, title, content: () => undefined });
-    return { scenes, locations, days };
+    const scoutings = scoutList({ snap, title, content: () => undefined });
+    return { scenes, locations, days, scoutings };
   }, [snap, revision, tree, treeRevision]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tab: MapTab | null = route.name === 'map' ? route.tab : null;
@@ -122,6 +124,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const sizes: Record<Part, number> = {
     locations: lists?.locations.length ?? 0,
     scenes: lists?.scenes.reduce((n, g) => n + g.scenes.length, 0) ?? 0,
+    scouting: lists?.scoutings.length ?? 0,
     days: lists?.days.length ?? 0,
   };
   /** La parte que abre el título: la desplegada o, sin ninguna, la primera que tiene algo. */
@@ -136,7 +139,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     const eps = activeEp !== null ? [activeEp] : f.eps;
     if (f.part !== tab || eps.join() !== f.eps.join() || f.closed) update({ closed: false, part: tab, eps });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, activeScene, activeEp, projectId, sizes.locations, sizes.scenes, sizes.days]);
+  }, [tab, activeScene, activeEp, projectId, sizes.locations, sizes.scenes, sizes.scouting, sizes.days]);
 
   // La fila de la escena abierta se lleva a la vista al abrirla y al abrir el cajón del teléfono, debajo de lo que queda
   // pegado arriba (`revealRow`, D771). Si su parte o su episodio estaban plegados, la fila aparece un dibujo después (el
@@ -323,6 +326,32 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     );
   };
 
+  const scoutingBody = () => {
+    const { n, button } = more('sc', lists.scoutings.length, lists.scoutings.findIndex((s) => s.pageId === activePage));
+    // La fecha corta (`29/01`) como el número de un día; sin fecha, nada.
+    const labels = lists.scoutings.map((s) => (s.date ? `${s.date.slice(8, 10)}/${s.date.slice(5, 7)}` : ''));
+    const width = Math.max(0, ...labels.map((l) => l.length));
+    return (
+      <ul className="scene-nav-list ov-list ov-days" style={{ '--code-w': `${width}ch` } as CSSProperties}>
+        {lists.scoutings.slice(0, n).map((s, i) => {
+          const on = s.pageId === activePage;
+          const name = s.locs.join(' + ') || s.title;
+          return (
+            <li key={s.pageId}>
+              <a className={`scene-nav-row${on ? ' active' : ''}`} href={pagePath(s.pageId)} aria-current={on ? 'page' : undefined} onClick={(e) => openPage(e, s.pageId)}>
+                <span className="code">{labels[i]}</span>
+                <span className={s.locs.length ? 'title locs' : 'title'} data-tip={s.title || undefined} data-tip-plain data-tip-overflow={s.locs.length ? undefined : true}>
+                  {name}
+                </span>
+              </a>
+            </li>
+          );
+        })}
+        {button}
+      </ul>
+    );
+  };
+
   /** El renglón de una parte: la flecha pliega o despliega; el resto de la fila abre su pestaña. */
   const partRow = (part: Part | 'pending', label: string, count: ReactNode, body: (() => ReactNode) | null, tip?: string) => {
     const open = part !== 'pending' && fold.part === part && !!body;
@@ -381,6 +410,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const parts: ReactNode[] = [];
   if (counts.locations) parts.push(partRow('locations', tr('sidebar.locations'), <span className="scene-nav-n">{counts.locations}</span>, locationsBody));
   if (counts.scenes) parts.push(partRow('scenes', tr('sidebar.scenes'), <span className="scene-nav-n">{counts.scenes}</span>, scenesBody, tr('sidebar.scenesTip')));
+  if (counts.scouting) parts.push(partRow('scouting', tr('sidebar.scouting'), <span className="scene-nav-n">{counts.scouting}</span>, scoutingBody));
   if (counts.days) parts.push(partRow('days', tr('sidebar.days'), <span className="scene-nav-n">{counts.days}</span>, daysBody));
   if (pending > 0) parts.push(partRow('pending', tr('sidebar.pending'), <span className="map-nav-count">{pending}</span>, null));
 

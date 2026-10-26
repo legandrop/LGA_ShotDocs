@@ -1,5 +1,19 @@
 # Changelog — LGA Shot Docs
 
+v0.275 :
+
+Un scouting contaba para una locación solo si estaba adentro de su página, así que no se podían ordenar como en Coda
+(una carpeta *Scouting* por fecha). Ahora un scouting o una prueba es un documento: *Type* suma *Scouting report(s)* y
+*Test report(s)* para una página o una carpeta (en `entity`/`holds`, que una versión vieja no pisa), lo de adentro vale
+a cualquier profundidad y gana lo más cercano (`kind.ts`). Se conecta con las locaciones que nombra en su título, su
+campo *Locación* o sus títulos de sección (`scoutLocations`), esté donde esté; adentro de una locación sigue siendo de
+ella. *Tech scout* y *Creative scout* marcan la página, *Test report* es nueva, y *Overview* suma *Scouting*: todos por
+fecha con sus locaciones, también en la barra lateral y en el mapa copiado. La auditoría pidió memoria por foto para
+las locaciones de cada scouting, que *None of these* le saque el documento de la carpeta y que una carpeta de documentos
+adentro de una de días no la convierta en día. Ayuda y docs al día. D778.
+
+[Scouting y pruebas como documentos, conectados por lo que nombran]
+
 v0.274 :
 
 El triángulo para colapsar una sección solo aparecía al pasar el mouse por el título (o si estaba colapsada o difería

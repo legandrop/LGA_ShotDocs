@@ -1,5 +1,5 @@
 import type { PageRow } from '../sync/types';
-import { kindReader, type EntityKind, type PageKind } from './kind';
+import { kindReader, type DocKind, type EntityKind, type PageKind } from './kind';
 import { withBareNames } from './aliases';
 import { fold, sceneCode as canonicalCode, type LocationInput, type SceneInput } from './reader';
 
@@ -25,6 +25,10 @@ export interface PageRole {
   entity: { kind: EntityKind; ref: string | null } | null;
   /** La página está adentro de una entidad (la más cercana). */
   partOf: { kind: EntityKind; ref: string | null; pageId: string } | null;
+  /** La página es un documento de una etapa (un scouting, una prueba o un plan), por su marca o la de su carpeta. */
+  doc: DocKind | null;
+  /** La página de arriba en el árbol (para las listas de documentos: un documento adentro de otro es parte de él). */
+  parent?: string | null;
   /** El episodio de su escena (para «Esc 27»). */
   ep: string | null;
   /** Fuera de las relaciones (`graph: false` en ella o en una carpeta de arriba, o una plantilla). */
@@ -93,13 +97,20 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
     const k = kinds.kindOf(page.id);
     let role: PageRole;
     if (k.kind === 'none') {
-      role = { entity: null, partOf: null, ep: null, excluded, stage: 'other' };
+      role = { entity: null, partOf: null, doc: null, ep: null, excluded, stage: 'other' };
+    } else if (k.kind === 'doc') {
+      // Una prueba se nombra como un scouting (Plan_Estructura_Etapas.md, sección 4); el plan, por ahora, sin etapa.
+      // Adentro de una entidad sigue siendo parte de ella (`within`): un scouting adentro de su locación, como antes.
+      const w = k.within;
+      const ref = w ? refOf(w.of, w.ofKind, w.code) : null;
+      const partOf = w ? { kind: w.ofKind, ref, pageId: w.of } : null;
+      role = { entity: null, partOf, doc: k.doc, ep: epOf(w?.ofKind === 'scene' ? ref : null), excluded, stage: k.doc === 'plan' ? (w ? stageOf(w.ofKind, false) : 'other') : 'scouting' };
     } else if (k.kind === 'part') {
       const ref = refOf(k.of, k.ofKind, k.code);
-      role = { entity: null, partOf: { kind: k.ofKind, ref, pageId: k.of }, ep: epOf(k.ofKind === 'scene' ? ref : null), excluded, stage: stageOf(k.ofKind, false) };
+      role = { entity: null, partOf: { kind: k.ofKind, ref, pageId: k.of }, doc: null, ep: epOf(k.ofKind === 'scene' ? ref : null), excluded, stage: stageOf(k.ofKind, false) };
     } else {
       const ref = refOf(page.id, k.kind, k.code);
-      role = { entity: { kind: k.kind, ref }, partOf: null, ep: epOf(k.kind === 'scene' ? ref : null), excluded, stage: stageOf(k.kind, true) };
+      role = { entity: { kind: k.kind, ref }, partOf: null, doc: null, ep: epOf(k.kind === 'scene' ? ref : null), excluded, stage: stageOf(k.kind, true) };
       if (!excluded && ref && k.kind === 'scene') {
         const list = byCode.get(ref) ?? [];
         list.push(page.id);
@@ -110,6 +121,7 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
         locations.push({ ...locationFromTitle(page.title ?? ''), pageId: page.id });
       }
     }
+    role.parent = page.parent_id ?? null;
     roles.set(page.id, role);
     for (const child of tree.children(page.id)) visit(child, off);
   };

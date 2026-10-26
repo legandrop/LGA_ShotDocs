@@ -29,11 +29,26 @@ import { isTemplatePage, isTemplatesFolder } from '../templates/own';
 export type EntityKind = 'scene' | 'location' | 'day';
 export const ENTITY_KINDS: readonly EntityKind[] = ['scene', 'location', 'day'];
 
+/**
+ * Los documentos de una etapa (Docs/Plan_Estructura_Etapas.md): un scouting, una prueba o un plan. Van en las mismas
+ * claves que las entidades (`settings.entity.kind`, `settings.holds`): una versión vieja los lee como `'other'` y no los
+ * pisa (decisión 1 del plan). No son entidades: no se linkean, dicen en qué etapa se nombra cada cosa.
+ */
+export type DocKind = 'scouting' | 'test' | 'plan';
+export const DOC_KINDS: readonly DocKind[] = ['scouting', 'test', 'plan'];
+
 /** Lo que es una página. `folder`: la carpeta que le da el tipo (aunque la marca sea de la página), o `null`. */
 export type PageKind =
   | { kind: EntityKind; code: string | null; source: 'page' | 'folder'; folder: string | null }
   | { kind: 'part'; of: string; ofKind: EntityKind; code: string | null }
+  | { kind: 'doc'; doc: DocKind; source: 'page' | 'folder'; folder: string | null; within: Within | null }
   | { kind: 'none' };
+
+/**
+ * La entidad que tiene arriba un documento, si tiene: un scouting que sigue adentro de su locación (como en ES2) o un plan
+ * adentro de su día sigue siendo de ella, como antes de que hubiera documentos.
+ */
+export type Within = { of: string; ofKind: EntityKind; code: string | null };
 
 /** Lo que hace falta del árbol (el de la app: `PageTree`). */
 export type KindTree = Pick<PageTree, 'get' | 'children' | 'isTrashed'>;
@@ -46,6 +61,7 @@ export type EntityMarkRead = { kind: EntityKind; code?: string } | false | 'othe
 export const SCENE_CODE = /^(?:\d{3}_)?\d{3}[A-Z]{0,2}$/;
 
 const isEntityKind = (v: unknown): v is EntityKind => v === 'scene' || v === 'location' || v === 'day';
+const isDocKind = (v: unknown): v is DocKind => v === 'scouting' || v === 'test' || v === 'plan';
 
 /** `settings.entity` de la fila, con su forma comprobada (algo de otra versión no se toma por escena). */
 export function entityMark(row: PageRow | undefined): EntityMarkRead {
@@ -55,6 +71,20 @@ export function entityMark(row: PageRow | undefined): EntityMarkRead {
   const { kind, code } = value as { kind?: unknown; code?: unknown };
   if (!isEntityKind(kind)) return 'other';
   return kind === 'scene' && typeof code === 'string' && SCENE_CODE.test(code) ? { kind, code } : { kind };
+}
+
+/** El documento que marca `settings.entity` de la página (scouting, prueba o plan), o `null`. */
+export function docMark(row: PageRow | undefined): DocKind | null {
+  const value: unknown = row?.settings?.entity;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const { kind } = value as { kind?: unknown };
+  return isDocKind(kind) ? kind : null;
+}
+
+/** El documento que guarda la carpeta (`settings.holds`: todo lo de adentro, a cualquier profundidad), o `null`. */
+export function holdsDoc(row: PageRow | undefined): DocKind | null {
+  const value: unknown = row?.settings?.holds;
+  return isDocKind(value) ? value : null;
 }
 
 /** `settings.holds` de la fila: `null` sin marca, `false` «nada» a mano, `'other'` un tipo que esta versión no conoce. */
@@ -208,16 +238,16 @@ export function kindReader(tree: KindTree) {
     const direct = holds(parent.id);
     if (direct) {
       // Una subcarpeta con su propio tipo, o un grupo (episodio, bloque), no es una entidad.
-      if (holds(row.id) || shapeGroup(row, direct)) return null;
+      if (holds(row.id) || holdsDoc(row) || shapeGroup(row, direct)) return null;
       return { holds: direct, folder: parent.id, episode: direct === 'scene' ? episodeOf(parent.title) : null, series: direct === 'scene' && series(parent.id) };
     }
     const grand = parentOf(parent);
     if (!grand) return null;
     const above = holds(grand.id);
-    if (!above || entityMark(parent) !== null || !shapeGroup(parent, above)) return null;
+    if (!above || entityMark(parent) !== null || holdsDoc(parent) || !shapeGroup(parent, above)) return null;
     // Adentro de un grupo: sin grupos dentro de grupos; y un día es un reporte, o tiene fecha Y número de día
     // (`2026-02-19 | Día 59`): «Call sheets › 2026-02-19 | Call sheet» no es un día (auditoría de E2, O2).
-    if (holds(row.id) || shapeGroup(row, above)) return null;
+    if (holds(row.id) || holdsDoc(row) || shapeGroup(row, above)) return null;
     if (above === 'day' && !isGroupedDay(row)) return null;
     return { holds: above, folder: grand.id, episode: above === 'scene' ? (episodeOf(parent.title) ?? episodeOf(grand.title)) : null, series: true };
   };
@@ -249,6 +279,17 @@ export function kindReader(tree: KindTree) {
     return value;
   };
 
+  /** La entidad más cercana arriba de la página (sin contarla), o `null`. */
+  const entityAbove = (row: PageRow): Within | null => {
+    const seen = new Set<string>([row.id]);
+    for (let p = parentOf(row); p && !seen.has(p.id); p = parentOf(p)) {
+      seen.add(p.id);
+      const above = own(p);
+      if (above) return { of: p.id, ofKind: above.kind, code: above.code };
+    }
+    return null;
+  };
+
   const kindOf = (id: string): PageKind => {
     const known = kindMemo.get(id);
     if (known) return known;
@@ -256,14 +297,31 @@ export function kindReader(tree: KindTree) {
     let value: PageKind = { kind: 'none' };
     if (row) {
       const mine = own(row);
+      const doc = mine || excluded(row) ? null : docMark(row);
       if (mine) value = { ...mine };
+      else if (doc) value = { kind: 'doc', doc, source: 'page', folder: null, within: entityAbove(row) };
       else if (!excluded(row)) {
+        // Gana lo más cercano hacia arriba (Plan_Estructura_Etapas.md, decisión 2): una entidad (la página es parte de
+        // ella: las fichas de una escena, las fotos de un día) o un documento (una página o una carpeta marcada), a
+        // cualquier profundidad (`4 | Planeamiento › Semana 03 › plan`).
+        // «None of these» en la página (`entity: false`) le saca también el documento de su carpeta; sigue siendo parte de
+        // la entidad de arriba, si la hay.
+        const none = entityMark(row) === false;
         const seen = new Set<string>([row.id]);
         for (let p = parentOf(row); p && !seen.has(p.id); p = parentOf(p)) {
           seen.add(p.id);
           const above = own(p);
           if (above) {
-            value = { kind: 'part', of: p.id, ofKind: above.kind, code: above.code };
+            // Una entidad que guarda documentos («CENADE › Lo que se crea adentro: Test reports»): sus páginas son pruebas
+            // de ella.
+            const holdsHere = none ? null : holdsDoc(p);
+            const within = { of: p.id, ofKind: above.kind, code: above.code };
+            value = holdsHere ? { kind: 'doc', doc: holdsHere, source: 'folder', folder: p.id, within } : { kind: 'part', ...within };
+            break;
+          }
+          const inside = none ? null : (docMark(p) ?? holdsDoc(p));
+          if (inside) {
+            value = { kind: 'doc', doc: inside, source: 'folder', folder: p.id, within: entityAbove(p) };
             break;
           }
         }

@@ -531,7 +531,7 @@ es todo el proyecto o una parte (un invitado), y `complete: false` si el disposi
 {
   format: "shotdocs.map", version: 1,
   project: { id, name }, pageUrl: "https://…/p/{id}", builtAt: ISO, complete: bool, scope: "project" | "visible",
-  counts: { scenes, locations, days, pending, duplicates, unnumbered },   // cada uno, el largo de su lista
+  counts: { scenes, locations, days, scoutings, pending, duplicates, unnumbered },   // cada uno, el largo de su lista
   scenes: [{ code: "105_027", page: id | null, title, episode: "105" | null,
              plannedAt: [locación…],                       // las que nombra su desglose (D393)
              shot: [{ day: id, date, locations: [locación…], sections: [Section…] }],   // reportes con sección suya
@@ -541,6 +541,7 @@ es todo el proyecto o una parte (un invitado), y `complete: false` si el disposi
   days: [{ page, label: "Día 59", date, locations: [..], written: bool,
            plan: { source: "plan" | "breakdown" | "none", scenes: [código…] },
            sections: [Section & { scenes: [código…], pending?: [código…] }], unnumbered?: [Section…] }],
+  scoutings: [{ page, kind: "scouting" | "test", date: "2026-01-29" | null, locations: [..] }],   // v0.275, por fecha
   pending: [{ code, mentions: [{ page, blocks: [blockId…] }] }],   // con scope "visible": no está en lo que se ve
   duplicates: [{ code, pages: [id…] }],
   pages: { [id]: { title, kind: "scene" | "location" | "day" | "part" | "page", stage: "breakdown" | "scouting" | "shoot" | "location" | "other" } }

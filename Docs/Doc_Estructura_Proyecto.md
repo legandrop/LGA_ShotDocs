@@ -143,6 +143,18 @@ entero) y lo escribe `src/relations/entitySync.ts`. Nada de esto toca el documen
    otra escena aunque tengan un número), el scouting de su locación, el planning de su día.
 4. Nada de la carpeta *Templates* ni ninguna plantilla es una entidad.
 
+**Documentos de una etapa (v0.275, D778, `Plan_Estructura_Etapas.md`).** Un scouting, una prueba o un plan no es algo a
+lo que se linkea sino un documento que se ordena como trabaja cada uno (una carpeta *Scouting* por fecha, una de
+*Pruebas*). Van en las mismas claves: `entity: { kind: 'scouting' | 'test' | 'plan' }` en una página y `holds:
+'scouting' | 'test' | 'plan'` en una carpeta; una versión vieja las lee como un tipo que no conoce y no las pisa. Al subir
+por el árbol gana lo más cercano: una entidad (la página es parte de ella) o un documento (una página o una carpeta
+marcada), **a cualquier profundidad** (`2 | Scouting › Enero › 26.01.29 | Scouting | Palomar › Fotos`). Las entidades
+siguen como arriba (primer nivel y un grupo). La marca de documento no se escribe en cada página: lo de adentro la toma
+de la carpeta al leer, y sacarlo de la carpeta le saca el tipo; solo *Type* y las plantillas la escriben en una página.
+Un documento adentro de una entidad sigue siendo parte de ella (un scouting que quedó en su locación). Un scouting o una
+prueba se conecta con las locaciones que nombra (título, campo *Locación* y títulos de sección), esté donde esté. Los
+planes (parte 3) todavía no se ofrecen en *Type*.
+
 **El número de escena** sale del título, en este orden: uno completo al principio de la primera parte
 (`101_074 | título`, `Escena 101_069A`); uno corto que es toda la primera parte, con el episodio de la carpeta
 (`074 | título` adentro de `105`); una última parte que es entera un número completo (`074 | título | 101_074`). Un
@@ -162,13 +174,15 @@ episodio, un número corto no alcanza y la página queda escena sin número (los
 - El número sigue al título: si un título nuevo (confirmado) trae otro número canónico, se actualiza; si no trae
   ninguno, el guardado se queda, también al elegir *Type* → *Scene* sobre una escena que ya lo es.
 - Desmarcar una carpeta no les saca la marca a sus páginas (perderla no sirve para nada y se pierde información).
-- Las plantillas *Scene* y *Location* marcan la página esté donde esté (y una propia que salió de ellas).
+- Las plantillas *Scene* y *Location* marcan la página esté donde esté (y una propia que salió de ellas); *Tech scout*,
+  *Creative scout* y *Test report* la marcan como scouting o prueba (v0.275).
 - Nunca se pisa una marca de otro tipo, ni `false`, ni una de una versión más nueva (un tipo que esta no conoce).
 
 **Decisiones:** D368 y D369 (el contrato y los días como carpeta de reportes), D372 a D382 en `Doc_Decisiones.md`.
 
-**En la pantalla:** el menú ⋯ tiene *Type* (*This page is* / *Pages created inside are*), y en el árbol una carpeta con
-tipo lleva el rótulo SCENES, LOCATIONS o SHOOT DAYS (tooltip: «Everything created inside is a scene»).
+**En la pantalla:** el menú ⋯ tiene *Type* (*This page is* / *Pages created inside are*, con *Scouting report(s)* y
+*Test report(s)* desde v0.275), y en el árbol una carpeta con tipo lleva el rótulo SCENES, LOCATIONS, SHOOT DAYS,
+SCOUTING o TESTS (tooltip: «Everything created inside is a scene»).
 
 **Compatibilidad:** cada marca es una clave de ajustes que sube sola (`patch_page_settings` fusiona por clave): una
 versión de la app que cambia otro ajuste de la página no la borra. Las anteriores a v0.214 subían el objeto entero,

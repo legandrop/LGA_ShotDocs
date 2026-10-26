@@ -1,9 +1,10 @@
 import { SEPARATOR } from '../search/extract';
 import { dayList, planOf, sceneTitleOf, type PlanSource } from './dayLive';
-import { GENERAL_SECTION, type LiveSource } from './liveView';
+import { GENERAL_SECTION, scoutLocations, type LiveSource } from './liveView';
 import { INDEX_PAGE_MIN, type MentionVia, type Section } from './pageRelations';
 import { fold } from './reader';
 import { pendingRelations } from './relationIndex';
+import { scoutList, type ScoutRow } from './scoutList';
 import { withoutDraft } from './slashDraft';
 import type { Stage } from './register';
 
@@ -120,6 +121,8 @@ export interface ProjectMapData {
   scenes: MapScene[];
   locations: MapLocation[];
   days: MapDay[];
+  /** Los scoutings y pruebas por fecha (`scoutList.ts`). */
+  scoutings: ScoutRow[];
   pending: MapPending[];
   /**
    * Escenas con el mismo código en dos páginas o más que la persona ve (las relaciones usan la primera del árbol) y, con
@@ -345,18 +348,20 @@ export function projectMap(src: LiveSource): ProjectMapData {
 
   // 4. Las locaciones, por su primer día (las que no tienen días, al final, por nombre).
   const locations: MapLocation[] = [];
+  // Los scoutings y pruebas de cada locación, en una pasada (`scoutLocations`: adentro de ella o los que la nombran).
+  const scoutsOf = new Map<string, string[]>();
+  for (const id of roles.keys()) {
+    if (src.title(id) === undefined) continue;
+    for (const loc of scoutLocations(src, id)) scoutsOf.set(loc, [...(scoutsOf.get(loc) ?? []), id]);
+  }
   for (const entry of snap.registry.locations.values()) {
     const name = entry.name;
     const its = days.filter((d) => d.locs.includes(name));
     const planned = scenes.filter((s) => s.plannedAt.includes(name)).map((s) => s.code);
     const shotSet = new Set<string>();
     for (const d of its) for (const c of d.scenes) shotSet.add(c);
-    const scouts: string[] = [];
-    for (const [id, role] of roles) {
-      if (role.excluded || role.partOf?.kind !== 'location' || role.partOf.ref !== name || src.title(id) === undefined) continue;
-      scouts.push(id);
-      notePage(id);
-    }
+    const scouts = scoutsOf.get(name) ?? [];
+    for (const id of scouts) notePage(id);
     if (entry.pageId) notePage(entry.pageId);
     locations.push({
       name,
@@ -385,18 +390,38 @@ export function projectMap(src: LiveSource): ProjectMapData {
     .filter((d) => d.pageIds.length > 1);
   const allDuplicates = [...duplicates, ...dayTwins(src)];
   for (const d of allDuplicates) for (const id of d.pageIds) notePage(id);
-  return { scenes, locations, days, pending, duplicates: allDuplicates, unnumbered, pages, complete: snap.complete };
+  const scoutings = scoutList(src);
+  for (const s of scoutings) notePage(s.pageId);
+  return { scenes, locations, days, scoutings, pending, duplicates: allDuplicates, unnumbered, pages, complete: snap.complete };
 }
 
 /**
  * Los números del mapa. `pending`, `duplicates` y `unnumbered` van separados (en el JSON, cada uno es el largo de su
  * lista); `toResolve` es la suma, el número de la pestaña *Pending* y de la fila *Map* de la barra lateral.
  */
-export function mapCounts(m: ProjectMapData): { scenes: number; locations: number; days: number; pending: number; duplicates: number; unnumbered: number; toResolve: number } {
+export function mapCounts(m: ProjectMapData): {
+  scenes: number;
+  locations: number;
+  days: number;
+  scoutings: number;
+  pending: number;
+  duplicates: number;
+  unnumbered: number;
+  toResolve: number;
+} {
   const pending = m.pending.length;
   const duplicates = m.duplicates.length;
   const unnumbered = m.unnumbered.length;
-  return { scenes: m.scenes.length, locations: m.locations.length, days: m.days.length, pending, duplicates, unnumbered, toResolve: pending + duplicates + unnumbered };
+  return {
+    scenes: m.scenes.length,
+    locations: m.locations.length,
+    days: m.days.length,
+    scoutings: m.scoutings.length,
+    pending,
+    duplicates,
+    unnumbered,
+    toResolve: pending + duplicates + unnumbered,
+  };
 }
 
 // --- Lo que se copia para un asistente ---------------------------------------------------------------------------
@@ -473,6 +498,7 @@ export function mapJson(m: ProjectMapData, meta: MapMeta): unknown {
       sections: d.sections.map((s) => ({ ...sec(s), scenes: s.scenes, ...(s.pending.length ? { pending: s.pending } : {}) })),
       ...(d.unnumbered.length ? { unnumbered: d.unnumbered.map(sec) } : {}),
     })),
+    scoutings: m.scoutings.map((s) => ({ page: s.pageId, kind: s.doc, date: s.date, locations: s.locs })),
     pending: m.pending.map((p) => ({ code: p.code, mentions: p.mentions.map((x) => ({ page: x.pageId, blocks: x.blockIds })) })),
     duplicates: m.duplicates.map((d) => ({ code: d.code, pages: d.pageIds })),
     pages,
@@ -541,6 +567,15 @@ export function mapText(m: ProjectMapData, meta: MapMeta): string {
     // El título ya empieza con la fecha en la forma de los reportes («2026-02-19 | Día 59 | Cenade»): no se repite.
     const t = title(d.pageId);
     out.push(`- ${d.date && !t.startsWith(d.date) ? `${d.date} ` : ''}${t}: ${bits.join(' · ')}`);
+  }
+  if (m.scoutings.length) {
+    out.push('');
+    out.push('## Scouting and tests');
+    for (const s of m.scoutings) {
+      const t = title(s.pageId);
+      const where = s.locs.length ? s.locs.join(' + ') : 'no location named';
+      out.push(`- ${s.date && !t.startsWith(s.date) ? `${s.date} ` : ''}${t}${s.doc === 'test' ? ' (test)' : ''}: ${where}`);
+    }
   }
   if (m.pending.length) {
     out.push('');

@@ -342,6 +342,9 @@ function setsOf(src: LiveSource, list: FieldValue[], into: SetRef[]): void {
   }
 }
 
+/** Los nombres de las locaciones por `normLabel`, una vez por registro (`locationOf` se llama por cada título de sección). */
+const labelMemo = new WeakMap<Registry, Map<string, string>>();
+
 /**
  * La locación que dice el valor entero de un campo de lugar (*Locacion Real*: «CENADE», «Lübben»), según el registro: su
  * nombre, o un alias que el registro reconoce para el lugar (`locDayTitleAlias`: los de siempre más el nombre de una
@@ -352,11 +355,68 @@ function setsOf(src: LiveSource, list: FieldValue[], into: SetRef[]): void {
 export function locationOf(R: Registry, text: string): string | null {
   const key = normLabel(text);
   if (!key) return null;
-  for (const l of R.locations.values()) if (normLabel(l.name) === key) return l.name;
+  let byLabel = labelMemo.get(R);
+  if (!byLabel) {
+    byLabel = new Map();
+    for (const l of R.locations.values()) {
+      const k = normLabel(l.name);
+      if (!byLabel.has(k)) byLabel.set(k, l.name);
+    }
+    labelMemo.set(R, byLabel);
+  }
+  const named = byLabel.get(key);
+  if (named) return named;
   // «Europa ?»: lo de después de un nombre que solo duda no lo cambia (D531).
   const f = fold(text).replace(/[\s?!.]+$/, '').replace(/\s+/g, ' ').trim();
   const names = new Set(R.locDayTitleAlias.filter((a) => a.f === f).map((a) => a.name));
   return names.size === 1 ? [...names][0] : null;
+}
+
+/**
+ * Las locaciones de un scouting o una prueba (Docs/Plan_Estructura_Etapas.md, sección 5). Adentro de una locación, esa
+ * (lo de antes: ES2). Un documento de scouting o de prueba, además, por su contenido, esté donde esté: un link o el valor de su
+ * campo *Locación*, las que nombra su título y los títulos de sección que son exactamente una locación (un recorrido
+ * visita varias). Cualquier otra página, ninguna.
+ */
+export function scoutLocations(src: LiveSource, pageId: string): string[] {
+  let memo = scoutMemo.get(src.snap);
+  if (!memo) scoutMemo.set(src.snap, (memo = new Map()));
+  let value = memo.get(pageId);
+  if (!value) memo.set(pageId, (value = readScoutLocations(src, pageId)));
+  return value;
+}
+
+/** Lo de `scoutLocations`, una vez por foto (la foto no cambia: cada revisión es otra). */
+const scoutMemo = new WeakMap<RelationSnapshot, Map<string, string[]>>();
+
+function readScoutLocations(src: LiveSource, pageId: string): string[] {
+  const { snap } = src;
+  const role = snap.registration.roles.get(pageId);
+  if (!role || role.excluded) return [];
+  const out = new Set<string>();
+  if (role.partOf?.kind === 'location' && role.partOf.ref) out.add(role.partOf.ref);
+  if (role.doc !== 'scouting' && role.doc !== 'test') return [...out];
+  const R = snap.registry;
+  const place = (text: string) => {
+    const line = text.replace(/\n/g, ' ');
+    const whole = locationOf(R, line);
+    if (whole) out.add(whole);
+    else for (const h of scan(R, line, { heading: true, dayTitle: true })) if (h.kind === 'loc') out.add(h.ref);
+  };
+  for (const f of valued(fieldValues(fieldsOf(src, pageId), 'location'))) {
+    for (const l of f.links) for (const e of R.locations.values()) if (e.pageId === l.pageId) out.add(e.name);
+    place(f.text);
+  }
+  for (const h of scan(R, src.title(pageId) ?? '', { heading: true, dayTitle: true })) if (h.kind === 'loc') out.add(h.ref);
+  // Una página índice (un resumen que nombra muchas) no es de cada locación que tiene como título de sección.
+  const rel = snap.pages.get(pageId);
+  if (rel && rel.entities <= INDEX_PAGE_MIN) {
+    for (const s of rel.sections) {
+      const name = locationOf(R, s.title);
+      if (name) out.add(name);
+    }
+  }
+  return [...out];
 }
 
 /** El texto de una ficha para su extracto: su *Descripción* si la tiene; si no, sus primeros renglones sin las tablas. */
@@ -585,10 +645,11 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
   const scoutsVia: SceneLive['scoutsVia'] = [];
   if (!scoutPages.length) {
     const shotLocs = new Set(days.filter((d) => d.sections.length).flatMap((d) => d.day.locs));
-    for (const [id, role] of roles) {
-      if (role.excluded || role.partOf?.kind !== 'location' || !role.partOf.ref || !shotLocs.has(role.partOf.ref)) continue;
+    for (const id of shotLocs.size ? roles.keys() : []) {
+      const loc = scoutLocations(src, id).find((l) => shotLocs.has(l));
+      if (!loc) continue;
       if (!snap.pages.has(id) && src.title(id) === undefined) continue;
-      scoutsVia.push({ pageId: id, title: title(id), loc: role.partOf.ref });
+      scoutsVia.push({ pageId: id, title: title(id), loc });
     }
     scoutsVia.sort((a, b) => (order.get(a.pageId) ?? 0) - (order.get(b.pageId) ?? 0));
   }
@@ -661,7 +722,7 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
   const setPages = new Set<string>();
   for (const [pageId, pf] of snap.fields) {
     const role = roles.get(pageId);
-    if (pageId === locPage || role?.excluded || role?.entity || role?.partOf) continue;
+    if (pageId === locPage || role?.excluded || role?.entity || role?.partOf || role?.doc) continue;
     if ((snap.pages.get(pageId)?.entities ?? 0) > INDEX_PAGE_MIN || src.title(pageId) === undefined) continue;
     const here = valued(fieldValues(pf, 'location')).some(
       (f) =>
@@ -692,7 +753,7 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
       plannedCodes.set(scene, true);
       continue;
     }
-    if (p.own || setPages.has(p.pageId)) continue;
+    if (p.own || setPages.has(p.pageId) || scoutLocations(src, p.pageId).includes(name)) continue;
     // Los días cuyo título la nombra se muestran aparte (columna Rodaje).
     if (p.stage === 'shoot' && dayRef(src, p.pageId).locs.includes(name)) continue;
     also.push({ pageId: p.pageId, title: title(p.pageId), blockId: p.mentions.find((m) => !m.hidden)?.blockId });
@@ -704,12 +765,12 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
       return { code, pageId: e?.pageId ?? null, title: e?.pageId ? title(e.pageId) : '', days: (shotDays.get(code) ?? []).slice().sort((a, b) => byDay(a, b, order)) };
     });
 
-  // Sus scoutings: lo de adentro de la locación.
+  // Sus scoutings y pruebas: lo de adentro de la locación, o los que la nombran (`scoutLocations`).
   const scouts: LocationLive['scouts'] = [];
   const scouting: Excerpt[] = [];
   const scoutPhotos: PhotoRef[] = [];
-  for (const [id, role] of roles) {
-    if (role.excluded || role.partOf?.kind !== 'location' || role.partOf.ref !== name) continue;
+  for (const id of roles.keys()) {
+    if (!scoutLocations(src, id).includes(name)) continue;
     if (src.title(id) === undefined) continue;
     const pr = snap.pages.get(id);
     const source = shortTitle(title(id), 24);

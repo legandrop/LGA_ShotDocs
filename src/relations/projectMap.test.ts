@@ -127,11 +127,11 @@ describe('el mapa del proyecto', () => {
     const src = await sourceOf(d, built.projectId);
     const m = projectMap(src);
     const j = JSON.parse(JSON.stringify(mapJson(m, META)));
-    expect(Object.keys(j)).toEqual(['format', 'version', 'project', 'pageUrl', 'builtAt', 'complete', 'scope', 'counts', 'scenes', 'locations', 'days', 'pending', 'duplicates', 'pages']);
+    expect(Object.keys(j)).toEqual(['format', 'version', 'project', 'pageUrl', 'builtAt', 'complete', 'scope', 'counts', 'scenes', 'locations', 'days', 'scoutings', 'pending', 'duplicates', 'pages']);
     expect([j.format, j.version, j.scope, j.complete]).toEqual([MAP_FORMAT, MAP_VERSION, 'project', true]);
     expect(MAP_FORMAT).toBe('shotdocs.map');
     // Cada número es el largo de su lista: nada de «pending: 1» con `pending: []` (O4).
-    expect(j.counts).toEqual({ scenes: 6, locations: 2, days: 6, pending: 0, duplicates: 0, unnumbered: 1 });
+    expect(j.counts).toEqual({ scenes: 6, locations: 2, days: 6, scoutings: 0, pending: 0, duplicates: 0, unnumbered: 1 });
     expect(j.pending).toEqual([]);
     expect(mapCounts(m).toResolve).toBe(1);
     expect(pendingSummary(src)).toEqual({ pending: 0, duplicates: 0, unnumbered: 1, total: 1 });

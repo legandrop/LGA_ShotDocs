@@ -1,7 +1,7 @@
 import type { PageTree } from '../sync/tree';
-import { BUILTIN_LOCATION, BUILTIN_SCENE } from '../templates/builtinIds';
+import { BUILTIN_CREATIVE_SCOUT, BUILTIN_LOCATION, BUILTIN_SCENE, BUILTIN_TECH_SCOUT, BUILTIN_TEST } from '../templates/builtinIds';
 import { dayReportsMark, isDayReportFolder } from '../templates/dayReport';
-import { entityMark, holdsMark, holdsOf, kindReader, type EntityKind, type KindTree } from './kind';
+import { docMark, entityMark, holdsDoc, holdsMark, holdsOf, kindReader, type DocKind, type EntityKind, type KindTree } from './kind';
 
 // Las marcas de tipo (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): lo que escribe `settings.entity` en las páginas
 // y `settings.holds` / `settings.dayReports` en las carpetas. Lo que se lee está en `kind.ts`.
@@ -92,29 +92,32 @@ export function folderHolds(tree: KindTree, id: string): EntityKind | null {
  * de usar (`dayReports: false`); nada saca `holds` y deja de usarla para reportes. Después marca lo de adentro que no
  * tenga marca. Las marcas de las páginas no se sacan al desmarcar (D-E2-3).
  */
-export async function markFolderHolds(tree: SyncTree, id: string, holds: EntityKind | null): Promise<void> {
+export async function markFolderHolds(tree: SyncTree, id: string, holds: EntityKind | DocKind | null): Promise<void> {
   const row = tree.get(id);
   if (!row) return;
   const reports = dayReportsMark(row);
   if (holds === 'day') {
     if (reports !== 'on') await tree.setSetting(id, 'dayReports', {});
-    if (holdsMark(row) !== null) await tree.setSetting(id, 'holds', undefined);
+    if (holdsMark(row) !== null || holdsDoc(row)) await tree.setSetting(id, 'holds', undefined);
   } else {
     const isReports = reports === 'on' || (reports === null && isDayReportFolder(tree as PageTree, id));
     if (isReports) await tree.setSetting(id, 'dayReports', false);
     await tree.setSetting(id, 'holds', holds ?? undefined);
   }
-  if (holds) for (const child of typedInside(tree, id)) await syncEntityMark(tree, child);
+  // Un documento no se escribe en cada página: lo de adentro lo toma de la carpeta al leer (Plan_Estructura_Etapas.md,
+  // decisión 3), y sacarlo de la carpeta le saca el tipo.
+  if (holds === 'scene' || holds === 'location') for (const child of typedInside(tree, id)) await syncEntityMark(tree, child);
 }
 
 /**
  * *Type* → *This page is*: marca la página como escena (con el código de su título, o el que ya tenía guardado si el
  * título no da ninguno), locación, día, o nada (`false`).
  */
-export async function setPageType(tree: SyncTree, id: string, kind: EntityKind | null): Promise<void> {
+export async function setPageType(tree: SyncTree, id: string, kind: EntityKind | DocKind | null): Promise<void> {
   const row = tree.get(id);
   if (!row) return;
   if (kind === null) return tree.setSetting(id, 'entity', false);
+  if (kind !== 'scene' && kind !== 'location' && kind !== 'day') return tree.setSetting(id, 'entity', { kind });
   const mark = entityMark(row);
   const kept = mark && mark !== 'other' && mark.kind === 'scene' ? (mark.code ?? null) : null;
   const fromTitle = kind === 'scene' ? kindReader(tree).titleCode(id) : null;
@@ -132,12 +135,20 @@ export function installEntityMarks(tree: Pick<PageTree, 'onPlaced'> & SyncTree, 
 }
 
 /**
- * El tipo que da una plantilla: *Scene* y *Location* de fábrica, o una propia que salió de una de ellas (*Customize*).
- * Las demás, ninguno.
+ * El tipo que da una plantilla: *Scene*, *Location*, *Tech scout*, *Creative scout* y *Test report* de fábrica (las tres
+ * últimas, un documento: scouting o prueba), o una propia que salió de una de ellas (*Customize*). Las demás, ninguno.
  */
-export function templateEntity(tree: Pick<PageTree, 'get'>, templateId: string | null | undefined): EntityKind | null {
-  const of = (id: string | null | undefined): EntityKind | null =>
-    id === BUILTIN_SCENE ? 'scene' : id === BUILTIN_LOCATION ? 'location' : null;
+export function templateEntity(tree: Pick<PageTree, 'get'>, templateId: string | null | undefined): EntityKind | DocKind | null {
+  const of = (id: string | null | undefined): EntityKind | DocKind | null =>
+    id === BUILTIN_SCENE
+      ? 'scene'
+      : id === BUILTIN_LOCATION
+        ? 'location'
+        : id === BUILTIN_TECH_SCOUT || id === BUILTIN_CREATIVE_SCOUT
+          ? 'scouting'
+          : id === BUILTIN_TEST
+            ? 'test'
+            : null;
   return of(templateId) ?? (templateId ? of(tree.get(templateId)?.template_id) : null);
 }
 
@@ -145,6 +156,10 @@ export function templateEntity(tree: Pick<PageTree, 'get'>, templateId: string |
 export async function markFromTemplate(tree: SyncTree, id: string, templateId: string | null | undefined): Promise<void> {
   const kind = templateEntity(tree, templateId);
   if (!kind) return;
+  if (kind === 'scouting' || kind === 'test' || kind === 'plan') {
+    if (docMark(tree.get(id)) !== kind) await setPageType(tree, id, kind);
+    return;
+  }
   const mark = entityMark(tree.get(id));
   if (mark && mark !== 'other' && mark.kind === kind) return syncEntityMark(tree, id);
   await setPageType(tree, id, kind);

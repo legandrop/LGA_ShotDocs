@@ -14,7 +14,14 @@ export const map = {
   'map.dayCount': { en: { one: "{count} day", other: "{count} days" }, es: { one: "{count} día", other: "{count} días" } },
   'map.tabLocations': { en: "Locations", es: "Locaciones" },
   'map.tabScenes': { en: "Scenes", es: "Escenas" },
+  'map.tabScouting': { en: "Scouting", es: "Scouting" },
   'map.tabDays': { en: "Shoot days", es: "Días de rodaje" },
+  'map.colReport': { en: "Report", es: "Reporte" },
+  'map.test': { en: "Test", es: "Prueba" },
+  'map.noScoutings': {
+    en: "No scouting or test reports yet. Create one from the Tech scout or Test report template, or mark a folder with Type › Pages created inside are: Scouting reports.",
+    es: "Todavía no hay reportes de scouting ni de pruebas. Creá uno con la plantilla Scouting técnico o Reporte de prueba, o marcá una carpeta con Tipo › Lo que se crea adentro es: Reportes de scouting.",
+  },
   'map.tabPending': { en: "Pending", es: "Pendientes" },
   'map.copy': { en: "Copy overview", es: "Copiar panorama" },
   'map.copyTip': {
@@ -62,6 +69,7 @@ export const map = {
   'map.plannedN': { en: { one: "{count} planned", other: "{count} planned" }, es: { one: "{count} planeada", other: "{count} planeadas" } },
   'map.nothingWritten': { en: "nothing written", es: "nada escrito" },
   'map.noLocation': { en: "No location in the title", es: "Sin locación en el título" },
+  'map.noLocationNamed': { en: "No location named", es: "No nombra ninguna locación" },
   'map.noLocationTip': {
     en: "What the day title says: it doesn’t name a location of the project",
     es: "Lo que dice el título del día: no nombra una locación del proyecto",

@@ -307,8 +307,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.templates.text',
     keys: { enter: 'titleEnter', undo: 'undo' },
     words: ['template', 'plantilla', 'report', 'reporte', 'on-set', 'rodaje', 'breakdown', 'desglose', 'preproducción', 'pre-production', 'apply', 'aplicar', 'scene', 'escena', 'location', 'locación', 'scout', 'scouting'],
-    // Subió con *Scene*, *Location*, *Tech scout*, *Creative scout* y la tira según la carpeta (llegó en v0.117).
-    since: '0.236',
+    // Subió con *Test report* y la tira en las carpetas de scouting y de pruebas (llegó en v0.117).
+    since: '0.275',
   },
   {
     id: 'ownTemplates',
@@ -332,9 +332,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'pages',
     title: 'help.pageTypes.title',
     text: 'help.pageTypes.text',
-    words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'episode', 'episodio', 'folder', 'carpeta'],
-    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»): el número lo pone quien publica.
-    since: '0.236',
+    words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'test', 'prueba', 'episode', 'episodio', 'folder', 'carpeta'],
+    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con Scouting y Pruebas.
+    since: '0.275',
   },
   {
     id: 'projects',
@@ -390,8 +390,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.relationsMap.title',
     text: 'help.relationsMap.text',
-    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
-    since: LIVE_MAP,
+    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
+    // Subió con *Scouting* (v0.275).
+    since: '0.275',
   },
   {
     id: 'scenesSection',

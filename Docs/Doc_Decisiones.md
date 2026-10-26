@@ -2178,3 +2178,13 @@ queda a menos de 1px del de la ficha en cualquier nivel de título.
 **Pedido de Lega:** en el Encabezado 1 y el 2, el triángulo para colapsar se ve siempre, no solo con el mouse encima.
 **Quedó:** clase `always` en `CollapseToggles.tsx` para H1 y H2 (opacidad entera, también en pantallas táctiles); H3 a
 H6 siguen como antes. El ámbar cuando tu vista difiere de la compartida no cambia.
+
+### D778 · Scouting y pruebas: documentos por contenido, no por lugar (2026-10-25)
+**Pedido de Lega:** trabajar como siempre (reuniones, desglose, scoutings, pruebas, planeamiento, rodaje) y que la app
+conecte las cosas sin obligar a meter cada scouting adentro de su locación. **Decidido** (auditoría de código y de flujo
+contra Coda; `Plan_Estructura_Etapas.md`, sección 9): los scoutings y las pruebas son documentos (`entity`/`holds` con
+`'scouting'`/`'test'`), valen a cualquier profundidad, gana lo más cercano, la marca se deduce de la carpeta al leer, y
+se conectan con las locaciones que nombran (título, campo *Locación*, títulos de sección). *Type*, *Tech scout*,
+*Creative scout*, *Test report* nueva, la cabecera de la locación y *Overview › Scouting* por fecha. Los planes y los
+decorados siguen en las partes 3 y 4 del plan.
+

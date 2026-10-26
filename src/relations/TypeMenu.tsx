@@ -6,15 +6,26 @@ import { ArrowLeftIcon, CheckIcon, EyeOffIcon, TypeIcon } from '../ui/icons';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { markFolderHolds, setPageType } from './entitySync';
-import { entityMark, kindReader, type EntityKind } from './kind';
+import { entityMark, holdsDoc, kindReader, type DocKind, type EntityKind } from './kind';
 import { leftOutBy } from './register';
 
 // *Type* en el menú de la página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): qué es esta página (escena,
-// locación, día de rodaje o nada) y qué es lo que se crea adentro (la carpeta da el tipo). Se abre en el mismo menú, en
+// locación, día de rodaje, scouting, prueba o nada) y qué es lo que se crea adentro (la carpeta da el tipo). Se abre en el mismo menú, en
 // lugar de sus ítems; *Back* vuelve. Solo con permiso para cambiar la fila (`canEditRow`): lo mismo que el título.
 
-const PAGE_LABEL: Record<EntityKind, Key> = { scene: 'type.scene', location: 'type.location', day: 'type.day' };
-const HOLDS_LABEL: Record<EntityKind, Key> = { scene: 'type.scenes', location: 'type.locations', day: 'type.days' };
+// Los documentos (Docs/Plan_Estructura_Etapas.md): un scouting o una prueba. El plan se suma con la parte 3 del plan.
+type Choice = EntityKind | Exclude<DocKind, 'plan'>;
+const CHOICES: readonly Choice[] = ['scene', 'location', 'day', 'scouting', 'test'];
+const PAGE_LABEL: Record<Choice, Key> = { scene: 'type.scene', location: 'type.location', day: 'type.day', scouting: 'type.scouting', test: 'type.test' };
+const HOLDS_LABEL: Record<Choice, Key> = { scene: 'type.scenes', location: 'type.locations', day: 'type.days', scouting: 'type.scoutings', test: 'type.tests' };
+const HOLDS_TIP: Record<Choice, Key> = {
+  scene: 'sidebar.holdsScenes',
+  location: 'sidebar.holdsLocations',
+  day: 'sidebar.holdsDays',
+  scouting: 'sidebar.holdsScoutings',
+  test: 'sidebar.holdsTests',
+};
+const isChoice = (v: unknown): v is Choice => CHOICES.includes(v as Choice);
 
 /** El renglón del menú: «Type» y, a la derecha, lo que es la página o lo que guarda la carpeta. */
 export function TypeMenuItem({ pageId, onOpen }: { pageId: string; onOpen: () => void }) {
@@ -22,15 +33,18 @@ export function TypeMenuItem({ pageId, onOpen }: { pageId: string; onOpen: () =>
   const tr = useT();
   const reader = kindReader(tree);
   const kind = reader.kindOf(pageId);
-  const holds = reader.holdsOf(pageId);
+  const holds = reader.holdsOf(pageId) ?? holdsDoc(tree.get(pageId));
+  const doc = kind.kind === 'doc' && isChoice(kind.doc) ? kind.doc : null;
   const now =
     kind.kind === 'scene' || kind.kind === 'location' || kind.kind === 'day'
       ? tr(PAGE_LABEL[kind.kind])
-      : holds
+      : holds && isChoice(holds)
         ? tr(HOLDS_LABEL[holds])
-        : kind.kind === 'part'
-          ? tr('type.part')
-          : '';
+        : doc
+          ? tr(PAGE_LABEL[doc])
+          : kind.kind === 'part'
+            ? tr('type.part')
+            : '';
   return (
     <button role="menuitem" aria-haspopup="menu" data-tip={tr('type.tip')} onClick={onOpen}>
       <TypeIcon />
@@ -48,15 +62,20 @@ export function TypeSubmenu({ pageId, onBack, onClose }: { pageId: string; onBac
   useEffect(() => first.current?.focus({ preventScroll: true }), []);
   const reader = kindReader(tree);
   const kind = reader.kindOf(pageId);
-  const holds = reader.holdsOf(pageId);
+  const holds = reader.holdsOf(pageId) ?? holdsDoc(tree.get(pageId));
   const mark = entityMark(tree.get(pageId));
-  const pageKind = kind.kind === 'scene' || kind.kind === 'location' || kind.kind === 'day' ? kind : null;
+  const pageKind =
+    kind.kind === 'scene' || kind.kind === 'location' || kind.kind === 'day'
+      ? { kind: kind.kind, code: kind.code, source: kind.source }
+      : kind.kind === 'doc' && isChoice(kind.doc)
+        ? { kind: kind.doc, code: null, source: kind.source }
+        : null;
   const pick = (run: () => Promise<void>) => {
     onClose();
     void run().catch((err: unknown) => console.warn('[tipo] no se pudo cambiar', err));
   };
 
-  const pageItem = (value: EntityKind | null) => {
+  const pageItem = (value: Choice | null) => {
     const checked = value === null ? !pageKind && (mark === false || kind.kind !== 'part') : pageKind?.kind === value;
     // La escena muestra su número; lo que da la carpeta sin marca en la página, «by folder».
     const note = !checked ? '' : pageKind?.kind === 'scene' && pageKind.code ? pageKind.code : pageKind?.source === 'folder' ? tr('type.byFolder') : '';
@@ -74,14 +93,14 @@ export function TypeSubmenu({ pageId, onBack, onClose }: { pageId: string; onBac
     );
   };
 
-  const holdsItem = (value: EntityKind | null) => {
+  const holdsItem = (value: Choice | null) => {
     const checked = holds === value;
     return (
       <button
         key={value ?? 'nothing'}
         role="menuitemradio"
         aria-checked={checked}
-        data-tip={value ? tr(value === 'scene' ? 'sidebar.holdsScenes' : value === 'location' ? 'sidebar.holdsLocations' : 'sidebar.holdsDays') : undefined}
+        data-tip={value ? tr(HOLDS_TIP[value]) : undefined}
         onClick={() => pick(() => markFolderHolds(tree, pageId, value))}
       >
         <span className="type-mark">{checked && <CheckIcon size={16} />}</span>
@@ -98,10 +117,10 @@ export function TypeSubmenu({ pageId, onBack, onClose }: { pageId: string; onBac
       </button>
       <hr />
       <p className="menu-label mono-label">{tr('type.thisPage')}</p>
-      {(['scene', 'location', 'day', null] as const).map(pageItem)}
+      {[...CHOICES, null].map(pageItem)}
       <hr />
       <p className="menu-label mono-label">{tr('type.inside')}</p>
-      {(['scene', 'location', 'day', null] as const).map(holdsItem)}
+      {[...CHOICES, null].map(holdsItem)}
     </>
   );
 }

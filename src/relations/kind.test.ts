@@ -287,3 +287,75 @@ describe('la carpeta de escenas de una serie (auditoría de E1, O9)', () => {
     expect(k.kindOf('canon')).toMatchObject({ kind: 'scene', code: '105_080' });
   });
 });
+
+describe('documentos de una etapa (Plan_Estructura_Etapas.md)', () => {
+  const tree = () =>
+    fakeTree([
+      { id: 'pre', title: '1 | Preproducción' },
+      { id: 'locs', parent: 'pre', title: 'Locaciones', settings: { holds: 'location' } },
+      { id: 'cenade', parent: 'locs', title: 'CENADE' },
+      { id: 'viejo', parent: 'cenade', title: '260106 | Scouting | CENADE' },
+      { id: 'scouting', title: '2 | Scouting', settings: { holds: 'scouting' } },
+      { id: 'enero', parent: 'scouting', title: 'Enero' },
+      { id: 's1', parent: 'enero', title: '26.01.29 | Scouting | Palomar' },
+      { id: 'fotos', parent: 's1', title: 'Fotos' },
+      { id: 'suelto', title: '26.02.03 | Scouting', settings: { entity: { kind: 'test' } } },
+      { id: 'sub', parent: 'suelto', title: 'Anexo' },
+      { id: 'scoutLocs', parent: 'locs', title: 'Recorridos', settings: { holds: 'scouting' } },
+      { id: 'r1', parent: 'scoutLocs', title: 'Recorrido 1' },
+    ]);
+
+  it('a cualquier profundidad, gana lo más cercano', () => {
+    const r = kindReader(tree());
+    expect(r.kindOf('s1')).toEqual({ kind: 'doc', doc: 'scouting', source: 'folder', folder: 'scouting', within: null });
+    expect(r.kindOf('fotos')).toMatchObject({ kind: 'doc', doc: 'scouting', folder: 'scouting' });
+    expect(r.kindOf('suelto')).toEqual({ kind: 'doc', doc: 'test', source: 'page', folder: null, within: null });
+    expect(r.kindOf('sub')).toMatchObject({ kind: 'doc', doc: 'test', folder: 'suelto' });
+    // Lo de antes sigue igual: adentro de su locación, parte de ella.
+    expect(r.kindOf('viejo')).toMatchObject({ kind: 'part', of: 'cenade', ofKind: 'location' });
+  });
+
+  it('un documento adentro de una entidad sigue siendo de ella (el scouting marcado que quedó en su locación)', () => {
+    const t = fakeTree([
+      { id: 'locs', title: 'Locaciones', settings: { holds: 'location' } },
+      { id: 'cenade', parent: 'locs', title: 'CENADE' },
+      { id: 'tech', parent: 'cenade', title: 'Tech scout', settings: { entity: { kind: 'scouting' } } },
+    ]);
+    expect(kindReader(t).kindOf('tech')).toEqual({ kind: 'doc', doc: 'scouting', source: 'page', folder: null, within: { of: 'cenade', ofKind: 'location', code: null } });
+  });
+
+  it('una carpeta de documentos adentro de la de locaciones no es una locación', () => {
+    const r = kindReader(tree());
+    expect(r.kindOf('scoutLocs')).toEqual({ kind: 'none' });
+    expect(r.kindOf('r1')).toMatchObject({ kind: 'doc', doc: 'scouting' });
+    expect(holdsOf(tree(), 'scoutLocs')).toBeNull();
+  });
+
+  it('None of these le saca el documento de la carpeta (sigue siendo parte de su entidad)', () => {
+    const t = fakeTree([
+      { id: 'sc', title: 'Scouting', settings: { holds: 'scouting' } },
+      { id: 'a', parent: 'sc', title: 'Índice de recorridos', settings: { entity: false } },
+    ]);
+    expect(kindReader(t).kindOf('a')).toEqual({ kind: 'none' });
+  });
+
+  it('una carpeta de documentos en una de días no deja que lo de adentro sea un día (auditoría de v0.275)', () => {
+    const t = fakeTree([
+      { id: 'rodaje', title: 'Rodaje', settings: { dayReports: {} } },
+      { id: 'planes', parent: 'rodaje', title: 'Planes', settings: { holds: 'plan' } },
+      { id: 'p59', parent: 'planes', title: '2026-02-19 | Día 59 | Plan' },
+    ]);
+    expect(kindReader(t).kindOf('p59')).toMatchObject({ kind: 'doc', doc: 'plan', folder: 'planes' });
+  });
+
+  it('una entidad que guarda documentos: sus páginas son documentos de ella', () => {
+    const t = fakeTree([
+      { id: 'locs', title: 'Locaciones', settings: { holds: 'location' } },
+      { id: 'cenade', parent: 'locs', title: 'CENADE', settings: { entity: { kind: 'location' }, holds: 'test' } },
+      { id: 'grua', parent: 'cenade', title: 'Prueba de grúa' },
+    ]);
+    expect(kindReader(t).kindOf('cenade')).toMatchObject({ kind: 'location' });
+    expect(kindReader(t).kindOf('grua')).toEqual({ kind: 'doc', doc: 'test', source: 'folder', folder: 'cenade', within: { of: 'cenade', ofKind: 'location', code: null } });
+  });
+});
+
