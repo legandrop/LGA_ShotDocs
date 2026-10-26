@@ -712,7 +712,7 @@ function Scoutings({ data, fq }: { data: ProjectMapData; fq: string }) {
   const rows = data.scoutings.filter((s) => !fq || fold(`${s.date ?? ''} ${s.title} ${s.locs.join(' ')}`).includes(fq));
   if (!rows.length) return <p className="mp-empty">{tr('map.noMatch')}</p>;
   return (
-    <div className="mp-grid mp-days" role="table">
+    <div className="mp-grid mp-days mp-scouts" role="table">
       <div className="mp-drow head" role="row">
         <span role="columnheader">{tr('map.colDate')}</span>
         <span role="columnheader">{tr('map.colReport')}</span>

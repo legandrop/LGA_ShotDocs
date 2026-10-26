@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.276 :
+
+En *Overview › Scouting* la columna del título usaba la grilla de los días (cuatro columnas iguales) y un título como
+«260106 | Scouting técnico VFX | Cenade - Ezeiza» ocupaba tres renglones con espacio de sobra; ahora el título tiene el
+doble de ancho, la marca *Test* una columna chica, y el título va en el color del texto (no es un día, D774). El gancho
+de desarrollo `__shotdocsDev` suma los índices, para comparar relaciones antes y después de reacomodar. Con esto se
+reacomodaron ERSO y VLLF: sus 10 y 29 scoutings salieron de sus locaciones a `2 | Scouting`, las pruebas de VLLF a
+`3 | Pruebas`, y cada scouting sigue conectado con su locación (verificado uno por uno). D779.
+
+[Scouting en el Overview más legible, y ERSO y VLLF reacomodados]
+
 v0.275 :
 
 Un scouting contaba para una locación solo si estaba adentro de su página, así que no se podían ordenar como en Coda

@@ -124,10 +124,11 @@ export function RelationsRunner(): null {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     // Para auditar sin interfaz (solo en desarrollo, el build lo saca): `__shotdocsRelations` en la consola, y
-    // `__shotdocsDev` con el árbol y los documentos para los guiones de desarrollo (ERSO a vivo, E4).
+    // `__shotdocsDev` con el árbol, los documentos y los índices para los guiones de desarrollo (ERSO a vivo, E4; el
+    // reacomodo de v0.276, que compara las relaciones antes y después).
     const w = window as unknown as Record<string, unknown>;
     w.__shotdocsRelations = relationsDebug(session, () => projectId, services.tree);
-    w.__shotdocsDev = { tree: services.tree, docs: services.docs, projectId };
+    w.__shotdocsDev = { tree: services.tree, docs: services.docs, projectId, relations: session.relations, index: session.index };
   }, [session, projectId, services]);
   return null;
 }

@@ -2188,3 +2188,13 @@ se conectan con las locaciones que nombran (título, campo *Locación*, títulos
 *Creative scout*, *Test report* nueva, la cabecera de la locación y *Overview › Scouting* por fecha. Los planes y los
 decorados siguen en las partes 3 y 4 del plan.
 
+### D779 · ERSO y VLLF reacomodados por etapas, sin reimportar (2026-10-25)
+**Pedido de Lega:** hacer el reacomodo con los archivos que ya están en el Drive (no volver a importar ni subir nada).
+**Quedó:** con las operaciones de la app (`move`, `rename`, `setSetting`), en los dos proyectos: carpeta `2 | Scouting`
+(*Scouting reports*) con los scoutings por fecha (10 en ERSO, 29 en VLLF), `3 | Pruebas` (*Test reports*) en VLLF con
+«Autos: comparación de técnicas» y «Puestas de cámara», y `2 | Rodaje` / `3 | Tablas y referencia` renombradas `5 |` y
+`6 |` para dejar lugar a las etapas. Prueba en seco antes (las locaciones de cada scouting fuera de su locación: ninguna
+perdida) y verificación después sobre la base real (cada uno es documento, tiene su locación y está en su cabecera). Los
+archivos, comentarios e historial no se tocan: van con la página. La versión mínima no hacía falta para este orden (las
+carpetas nuevas están en la raíz, no adentro de la de locaciones); queda subirla a 0.275 cuando haya token.
+

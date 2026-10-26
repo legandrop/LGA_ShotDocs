@@ -414,6 +414,16 @@
   grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 
+/* Scouting: el título del reporte es largo; la última columna solo dice «Test» */
+.mp-scouts .mp-drow {
+  grid-template-columns: 92px minmax(0, 2fr) minmax(0, 1.2fr) 56px;
+}
+
+/* Un reporte de scouting no es un día: su título va en el color del texto (D774) */
+.mp-scouts .mp-dt .mp-link {
+  color: var(--text);
+}
+
 .mp-srow.head,
 .mp-drow.head {
   border-top: 0;
@@ -821,7 +831,8 @@
   }
 
   .mp-srow,
-  .mp-drow {
+  .mp-drow,
+  .mp-scouts .mp-drow {
     grid-template-columns: auto minmax(0, 1fr);
     gap: 3px 10px;
     padding: 9px 12px;
