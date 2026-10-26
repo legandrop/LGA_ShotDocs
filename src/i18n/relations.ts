@@ -699,14 +699,17 @@ export const relations = {
     es: { one: "{count} quedó como subpágina", other: "{count} quedaron como subpáginas" },
   },
   'fold.allRow': {
-    en: "Scenes with their shots still as subpages: {scenes} ({count} shots)",
-    es: "Escenas con sus planos todavía como subpáginas: {scenes} ({count} planos)",
+    en: { one: "Scenes with their shots still as subpages: {scenes} ({count} shot)", other: "Scenes with their shots still as subpages: {scenes} ({count} shots)" },
+    es: { one: "Escenas con sus planos todavía como subpáginas: {scenes} ({count} plano)", other: "Escenas con sus planos todavía como subpáginas: {scenes} ({count} planos)" },
   },
   'fold.bringAll': { en: "Bring them all in", es: "Traerlos todos" },
   'fold.allTip': {
     en: "Scene by scene, each subpage goes under «Shots» in its scene page and then to the trash. Keep the app open until it finishes",
     es: "Escena por escena, cada subpágina va debajo de «Planos» en la página de su escena y después a la papelera. Dejá la app abierta hasta que termine",
   },
-  'fold.allRunning': { en: "Bringing shots in: scene {at} of {scenes} · {done} shots in", es: "Trayendo los planos: escena {at} de {scenes} · {done} planos adentro" },
+  'fold.allRunning': {
+    en: { one: "Bringing shots in: scene {at} of {scenes} · {count} shot in", other: "Bringing shots in: scene {at} of {scenes} · {count} shots in" },
+    es: { one: "Trayendo los planos: escena {at} de {scenes} · {count} plano adentro", other: "Trayendo los planos: escena {at} de {scenes} · {count} planos adentro" },
+  },
   'fold.stop': { en: "Stop", es: "Parar" },
 } satisfies Dict;

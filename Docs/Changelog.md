@@ -1,5 +1,14 @@
 # Changelog — LGA Shot Docs
 
+v0.280 :
+
+Al traer los planos de ERSO y VLLF con *Bring them all in*, el progreso decía «1 planos adentro» y la fila de
+*Pending* «(1 planos)»: los dos textos no tenían plural. Ahora tienen su forma singular y plural. Con la v0.279 se
+trajeron 288 planos de ERSO y 256 de VLLF a la página de su escena; quedan como subpáginas los 4 que tienen comentarios
+(ERSO_101_012_010, ERSO_101_069A_010, VLLF_040_010 y VLLF_153_010).
+
+[Plural en el progreso de traer los planos]
+
 v0.279 :
 
 La vista de una escena en el Overview juntaba todo lo que la nombra sin decir qué era cada cosa («Shot Name: …», «§

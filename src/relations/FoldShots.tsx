@@ -258,7 +258,7 @@ export function FoldPendingRow() {
   };
   return (
     <PendingRow
-      head={<span>{run ? tr('fold.allRunning', { at: run.at, scenes: run.scenes, done: run.done }) : tr('fold.allRow', { scenes: list.length, count: total })}</span>}
+      head={<span>{run ? tr('fold.allRunning', { at: run.at, scenes: run.scenes, count: run.done }) : tr('fold.allRow', { scenes: list.length, count: total })}</span>}
       actions={
         run ? (
           <button className="mp-btn" onClick={() => (stopRef.current = true)}>
