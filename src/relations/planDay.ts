@@ -14,7 +14,7 @@ import type { RelationSnapshot } from './relationIndex';
 //
 // Un plan adentro de su día sigue siendo de ese día («parte de», como siempre) y no pasa por acá. Una subpágina de un
 // plan es del día de su plan. Un plan con varias fechas («Plaza de Mayo | 21 Mar | 2,3,4,11 Abr») es de su locación:
-// no se pega a ningún día ni va a *Pending*. Una página sin fecha, vacía y con planes adentro (`Semana 03`) es un grupo.
+// no se pega a ningún día ni va a *Pending*. Una página vacía, sin jornada y con planes adentro que tienen su propio día (`Semana 03 | 2026-04-06`) es un grupo.
 
 export type PlanWhy = 'pointer' | 'field' | 'match' | 'conflict' | 'tie' | 'several' | 'noDay' | 'none' | 'group';
 
@@ -155,8 +155,20 @@ export function planLinks(src: LiveSource): Map<string, PlanLink> {
     const fields = snap.fields.get(id);
     const dayField = fieldValues(fields, ['dia', 'día', 'day', 'jornada', 'shoot day']);
     for (const f of dayField) for (const l of f.links) if (isDay.has(l.pageId)) return linked(l.pageId, 'field');
+    // Una página vacía, sin jornada, con planes adentro que tienen su propio día (fecha, jornada o puntero) es un grupo
+    // (`Semana 01 | 2026-03-23`), aunque su título tenga una fecha; un plan vacío con sus fotos abajo
+    // (`26.02.20 | CENADE › Fotos`) sigue siendo un plan.
     const title = src.title(id) ?? '';
     const said = readPlanTitle(title);
+    const rel = snap.pages.get(id);
+    const empty = !rel || (rel.blocks === 0 && rel.media.length === 0);
+    const ownDay = (c: string) => {
+      if (!isPlan(c)) return false;
+      if (roles.get(c)?.planDay) return true;
+      const r = readPlanTitle(src.title(c) ?? '');
+      return r.dates.length > 0 || r.jornada !== null;
+    };
+    if (empty && said.jornada === null && (children.get(id) ?? []).some(ownDay)) return { dayId: null, date: null, why: 'group', candidates: [] };
     // Sus campos *Fecha* y *Día* valen como el título (la plantilla *Day plan* los trae); el campo *Día* da la jornada
     // solo si es un número («3», «Día 03»), no una fecha («Lunes 03/11»).
     const fieldDay = dayField.map((f) => /^\s*(?:d|d[ií]a|day)?\s*0*(\d{1,3})\s*$/i.exec(f.text)?.[1]).find(Boolean);
@@ -176,12 +188,7 @@ export function planLinks(src: LiveSource): Map<string, PlanLink> {
       return parent.dayId || parent.why === 'noDay' ? { ...parent, candidates: [...parent.candidates] } : { dayId: null, date: null, why: 'none', candidates: [] };
     }
     if (dates.length > 1) return { dayId: null, date: null, why: 'several', candidates: [] };
-    const rel = snap.pages.get(id);
-    const empty = !rel || (rel.blocks === 0 && rel.media.length === 0);
-    if (!dates.length && jornada === null) {
-      const group = empty && (children.get(id) ?? []).some(isPlan);
-      return { dayId: null, date: null, why: group ? 'group' : 'none', candidates: [] };
-    }
+    if (!dates.length && jornada === null) return { dayId: null, date: null, why: 'none', candidates: [] };
     const readings = dates[0] ?? [];
     // La unidad: un día sin unidad es la principal (U1); un plan sin unidad va con cualquiera, y si empatan, con la
     // principal.

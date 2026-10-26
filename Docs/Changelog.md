@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.278 :
+
+Al reacomodar los planes, las carpetas de semana («Semana 01 | 2026-03-23») se leían como planes por la fecha del título
+y aparecían como fechas planeadas en *Shoot days*. Ahora una página vacía y sin jornada, con planes adentro que tienen su
+propio día (fecha, jornada o puntero), es un grupo, tenga fecha o no; un plan vacío con sus fotos abajo («26.02.20 |
+CENADE › Fotos») sigue siendo un plan. Con esto se
+reacomodaron los planes: 67 de VLLF a `4 | Planeamiento › Semana NN` y 35 de ERSO a `4 | Planeamiento › Bloque N`, con
+títulos como en Coda (`D03_26.03.25_Palomar Dagmar | Mie`, `D03 25.11.03 | Ferro Escalada`) y el puntero a su día; el
+plan de cada día dio igual antes y después en los 141 días. D782.
+
+[Semanas de Planeamiento como grupos, y planes de ERSO y VLLF reacomodados]
+
 v0.277 :
 
 Un plan de jornada contaba para un día solo si estaba adentro de su página, así que no se podía tener una carpeta

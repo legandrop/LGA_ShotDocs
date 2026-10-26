@@ -93,6 +93,30 @@ describe('plan → día, casos de borde', () => {
     expect(L.get(ddmm)).toMatchObject({ dayId: built.ids.d60 });
   });
 
+  it('una semana vacía con planes adentro es un grupo aunque su título tenga fecha', async () => {
+    const { d, built, src, folder } = await setup();
+    const week = await d.tree.create(folder, 'Semana 08 | 2026-02-20', built.projectId);
+    await d.tree.move(built.ids.plan60, week);
+    const s = await src();
+    expect(planLinks(s).get(week)).toMatchObject({ why: 'group', dayId: null });
+    expect(projectMap(s).plannedDates).toEqual([]);
+    expect(dayLive(s, built.ids.d60).plan.pages.map((p) => p.title)).toEqual(['Plan | Día 60']);
+  });
+
+  it('un plan vacío con fecha y sin jornada, con sus fotos abajo, sigue siendo el plan de su día; el puntero gana al grupo', async () => {
+    const { d, built, src, folder } = await setup();
+    const p = await d.tree.create(folder, '26.02.20 | CENADE', built.projectId);
+    const photos = await d.tree.create(p, 'Fotos', built.projectId);
+    const week = await d.tree.create(folder, 'Semana 08 | 2026-02-20', built.projectId);
+    const inner = await d.tree.create(week, 'D59 | CENADE', built.projectId);
+    await d.tree.setSetting(week, 'entity', { kind: 'plan', day: built.ids.d60 });
+    const L = planLinks(await src());
+    expect(L.get(p)).toMatchObject({ dayId: built.ids.d60, why: 'match' });
+    expect(L.get(photos)).toMatchObject({ dayId: built.ids.d60 });
+    expect(L.get(week)).toMatchObject({ dayId: built.ids.d60, why: 'pointer' });
+    expect(L.get(inner)?.why).not.toBe('group');
+  });
+
   it('una hora sin fecha completa no contradice a la jornada', async () => {
     const { d, built, src, folder } = await setup();
     const p = await d.tree.create(folder, 'D60 | 7.30 a 19.30', built.projectId);

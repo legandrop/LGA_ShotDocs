@@ -2209,3 +2209,13 @@ El reacomodo escribe el puntero con el día donde estaba cada plan, así nada ca
 ### D781 · Las tablas de las páginas, con el borde del Overview (2026-10-25)
 **Pedido de Lega:** los bordes de las tablas se veían casi blancos en el tema oscuro. **Quedó:** un borde apagado
 alrededor con las esquinas redondeadas y líneas suaves entre celdas, como las tablas del Overview, en oscuro y en claro.
+
+### D782 · Los planes de ERSO y VLLF, en *Planeamiento* (2026-10-25)
+**Pedido de Lega:** los planes como en Coda, separados de los reportes. **Quedó:** con las operaciones de la app, carpeta
+`4 | Planeamiento` (*Day plans*) en los dos proyectos: VLLF con sus 12 semanas (67 planes) y ERSO con sus 2 bloques (35).
+Cada plan lleva el puntero `entity.day` al día donde estaba y un título como en Coda (`D03_26.03.25_Palomar Dagmar | Mie`
+en VLLF, `D03 25.11.03 | Ferro Escalada` en ERSO). Se comparó el plan de cada día antes y después (68 + 73 días): sin
+diferencias. Para deshacer: el puntero es el día de origen y el título viejo es «Plan | » más lo que sigue a la fecha (en
+ERSO, «Plan | Día NN · …»). Los dos planes «D44 | COFA» de ERSO son los que la importación pegó al Día 44; en Coda uno era
+el D43 (falta revisarlo con Lega).
+
