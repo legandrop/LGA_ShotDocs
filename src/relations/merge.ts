@@ -19,6 +19,8 @@ export interface MergedPointer {
   at: string;
   /** Las subpáginas de B que ya se vieron (*Dismiss*): una nueva adentro de B también se lista. */
   kids?: string[];
+  /** Una ficha que entró como plano (D785): el título del plano en A. Un link a la ficha lleva ahí. */
+  block?: string;
 }
 
 /** Hasta cuántas uniones seguidas se siguen (B → A → C…). */
@@ -31,7 +33,8 @@ export function readPointer(row: Pick<PageRow, 'settings'> | undefined): MergedP
   const p = raw as Record<string, unknown>;
   if (typeof p.into !== 'string' || !p.into || typeof p.seq !== 'number' || !Number.isFinite(p.seq)) return null;
   const kids = Array.isArray(p.kids) ? p.kids.filter((k): k is string => typeof k === 'string') : undefined;
-  return { into: p.into, seq: p.seq, at: typeof p.at === 'string' ? p.at : '', ...(kids ? { kids } : {}) };
+  const block = typeof p.block === 'string' && p.block ? p.block : undefined;
+  return { into: p.into, seq: p.seq, at: typeof p.at === 'string' ? p.at : '', ...(kids ? { kids } : {}), ...(block ? { block } : {}) };
 }
 
 export interface PointerTree {

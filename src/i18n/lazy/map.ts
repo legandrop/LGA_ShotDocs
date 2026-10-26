@@ -141,38 +141,11 @@ export const map = {
     es: "Todas las páginas que hablan de la escena en un solo PDF o zip, sin las páginas índice",
   },
   'map.sceneExportTitle': { en: "Scene {code}", es: "Escena {code}" },
-  'map.sceneLede': {
-    en: { one: "{count} page talks about it", other: "{count} pages talk about it" },
-    es: { one: "{count} página habla de ella", other: "{count} páginas hablan de ella" },
-  },
-  'map.sceneLedeSeen': {
-    en: { one: "{count} page you can see talks about it", other: "{count} pages you can see talk about it" },
-    es: { one: "{count} página que ves habla de ella", other: "{count} páginas que ves hablan de ella" },
-  },
-  'map.sceneGroupScene': { en: "The scene and its breakdown", es: "La escena y su desglose" },
-  'map.sceneGroupLocation': { en: "Locations and scoutings", es: "Locaciones y scoutings" },
-  'map.sceneGroupShoot': { en: "Shoot days", es: "Días de rodaje" },
-  'map.sceneGroupOther': { en: "Other pages", es: "Otras páginas" },
-  'map.sceneGroupIndex': { en: "Index pages", es: "Páginas índice" },
-  'map.sceneIndexTip': {
-    en: "Pages that name more than 20 scenes and locations (a breakdown table, a general plan): they also name this one",
-    es: "Páginas que nombran más de 20 escenas y locaciones (una tabla de desglose, un plan general): también nombran esta",
-  },
-  'map.sceneSelf': { en: "scene", es: "escena" },
-  'map.sceneTwin': { en: "repeated", es: "repetida" },
-  'map.sceneTwinTip': {
-    en: "Another page with the same scene number: the relations use the first one in the sidebar",
-    es: "Otra página con el mismo número de escena: las relaciones usan la primera de la barra lateral",
-  },
   'map.sceneTwins': {
     en: { one: "{count} page has this scene number.", other: "{count} pages have this scene number." },
     es: { one: "{count} página tiene este número de escena.", other: "{count} páginas tienen este número de escena." },
   },
   'map.sceneTwinsGo': { en: "Merge them in Overview › Pending", es: "Unilas en Panorama › Pendientes" },
-  'map.sceneBlock': { en: "Go to the block", es: "Ir al bloque" },
-  'map.sceneMore': { en: { one: "{count} more", other: "{count} more" }, es: { one: "{count} más", other: "{count} más" } },
-  'map.sceneNone': { en: "No other page names it yet.", es: "Ninguna otra página la nombra todavía." },
-  'map.sceneNoneSeen': { en: "No other page you can see names it.", es: "Ninguna otra página que ves la nombra." },
   'map.sceneUnknown': { en: "{code} isn’t a scene of this project.", es: "{code} no es una escena de este proyecto." },
   'map.sceneUnknownSeen': { en: "{code} isn’t in the pages you can see.", es: "{code} no está en las páginas que ves." },
 } satisfies Dict;

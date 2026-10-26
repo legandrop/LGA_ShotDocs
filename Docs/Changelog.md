@@ -1,5 +1,19 @@
 # Changelog — LGA Shot Docs
 
+v0.279 :
+
+La vista de una escena en el Overview juntaba todo lo que la nombra sin decir qué era cada cosa («Shot Name: …», «§
+Escena — → Escena»), y una escena importada de Coda tenía sus planos como subpáginas con el mismo nombre (en Coda son
+sub-filas de `BD Main`). Ahora la escena dice dónde está cada cosa, un renglón por etapa y tipo (*Preproduction |
+Breakdown*, *Scouting | Reports*, *Planning | Day plan*, *Shoot | Reports*…), en el Overview y en la cabecera de su página
+(D783, D784). Los planos pueden vivir en la página: un título 2 dentro de «Shots». *Bring them into this page…* (y *Bring
+them all in* en *Pending*) los trae con la maquinaria de *Merge*: copia entera, la ficha a la papelera con un puntero al
+plano, y un link a la ficha abre el plano (D785, D786). La auditoría pidió bajar a título 3 los títulos de adentro de
+cada ficha, no traer scoutings, pruebas ni planes, usar el título entero de la ficha y no redirigir una ficha que cambió.
+Ayuda y docs al día.
+
+[Escenas con un renglón por etapa, y sus planos adentro de la página]
+
 v0.278 :
 
 Al reacomodar los planes, las carpetas de semana («Semana 01 | 2026-03-23») se leían como planes por la fecha del título

@@ -540,7 +540,6 @@
 }
 
 .mp-pages:focus-visible,
-.mp-smmore:focus-visible,
 .mp-back:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -604,94 +603,19 @@
   color: var(--muted);
 }
 
-.mp-sm {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-}
 
-.mp-smh,
-.mp-smidx summary {
-  margin: 0 0 6px;
-  font: 500 11px var(--mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 
-.mp-smh b,
-.mp-smidx summary b {
-  font-weight: 500;
-  color: var(--faint);
-}
 
-.mp-sml,
-.mp-smpl {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
 
-.mp-smp {
-  padding: 6px 0 7px;
-  border-top: 1px solid var(--border-soft);
-  min-width: 0;
-}
 
-.mp-smp:first-child {
-  border-top: 0;
-}
 
-.mp-smt {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-  color: var(--text);
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
 
-.mp-smt .mp-tag {
-  margin-left: 0;
-}
 
-.mp-smd {
-  font-size: 11.5px;
-  color: var(--faint);
-}
 
-.mp-smpl {
-  margin-top: 3px;
-  padding-left: 12px;
-  border-left: 2px solid var(--border-soft);
-  font-size: 13px;
-  color: var(--muted);
-}
 
-.mp-smpl li {
-  padding: 1px 0;
-  overflow-wrap: anywhere;
-}
 
-.mp-smph {
-  color: var(--faint);
-}
 
-.mp-smmore {
-  border: 0;
-  padding: 0;
-  background: none;
-  font: inherit;
-  color: var(--muted);
-  cursor: pointer;
-  border-radius: 3px;
-}
 
-.mp-smmore:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
 
 .mp-smtwins {
   margin: 0;
@@ -702,26 +626,8 @@
   color: var(--text-2);
 }
 
-.mp-tag.warn {
-  color: var(--warn);
-  border-color: currentColor;
-}
 
-.mp-smnone {
-  margin: 0;
-  color: var(--faint);
-  font-size: 13px;
-}
 
-.mp-smidx summary {
-  display: list-item;
-  cursor: pointer;
-  width: fit-content;
-}
-
-.mp-smidx summary:hover {
-  color: var(--text-2);
-}
 
 /* --- Pending ---------------------------------------------------------------------------------------------------- */
 

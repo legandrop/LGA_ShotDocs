@@ -136,6 +136,9 @@ export function useRoute(): Route {
  * Lo que va después del "?" en la dirección: la ruta no lo mira (dos direcciones con la misma ruta son la misma
  * pantalla), pero una pantalla puede leerlo, como la vista previa de una plantilla (`/practice?template=on-set`).
  */
+/** Abrir la página misma aunque sea una ficha que entró en su escena (desde la papelera, D785): `?stay`. */
+export const STAY_PARAM = 'stay';
+
 export function useSearchParam(name: string): string | null {
   const search = useSyncExternalStore(subscribe, () => location.search);
   return new URLSearchParams(search).get(name);

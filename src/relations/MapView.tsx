@@ -19,10 +19,14 @@ import { AssignButton, CreateEntityButton } from './EntityActions';
 import { titleFragment, titleFragmentWhy } from './aliasAction';
 import { LinkLocationButton } from './LinkLocation';
 import { MergeButton, MergePendingRows, useMergeRows } from './MergeAction';
+import { FoldPendingRow } from './FoldShots';
 import { contentCounts } from './merge';
 import { twinLabels } from './twinNames';
 import { mapPathFrom, sceneLinks, sceneMentions, scenePageCount, type SceneLinks } from './sceneMentions';
-import { SceneMentionsView } from './SceneMentionsView';
+import { sceneLive, type LiveSource, type PageChip, type SceneLive } from './liveView';
+import { sceneStageRows, stagePageIds } from './sceneStageRows';
+import { SceneStages } from './SceneStages';
+import type { SceneMentionList } from './sceneMentions';
 import './liveHeader.css';
 import './map.css';
 
@@ -256,9 +260,9 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
           ) : tab === 'locations' ? (
             <Locations data={data} fq={fq} complete={complete} />
           ) : tab === 'scenes' && sceneCode && src ? (
-            <SceneDetail key={sceneCode} code={resolve(sceneCode) ?? sceneCode} data={data} src={src} links={links} complete={complete} partial={partial} onPlace={(p) => goToPlace(services, p)} />
+            <SceneDetail key={sceneCode} code={resolve(sceneCode) ?? sceneCode} data={data} src={src} links={links} complete={complete} partial={partial} />
           ) : tab === 'scenes' ? (
-            <Scenes data={data} fq={fq} codes={codes} complete={complete} partial={partial} src={src} links={links} onPlace={(p) => goToPlace(services, p)} />
+            <Scenes data={data} fq={fq} codes={codes} complete={complete} partial={partial} src={src} links={links} />
           ) : tab === 'scouting' ? (
             <Scoutings data={data} fq={fq} />
           ) : tab === 'days' ? (
@@ -435,7 +439,6 @@ function Scenes({
   partial,
   src,
   links,
-  onPlace,
 }: {
   data: ProjectMapData;
   fq: string;
@@ -444,7 +447,6 @@ function Scenes({
   partial: boolean;
   src: SceneSrc | null;
   links: SceneLinks | null;
-  onPlace: (place: Place) => void;
 }) {
   const tr = useT();
   // Las escenas con «N pages» desplegado (la lista se arma recién al desplegar: lee los extractos).
@@ -547,7 +549,7 @@ function Scenes({
                 </span>
                 {list && (
                   <div className="mp-sexp" role="cell">
-                    <SceneMentionsView list={list} complete={complete} partial={partial} onPlace={onPlace} />
+                    <SceneStagesFor code={s.code} src={src!} list={list} partial={partial} />
                   </div>
                 )}
               </div>
@@ -568,7 +570,6 @@ function SceneDetail({
   links,
   complete,
   partial,
-  onPlace,
 }: {
   code: string;
   data: ProjectMapData;
@@ -576,7 +577,6 @@ function SceneDetail({
   links: SceneLinks | null;
   complete: boolean;
   partial: boolean;
-  onPlace: (place: Place) => void;
 }) {
   const tr = useT();
   const top = useRef<HTMLDivElement>(null);
@@ -589,6 +589,8 @@ function SceneDetail({
   }, [code]);
   const scene = data.scenes.find((s) => s.code === code) ?? null;
   const list = useMemo(() => (scene && links ? sceneMentions(data, code, src, { links }) : null), [data, code, src, scene, links]);
+  // Lo que dicen los renglones por etapa (D783): la vista viva de la escena, la misma de su cabecera.
+  const live = useMemo(() => (scene ? sceneLive(src as LiveSource, code) : null), [src, code, scene, data]);
   // Lo que se exporta: las páginas de la lista en el orden en que se ven, sin las páginas índice.
   const exportIds = useMemo(() => (list ? list.groups.filter((g) => g.id !== 'index').flatMap((g) => g.pages.map((p) => p.pageId)) : []), [list]);
   return (
@@ -626,10 +628,7 @@ function SceneDetail({
             )}
           </h2>
           <div className="mp-sbar">
-            <p className="mp-smeta">
-              {scene.episode && <>{tr('live.episode', { ep: scene.episode })} · </>}
-              {complete || list.count > 1 ? tr(partial ? 'map.sceneLedeSeen' : 'map.sceneLede', { count: list.count }) : tr('live.reading')}
-            </p>
+            <p className="mp-smeta">{metaOf(tr, live, scene.episode)}</p>
             {/* Todas las páginas de la lista en un PDF o un zip, sin las páginas índice (nombran decenas de escenas). Mientras el
                 índice lee, apagado: la lista todavía puede crecer y la ventana se lleva la de ese momento. */}
             <button className="mp-btn" data-tip={tr('map.sceneExportTip')} disabled={!complete || exportIds.length === 0} onClick={() => openExportPages(`scene:${scene.code}`, tr('map.sceneExportTitle', { code: scene.code }), exportIds)}>
@@ -639,10 +638,68 @@ function SceneDetail({
               {tr('map.sceneExport')}
             </button>
           </div>
-          <SceneMentionsView list={list} complete={complete} partial={partial} onPlace={onPlace} />
+          {list.scenePages > 1 && (
+            // La escena está en dos páginas o más: las relaciones usan la primera; se resuelve en Pending (D747).
+            <p className="mp-smtwins">
+              {tr('map.sceneTwins', { count: list.scenePages })}{' '}
+              <PageLinkTo href={mapPath('pending')}>{tr('map.sceneTwinsGo')}</PageLinkTo>
+            </p>
+          )}
+          <SceneStagesFor code={scene.code} src={src} list={list} partial={partial} live={live} />
         </>
       )}
     </div>
+  );
+}
+
+/** Los renglones «Etapa | Tipo: links» de una escena (D783): en su vista y en la fila desplegada de *Scenes*. */
+function SceneStagesFor({ code, src, list, partial, live }: { code: string; src: SceneSrc; list: SceneMentionList; partial: boolean; live?: SceneLive | null }) {
+  const v = useMemo(() => live ?? sceneLive(src as LiveSource, code), [live, src, code]);
+  const rows = useMemo(() => {
+    // Lo que nombra la escena y no está en ninguna etapa (una página suelta, un link), y las páginas índice, plegadas.
+    const inRows = stagePageIds(v);
+    const others: PageChip[] = [];
+    const index: PageChip[] = [];
+    for (const g of list.groups) {
+      for (const p of g.pages) {
+        if (p.self) continue;
+        const chip: PageChip = { pageId: p.pageId, title: p.title, ...(p.places[0] ? { blockId: p.places[0].blockId } : {}) };
+        if (g.id === 'index') index.push(chip);
+        else if (!inRows.has(p.pageId)) others.push(chip);
+      }
+    }
+    return sceneStageRows(v, { self: false, title: (id) => src.title(id) ?? '', locPage: (n) => src.snap.registry.locations.get(n)?.pageId ?? null, others, index });
+  }, [v, list, src]);
+  return <SceneStages rows={rows} partial={partial} />;
+}
+
+/** «Episodio 101 · INT/DÍA · 3 planos · filmada en 2 días» (solo lo que se sabe: mientras lee, sin ceros). */
+function metaOf(tr: ReturnType<typeof useT>, v: SceneLive | null, episode: string | null): string {
+  const shot = v ? v.days.filter((d) => d.sections.length).length : 0;
+  return [
+    episode ? tr('live.episode', { ep: episode }) : '',
+    v?.intExt.slice(0, 2).join(', ') ?? '',
+    v && v.shots.length ? tr('stages.shots', { count: v.shots.length }) : '',
+    shot ? tr('stages.shotOnDays', { count: shot }) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Un link de la app dentro del texto (con ⌘/Ctrl, aparte). */
+function PageLinkTo({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a
+      className="mp-plink"
+      href={href}
+      onClick={(e: MouseEvent) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        navigate(href);
+      }}
+    >
+      {children}
+    </a>
   );
 }
 
@@ -916,6 +973,7 @@ function Pending({
             );
           })}
           <MergePendingRows />
+          <FoldPendingRow />
           {data.duplicates.map((d) => (
             <PendingRow
               key={`dup:${d.code}`}

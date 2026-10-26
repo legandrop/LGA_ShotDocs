@@ -10,7 +10,7 @@ import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { schema } from '../ui/editorSchema';
 import { schema as publishedSchema } from '../ui/fixtures/editorSchemaMain';
 import { findUnknownContent } from '../ui/unknownContent';
-import { blockIds, blocksToCopy, blockSignature, copyIntoDoc, derivedId, intactCopy, missingFrom, planCopy, separatorBlock, separatorId, skippedSignatures, undoCopyInDoc, type CopyRecord } from './mergeWrite';
+import { blockIds, blocksToCopy, blockSignature, copyIntoDoc, derivedId, intactCopy, missingFrom, planCopy, planFold, separatorBlock, separatorId, shotsId, skippedSignatures, undoCopyInDoc, type CopyRecord } from './mergeWrite';
 
 // La copia de *Merge* en el Y.Doc (E16, D645, D649, C4, C5, C8): exacta, con los mismos ids, al final y solo agregando;
 // los ids que A ya tenía, derivados también adentro; repetir no duplica; *Undo* saca solo lo intacto; con el editor
@@ -469,5 +469,57 @@ describe('volver a mirar lo salteado (D714)', () => {
     expect(missingFrom(a, skipped)).toBe(1);
     // Un renglón en blanco no cuenta como salteado.
     expect(skippedSignatures(docOf([para('x')]), docOf([para('x'), para('')])).length).toBe(1);
+  });
+});
+
+describe('una ficha que entra como plano (D785)', () => {
+  const SCENE = 'aaaaaaaa-0000-4000-8000-000000000000';
+  const level = (doc: Y.Doc, id: string) => {
+    const el = ((doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).toArray() as Y.XmlElement[]).find((c) => c.getAttribute('id') === id)!;
+    return Number((el.toArray()[0] as Y.XmlElement).getAttribute('level'));
+  };
+  function fold(a: Y.Doc, b: Y.Doc, key: string, title: string) {
+    const plan = planFold(a, b);
+    return copyIntoDoc(a, b, {
+      from: key,
+      remap: plan.remap,
+      separator: () => separatorBlock(title, separatorId(key), 2),
+      fold: { shotsId: shotsId(SCENE), shots: () => separatorBlock('Planos', shotsId(SCENE), 1) },
+    });
+  }
+
+  it('la primera escribe «Planos» (título 1) y su título 2; las siguientes van al final de esa sección, antes del próximo título 1', () => {
+    const a = docOf([{ id: 'n1', ...head('Notas') }, { id: 'n2', ...para('Algo de la escena.') }]);
+    const b1 = docOf([{ id: 'x1', ...para('Shot Name: ERSO_101_032_010') }, { id: 'x2', ...para('Descripción del plano.') }]);
+    const k1 = `${B_ID}:1`;
+    expect(typeof fold(a, b1, k1, 'ERSO_101_032_010')).toBe('object');
+    expect(topIds(a)).toEqual(['n1', 'n2', shotsId(SCENE), separatorId(k1), 'x1', 'x2']);
+    expect(level(a, shotsId(SCENE))).toBe(1);
+    expect(level(a, separatorId(k1))).toBe(2);
+    // La persona escribe una sección nueva después de los planos: el próximo plano va antes de ella.
+    const e = mount(a);
+    e.insertBlocks([{ id: 'z1', type: 'heading', props: { level: 1 }, content: 'Después' } as never], e.document[e.document.length - 1], 'after');
+    // Lo mismo que la primera (en Coda, las sub-filas repiten campos): se copia igual, no se compara con A (no es *Merge*).
+    const b2 = docOf([{ id: 'y1', ...para('Shot Name: ERSO_101_032_010') }, { id: 'y2', ...para('Otra descripción.') }]);
+    const k2 = `${B_ID}:2`;
+    expect(typeof fold(a, b2, k2, 'ERSO_101_032_010 · 2')).toBe('object');
+    expect(topIds(a)).toEqual(['n1', 'n2', shotsId(SCENE), separatorId(k1), 'x1', 'x2', separatorId(k2), 'y1', 'y2', 'z1']);
+    expect(topTexts(a).filter((x) => x === 'Shot Name: ERSO_101_032_010')).toHaveLength(2);
+    // Repetir no duplica.
+    expect(fold(a, b2, k2, 'ERSO_101_032_010 · 2')).toBe('already');
+  });
+
+  it('una ficha vacía igual deja su título; los renglones en blanco de las puntas no viajan; un id que A ya tiene, derivado', () => {
+    const a = docOf([{ id: 'same', ...para('De A') }]);
+    expect(planFold(a, docOf([para('')])).nothing).toBe(false);
+    expect(typeof fold(a, docOf([para('')]), `${B_ID}:v`, 'Vacía')).toBe('object');
+    expect(topTexts(a)).toEqual(['De A', 'Planos', 'Vacía']);
+    const b = docOf([para(''), { id: 'same', ...para('De B') }, para('')]);
+    const plan = planFold(a, b);
+    expect(plan.remap).toEqual(['same']);
+    expect(typeof fold(a, b, `${B_ID}:r`, 'Con id repetido')).toBe('object');
+    expect(topTexts(a)).toEqual(['De A', 'Planos', 'Vacía', 'Con id repetido', 'De B']);
+    expect([...blockIds(a)].filter((id) => id === 'same')).toHaveLength(1);
+    expect(blockIds(a).has(derivedId(`${B_ID}:r`, 'same'))).toBe(true);
   });
 });

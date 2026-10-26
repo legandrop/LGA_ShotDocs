@@ -1340,3 +1340,55 @@ como en el árbol. Lo plegado (el bloque, la parte y el episodio) se recuerda po
 (`localStorage` `shotdocs-overview-nav`; reemplaza a `shotdocs-scenes-nav`, que se ignora). De fábrica, el bloque
 abierto con *Scenes* desplegada. Al bajar, el título y la parte desplegada quedan pegados arriba (D771). Cada lista
 dibuja 60 filas y «Show 60 more», y la fila abierta siempre se ve.
+
+## 23. Una escena: dónde está cada cosa, y sus planos adentro (v0.279, D783–D786)
+
+Pedido de Lega: la vista de una escena en el Overview mezclaba todo lo que la nombra («La escena y su desglose», «Shot
+Name: …», «§ Escena 101_061 — → Escena 101_061») sin decir qué era cada cosa, con títulos que no parecían títulos y links
+de colores distintos; y la página de una escena importada de Coda tenía sus planos como subpáginas con el mismo nombre
+(en Coda, `BD Main` es una fila por plano y las sub-filas repiten el nombre del plano). Eligió, de los mockups, la
+opción A para el Overview y la D para la página de la escena.
+
+| Pieza | Archivo |
+|---|---|
+| Los renglones (puro) | `src/relations/sceneStageRows.ts` (`sceneStageRows`, `stagePageIds`) |
+| Cómo se ven | `src/relations/SceneStages.tsx` + `sceneStages.css` (prefijo `ss-`) |
+| Los planos de la página y los planes de jornada | `src/relations/liveView.ts` (`shotSections`, `SHOTS_HEADINGS`, `SceneLive.shots`, `.plans`, `.testPages`) |
+| Traer los planos | `src/relations/FoldShots.tsx` (`foldCards`, `foldScene`, `FoldShotsLine`, `FoldPendingRow`), `mergeJob.ts` (`runFold`), `mergeWrite.ts` (`planFold`, `foldBlocks`, `shotsId`) |
+| Textos | `stages.*`, `fold.*` |
+
+**Los renglones «Etapa | Tipo: links» (D783, D784).** Uno por etapa del árbol (`Plan_Estructura_Etapas.md`) y tipo:
+*Preproduction | Breakdown* (la página de la escena y cuántos planos), *Set*, *Location* (la del desglose y la del título
+de cada día filmado, sin repetir), *Open questions* (la primera, de qué plano, cuántas más), *Scouting | Reports* (los
+que la nombran; si ninguno, los de la locación donde se filmó, «de …»), *Tests | Reports*, *Planning | Day plan* (cada
+día con sus planes), *Shoot | Reports* (un día por renglón con sus secciones y sus fotos; un día que solo la nombra en el
+texto, aparte) y *Other* (lo que la nombra fuera de las etapas; las páginas índice, plegadas). *Breakdown*, *Location*,
+*Scouting*, *Planning* y *Shoot* van siempre: vacíos dicen que no hay, o *Reading…* mientras el índice lee (D402);
+*Set*, *Open questions*, *Tests* y *Other*, solo con algo. Los colores de D774: escena en frambuesa, locación en azul,
+día en violeta, lo demás en el acento. El Overview los muestra en la vista de la escena y en la fila desplegada de
+*Scenes*; la cabecera viva de la página de la escena, los mismos sin *Breakdown* (es esa página). Una escena en dos
+páginas lo dice arriba y lleva a *Pending*.
+
+**Los planos adentro de la página (D785).** Un título 1 «Planos» o «Shots» abre la sección de los planos: cada título 2
+de adentro es un plano, hasta el próximo título de nivel 1 o 2, y cuenta como una ficha (sus campos, su pregunta abierta,
+su «No VFX», que ya no marca la escena entera). La cabecera los cuenta junto con las fichas que sigan siendo subpáginas.
+
+**Traerlos (*Bring them into this page…*, D785).** La cabecera de una escena con fichas como subpáginas directas dice «N
+shots are subpages» y ofrece traerlas. Cada ficha, en el orden del árbol, pasa por la maquinaria de *Merge* (sección 20)
+con las mismas guardas y el mismo orden: la copia entera (sin comparar con lo que la escena ya tiene) va al final de la
+sección «Shots» de la escena (que se escribe la primera vez, con un id derivado de la escena, igual en todos los
+dispositivos; si ya está en otro lugar no se escribe otro), bajo un título 2 con el título entero de la ficha (o su *Shot
+Name* si no tiene; los repetidos, «· 2», «· 3»), con sus títulos 1 y 2 bajados a 3 (si no, cortarían la sección); la
+escena sube entera y los usos de las fotos se confirman en la base; recién ahí la ficha va a la papelera con el puntero
+`merged`, que además dice el bloque del plano (`block`). Un link a la ficha abre la escena en ese plano y reemplaza la
+dirección, salvo que la ficha haya cambiado después de entrar (*Pending* la lista) o se la abra desde la papelera
+(`?stay`); restaurada, se abre como siempre. Solo se traen subpáginas directas que no son un documento de una etapa (un
+scouting, una prueba o un plan adentro de la escena siguen en su renglón), con la lista armada al empezar: las subpáginas
+de una ficha suben a la escena con ella y no se traen en la misma corrida. *Undo* saca el plano y, si era el único, el
+título «Shots». Queda como subpágina una ficha con comentarios o compartida aparte (permiso o link público propio); sin
+red, se corta y lo empezado sigue al volver. `runFold` no copia una ficha que ya está en la
+papelera o fuera de la escena, la llame quien la llame.
+
+**Todas a la vez (D786).** *Overview › Pending* lista «Scenes with their shots still as subpages: N (M shots)» con *Bring them all
+in* (dueño o admin): escena por escena, ficha por ficha, con *Stop* entre una ficha y la siguiente, y un aviso final con
+cuántas entraron y por qué quedaron las otras.

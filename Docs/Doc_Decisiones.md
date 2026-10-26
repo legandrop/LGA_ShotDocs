@@ -2219,3 +2219,23 @@ diferencias. Para deshacer: el puntero es el día de origen y el título viejo e
 ERSO, «Plan | Día NN · …»). Los dos planes «D44 | COFA» de ERSO son los que la importación pegó al Día 44; en Coda uno era
 el D43 (falta revisarlo con Lega).
 
+
+### D783 · La escena en el Overview: un renglón por etapa y tipo (2026-10-26)
+**Pedido de Lega:** la vista de la escena del Overview no se entendía (títulos que no parecían títulos, links de colores
+distintos, renglones como «Shot Name: …» o «§ Escena — → Escena»). Propuso «Etapa | Tipo: links». **Eligió la opción A**
+de los mockups: un renglón por etapa del árbol y tipo, con sus links y lo que falta dicho («No day plan names it»).
+
+### D784 · La cabecera de la página de la escena, con los mismos renglones (2026-10-26)
+**Eligió la opción D** de los mockups para la página de la escena: arriba, los renglones de D783 sin *Breakdown* (es esa
+página); reemplazan los paneles *Breakdown / Scouting / Shoot* de la cabecera. La de una locación no cambia.
+
+### D785 · Los planos de una escena, adentro de su página (2026-10-26)
+**Pedido de Lega:** que una escena con varios planos se vea en una sola página, sin subpáginas (en Coda, `BD Main` es una
+fila por plano). **Quedó:** cada plano es un título 2 dentro de un título 1 «Planos»/«Shots» de la página de la escena;
+*Bring them into this page…* trae las fichas que siguen como subpáginas con la maquinaria de *Merge* (copia entera, la
+ficha a la papelera con un puntero al plano, un link a la ficha abre el plano). Quedan como subpágina las que tienen
+comentarios o están compartidas aparte. Los nombres repetidos llevan «· 2», «· 3» (propuesta, no sale de Coda).
+
+### D786 · Traer los planos de todo el proyecto desde *Pending* (2026-10-26)
+**Decidido** (sin preguntar, como pide Lega): *Overview › Pending* ofrece hacerlo con todas las escenas a la vez, solo al
+dueño o a un admin, con *Stop*. Así ERSO y VLLF se pasan con un clic, sin reimportar.

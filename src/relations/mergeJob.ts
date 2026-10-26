@@ -5,7 +5,7 @@ import type { PageTree } from '../sync/tree';
 import { findUnknownContent } from '../ui/unknownContent';
 import { freshSync } from './createEntity';
 import { readPointer, type MergeBlock } from './merge';
-import { copyIntoDoc, missingFrom, planCopy, separatorBlock, separatorId, skippedSignatures, undoCopyInDoc, type CopyRecord } from './mergeWrite';
+import { copyIntoDoc, dropEmptyShots, missingFrom, planCopy, planFold, separatorBlock, separatorId, shotsId, skippedSignatures, undoCopyInDoc, type CopyRecord } from './mergeWrite';
 import { isArriving } from './prepareDay';
 
 // El trabajo de *Merge* (E16, alcance reducido, C3): todo en el dispositivo que une, sin funciones nuevas en la base, en
@@ -61,6 +61,11 @@ export interface MergeJob {
   skipped?: string[];
   /** El `seq` del contenido de B que se copió. */
   seq: number;
+  /**
+   * Una ficha que entra en la página de su escena como plano (*Bring shots into this page*, D785): `title`, el título 2 del
+   * plano; `shots`, el del título 1 «Planos» si la escena todavía no lo tiene. Se copia todo B, sin comparar.
+   */
+  fold?: { title: string; shots: string };
   step: MergeStep;
   copy?: CopyRecord;
   at: string;
@@ -101,8 +106,8 @@ export interface MergeDeps {
   store: MergeStore;
   /** Las guardas que se miran sin red (M1, M4, M8) con lo de ahora: `null` si se puede. */
   check(keep: string, gone: string): MergeFailure | null;
-  /** Arma el separador (con el editor); las pruebas sin DOM pasan otro. */
-  separator?: (text: string, id: string) => Y.XmlElement;
+  /** Arma el separador (con el editor; `level`: 1, o 2 el título de un plano); las pruebas sin DOM pasan otro. */
+  separator?: (text: string, id: string, level?: number) => Y.XmlElement;
   waitMs?: number;
   /** Pruebas: corre después de anotar cada paso (cortar la app ahí). */
   afterStep?(step: MergeStep, job: MergeJob): void | Promise<void>;
@@ -174,15 +179,28 @@ export async function pendingMerges(store: MergeStore): Promise<MergeJob[]> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+type MergeRequest = { keep: string; gone: string; projectId: string; text: string; fold?: MergeJob['fold'] };
+
+/**
+ * Una ficha (`card`, adentro de la escena) entra en la página de su escena (`scene`) como plano (D785): las mismas guardas,
+ * el mismo orden y la misma papelera que *Merge*, con la copia entera de la ficha bajo su título. `deps.check` es el de
+ * esta acción (la ficha está adentro de la escena).
+ */
+export function runFold(deps: MergeDeps, req: { scene: string; card: string; projectId: string; title: string; shots: string }): Promise<MergeOutcome> {
+  // Una ficha que ya entró (en la papelera) o que ya no está adentro de la escena no se copia, la llame quien la llame.
+  if (deps.tree.isTrashed(req.card) || deps.tree.get(req.card)?.parent_id !== req.scene) return Promise.resolve({ status: 'blocked', reason: 'gone' });
+  return runMerge(deps, { keep: req.scene, gone: req.card, projectId: req.projectId, text: req.title, fold: { title: req.title, shots: req.shots } });
+}
+
 /** Une `gone` (B) en `keep` (A). */
-export function runMerge(deps: MergeDeps, req: { keep: string; gone: string; projectId: string; text: string }): Promise<MergeOutcome> {
+export function runMerge(deps: MergeDeps, req: MergeRequest): Promise<MergeOutcome> {
   // Tomado desde antes de la primera guarda: el vigía no puede empezar a mitad (D687).
   const running = runningOf(deps);
   if (running.has(req.gone) || running.has(req.keep)) return Promise.resolve({ status: 'blocked', reason: 'merging' });
   return locked(deps, req.gone, () => runMergeNow(deps, req));
 }
 
-async function runMergeNow(deps: MergeDeps, req: { keep: string; gone: string; projectId: string; text: string }): Promise<MergeOutcome> {
+async function runMergeNow(deps: MergeDeps, req: MergeRequest): Promise<MergeOutcome> {
   const { keep, gone } = req;
   // Con red y una sincronización buena en el momento (D653): lo último de otro dispositivo tiene que estar acá.
   if (!(await freshSync(deps.engine))) return { status: 'blocked', reason: 'offline' };
@@ -205,7 +223,7 @@ async function runMergeNow(deps: MergeDeps, req: { keep: string; gone: string; p
     await deps.engine.syncNow().catch(() => undefined);
     if (await deps.docs.hasOwnUnsent(gone)) return { status: 'blocked', reason: 'unsent' };
   }
-  const plan = await readPlan(deps, keep, gone);
+  const plan = await readPlan(deps, keep, gone, !!req.fold);
   if (typeof plan === 'string') return { status: 'blocked', reason: plan };
   const job: MergeJob = {
     v: 1,
@@ -220,6 +238,7 @@ async function runMergeNow(deps: MergeDeps, req: { keep: string; gone: string; p
     photos: plan.photos,
     skipped: plan.skipped,
     seq: plan.seq,
+    ...(req.fold ? { fold: req.fold } : {}),
     step: 'started',
     at: new Date().toISOString(),
   };
@@ -228,7 +247,7 @@ async function runMergeNow(deps: MergeDeps, req: { keep: string; gone: string; p
 }
 
 /** B leída sin abrirla en el editor (abrirla podría escribirle una reparación) y A abierta: qué copiar. */
-async function readPlan(deps: MergeDeps, keep: string, gone: string): Promise<{ remap: string[]; nothing: boolean; photos: string[]; skipped: string[]; seq: number } | 'unknown' | 'missing'> {
+async function readPlan(deps: MergeDeps, keep: string, gone: string, fold = false): Promise<{ remap: string[]; nothing: boolean; photos: string[]; skipped: string[]; seq: number } | 'unknown' | 'missing'> {
   const b = await deps.docs.indexSnapshot(gone);
   try {
     if (findUnknownContent(b.doc)) return 'unknown';
@@ -237,6 +256,8 @@ async function readPlan(deps: MergeDeps, keep: string, gone: string): Promise<{ 
     const a = await deps.docs.open(keep);
     try {
       if (findUnknownContent(a)) return 'unknown';
+      // Una ficha que entra como plano se copia entera (D785): nada se saltea.
+      if (fold) return { ...planFold(a, b.doc), skipped: [], seq };
       return { ...planCopy(a, b.doc), skipped: skippedSignatures(a, b.doc), seq };
     } finally {
       deps.docs.close(keep);
@@ -268,7 +289,15 @@ export async function continueMerge(deps: MergeDeps, job: MergeJob): Promise<Mer
           if (findUnknownContent(a)) return stop(deps, job, 'into');
           const build = deps.separator ?? separatorBlock;
           const key = copyKey(job);
-          const out = copyIntoDoc(a, b.doc, { from: key, remap: job.remap, separator: () => build(job.text, separatorId(key)) });
+          const fold = job.fold;
+          const out = fold
+            ? copyIntoDoc(a, b.doc, {
+                from: key,
+                remap: job.remap,
+                separator: () => build(fold.title, separatorId(key), 2),
+                fold: { shotsId: shotsId(job.into), shots: () => build(fold.shots, shotsId(job.into), 1) },
+              })
+            : copyIntoDoc(a, b.doc, { from: key, remap: job.remap, separator: () => build(job.text, separatorId(key)) });
           if (typeof out !== 'string') {
             job.copy = out;
             job.photos = [...new Set([...(job.photos ?? []), ...out.photos])];
@@ -340,7 +369,8 @@ export async function continueMerge(deps: MergeDeps, job: MergeJob): Promise<Mer
     const comments = await deps.comments(job.from);
     if (comments === null) return pending(deps, job);
     if (comments > 0) return stop(deps, job, 'comments');
-    await tree.setSetting(job.from, 'merged', { into: job.into, seq: job.seq, at: new Date().toISOString() });
+    // Una ficha que entró como plano: el puntero dice además dónde quedó (un link a la ficha lleva al plano, D785).
+    await tree.setSetting(job.from, 'merged', { into: job.into, seq: job.seq, at: new Date().toISOString(), ...(job.fold ? { block: separatorId(copyKey(job)) } : {}) });
     await save(deps, job, 'pointer');
   }
   // La papelera, recién ahora: A tiene todo en el servidor.
@@ -397,7 +427,11 @@ export async function undoMerge(deps: Pick<MergeDeps, 'tree' | 'docs' | 'engine'
   if (job.copy) {
     const a = await deps.docs.open(job.into);
     try {
-      if (!findUnknownContent(a)) kept = undoCopyInDoc(a, job.copy).kept;
+      if (!findUnknownContent(a)) {
+        kept = undoCopyInDoc(a, job.copy).kept;
+        // Un plano traído (D785): si era el único, el título «Shots» queda vacío y se saca.
+        if (job.fold && !kept) dropEmptyShots(a, shotsId(job.into));
+      }
       await deps.docs.flush(job.into);
     } finally {
       deps.docs.close(job.into);

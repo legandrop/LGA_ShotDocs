@@ -93,7 +93,7 @@ export interface PageSettings {
    * `seq` de su contenido. Solo una pista (la escribe cualquier editor): vale solo si la página está en la papelera y
    * `into` vive (`mergedTarget`, `src/relations/merge.ts`). No se hereda.
    */
-  merged?: { into: string; seq: number; at: string; kids?: string[] };
+  merged?: { into: string; seq: number; at: string; kids?: string[]; block?: string };
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;

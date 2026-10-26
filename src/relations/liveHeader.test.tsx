@@ -98,10 +98,30 @@ function services(device: Device): Services {
 }
 
 let n = 0;
-const fakePhoto = async () => `0000${String(++n).padStart(4, '0')}-aaaa-4bbb-8ccc-dddddddddddd`;
+/** Con servidor: las fotos falsas existen ahí, con su uso en la página donde están (una prueba que necesita usos confirmados). */
+let photoServer: FakeServer | null = null;
+const fakePhoto = async (_label?: string, pageId?: string) => {
+  const id = `0000${String(++n).padStart(4, '0')}-aaaa-4bbb-8ccc-dddddddddddd`;
+  if (photoServer && pageId) {
+    photoServer.mediaFiles.set(id, {
+      id, name: `${id}.jpg`, mime: 'image/jpeg', width: 1920, height: 1080, duration: null, thumb_at: null,
+      drive_id: `d-${id}`, size: 2048, trashed_at: null, purged_at: null, drive_trashed_at: null, project_id: photoServer.workspaceId,
+    });
+    photoServer.pageFiles.add(`${pageId}:${id}`);
+  }
+  return id;
+};
 
-async function app(start: string): Promise<{ d: Device; built: Built; host: HTMLElement; s: Services }> {
-  const d = await makeDevice(new FakeServer());
+async function app(start: string, team = false): Promise<{ d: Device; built: Built; host: HTMLElement; s: Services; server: FakeServer }> {
+  const server = new FakeServer();
+  // Con equipo, el dueño puede leer quién ve cada página (lo mira *Bring shots into this page*), y con el portero y la
+  // papelera de archivos los usos de las fotos se confirman en la base (lo espera antes de mandar la ficha a la papelera).
+  if (team) {
+    server.enableTeam();
+    server.enableTrash();
+  }
+  photoServer = team ? server : null;
+  const d = await makeDevice(server);
   devices.push(d);
   const built = await buildProject(d, fakePhoto, { indexPage: false });
   history.replaceState(null, '', pagePath(built.ids[start]));
@@ -117,7 +137,7 @@ async function app(start: string): Promise<{ d: Device; built: Built; host: HTML
       </ServicesContext.Provider>,
     ),
   );
-  return { d, built, host, s };
+  return { d, built, host, s, server };
 }
 
 const header = (host: HTMLElement) => host.querySelector<HTMLElement>('section.lh');
@@ -141,26 +161,27 @@ describe('la cabecera viva en la app', () => {
     expect(lh.querySelector('.lh-id')!.textContent).toMatch(/^Scene/);
     expect(lh.querySelector('.lh-id')!.textContent).not.toContain('105_027 ');
     expect(lh.querySelector('.lh-id')!.textContent).not.toContain('Desglose');
-    expect(lh.textContent).toContain('Día 59');
-    expect(lh.textContent).toContain('§ Escena 105_027b');
-    expect(lh.querySelector('[data-tip="Location per the day title"]')?.textContent).toBe('CENADE');
-    expect(lh.textContent).toContain('2 cards');
-    expect(lh.textContent).toContain('3 days · 4 sections');
+    // Los renglones «Etapa | Tipo: links» (D784), sin *Desglose* (es esta página).
+    expect([...lh.querySelectorAll('.ss-row')].map((r) => r.textContent)).toEqual([
+      'Preproduction | SetAmbulancia | Ruta INT',
+      'Preproduction | LocationLa Arenera (estudio), CENADE',
+      'Preproduction | Open questions? ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1',
+      'Scouting | ReportsTech scout 06/01',
+      'Planning | Day planDía 60 · 20 Feb › Plan | Día 60',
+      'Shoot | ReportsDía 59 · 19 Feb › Escena 105_027b · 5 photosDía 70 · 6 Mar › Escena 105_027A + 029B · 4 photosDía 76 · 14 Mar › Escena 5-27, Escena 5-27A · 4 photos',
+      'Other | Also named inNotas de dirección',
+    ]);
     // Tooltips de la app, nunca `title=`.
     expect(lh.querySelectorAll('[title]').length).toBe(0);
-    // Etapas cerradas; abrir una muestra sus extractos.
-    expect(lh.querySelector('.lh-panel')).toBeNull();
-    click(byText(lh, '.lh-stage', 'Scouting'));
-    expect(lh.querySelector('.lh-panel')!.textContent).toContain('(5027b) Ambulancia vuelca');
-    expect(lh.querySelector('.lh-panel')!.textContent).toContain('part B');
+    // Sin los paneles de etapa de antes.
+    expect(lh.querySelector('.lh-panel, .lh-stage')).toBeNull();
     // Nada de esto tocó el documento de la página.
     const doc = await d.docs.open(built.ids.s027);
     // La página vacía la siembra el editor al abrirla (eso es de siempre): se compara después de eso.
     await until(() => host.querySelector('.bn-editor') && Y.encodeStateVector(doc).length > 1, 'el editor listo');
     await wait(100);
     const before = Y.encodeStateVector(doc);
-    click(byText(lh, '.lh-stage', 'Shoot'));
-    click(lh.querySelector('.lh-tbtn'));
+    click(lh.querySelector('.lh-tools .lh-tbtn'));
     await wait();
     click(header(host)!.querySelector('.lh-line'));
     await wait();
@@ -176,7 +197,7 @@ describe('la cabecera viva en la app', () => {
     expect(header(host)!.textContent?.toLowerCase()).not.toContain('not shot');
     // Alguien escribe en el día 60: la escena se entera sola.
     await writeBlocks(d, built.ids.d60, [{ h: 1, text: 'Escena 105_029a' }, { p: '105_026 queda para mañana' }]);
-    await until(() => byText(host, '.lh-dayline', 'named in the text')?.textContent?.includes('Día 60'), 'la mención nueva');
+    await until(() => byText(host, '.ss-row[data-row="shoot"] .ss-line', 'named in the text')?.textContent?.includes('Día 60'), 'la mención nueva');
   });
 
   it('mientras el índice no leyó todo, dice «Reading…» en vez de afirmar ausencias', async () => {
@@ -210,7 +231,7 @@ describe('la cabecera viva en la app', () => {
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
     click(header(host)!.querySelector('.lh-tbtn'));
     expect(header(host)!.classList.contains('closed')).toBe(true);
-    expect(header(host)!.querySelector('.lh-line')!.textContent).toContain('Shot at CENADE, La Arenera (estudio) · 3 days · 2 cards · ');
+    expect(header(host)!.querySelector('.lh-line')!.textContent).toContain('Shot at CENADE, La Arenera (estudio) · 3 days · 2 shots · ');
     expect(JSON.parse(localStorage.getItem('shotdocs.liveHeader.open')!)).toEqual({ scene: false });
     // La locación sigue abierta: el plegado es por tipo.
     await go(built, 'cenade');
@@ -240,7 +261,7 @@ describe('la cabecera viva en la app', () => {
   it('ir al lugar exacto: la página del día en la sección, con el pedido de la sección entera y su resaltado', async () => {
     const { built, host, s } = await app('s027');
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
-    const link = byText(header(host)!, '.lh-sec', '§ Escena 105_027b')!;
+    const link = [...header(host)!.querySelectorAll('.ss-row[data-row="shoot"] a')].find((a) => a.textContent === 'Escena 105_027b')!;
     const spy = vi.spyOn(searchSession(s), 'requestResult');
     click(link);
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ pageId: built.ids.d59, term: null, place: { endBlockId: expect.any(String) } }));
@@ -302,15 +323,17 @@ describe('ronda de corrección (auditoría de E3)', () => {
     expect(header(host)!.textContent).toContain('No report section you can see');
   });
 
-  it('O4: cada ficha dice «From the breakdown of 105_027» y su título una sola vez', async () => {
+  it('los planos: cuántos tiene la escena, y las fichas que son subpáginas se ofrecen traer (D785)', async () => {
     const { host } = await app('s027');
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
-    click(byText(header(host)!, '.lh-stage', 'Breakdown'));
-    const ex = header(host)!.querySelector('.lh-panel .lh-ex')!;
-    expect(ex.querySelector('.src')!.textContent).toContain('From the breakdown of 105_027');
-    // Con el campo Shot Name (E3b), el título es el plano, una sola vez.
-    expect(ex.querySelector('.tt-t')!.textContent).toBe('PRUEBA_105_027_010');
-    expect(ex.textContent!.split('PRUEBA_105_027_010').length - 1).toBe(1);
+    expect(header(host)!.querySelector('.lh-meta')!.textContent).toContain('2 shots');
+    const fold = header(host)!.querySelector<HTMLElement>('.lh-fold')!;
+    expect(fold.textContent).toBe('2 shots are subpagesBring them into this page…');
+    // Primero confirma (dice qué va a pasar); cancelar no hace nada.
+    click(byText(fold, 'button', 'Bring them into'));
+    expect(header(host)!.querySelector('.lh-fold')!.textContent).toContain('Their content goes under «Shots» in this page, one heading per shot, and the 2 subpages to the trash.');
+    click(byText(header(host)!.querySelector('.lh-fold')!, 'button', 'Cancel'));
+    expect(header(host)!.querySelector('.lh-fold')!.textContent).toBe('2 shots are subpagesBring them into this page…');
   });
 
   it('O5 y O6: el foco pasa al control nuevo al plegar y desplegar, con aria-expanded; las fotos sin tooltip repetido', async () => {
@@ -444,32 +467,25 @@ describe('los campos de las fichas en la cabecera (E3b)', () => {
     const { built, host } = await app('s027');
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
     const lh = header(host)!;
-    expect(lh.querySelector('.lh-meta')!.textContent).toMatch(/^INT-EXT\/NOCHE · Episode 105 · also written/);
+    expect(lh.querySelector('.lh-meta')!.textContent).toMatch(/^INT-EXT\/NOCHE · Episode 105 · 2 shots · also written/);
     expect(lh.querySelector('.lh-meta [data-tip="INT/EXT from its breakdown"]')).not.toBeNull();
-    // Decorado: chip que lleva a su página.
-    const set = lh.querySelector<HTMLElement>('.lh-chip.set')!;
+    // Decorado: un link a su página, en el renglón «Preproduction | Set».
+    const set = lh.querySelector<HTMLElement>('.ss-row[data-row="set"] a')!;
     expect(set.textContent).toBe('Ambulancia | Ruta INT');
-    expect(set.closest('.lh-kv')!.querySelector('span')!.textContent).toBe('Breakdown');
     // La pregunta: su primer renglón, en cuántas fichas y cuántas más.
-    const q = lh.querySelector<HTMLElement>('.lh-q')!;
-    expect(q.closest('.lh-kv')!.querySelector('span')!.textContent).toBe('Open question');
-    expect(q.textContent).toBe('¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1');
+    const qRow = lh.querySelector<HTMLElement>('.ss-row[data-row="question"]')!;
+    expect(qRow.querySelector('.ss-type')!.textContent).toBe('Open questions');
+    expect(qRow.querySelector('.ss-val')!.textContent).toBe('? ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1');
     expect(lh.querySelectorAll('[title]').length).toBe(0);
-    // La etapa Desglose dice cuántas preguntas; cada ficha muestra su pregunta y su descripción (no la tabla).
-    expect(byText(lh, '.lh-stage', 'Breakdown')!.querySelector('.sv')!.textContent).toBe('2 cards · 2 questions');
-    click(byText(lh, '.lh-stage', 'Breakdown'));
-    const ex = header(host)!.querySelector('.lh-panel .lh-ex.has-q')!;
-    expect(ex.querySelector('.qq')!.textContent).toBe('Open question: ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco?');
-    expect(ex.querySelector('.tx')!.textContent).toBe('El fugitivo va acostado atrás; adelante, el chofer y el oficial forcejean.');
     // Tocar la pregunta: la ficha, con la sección «Consultas» resaltada.
-    click(header(host)!.querySelector('.lh-q'));
+    click(qRow.querySelector('.ss-q'));
     expect(location.pathname).toBe(pagePath(built.ids.s027_010));
     await until(() => host.querySelectorAll('.bn-block-outer.rel-flash').length > 0, 'el resaltado de la pregunta');
     expect(host.querySelector('.bn-block-outer.rel-flash-first')!.textContent).toContain('Consultas');
     // El decorado lleva a su página.
     await go(built, 's027');
-    await until(() => header(host)?.querySelector('.lh-chip.set'), 'la cabecera otra vez');
-    click(header(host)!.querySelector('.lh-chip.set'));
+    await until(() => header(host)?.querySelector('.ss-row[data-row="set"] a'), 'la cabecera otra vez');
+    click(header(host)!.querySelector('.ss-row[data-row="set"] a'));
     expect(location.pathname).toBe(pagePath(built.ids.set_int));
   });
 
@@ -491,14 +507,15 @@ describe('los campos de las fichas en la cabecera (E3b)', () => {
   it('sin campos no hay filas (nada afirma una ausencia); al escribir una pregunta en una ficha aparece sola', async () => {
     const { d, built, host } = await app('s026');
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
-    expect(header(host)!.querySelector('.lh-q')).toBeNull();
-    expect(header(host)!.querySelector('.lh-chip.set')).toBeNull();
+    expect(header(host)!.querySelector('.ss-row[data-row="question"]')).toBeNull();
+    expect(header(host)!.querySelector('.ss-row[data-row="set"]')).toBeNull();
     await writeBlocks(d, built.ids.s026_010, [{ p: 'Locación real: CENADE' }, { table: [['Consultas', '¿Se ve el cartel de la ruta?'], ['Locacion Guion', 'Ruta | Cartel']] }]);
-    await until(() => header(host)?.querySelector('.lh-q'), 'la pregunta nueva');
-    expect(header(host)!.querySelector('.lh-q')!.textContent).toBe('¿Se ve el cartel de la ruta? · PRUEBA_105_026_010');
-    // Un decorado sin página: chip que no lleva a ningún lado.
-    expect(header(host)!.querySelector('.lh-chip.set.static')!.textContent).toBe('Ruta | Cartel');
-    expect(header(host)!.querySelector('.lh-chip.set.static')!.tagName).toBe('SPAN');
+    await until(() => header(host)?.querySelector('.ss-row[data-row="question"]'), 'la pregunta nueva');
+    expect(header(host)!.querySelector('.ss-row[data-row="question"] .ss-val')!.textContent).toBe('? ¿Se ve el cartel de la ruta? · PRUEBA_105_026_010');
+    // Un decorado sin página: texto que no lleva a ningún lado.
+    const set = header(host)!.querySelector('.ss-row[data-row="set"] .ss-txt')!;
+    expect(set.textContent).toBe('Ruta | Cartel');
+    expect(set.tagName).toBe('SPAN');
   });
 });
 
@@ -635,5 +652,46 @@ describe('ronda de corrección (auditoría de E8)', () => {
     click(header(host)!.querySelector('.lh-gal-go .lh-sec'));
     expect(location.pathname).toBe(pagePath(built.ids.d60));
     await until(() => host.querySelector(`.sd-photo[data-url="sdmedia://${fotos[0]}"].rel-flash-photo`), 'la primera foto resaltada');
+  });
+});
+
+describe('traer los planos a la página de la escena (D785)', () => {
+  it('cada ficha entra como un plano debajo de «Shots», va a la papelera con su puntero, y un link a ella abre el plano', async () => {
+    const { d, built, host, s } = await app('s027', true);
+    // Las fichas no están compartidas aparte (sin link público propio).
+    (s.client as unknown as { rpc: unknown }).rpc = vi.fn(async () => ({ data: null, error: null, status: 200 }));
+    await until(() => header(host)?.querySelector('.lh-fold'), 'el renglón de las fichas');
+    const cards = [built.ids.s027_010, built.ids.s027_020];
+    click(byText(header(host)!.querySelector('.lh-fold')!, 'button', 'Bring them into'));
+    click(byText(header(host)!.querySelector('.lh-fold')!, 'button', 'Bring them in'));
+    await until(() => cards.every((id) => d.tree.isTrashed(id)), 'las fichas en la papelera', 1500);
+    await until(() => !header(host)?.querySelector('.lh-fold'), 'sin el renglón de las fichas');
+    // La escena: «Shots» (título 1) y un título 2 por plano, con lo de cada ficha debajo, en el orden del árbol.
+    const doc = await d.docs.open(built.ids.s027);
+    const units = (await import('../search/extract')).unitsFromYDoc(doc).map((u) => u.text);
+    d.docs.close(built.ids.s027);
+    const at = (text: string) => units.findIndex((u) => u.includes(text));
+    expect(at('Shots')).toBeGreaterThanOrEqual(0);
+    expect(at('PRUEBA_105_027_010')).toBeGreaterThan(at('Shots'));
+    expect(at('PRUEBA_105_027_020')).toBeGreaterThan(at('PRUEBA_105_027_010'));
+    expect(units.join(' ')).toContain('El fugitivo va acostado atrás');
+    // Cada ficha con su puntero al plano; la cabecera sigue con 2 planos y la pregunta dice de cuál es.
+    for (const id of cards) {
+      const p = d.tree.get(id)!.settings!.merged!;
+      expect(p.into).toBe(built.ids.s027);
+      expect(typeof p.block).toBe('string');
+    }
+    await until(() => header(host)?.querySelector('.lh-meta')?.textContent?.includes('2 shots'), 'los planos adentro');
+    await until(() => header(host)?.querySelector('.ss-row[data-row="question"]')?.textContent?.includes('in 2 cards'), 'la pregunta de los planos');
+    // Un link a la ficha (de otra página, de antes) lleva a la escena, al plano.
+    const spy = vi.spyOn(searchSession(s), 'requestResult');
+    await go(built, 's027_020');
+    await until(() => location.pathname === pagePath(built.ids.s027), 'la escena');
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ pageId: built.ids.s027, blockId: d.tree.get(built.ids.s027_020)!.settings!.merged!.block }));
+    // Desde la papelera (`?stay`) se abre la ficha misma, sin ir al plano.
+    act(() => navigate(`${pagePath(built.ids.s027_020)}?stay`));
+    await wait();
+    await wait();
+    expect(location.pathname).toBe(pagePath(built.ids.s027_020));
   });
 });

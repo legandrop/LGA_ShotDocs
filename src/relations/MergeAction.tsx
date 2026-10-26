@@ -53,7 +53,7 @@ async function audienceOf(services: Services, pageId: string): Promise<AudienceI
 }
 
 /** Las dependencias del trabajo con los servicios de la app. */
-async function depsFor(services: Services, check: MergeDeps['check']): Promise<MergeDeps> {
+export async function depsFor(services: Services, check: MergeDeps['check']): Promise<MergeDeps> {
   const { mergeDepsFrom } = await import('./mergeJob');
   return mergeDepsFrom(services, { comments: commentSource(services), check });
 }
@@ -322,7 +322,7 @@ export function MergeDialog({ pair, onClose }: { pair: MergePair; onClose: () =>
 // --- Lo que *Pending* lista después ---------------------------------------------------------------------------------
 
 /** Una fila de *Pending*, igual que `PendingRow` de `MapView.tsx` (acá aparte para no importar el mapa desde la cabecera). */
-function PendingRow({ head, children, actions }: { head: ReactNode; children?: ReactNode; actions?: ReactNode }) {
+export function PendingRow({ head, children, actions }: { head: ReactNode; children?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mp-pcard">
       <div className="mp-ph">

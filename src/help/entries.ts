@@ -156,8 +156,11 @@ const COMMENT_EDIT_CONFLICT = '0.227';
 const COMMENT_BOX_KEPT = '0.229';
 /** El índice del proyecto arranca al abrirlo y se guarda en el dispositivo (relaciones en vivo, E1). */
 const INDEX_READING = '0.237';
-/** La cabecera viva de escena y locación (relaciones en vivo, E3): la versión se pone al publicar. */
-const LIVE_HEADER = '0.238';
+/**
+ * La cabecera viva de escena y locación (relaciones en vivo, E3): llegó en v0.238 y sube con los renglones por etapa de la
+ * escena y *Bring them into this page* (D784, D785).
+ */
+const LIVE_HEADER = '0.279';
 /** Los campos de las fichas en la cabecera viva (pregunta abierta, decorados, INT/EXT, coordenadas; E3b). */
 const LIVE_FIELDS = '0.240';
 /** Las fotos por fuente de la cabecera viva y el carrete de varias páginas (relaciones en vivo, E8). */
@@ -169,9 +172,10 @@ const LIVE_PHOTOS = '0.243';
 const LIVE_MAP = '0.269';
 /**
  * La sección automática *Scenes* de la barra lateral y las páginas de cada escena (Doc_Relaciones.md, sección 21): llegó
- * en v0.260, sube con *Export…* en la vista de una escena (D769) y pasa adentro de *Overview* (D772).
+ * en v0.260, sube con *Export…* en la vista de una escena (D769), pasa adentro de *Overview* (D772) y sube con los
+ * renglones por etapa (D783).
  */
-const SCENES_SECTION = '0.269';
+const SCENES_SECTION = '0.279';
 /** *Pages* se pliega entera desde su título (D770, v0.267) y, al bajar, lo de arriba queda fijo (D771). */
 const PAGES_FOLD = '0.268';
 /**
@@ -392,15 +396,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.relationsMap.title',
     text: 'help.relationsMap.text',
     words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
-    // Subió con los planes en *Shoot days* y *Pending* (v0.277).
-    since: '0.277',
+    // Subió con los planos que siguen siendo subpáginas en *Pending* (v0.279).
+    since: '0.279',
   },
   {
     id: 'scenesSection',
     section: 'find',
     title: 'help.scenesSection.title',
     text: 'help.scenesSection.text',
-    words: ['scenes', 'escenas', 'scene list', 'lista de escenas', 'episode', 'episodio', 'pages', 'páginas', 'mentions', 'menciones', 'where', 'dónde', 'backlinks', 'related', 'relacionado', 'index pages', 'páginas índice', 'export', 'exportar', 'pdf', 'zip'],
+    words: ['scenes', 'escenas', 'scene list', 'lista de escenas', 'episode', 'episodio', 'pages', 'páginas', 'mentions', 'menciones', 'where', 'dónde', 'backlinks', 'related', 'relacionado', 'index pages', 'páginas índice', 'export', 'exportar', 'pdf', 'zip', 'stage', 'etapa'],
     since: SCENES_SECTION,
   },
   {
@@ -455,6 +459,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.mergePages.text',
     words: ['merge', 'unir', 'juntar', 'duplicate', 'duplicada', 'repetida', 'two pages', 'dos páginas', 'same scene', 'misma escena', 'same day', 'mismo día', 'in 2 pages', 'en 2 páginas', 'pending', 'pendiente'],
     since: RESTOS_E19,
+  },
+  {
+    id: 'foldShots',
+    section: 'pages',
+    title: 'help.foldShots.title',
+    text: 'help.foldShots.text',
+    words: ['shots', 'planos', 'subpages', 'subpáginas', 'cards', 'fichas', 'bring', 'traer', 'into this page', 'a esta página', 'coda', 'sub-rows', 'subfilas', 'one page', 'una sola página'],
+    since: LIVE_HEADER,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

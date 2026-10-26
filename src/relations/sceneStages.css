@@ -1,0 +1,168 @@
+/* Los renglones «Etapa | Tipo: links» de una escena (SceneStages.tsx; D783, D784). Colores con la regla D774: escena,
+   locación y día en su color; cualquier otra página en el acento; las preguntas en ámbar. */
+
+.ss {
+  margin: 0;
+  display: grid;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.ss-row {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: 4px 24px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-top: 1px solid var(--border-soft);
+  min-width: 0;
+}
+
+.ss-row:first-child {
+  border-top: 0;
+}
+
+.ss-label {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.ss-bar {
+  color: var(--faint-2);
+}
+
+.ss-type {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ss-val {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+/* Con `.ss` delante: el Overview pone `.mp a { color: inherit }` y un link de página quedaba blanco, como texto. */
+.ss .ss-a {
+  color: var(--accent-text);
+  text-decoration: none;
+  border-radius: 3px;
+}
+
+.ss-a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ss .ss-a.scene {
+  color: var(--scene-fg);
+}
+
+.ss .ss-a.loc {
+  color: var(--loc-fg);
+}
+
+.ss .ss-a.day {
+  color: var(--day-fg);
+}
+
+.ss-a:focus-visible,
+.ss-q:focus-visible,
+.ss-more:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.ss-date {
+  opacity: 0.85;
+}
+
+.ss-gt,
+.ss-n,
+.ss-none {
+  color: var(--faint);
+}
+
+.ss-n {
+  font-size: 13px;
+}
+
+.ss-q,
+.ss-more {
+  font: inherit;
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.ss-q:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ss-qm {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.ss-more {
+  color: var(--accent-text);
+}
+
+.ss-more:hover {
+  text-decoration: underline;
+}
+
+.ss-idx {
+  margin-top: 4px;
+}
+
+/* En la cabecera viva: más chico y dentro de su caja. */
+.ss.in-lh {
+  font-size: 13px;
+  padding: 2px 16px 4px;
+}
+
+.ss.in-lh .ss-row {
+  grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
+  padding: 8px 0;
+}
+
+@media (max-width: 640px) {
+  .ss-row,
+  .ss.in-lh .ss-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* *Bring shots into this page* (FoldShots.tsx, D785): un renglón debajo de los renglones de la cabecera. */
+.lh-fold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin: 0 16px 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.lh-fold-act {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.lh .lh-tbtn.primary {
+  color: var(--accent-text);
+  font-weight: 600;
+}

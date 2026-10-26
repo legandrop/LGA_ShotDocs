@@ -11,7 +11,7 @@ import {
 } from '../media/fileTrash';
 import { locale, localize, t, useT } from '../i18n';
 import '../i18n/lazy/projectStates';
-import { navigate, pagePath } from '../router';
+import { navigate, pagePath, STAY_PARAM } from '../router';
 import { usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
 import { PROJECT_PURGE_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION } from '../sync/remote';
 import type { PageRow, TrashedFileRow, TrashedProjectRow } from '../sync/types';
@@ -21,7 +21,7 @@ import { notify } from './notice';
 import { useProjectDrive } from './project';
 import { DeletedProjectItem, DeletedProjectsError, useDeletedProjects } from './ProjectStatesPart';
 import { extensionLabel, fileKind } from '../media/attachments';
-import { mergedTarget, restorePage } from '../relations/merge';
+import { mergedTarget, readPointer, restorePage } from '../relations/merge';
 import { cededMark } from '../relations/cededCopy';
 
 // La papelera única (pedido de Lega, 2026-10-03; Docs/Doc_Proyectos_Borrar.md, "Cómo quedó: una sola papelera"): las
@@ -296,7 +296,8 @@ export function TrashPanel(props: { current: string; onClose: () => void }) {
                       className="link title"
                       onClick={() => {
                         props.onClose();
-                        navigate(pagePath(p.id));
+                        // Una ficha que entró como plano se abre ella misma, no su plano en la escena (D785).
+                        navigate(readPointer(p)?.block ? `${pagePath(p.id)}?${STAY_PARAM}` : pagePath(p.id));
                       }}
                     >
                       {p.title || tr('common.untitled')}

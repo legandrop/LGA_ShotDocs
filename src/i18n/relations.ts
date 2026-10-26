@@ -53,25 +53,14 @@ export const relations = {
   'live.shoot': { en: "Shoot", es: "Rodaje" },
   'live.breakdown': { en: "Breakdown", es: "Desglose" },
   'live.scouting': { en: "Scouting", es: "Scouting" },
-  'live.plannedAt': { en: "Planned at", es: "Planeada en" },
-  'live.plannedVia': { en: "named in its breakdown", es: "la nombra su desglose" },
   'live.none': { en: "None", es: "Ninguno" },
   'live.cards': {
     en: { one: "{count} card", other: "{count} cards" },
     es: { one: "{count} ficha", other: "{count} fichas" },
   },
-  'live.namesIt': { en: "names it", es: "la nombra" },
   'live.ofLoc': { en: "of {loc}", es: "de {loc}" },
   'live.noReport': { en: "No report section", es: "Sin sección en un reporte" },
-  'live.noReportTip': {
-    en: "No day report has a section titled with this scene. It doesn't say whether it was shot.",
-    es: "Ningún reporte del día tiene una sección con esta escena en el título. No dice si se filmó o no.",
-  },
   'live.noReportSeen': { en: "No report section you can see", es: "Sin sección en un reporte que veas" },
-  'live.noReportSeenTip': {
-    en: "You see part of this project: a report you can't see may have a section of this scene.",
-    es: "Ves una parte del proyecto: un reporte que no ves puede tener una sección de esta escena.",
-  },
   'live.noReportYetSeen': { en: "No report section you can see yet: {codes}", es: "Todavía sin sección en un reporte que veas: {codes}" },
   'live.noVfxSome': { en: "No VFX in {count} of {of} cards", es: "No VFX en {count} de {of} fichas" },
   'live.noVfxSomeTip': {
@@ -82,42 +71,12 @@ export const relations = {
   'live.noVfx': { en: "No VFX · not expected in VFX reports", es: "No VFX · no se espera en reportes de VFX" },
   'live.noVfxTip': { en: "Its breakdown says No VFX", es: "Su desglose dice No VFX" },
   'live.perDayTitle': { en: "Location per the day title", es: "La locación según el título del día" },
-  'live.plannedFor': { en: "planned in «{page}»", es: "planeada en «{page}»" },
-  'live.plannedForTip': {
-    en: "A page inside that day (not its report) names this scene: planned, not necessarily shot.",
-    es: "Una página adentro de ese día (no su reporte) nombra esta escena: planeada, no necesariamente filmada.",
-  },
   'live.plan': { en: "Plan", es: "Plan" },
   'live.namedInText': { en: "named in the text", es: "nombrada en el texto" },
   'live.days': {
     en: { one: "{count} day", other: "{count} days" },
     es: { one: "{count} día", other: "{count} días" },
   },
-  'live.sections': {
-    en: { one: "{count} section", other: "{count} sections" },
-    es: { one: "{count} sección", other: "{count} secciones" },
-  },
-  'live.mentions': {
-    en: { one: "{count} mention", other: "{count} mentions" },
-    es: { one: "{count} mención", other: "{count} menciones" },
-  },
-  'live.sectionsNameIt': {
-    en: { one: "{count} section names it", other: "{count} sections name it" },
-    es: { one: "{count} sección la nombra", other: "{count} secciones la nombran" },
-  },
-  'live.via': { en: "Via {locs}", es: "Por {locs}" },
-  'live.noCards': { en: "No cards", es: "Sin fichas" },
-  'live.panel.breakdown': { en: "cards inside this scene, and other breakdown pages that name it", es: "las fichas de adentro de la escena y otras páginas del desglose que la nombran" },
-  'live.panel.scouting': { en: "where a scout report names it", es: "dónde la nombra un scouting" },
-  'live.panel.shoot': { en: "sections of the day reports, in order", es: "las secciones de los reportes del día, en orden" },
-  'live.panel.scoutsVia': {
-    en: "scoutings of the locations where it was shot · they don't name this scene",
-    es: "los scoutings de las locaciones donde se filmó · no nombran esta escena",
-  },
-  'live.empty.breakdown': { en: "No breakdown cards inside this scene.", es: "No hay fichas de desglose adentro de esta escena." },
-  'live.empty.scouting': { en: "No scouting names this scene.", es: "Ningún scouting nombra esta escena." },
-  'live.empty.shoot': { en: "No report has a section for this scene.", es: "Ningún reporte tiene una sección de esta escena." },
-  'live.empty.shootSeen': { en: "No report you can see has a section for this scene.", es: "Ningún reporte que ves tiene una sección de esta escena." },
   'live.photos': { en: "Photos", es: "Fotos" },
   'live.photoCount': {
     en: { one: "{count} photo", other: "{count} photos" },
@@ -206,7 +165,6 @@ export const relations = {
   'live.empty.locShoot': { en: "No shoot day names this location in its title.", es: "Ningún día de rodaje nombra esta locación en el título." },
   'live.reportOn': { en: "report · {days}", es: "reporte · {days}" },
   // Los campos de las fichas (pregunta abierta, decorados, INT/EXT, coordenadas)
-  'live.openQuestion': { en: "Open question", es: "Pregunta abierta" },
   'live.openQuestionLine': { en: "Open question:", es: "Pregunta abierta:" },
   'live.inCards': {
     en: { one: "in {count} card", other: "in {count} cards" },
@@ -214,10 +172,6 @@ export const relations = {
   },
   'live.questionOnScene': { en: "on this page", es: "en esta página" },
   'live.questionTip': { en: "Opens the page where it is written, with the question highlighted", es: "Abre la página donde está escrita, con la pregunta resaltada" },
-  'live.questionMoreTip': {
-    en: "Opens the page where it is written, with the question highlighted. The others are in Breakdown",
-    es: "Abre la página donde está escrita, con la pregunta resaltada. Las otras están en Desglose",
-  },
   'live.questions': {
     en: { one: "{count} question", other: "{count} questions" },
     es: { one: "{count} pregunta", other: "{count} preguntas" },
@@ -678,4 +632,81 @@ export const relations = {
   },
   'merge.mergedInto': { en: "Merged into «{title}»", es: "Unida a «{title}»" },
   'merge.openInto': { en: "Open «{title}»", es: "Abrir «{title}»" },
+  // Los renglones «Etapa | Tipo: links» de una escena (Docs/Doc_Relaciones.md, sección 23).
+  'stages.scouting': { en: "Scouting", es: "Scouting" },
+  'stages.tests': { en: "Tests", es: "Pruebas" },
+  'stages.plan': { en: "Planning", es: "Planeamiento" },
+  'stages.other': { en: "Other", es: "Otras" },
+  'stages.set': { en: "Set", es: "Decorado" },
+  'stages.location': { en: "Location", es: "Locación" },
+  'stages.questions': { en: "Open questions", es: "Preguntas abiertas" },
+  'stages.reports': { en: "Reports", es: "Reportes" },
+  'stages.dayPlan': { en: "Day plan", es: "Plan de jornada" },
+  'stages.alsoNamed': { en: "Also named in", es: "También la nombran" },
+  'stages.shots': {
+    en: { one: "{count} shot", other: "{count} shots" },
+    es: { one: "{count} plano", other: "{count} planos" },
+  },
+  'stages.shotOnDays': {
+    en: { one: "shot on {count} day", other: "shot on {count} days" },
+    es: { one: "filmada en {count} día", other: "filmada en {count} días" },
+  },
+  'stages.none.breakdown': { en: "No page for this scene", es: "Sin página de la escena" },
+  'stages.none.location': { en: "None named", es: "Ninguna nombrada" },
+  'stages.none.locationSeen': { en: "None named in the pages you can see", es: "Ninguna nombrada en las páginas que ves" },
+  'stages.none.scouting': { en: "No scouting names it", es: "Ningún scouting la nombra" },
+  'stages.none.scoutingSeen': { en: "No scouting you can see names it", es: "Ningún scouting que veas la nombra" },
+  'stages.none.plan': { en: "No day plan names it", es: "Ningún plan de jornada la nombra" },
+  'stages.none.planSeen': { en: "No day plan you can see names it", es: "Ningún plan de jornada que veas la nombra" },
+  'stages.none.generic': { en: "None", es: "Ninguno" },
+  // *Bring shots into this page* (Docs/Doc_Relaciones.md, sección 23).
+  'fold.aria': { en: "Shots that are subpages", es: "Planos que son subpáginas" },
+  'fold.shotsHeading': { en: "Shots", es: "Planos" },
+  'fold.line': {
+    en: { one: "{count} shot is a subpage", other: "{count} shots are subpages" },
+    es: { one: "{count} plano es una subpágina", other: "{count} planos son subpáginas" },
+  },
+  'fold.bring': { en: "Bring them into this page…", es: "Traerlos a esta página…" },
+  'fold.tip': {
+    en: "Each subpage goes under «Shots» in this page, with its own heading, and then to the trash (Restore brings it back)",
+    es: "Cada subpágina va debajo de «Planos» en esta página, con su propio título, y después a la papelera (Restaurar la devuelve)",
+  },
+  'fold.confirm': {
+    en: { one: "Its content goes under «Shots» in this page, with its own heading, and the subpage to the trash. Pages inside it move up to this page.", other: "Their content goes under «Shots» in this page, one heading per shot, and the {count} subpages to the trash. Pages inside them move up to this page." },
+    es: { one: "Su contenido va debajo de «Planos» en esta página, con su propio título, y la subpágina a la papelera. Las páginas de adentro suben a esta página.", other: "Su contenido va debajo de «Planos» en esta página, un título por plano, y las {count} subpáginas a la papelera. Las páginas de adentro suben a esta página." },
+  },
+  'fold.go': { en: "Bring them in", es: "Traerlos" },
+  'fold.running': { en: "Bringing shots in… {done} of {count}", es: "Trayendo los planos… {done} de {count}" },
+  'fold.done': {
+    en: { one: "{count} shot is now inside its scene", other: "{count} shots are now inside their scenes" },
+    es: { one: "{count} plano quedó adentro de su escena", other: "{count} planos quedaron adentro de sus escenas" },
+  },
+  'fold.noneDone': { en: "No shot came in", es: "No entró ningún plano" },
+  'fold.stayedComments': {
+    en: { one: "{count} stayed as a subpage: it has comments", other: "{count} stayed as subpages: they have comments" },
+    es: { one: "{count} quedó como subpágina: tiene comentarios", other: "{count} quedaron como subpáginas: tienen comentarios" },
+  },
+  'fold.stayedShared': {
+    en: { one: "{count} stayed as a subpage: it's shared on its own", other: "{count} stayed as subpages: they're shared on their own" },
+    es: { one: "{count} quedó como subpágina: está compartida aparte", other: "{count} quedaron como subpáginas: están compartidas aparte" },
+  },
+  'fold.pending': {
+    en: { one: "{count} finishes by itself when the connection is back", other: "{count} finish by themselves when the connection is back" },
+    es: { one: "{count} termina sola cuando vuelva la red", other: "{count} terminan solas cuando vuelva la red" },
+  },
+  'fold.stayedOther': {
+    en: { one: "{count} stayed as a subpage", other: "{count} stayed as subpages" },
+    es: { one: "{count} quedó como subpágina", other: "{count} quedaron como subpáginas" },
+  },
+  'fold.allRow': {
+    en: "Scenes with their shots still as subpages: {scenes} ({count} shots)",
+    es: "Escenas con sus planos todavía como subpáginas: {scenes} ({count} planos)",
+  },
+  'fold.bringAll': { en: "Bring them all in", es: "Traerlos todos" },
+  'fold.allTip': {
+    en: "Scene by scene, each subpage goes under «Shots» in its scene page and then to the trash. Keep the app open until it finishes",
+    es: "Escena por escena, cada subpágina va debajo de «Planos» en la página de su escena y después a la papelera. Dejá la app abierta hasta que termine",
+  },
+  'fold.allRunning': { en: "Bringing shots in: scene {at} of {scenes} · {done} shots in", es: "Trayendo los planos: escena {at} de {scenes} · {done} planos adentro" },
+  'fold.stop': { en: "Stop", es: "Parar" },
 } satisfies Dict;

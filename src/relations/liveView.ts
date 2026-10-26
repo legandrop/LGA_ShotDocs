@@ -108,6 +108,14 @@ export interface SceneDay {
   photos: PhotoRef[];
 }
 
+/** Un plano de la escena: una ficha (subpágina) o un título 2 de la sección «Planos» de su página (D785). */
+export interface ShotRef {
+  title: string;
+  pageId: string;
+  /** Adentro de la página de la escena: su título y lo de abajo. Una ficha: su primer bloque. */
+  place: Place;
+}
+
 export interface SceneLive {
   code: string;
   pageId: string | null;
@@ -116,6 +124,12 @@ export interface SceneLive {
   aliases: string[];
   /** Las páginas de adentro (fichas). */
   cards: PageChip[];
+  /** Sus planos: los de la sección «Planos» de su página y las fichas que siguen siendo subpáginas, en ese orden. */
+  shots: ShotRef[];
+  /** Los planes de jornada (y lo de adentro de un día que no es el reporte) que la nombran, por día: también de un día filmado. */
+  plans: { day: DayRef; items: Excerpt[] }[];
+  /** Los documentos de prueba que la nombran (D778); `scoutPages` no los tiene. */
+  testPages: PageChip[];
   /** Locaciones que nombra su desglose (la escena y sus fichas). */
   plannedAt: PageChip[];
   /** Páginas de scouting que la nombran. */
@@ -229,6 +243,59 @@ function blockText(pb: PageBlocks | null, blockId: string): string {
   const i = pb.ids.indexOf(blockId);
   return i < 0 ? '' : clip(pb.texts[i]);
 }
+
+/** Un plano escrito adentro de la página de la escena: un título 2 de la sección «Planos» (D785). */
+export interface ShotSection {
+  title: string;
+  blockId: string;
+  /** El bloque que lo cierra (`null`, hasta el final). */
+  endBlockId: string | null;
+  /** Índices de bloque (los de `PageBlocks`): el título y el primero de afuera. */
+  start: number;
+  end: number;
+}
+
+/** Los títulos 1 que abren la sección de los planos (los escribe *Bring shots into this page*, D785, o la persona). */
+export const SHOTS_HEADINGS = new Set(['planos', 'shots']);
+
+/**
+ * Los planos de una página de escena: cada título 2 adentro de un título 1 «Planos» / «Shots», hasta el próximo título de
+ * nivel 2 o 1. Lo de abajo es del plano (sus campos, su pregunta abierta, su «No VFX»).
+ */
+export function shotSections(pb: PageBlocks | null): ShotSection[] {
+  if (!pb) return [];
+  const out: ShotSection[] = [];
+  const n = pb.ids.length;
+  for (let i = 0; i < n; i++) {
+    if (pb.levels[i] !== 1 || !SHOTS_HEADINGS.has(normLabel(pb.texts[i]))) continue;
+    let end = n;
+    for (let j = i + 1; j < n; j++) {
+      if (pb.levels[j] === 1) {
+        end = j;
+        break;
+      }
+    }
+    for (let k = i + 1; k < end; k++) {
+      if (pb.levels[k] !== 2) continue;
+      let e = end;
+      for (let j = k + 1; j < end; j++) {
+        if (pb.levels[j] && pb.levels[j] <= 2) {
+          e = j;
+          break;
+        }
+      }
+      out.push({ title: pb.texts[k], blockId: pb.ids[k], endBlockId: e < n ? pb.ids[e] : null, start: k, end: e });
+    }
+    i = end - 1;
+  }
+  return out;
+}
+
+/** El plano de la página que tiene ese bloque, o `null`. */
+const shotAt = (pb: PageBlocks | null, shots: ShotSection[], blockId: string): ShotSection | null => {
+  const at = pb ? pb.ids.indexOf(blockId) : -1;
+  return at < 0 ? null : (shots.find((s) => at >= s.start && at < s.end) ?? null);
+};
 
 /** El principio de una página (una ficha, un scouting): sus primeros renglones. */
 function pageText(pb: PageBlocks | null): string {
@@ -487,6 +554,9 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
   }
   cards.sort((a, b) => (order.get(a.pageId) ?? 0) - (order.get(b.pageId) ?? 0));
   const ownIds = new Set<string>([...(rel.pageId ? [rel.pageId] : []), ...cards.map((c) => c.pageId)]);
+  // Los planos escritos adentro de la página de la escena (D785): cada uno cuenta como una ficha.
+  const scenePb = rel.pageId ? pageBlocks(src.content(rel.pageId)) : null;
+  const inPage = shotSections(scenePb);
 
   // Locaciones que nombra su desglose; y si dice «No VFX» (la escena, o cada ficha con texto).
   const planned = new Map<string, PageChip>();
@@ -501,7 +571,23 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
     }
     const content = src.content(id);
     const says = !!content?.units.some((u) => u.field === 'text' && NO_VFX.test(flat(u.text)));
-    if (id === rel.pageId) {
+    if (id === rel.pageId && inPage.length && content && scenePb) {
+      // Con planos adentro, cada uno es como una ficha: un «No VFX» en un plano no marca la escena entera; lo de afuera sí.
+      const at = new Map(scenePb.ids.map((b, i) => [b, i]));
+      const per = new Map<ShotSection, boolean>();
+      for (const u of content.units) {
+        if (u.field !== 'text') continue;
+        const i = at.get(u.blockId) ?? -1;
+        const shot = inPage.find((s) => i >= s.start && i < s.end);
+        const no = NO_VFX.test(flat(u.text));
+        if (!shot) sceneNoVfx ||= no;
+        else if (i !== shot.start) per.set(shot, (per.get(shot) ?? false) || no);
+      }
+      for (const no of per.values()) {
+        noVfxCards.of++;
+        if (no) noVfxCards.no++;
+      }
+    } else if (id === rel.pageId) {
       sceneNoVfx = says;
     } else if (content?.units.some((u) => u.field === 'text')) {
       noVfxCards.of++;
@@ -514,6 +600,7 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
   const scouting: Excerpt[] = [];
   const shoot: Excerpt[] = [];
   const scoutPages: PageChip[] = [];
+  const testPages: PageChip[] = [];
   const also: PageChip[] = [];
   const indexPagesList: PageChip[] = [];
   const dayMap = new Map<string, SceneDay>();
@@ -535,10 +622,12 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
       // Dos fichas con la misma pregunta (su primer renglón, lo que se muestra) son una sola, «in 2 cards».
       const key = normLabel(firstLine(text));
       if (!key) continue;
-      const card = o.card ? { pageId: o.pageId, shot: shotOf(src, o.pageId, o.title) } : null;
+      // De qué plano es: una ficha, o un plano de la sección «Planos» de la página de la escena (D785).
+      const inShot = o.card ? null : shotAt(scenePb, inPage, f.blockId);
+      const card = o.card ? { pageId: o.pageId, shot: shotOf(src, o.pageId, o.title) } : inShot ? { pageId: o.pageId, shot: inShot.title } : null;
       const known = questions.find((q) => normLabel(firstLine(q.text)) === key);
       if (known) {
-        if (card && !known.cards.some((x) => x.pageId === card.pageId)) known.cards.push(card);
+        if (card && !known.cards.some((x) => x.pageId === card.pageId && x.shot === card.shot)) known.cards.push(card);
         continue;
       }
       const place: Place = f.via === 'heading' ? { pageId: o.pageId, blockId: f.blockId, endBlockId: f.endBlockId ?? null } : { pageId: o.pageId, blockId: f.blockId };
@@ -631,7 +720,8 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
       for (const m of looseMentions(p)) entry.mentions.push(mentionEx(m, day));
     } else if (p.stage === 'scouting') {
       const source = shortTitle(pageTitle, 24);
-      scoutPages.push({ pageId: p.pageId, title: pageTitle, blockId: p.sections[0]?.blockId ?? p.mentions[0]?.blockId });
+      // Una prueba (D778) tiene su propio renglón; lo que escribe sigue contando como scouting.
+      (roles.get(p.pageId)?.doc === 'test' ? testPages : scoutPages).push({ pageId: p.pageId, title: pageTitle, blockId: p.sections[0]?.blockId ?? p.mentions[0]?.blockId });
       for (const s of p.sections) {
         const ex = sectionEx(s, null, source);
         scouting.push(ex);
@@ -673,6 +763,12 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
     episode: entry?.ep || null,
     aliases: sceneAliases(src, rel.pages, code),
     cards,
+    shots: [
+      ...inPage.map((s) => ({ title: s.title, pageId: rel.pageId!, place: { pageId: rel.pageId!, blockId: s.blockId, endBlockId: s.endBlockId } })),
+      ...cards.map((c) => ({ title: shotOf(src, c.pageId, c.title), pageId: c.pageId, place: { pageId: c.pageId, blockId: pageBlocks(src.content(c.pageId))?.ids[0] ?? '' } })),
+    ],
+    plans: [...planMap.values()].sort((a, b) => byDay(a.day, b.day, order)),
+    testPages,
     plannedAt: [...planned.values()],
     scoutPages,
     scoutsVia,

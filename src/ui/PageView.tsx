@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
-import { navigate, pagePath } from '../router';
+import { navigate, pagePath, STAY_PARAM, useSearchParam } from '../router';
 import { useLinkMode } from '../linkMode';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION } from '../sync/accessRequests';
 import { LiveHeader } from '../relations/LiveHeader';
-import { mergedTarget, restorePage } from '../relations/merge';
+import { mergedTarget, readPointer, restorePage } from '../relations/merge';
+import { searchSession } from './projectSearchUi';
 import { sameTitle } from '../relations/twinNames';
 import { cededMark } from '../relations/cededCopy';
 import { DayReportButton } from '../templates/dayReportUi';
@@ -66,6 +67,20 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
     // Con el número de menciones sin leer adelante, si hay (titleBadge.ts).
     setDocumentTitle(page ? `${page.title || tr('common.untitled')} · Shot Docs` : 'LGA Shot Docs');
   }, [page, tr]);
+
+  // Una ficha que entró como plano en la página de su escena (D785): un link a ella lleva al plano, en lugar de la ficha en
+  // la papelera. Reemplaza la dirección (volver atrás no vuelve a pasar por acá). Restaurada, se abre como siempre. Se abre
+  // la ficha (no el plano) si cambió después de entrar (*Pending* la lista para verla) o si se la abre desde la papelera.
+  const services = useServices();
+  const stay = useSearchParam(STAY_PARAM) !== null;
+  const pointer = page && !stay && tree.trashedAncestor(id)?.id === id ? readPointer(page) : null;
+  const foldedTo = pointer?.block && (page!.update_seq ?? 0) <= pointer.seq ? mergedTarget(tree, id) : null;
+  const foldedBlock = foldedTo ? pointer!.block : undefined;
+  useEffect(() => {
+    if (!foldedTo || !foldedBlock) return;
+    searchSession(services).requestResult({ pageId: foldedTo, term: null, blockId: foldedBlock, place: {} });
+    navigate(pagePath(foldedTo), true);
+  }, [foldedTo, foldedBlock, services]);
 
   if (!page) {
     return (

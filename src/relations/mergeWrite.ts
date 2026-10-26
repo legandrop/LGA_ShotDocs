@@ -288,11 +288,80 @@ export function planCopy(docA: Y.Doc, docB: Y.Doc): CopyPlan {
   return { remap: [...ids].filter((id) => inA.has(id)), nothing: list.length === 0, photos: [...photos], blocks: list.filter((b) => !isBlank(b)).length };
 }
 
+// --- *Bring shots into this page* (D785) ---------------------------------------------------------------------------
+//
+// Una ficha (B) que entra en la página de su escena (A) como un plano: un título 2 con su nombre y, debajo, TODO lo de B
+// (sin comparar con A: dos planos pueden tener el mismo renglón y los dos se quedan). Los títulos 2 van adentro de un
+// título 1 «Planos» (`shotsId(A)`, el mismo en todos los dispositivos): el primero lo escribe; los siguientes van al final de
+// su sección, antes del próximo título 1. Nunca `empty`: una ficha sin nada igual deja su título.
+
+/** El id del título 1 «Planos» de una página de escena: igual en todos los dispositivos y en cada ficha que entra. */
+export const shotsId = (scenePageId: string) => derivedId(scenePageId, 'shots-heading');
+
+/** Lo que copia una ficha: todos sus bloques de primer nivel, menos los renglones en blanco del principio y del final. */
+export function foldBlocks(docB: Y.Doc): Y.XmlElement[] {
+  const all = topBlocks(docB);
+  let first = 0;
+  while (first < all.length && isBlank(all[first])) first++;
+  let last = all.length - 1;
+  while (last >= first && isBlank(all[last])) last--;
+  return all.slice(first, last + 1);
+}
+
+/** Como `planCopy`, para una ficha: se copia todo (`nothing` nunca: el título del plano va siempre). */
+export function planFold(docA: Y.Doc, docB: Y.Doc): CopyPlan {
+  const list = foldBlocks(docB);
+  const inA = blockIds(docA);
+  const ids = new Set<string>();
+  for (const b of list) idsIn(b, ids);
+  const photos = new Set<string>();
+  for (const b of list) mediaIn(b, photos);
+  return { remap: [...ids].filter((id) => inA.has(id)), nothing: false, photos: [...photos], blocks: list.filter((b) => !isBlank(b)).length };
+}
+
+/** Un título de nivel 1 o 2 pasa a 3 (el atributo, leído del original: el de una copia todavía no se lee). */
+const demoteHeading = (node: string, key: string, value: unknown): unknown =>
+  node === 'heading' && key === 'level' && Number(value) < 3 ? (typeof value === 'string' ? '3' : 3) : value;
+
+/**
+ * Deshacer el último plano traído deja el título 1 «Shots» (`shotsId`) sin nada debajo: se saca. Solo si está vacío (lo que
+ * siga es otro título 1 o el final); con algo debajo, queda. Devuelve si lo sacó.
+ */
+export function dropEmptyShots(docA: Y.Doc, id: string): boolean {
+  const root = rootGroups(docA)[0];
+  if (!root) return false;
+  const top = root.toArray();
+  const at = top.findIndex((n) => n instanceof Y.XmlElement && n.nodeName === CONTAINER && n.getAttribute('id') === id);
+  if (at < 0) return false;
+  const next = top[at + 1];
+  if (next instanceof Y.XmlElement && headingLevel(next) !== 1) return false;
+  docA.transact(() => root.delete(at, 1), MERGE_ORIGIN);
+  return true;
+}
+
+/** Dónde entra el próximo plano: al final de la sección del título 1 `id` (antes del próximo título 1), o `-1` si A no lo tiene. */
+function shotsEnd(root: Y.XmlElement, id: string): number {
+  const top = root.toArray();
+  const at = top.findIndex((n) => n instanceof Y.XmlElement && n.nodeName === CONTAINER && n.getAttribute('id') === id);
+  if (at < 0) return -1;
+  for (let i = at + 1; i < top.length; i++) {
+    const n = top[i];
+    if (n instanceof Y.XmlElement && n.nodeName === CONTAINER && headingLevel(n) === 1) return i;
+  }
+  return top.length;
+}
+
 /**
  * Una copia de un elemento de B con los ids de `remap` cambiados por el derivado (`copyType` copia todo lo demás igual).
  * Anota cada id viejo con el nuevo (para los colapsados).
  */
-function copyMapped<T extends Y.XmlElement | Y.XmlText>(type: T, mapId: (id: string) => string, ids: Map<string, string>): T {
+function copyMapped<T extends Y.XmlElement | Y.XmlText>(
+  type: T,
+  mapId: (id: string) => string,
+  ids: Map<string, string>,
+  /** Cambia un atributo al copiarlo (`demoteHeading`). */
+  attr?: (node: string, key: string, value: unknown) => unknown,
+): T {
   if (type instanceof Y.XmlText) return copyType(type);
   const copy = new Y.XmlElement(type.nodeName);
   for (const [key, value] of Object.entries(type.getAttributes())) {
@@ -300,9 +369,9 @@ function copyMapped<T extends Y.XmlElement | Y.XmlText>(type: T, mapId: (id: str
       const next = mapId(value);
       ids.set(value, next);
       copy.setAttribute(key, next);
-    } else copy.setAttribute(key, value as never);
+    } else copy.setAttribute(key, (attr ? attr(type.nodeName, key, value) : value) as never);
   }
-  const children = type.toArray().map((child) => (child instanceof Y.XmlHook ? child.clone() : copyMapped(child as Y.XmlElement | Y.XmlText, mapId, ids)));
+  const children = type.toArray().map((child) => (child instanceof Y.XmlHook ? child.clone() : copyMapped(child as Y.XmlElement | Y.XmlText, mapId, ids, attr)));
   copy.insert(0, children as (Y.XmlElement | Y.XmlText)[]);
   return copy as T;
 }
@@ -311,11 +380,11 @@ function copyMapped<T extends Y.XmlElement | Y.XmlText>(type: T, mapId: (id: str
  * El título 1 separador (D645), armado con el editor de la app en un documento aparte (así tiene los atributos que el
  * esquema espera) y copiado. `id`: `separatorId(clave de la unión)`.
  */
-export function separatorBlock(text: string, id: string): Y.XmlElement {
+export function separatorBlock(text: string, id: string, level = 1): Y.XmlElement {
   const tmp = new Y.Doc();
   try {
     withEditor(tmp, (editor) => {
-      editor.replaceBlocks(editor.document, [{ id, type: 'heading', props: { level: 1 }, content: text }] as never);
+      editor.replaceBlocks(editor.document, [{ id, type: 'heading', props: { level }, content: text }] as never);
     });
     for (const root of rootGroups(tmp)) {
       for (const child of root.toArray()) {
@@ -336,14 +405,20 @@ export function copyIntoDoc(
   docA: Y.Doc,
   docB: Y.Doc,
   /** `from`: la clave de la unión (`copyKey`: la página que se va y el id de la unión). */
-  opts: { from: string; remap: readonly string[]; separator: () => Y.XmlElement },
+  opts: {
+    from: string;
+    remap: readonly string[];
+    separator: () => Y.XmlElement;
+    /** Una ficha que entra como plano (D785): todo B, debajo del título 1 `shotsId` (que se escribe si falta). */
+    fold?: { shotsId: string; shots: () => Y.XmlElement };
+  },
 ): CopyRecord | 'already' | 'empty' {
   // (Un elemento recién armado todavía no está en ningún documento: sus atributos no se leen. Los ids salen de B.)
   const sepId = separatorId(opts.from);
   if (blockIds(docA).has(sepId)) return 'already';
   // Lo que A ya tiene idéntico no se copia otra vez (D707); los ids de lo que sí, aunque el plan no los haya dicho, no se repiten.
-  const blocks = blocksToCopy(docA, docB);
-  if (!blocks.length) return 'empty';
+  const blocks = opts.fold ? foldBlocks(docB) : blocksToCopy(docA, docB);
+  if (!blocks.length && !opts.fold) return 'empty';
   const remap = new Set(opts.remap);
   {
     const inA = blockIds(docA);
@@ -364,8 +439,16 @@ export function copyIntoDoc(
       root = new Y.XmlElement(GROUP);
       docA.getXmlFragment(CONTENT_FRAGMENT).insert(0, [root]);
     }
-    const copies = blocks.map((b) => copyMapped(b, mapId, ids));
-    root.insert(root.length, [opts.separator(), ...copies]);
+    // Una ficha: sus títulos 1 y 2 bajan a 3. Si no, cortarían la sección «Shots» (la ficha siguiente entraría en el medio) y
+    // cada uno contaría como un plano. El texto queda igual.
+    const copies = blocks.map((b) => copyMapped(b, mapId, ids, opts.fold ? demoteHeading : undefined));
+    if (opts.fold) {
+      const at = shotsEnd(root, opts.fold.shotsId);
+      // «Shots» ya está en otro lugar (anidado, o lo escribió otro dispositivo): no se escribe otro, el plano va al final.
+      if (at < 0 && blockIds(docA).has(opts.fold.shotsId)) root.insert(root.length, [opts.separator(), ...copies]);
+      else if (at < 0) root.insert(root.length, [opts.fold.shots(), opts.separator(), ...copies]);
+      else root.insert(at, [opts.separator(), ...copies]);
+    } else root.insert(root.length, [opts.separator(), ...copies]);
     record.ids = [sepId, ...blocks.map((b) => mapId(String(b.getAttribute('id'))))];
     // Las anotaciones de las fotos copiadas, con las reglas de pegar (mismas claves, el marco solo si falta, topes).
     if (photos.size) {

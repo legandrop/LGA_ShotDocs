@@ -14,8 +14,9 @@ import { searchSession } from '../ui/projectSearchUi';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, type Built } from './fixtures/proyectoSintetico';
-import { SceneMentionsView } from './SceneMentionsView';
-import type { SceneMentionList } from './sceneMentions';
+import { SceneStages } from './SceneStages';
+import { sceneStageRows } from './sceneStageRows';
+import type { SceneLive } from './liveView';
 import { OVERVIEW_PAGE as SCENES_PAGE } from './OverviewNav';
 
 // *Overview* de la barra lateral con *Scenes* adentro (Docs/Doc_Relaciones.md, secciones 21 y 22) y la lista de las
@@ -152,26 +153,39 @@ describe('Overview y Scenes en la barra lateral', () => {
     await act(() => d.tree.rename(built.ids.s026, '026 | El fugitivo cruza la autopista'));
     await shown(() => expect(sceneRows(host)[1].querySelector('.title')!.textContent).toBe('El fugitivo cruza la autopista'));
 
-    // La escena: la lista de las páginas que hablan de ella.
+    // La escena: dónde está cada cosa, por etapa (D783).
     const r027 = sceneRows(host)[2];
     expect(r027.getAttribute('href')).toBe('/map/scenes?scene=105_027');
     click(r027);
-    await shown(() => expect(complete(host) && host.querySelector('.mp-scene .mp-sm')).toBeTruthy());
+    await shown(() => expect(complete(host) && host.querySelector('.mp-scene .ss')).toBeTruthy());
     expect(location.pathname + location.search).toBe('/map/scenes?scene=105_027');
     expect(sceneRows(host)[2].classList.contains('active')).toBe(true);
     const view = host.querySelector<HTMLElement>('.mp-scene')!;
     expect(view.querySelector('.mp-sh')!.textContent).toBe('105_027La ambulancia empieza a zigzaguear');
-    expect(view.querySelector('.mp-smeta')!.textContent).toBe('Episode 105 · 9 pages talk about it');
-    expect([...view.querySelectorAll('.mp-smh')].map((h) => h.textContent)).toEqual([
-      'The scene and its breakdown 4',
-      'Locations and scoutings 1',
-      'Shoot days 3',
-      'Other pages 1',
+    expect(view.querySelector('.mp-smeta')!.textContent).toBe('Episode 105 · INT-EXT/NOCHE · 3 shots · shot on 3 days');
+    // Un renglón por tipo, «Etapa | Tipo» y sus links; vacío, lo dice (ya leyó todo).
+    expect([...view.querySelectorAll('.ss-row')].map((r) => r.textContent)).toEqual([
+      'Preproduction | Breakdown027 | La ambulancia empieza a zigzaguear · 3 shots',
+      'Preproduction | SetAmbulancia | Ruta INT',
+      'Preproduction | LocationLa Arenera (estudio), CENADE',
+      'Preproduction | Open questions? ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1',
+      'Scouting | ReportsTech scout 06/01',
+      'Planning | Day planNo day plan names it',
+      'Shoot | ReportsDía 59 · 19 Feb › Escena 105_027b · 5 photosDía 70 · 6 Mar › Escena 105_027A + 029B · 4 photosDía 76 · 14 Mar › Escena 5-27, Escena 5-27A · 4 photos',
+      'Other | Also named inNotas de dirección1 index page ▾',
     ]);
-    // Las páginas índice, aparte y cerradas.
-    const idx = view.querySelector<HTMLDetailsElement>('details.mp-smidx')!;
-    expect(idx.open).toBe(false);
-    expect(idx.querySelector('summary')!.textContent).toBe('Index pages 1');
+    // Los links en el color de lo que son (D774): la escena, la locación, el día; lo demás, en el acento.
+    const row = (id: string) => view.querySelector<HTMLElement>(`.ss-row[data-row="${id}"]`)!;
+    expect(row('breakdown').querySelector('a')!.className).toBe('ss-a scene');
+    expect([...row('location').querySelectorAll('a')].map((a) => a.className)).toEqual(['ss-a loc', 'ss-a loc']);
+    expect(row('shoot').querySelector('a')!.className).toBe('ss-a day');
+    expect(row('scouting').querySelector('a')!.className).toBe('ss-a');
+    // Las páginas índice, plegadas.
+    const idx = row('other').querySelector<HTMLButtonElement>('.ss-more')!;
+    expect(idx.getAttribute('aria-expanded')).toBe('false');
+    expect(row('other').querySelector('.ss-idx')).toBeNull();
+    click(idx);
+    expect(row('other').querySelectorAll('.ss-idx a')).toHaveLength(1);
     // *Export…* pide la ventana con las 9 páginas de la lista, en su orden y sin la página índice.
     const exported: { kind: string; id: string; title: string; ids: string[] }[] = [];
     const onExport = (e: Event) => exported.push((e as CustomEvent).detail);
@@ -181,11 +195,10 @@ describe('Overview y Scenes en la barra lateral', () => {
     } finally {
       window.removeEventListener('shotdocs:export', onExport);
     }
-    const listed = [...view.querySelectorAll<HTMLAnchorElement>('.mp-sm > :not(details) a[href^="/p/"]')].map((a) => a.getAttribute('href')!.slice(3));
     expect(exported).toHaveLength(1);
     expect(exported[0]).toMatchObject({ kind: 'pages', id: 'scene:105_027', title: 'Scene 105_027' });
     expect(exported[0].ids).toHaveLength(9);
-    expect(exported[0].ids).toEqual([...new Set(listed)]);
+    expect(exported[0].ids).toEqual(expect.arrayContaining([built.ids.s027, built.ids.d59, built.ids.d70, built.ids.d76, built.ids.notas]));
     // El filtro de la lista no está en la vista de una escena.
     expect(host.querySelector('.mp-filter')).toBeNull();
     // Un lugar lleva a la sección exacta del día (el mismo pedido que la búsqueda, lo toma el editor).
@@ -196,11 +209,9 @@ describe('Overview y Scenes en la barra lateral', () => {
       asked.push(r);
       request(r);
     };
-    const shoot = [...view.querySelectorAll('.mp-smg')][2];
-    const d59 = shoot.querySelector('.mp-smp')!;
-    expect(d59.querySelector('.mp-smt a')!.textContent).toBe('Día 59');
-    expect(d59.querySelector('.mp-smpl')!.textContent).toBe('§ Escena 105_027b — Tres tomas del vuelco con la ambulancia de doble. Chrome ball y HDRI en la curva. · 5 photos');
-    click(d59.querySelector('.mp-smpl button'));
+    const d59 = row('shoot').querySelector('.ss-line')!;
+    expect(d59.querySelector('a.day')!.getAttribute('href')).toBe(pagePath(built.ids.d59));
+    click([...d59.querySelectorAll('a')].find((a) => a.textContent === 'Escena 105_027b'));
     await wait();
     expect(location.pathname).toBe(pagePath(built.ids.d59));
     expect(asked).toEqual([expect.objectContaining({ pageId: built.ids.d59, term: null, place: { endBlockId: expect.any(String) } })]);
@@ -353,18 +364,24 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(row.querySelector('.mp-sexp')).toBeNull();
     click(btn);
     expect(btn.getAttribute('aria-expanded')).toBe('true');
-    expect([...row.querySelectorAll('.mp-sexp .mp-smh')].map((h) => h.textContent)).toEqual([
-      'The scene and its breakdown 4',
-      'Locations and scoutings 1',
-      'Shoot days 3',
-      'Other pages 1',
+    expect([...row.querySelectorAll('.mp-sexp .ss-row')].map((r) => r.textContent)).toEqual([
+      'Preproduction | Breakdown027 | La ambulancia empieza a zigzaguear · 3 shots',
+      'Preproduction | SetAmbulancia | Ruta INT',
+      'Preproduction | LocationLa Arenera (estudio), CENADE',
+      'Preproduction | Open questions? ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1',
+      'Scouting | ReportsTech scout 06/01',
+      'Planning | Day planNo day plan names it',
+      'Shoot | ReportsDía 59 · 19 Feb › Escena 105_027b · 5 photosDía 70 · 6 Mar › Escena 105_027A + 029B · 4 photosDía 76 · 14 Mar › Escena 5-27, Escena 5-27A · 4 photos',
+      'Other | Also named inNotas de dirección1 index page ▾',
     ]);
     // Una escena de la página índice que nadie más nombra: la escena sola, y lo dice.
     const lone = [...host.querySelectorAll<HTMLElement>('.mp-srow:not(.head)')].find((r) => r.textContent!.startsWith('101_005'))!;
     expect(lone.querySelector('.mp-pages')!.textContent).toBe('1 page');
     click(lone.querySelector('.mp-pages'));
-    expect(lone.querySelector('.mp-smnone')!.textContent).toBe('No other page names it yet.');
-    expect(lone.querySelector('details.mp-smidx summary')!.textContent).toBe('Index pages 1');
+    // Sin nada en cada etapa, cada renglón lo dice (ya leyó todo); la página índice, plegada.
+    expect(lone.querySelector('.ss-row[data-row="shoot"]')!.textContent).toBe('Shoot | ReportsNo report section');
+    expect(lone.querySelector('.ss-row[data-row="scouting"]')!.textContent).toBe('Scouting | ReportsNo scouting names it');
+    expect(lone.querySelector('.ss-row[data-row="other"] .ss-more')!.textContent).toBe('1 index page ▾');
     // Una dirección con un número que no es una escena.
     act(() => navigate('/map/scenes?scene=105_999'));
     await shown(() => expect(host.querySelector('.mp-scene .mp-empty')!.textContent).toBe('105_999 isn’t a scene of this project.'));
@@ -381,7 +398,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     click(host.querySelector('.mp-tab[href="/map/scenes"]'));
     await shown(() => expect(host.querySelectorAll('.mp-srow:not(.head)').length).toBe(24));
     act(() => navigate('/map/scenes?scene=105_027'));
-    await shown(() => expect(host.querySelector('.mp-scene .mp-sm')).toBeTruthy());
+    await shown(() => expect(host.querySelector('.mp-scene .ss')).toBeTruthy());
     click(host.querySelector('.ov-part-name[href="/map"]'));
     await shown(() => expect(location.pathname + location.search).toBe('/map'));
     await shown(() => expect(host.querySelector('.mp-lrow:not(.head)')).toBeTruthy());
@@ -414,14 +431,14 @@ describe('Overview y Scenes en la barra lateral', () => {
     await shown(() => expect(sceneRows(host).map((r) => r.querySelector('.code')!.textContent)).toEqual(['105_027']));
     expect(eps(host)).toEqual([]);
     click(sceneRows(host)[0]);
-    await shown(() => expect(complete(host) && host.querySelector('.mp-scene .mp-sm')).toBeTruthy());
+    await shown(() => expect(complete(host) && host.querySelector('.mp-scene .ss')).toBeTruthy());
     const view = host.querySelector<HTMLElement>('.mp-scene')!;
-    expect(view.querySelector('.mp-smeta')!.textContent).toMatch(/pages? you can see talks? about it$/);
     // Las páginas que no ve no aparecen (la ficha dice «CENADE» en su texto: se busca por el título de cada página).
-    const titles = [...view.querySelectorAll('.mp-smt a')].map((a) => a.textContent);
+    const titles = [...view.querySelectorAll('.ss a')].map((a) => a.textContent);
     for (const k of ['d59', 'd76', 'scout', 'notas', 'cenade']) expect(titles).not.toContain(o.tree.get(built.ids[k])!.title);
-    expect(titles).toEqual(['027 | La ambulancia empieza a zigzaguear', 'PRUEBA_105_027_010 Ambulancia', 'PRUEBA_105_027_020 Ambulancia interior', 'PRUEBA_105_027_030 Ambulancia vuelco', 'Día 70']);
     expect(view.textContent).toContain('Día 70');
+    // Lo que no ve se dice «que veas», nunca «no hay» (D401).
+    expect(view.querySelector('.ss-row[data-row="scouting"]')!.textContent).toBe('Scouting | ReportsNo scouting you can see names it');
     // Una escena que no ve: «no está en las páginas que ves», nunca «no existe» (D401).
     act(() => navigate('/map/scenes?scene=105_029'));
     await shown(() => expect(host.querySelector('.mp-scene .mp-empty')!.textContent).toBe('105_029 isn’t in the pages you can see.'));
@@ -479,10 +496,11 @@ describe('Overview y Scenes en la barra lateral', () => {
       const { host } = mount(d, pagePath(built.ids.notas));
       await shown(() => expect(eps(host).length).toBe(3));
       act(() => navigate('/map/scenes?scene=105_027'));
-      await shown(() => expect(host.querySelector('.mp-scene .mp-sm')).toBeTruthy());
+      await shown(() => expect(host.querySelector('.mp-scene .ss')).toBeTruthy());
       act(() => navigate('/map/scenes?scene=105_029'));
       await shown(() => expect(host.querySelector('.mp-sh')!.textContent).toContain('105_029'));
-      click(host.querySelector('.mp-scene .mp-smt a'));
+      await shown(() => expect(host.querySelector('.mp-scene .ss-row[data-row="breakdown"] a')).toBeTruthy());
+      click(host.querySelector('.mp-scene .ss-row[data-row="breakdown"] a'));
       await shown(() => expect(host.querySelector('.page-title')).toBeTruthy());
       expect(location.pathname).toBe(pagePath(built.ids.s029));
       expect(errors).toEqual([]);
@@ -493,23 +511,19 @@ describe('Overview y Scenes en la barra lateral', () => {
   });
 });
 
-describe('la lista mientras el índice lee', () => {
-  it('dice «Reading…» y nunca «ninguna otra página»', async () => {
-    const list: SceneMentionList = {
-      code: '105_027',
-      count: 1,
-      indexCount: 0,
-      scenePages: 1,
-      groups: [{ id: 'scene', pages: [{ pageId: 'a', title: '027 | La ambulancia', label: '027 | La ambulancia', date: null, stage: 'breakdown', group: 'scene', self: true, twin: false, own: true, places: [] }] }],
-    };
+describe('los renglones mientras el índice lee', () => {
+  it('dicen «Reading…» y nunca que no hay nada; ya leído, que no hay', async () => {
+    const v = { pageId: 'a', complete: false, shots: [], cards: [], sets: [], plannedAt: [], questions: [], scoutPages: [], scoutsVia: [], testPages: [], plans: [], days: [] } as unknown as SceneLive;
+    const o = { self: false, title: () => '027 | La ambulancia', locPage: () => null, others: [], index: [] };
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
     roots.push(root);
-    act(() => root.render(<SceneMentionsView list={list} complete={false} partial={false} onPlace={() => undefined} />));
-    expect(host.querySelector('.mp-smnone')!.textContent).toBe('Reading…');
-    expect(host.textContent).not.toContain('No other page');
-    act(() => root.render(<SceneMentionsView list={list} complete partial onPlace={() => undefined} />));
-    expect(host.querySelector('.mp-smnone')!.textContent).toBe('No other page you can see names it.');
+    act(() => root.render(<ServicesContext.Provider value={{} as Services}><SceneStages rows={sceneStageRows(v, o)} partial={false} /></ServicesContext.Provider>));
+    expect([...host.querySelectorAll('.ss-none')].map((e) => e.textContent)).toEqual(['Reading…', 'Reading…', 'Reading…', 'Reading…']);
+    expect(host.textContent).not.toContain('No scouting');
+    act(() => root.render(<ServicesContext.Provider value={{} as Services}><SceneStages rows={sceneStageRows({ ...v, complete: true }, o)} partial /></ServicesContext.Provider>));
+    expect(host.textContent).toContain('No scouting you can see names it');
+    expect(host.textContent).not.toContain('Reading…');
   });
 });

@@ -9,11 +9,14 @@ import { goToPlace } from './goToPlace';
 import { DayHeader } from './DayHeader';
 import { dayLive } from './dayLive';
 import { useLiveOpen, type FoldKind } from './liveFold';
-import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type OpenQuestion, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
+import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
 import { dayGallery, locationGallery, sceneGallery, type Gallery } from './photoGallery';
 import { PhotoSources } from './PhotoSources';
 import { leftOutBy } from './register';
 import { TwinLine, type MergePair } from './MergeAction';
+import { sceneStageRows, type StageOptions } from './sceneStageRows';
+import { SceneStages } from './SceneStages';
+import { FoldShotsLine } from './FoldShots';
 import { dayTwins } from './projectMap';
 import './liveHeader.css';
 
@@ -81,11 +84,12 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   // see» (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
   const photos = { gallery: view.gallery, unread: snap.unread, here: pageId };
+  const stageOpts = { title: (id: string) => tree.get(id)?.title ?? '', locPage: (name: string) => snap.registry.locations.get(name)?.pageId ?? null };
   const header =
     view.kind === 'day' ? (
       <DayHeader v={view.data} src={view.src} pages={snap.pages.size} partial={partial} photos={photos} />
     ) : view.kind === 'scene' ? (
-      <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
+      <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} opts={stageOpts} />
     ) : (
       <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
     );
@@ -271,32 +275,6 @@ function SetChip({ set }: { set: SetRef }) {
       <Ic name="set" />
       <span className="lh-chip-t">{set.title}</span>
     </button>
-  );
-}
-
-const QUESTION_CHARS = 120;
-const short = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : text);
-
-/**
- * La pregunta abierta del desglose (la primera), como la maqueta: su primer renglón, de qué ficha es («· ERSO_105_027_010»
- * o «· in 2 cards») y cuántas más hay («· +1»). Lleva a la ficha, con la pregunta resaltada.
- */
-function QuestionRow({ questions, tr }: { questions: OpenQuestion[]; tr: Translate }) {
-  const go = useGo();
-  const q = questions[0];
-  const where = q.cards.length > 1 ? tr('live.inCards', { count: q.cards.length }) : q.cards.length ? q.cards[0].shot : tr('live.questionOnScene');
-  return (
-    <div className="lh-kv">
-      <span>{tr('live.openQuestion')}</span>
-      {/* Un solo botón (un párrafo): un botón dentro del renglón no deja que «· in 2 cards» siga en la misma línea. */}
-      <button className="lh-q" onClick={() => go(q.place)} data-tip={tr(questions.length > 1 ? 'live.questionMoreTip' : 'live.questionTip')}>
-        <span className="lh-qt">{short(q.text.split('\n')[0], QUESTION_CHARS)}</span>{' '}
-        <span className="lh-via">
-          · {where}
-          {questions.length > 1 && <> · +{questions.length - 1}</>}
-        </span>
-      </button>
-    </div>
   );
 }
 
@@ -494,21 +472,19 @@ function AlsoRow({ also, index, tr }: { also: PageChip[]; index: PageChip[]; tr:
 
 // --- Escena -----------------------------------------------------------------------------------------------------
 
-function SceneHeader({ v, pages, partial, photos }: { v: SceneLive; pages: number; partial: boolean; photos: HeaderPhotos }) {
+function SceneHeader({ v, pages, partial, photos, opts }: { v: SceneLive; pages: number; partial: boolean; photos: HeaderPhotos; opts: Pick<StageOptions, 'title' | 'locPage'> }) {
   const tr = useT();
-  const go = useGo();
   const [open, setOpenRaw] = useLiveOpen('scene');
   const focus = useFoldFocus(open);
   const setOpen = (next: boolean) => {
     focus.mark();
     setOpenRaw(next);
   };
-  const [stage, setStage] = useState<Stage | null>(null);
   const reading = !v.complete;
-  const absent = (text: string) => (reading ? tr('live.reading') : text);
   const shotDays = v.days.filter((d) => d.sections.length);
   const shotLocs = [...new Set(shotDays.flatMap((d) => d.day.locs))];
-  const sections = shotDays.reduce((n, d) => n + d.sections.length, 0);
+  // Los renglones «Etapa | Tipo: links» (D784): los mismos de la vista de la escena en el Overview, sin *Desglose* (es esta página).
+  const rows = useMemo(() => sceneStageRows(v, { self: true, title: opts.title, locPage: opts.locPage, others: v.also, index: v.indexPages }), [v, opts]);
 
   const noReportText = partial ? tr('live.noReportSeen') : tr('live.noReport');
   if (!open) {
@@ -517,7 +493,7 @@ function SceneHeader({ v, pages, partial, photos }: { v: SceneLive; pages: numbe
     const parts = [
       shotLocs.length ? tr.rich('live.shotAt', { locs: <b>{shotLocs.join(', ')}</b> }) : shotDays.length ? tr('live.days', { count: shotDays.length }) : reading ? null : noReportText,
       shotLocs.length ? tr('live.days', { count: shotDays.length }) : null,
-      count(v.cards.length, tr('live.cards', { count: v.cards.length })),
+      count(v.shots.length, tr('stages.shots', { count: v.shots.length })),
       count(v.photos.length, tr('live.photoCount', { count: v.photos.length })),
     ].filter(Boolean);
     return (
@@ -532,231 +508,45 @@ function SceneHeader({ v, pages, partial, photos }: { v: SceneLive; pages: numbe
     );
   }
 
-  const noReport = (
-    <span className="lh-noreport">
-      <span className="lh-none" data-tip={reading ? undefined : tr(partial ? 'live.noReportSeenTip' : 'live.noReportTip')}>
-        {absent(noReportText)}
-      </span>
-      {v.noVfx ? (
-        <span className="lh-st" data-tip={tr('live.noVfxTip')}>
-          {tr('live.noVfx')}
-        </span>
-      ) : (
-        v.noVfxCards.no > 0 && (
-          <span className="lh-st" data-tip={tr('live.noVfxSomeTip')}>
-            {tr('live.noVfxSome', { count: v.noVfxCards.no, of: v.noVfxCards.of })}
-          </span>
-        )
-      )}
-    </span>
-  );
-  const scoutSum = v.scoutPages.length
-    ? tr('live.sectionsNameIt', { count: Math.max(v.scouting.length, 1) })
-    : v.scoutsVia.length
-      ? tr('live.via', { locs: [...new Set(v.scoutsVia.map((s) => s.loc))].join(', ') })
-      : absent(tr('live.none'));
-  const shootSum = shotDays.length
-    ? `${tr('live.days', { count: shotDays.length })} · ${tr('live.sections', { count: sections })}`
-    : v.shoot.length
-      ? tr('live.mentions', { count: v.shoot.length })
-      : absent(tr('live.noReport'));
-  const bdExtra = v.breakdown.filter((e) => e.kind !== 'card').length;
-  const defs = [
-    {
-      key: 'breakdown' as const,
-      name: tr('live.breakdown'),
-      has: v.breakdown.length > 0,
-      sum:
-        (v.cards.length ? tr('live.cards', { count: v.cards.length }) + (bdExtra ? ` · ${tr('live.mentions', { count: bdExtra })}` : '') : bdExtra ? tr('live.mentions', { count: bdExtra }) : absent(tr('live.noCards'))) +
-        (v.questions.length ? ` · ${tr('live.questions', { count: v.questions.length })}` : ''),
-    },
-    { key: 'scouting' as const, name: tr('live.scouting'), has: v.scouting.length > 0, sum: scoutSum },
-    { key: 'shoot' as const, name: tr('live.shoot'), has: v.shoot.length > 0 || v.plannedDays.length > 0, sum: shootSum },
-  ];
-
-  let panel: ReactNode = null;
-  if (stage === 'breakdown') {
-    panel = (
-      <Panel head={<><b>{tr('live.breakdown')}</b> · {tr('live.panel.breakdown')}</>}>
-        {v.breakdown.length ? v.breakdown.map((ex, i) => <ExcerptCard key={i} ex={ex} tag="bd" tr={tr} code={v.code} />) : <Empty icon="card">{absent(tr('live.empty.breakdown'))}</Empty>}
-      </Panel>
-    );
-  } else if (stage === 'scouting') {
-    panel = (
-      <Panel head={<><b>{tr('live.scouting')}</b> · {v.scouting.length || !v.scoutsVia.length ? tr('live.panel.scouting') : tr('live.panel.scoutsVia')}</>}>
-        {v.scouting.length ? (
-          v.scouting.map((ex, i) => <ExcerptCard key={i} ex={ex} tag="scout" tr={tr} />)
-        ) : v.scoutsVia.length ? (
-          v.scoutsVia.map((s) => (
-            <button key={s.pageId} className="lh-ex" onClick={() => navigate(pagePath(s.pageId))}>
-              <span className="src">
-                <span className="tag scout">{tr('live.scouting')}</span>
-                <span>{tr('live.ofLoc', { loc: s.loc })}</span>
-              </span>
-              <span className="tt">
-                <span className="tt-t">{s.title}</span>
-                <span className="go">
-                  <Ic name="go" small />
-                </span>
-              </span>
-            </button>
-          ))
-        ) : (
-          <Empty icon="scout">{absent(tr('live.empty.scouting'))}</Empty>
-        )}
-      </Panel>
-    );
-  } else if (stage === 'shoot') {
-    panel = (
-      <Panel head={<><b>{tr('live.shoot')}</b> · {tr('live.panel.shoot')}</>}>
-        {v.shoot.length || v.plannedDays.length ? (
-          <>
-            {v.shoot.map((ex, i) => <ExcerptCard key={i} ex={ex} tag="shoot" tr={tr} />)}
-            {v.plannedDays.flatMap((d) => d.items).map((ex, i) => <ExcerptCard key={`p${i}`} ex={ex} tag="plan" tr={tr} />)}
-          </>
-        ) : (
-          <Empty icon="day">
-            {absent(tr(partial ? 'live.empty.shootSeen' : 'live.empty.shoot'))}
-            {!reading && v.noVfx && <> · {tr('live.noVfxTip')}</>}
-          </Empty>
-        )}
-      </Panel>
-    );
-  }
-
   return (
     <section className="lh" aria-label={tr('live.aria')}>
       <div className="lh-id">
         <Badge kind="scene" />
         <span className="lh-meta">
-          {v.intExt.length > 0 && (
-            <>
-              <span data-tip={tr('live.intExtTip')}>{v.intExt.slice(0, 3).join(', ')}</span>
-              {(v.episode || v.aliases.length > 0) && ' · '}
-            </>
-          )}
-          {v.episode && tr('live.episode', { ep: v.episode })}
-          {v.aliases.length > 0 && (
-            <>
-              {v.episode && ' · '}
-              {tr('live.alsoWritten')} <span className="mono">{v.aliases.join(' · ')}</span>
-            </>
+          {[
+            v.intExt.length ? <span data-tip={tr('live.intExtTip')}>{v.intExt.slice(0, 3).join(', ')}</span> : null,
+            v.episode ? tr('live.episode', { ep: v.episode }) : null,
+            v.shots.length ? tr('stages.shots', { count: v.shots.length }) : null,
+            v.aliases.length ? (
+              <>
+                {tr('live.alsoWritten')} <span className="mono">{v.aliases.join(' · ')}</span>
+              </>
+            ) : null,
+          ]
+            .filter(Boolean)
+            .map((p, i) => (
+              <span key={i}>
+                {i > 0 && ' · '}
+                {p}
+              </span>
+            ))}
+          {v.noVfx ? (
+            <span className="lh-st" data-tip={tr('live.noVfxTip')}>
+              {tr('live.noVfx')}
+            </span>
+          ) : (
+            v.noVfxCards.no > 0 && (
+              <span className="lh-st" data-tip={tr('live.noVfxSomeTip')}>
+                {tr('live.noVfxSome', { count: v.noVfxCards.no, of: v.noVfxCards.of })}
+              </span>
+            )
           )}
         </span>
         <Tools kind="scene" complete={v.complete} onFold={() => setOpen(false)} foldRef={focus.ref} />
       </div>
-      <div className="lh-sum2">
-        <div className="lh-col">
-          <div className="lh-col-h">{tr('live.preproduction')}</div>
-          <div className="lh-kv">
-            <span>{tr('live.plannedAt')}</span>
-            <div>
-              {v.plannedAt.length ? (
-                <>
-                  {v.plannedAt.map((l) => (
-                    <Chip key={l.title} kind="loc" onClick={() => (l.pageId ? navigate(pagePath(l.pageId)) : undefined)}>
-                      {l.title}
-                    </Chip>
-                  ))}
-                  <span className="lh-via">{tr('live.plannedVia')}</span>
-                </>
-              ) : (
-                <span className="lh-none">{absent('—')}</span>
-              )}
-            </div>
-          </div>
-          <div className="lh-kv">
-            <span>{tr('live.breakdown')}</span>
-            <div>
-              {v.cards.length ? (
-                <button className="lh-lnk" onClick={() => setStage('breakdown')}>
-                  {tr('live.cards', { count: v.cards.length })}
-                </button>
-              ) : (
-                <span className="lh-none">{absent(tr('live.noCards'))}</span>
-              )}
-              {v.sets.length > 0 && (
-                <>
-                  <span className="lh-sep">·</span>
-                  {v.sets.map((s) => (
-                    <SetChip key={s.pageId ?? s.title} set={s} />
-                  ))}
-                </>
-              )}
-            </div>
-          </div>
-          {v.questions.length > 0 && <QuestionRow questions={v.questions} tr={tr} />}
-          <div className="lh-kv">
-            <span>{tr('live.scouting')}</span>
-            <div>
-              {v.scoutPages.length ? (
-                v.scoutPages.map((s) => (
-                  <Chip key={s.pageId} kind="scout" onClick={() => (s.blockId ? go({ pageId: s.pageId, blockId: s.blockId }) : navigate(pagePath(s.pageId)))}>
-                    {s.title} <span className="n">· {tr('live.namesIt')}</span>
-                  </Chip>
-                ))
-              ) : v.scoutsVia.length ? (
-                v.scoutsVia.map((s) => (
-                  <Chip key={s.pageId} kind="scout" onClick={() => navigate(pagePath(s.pageId))}>
-                    {s.title} <span className="n">· {tr('live.ofLoc', { loc: s.loc })}</span>
-                  </Chip>
-                ))
-              ) : (
-                <span className="lh-none">{absent(tr('live.none'))}</span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="lh-col">
-          <div className="lh-col-h">{tr('live.shoot')}</div>
-          {shotDays.length
-            ? shotDays.map((d) => (
-                <div className="lh-dayline" key={d.day.pageId}>
-                  <span className="dl-main">
-                    <DayChip day={d.day} />
-                    {d.day.locs.length > 0 && (
-                      <span className="lh-via lh-locs" data-tip={tr('live.perDayTitle')}>
-                        {d.day.locs.join(' + ')}
-                      </span>
-                    )}
-                    {d.sections.map((s) => (
-                      <button key={s.place.blockId} className="lh-sec" onClick={() => go(s.place)} data-tip={tr('live.goTip')}>
-                        § {s.heading}
-                      </button>
-                    ))}
-                  </span>
-                  <Thumbs photos={d.photos} onMore={() => go(d.sections[0].place)} />
-                </div>
-              ))
-            : !v.days.length && !v.plannedDays.length && <div className="lh-dayline">{noReport}</div>}
-          {v.days
-            .filter((d) => d.mentions.length)
-            .map((d) => (
-              <div className="lh-dayline" key={`m-${d.day.pageId}`}>
-                <span className="dl-main">
-                  <DayChip day={d.day} />
-                  <button className="lh-sec" onClick={() => go(d.mentions[0].place)}>
-                    {tr('live.namedInText')}
-                  </button>
-                </span>
-              </div>
-            ))}
-          {v.plannedDays.map((d) => (
-            <div className="lh-dayline" key={`p-${d.day.pageId}`}>
-              <span className="dl-main">
-                <DayChip day={d.day} />
-                <button className="lh-sec plan" onClick={() => go(d.items[0].place)} data-tip={tr('live.plannedForTip')}>
-                  {tr('live.plannedFor', { page: d.items[0].pageTitle })}
-                </button>
-              </span>
-            </div>
-          ))}
-          {!shotDays.length && (v.days.length > 0 || v.plannedDays.length > 0) && <div className="lh-dayline">{noReport}</div>}
-        </div>
-      </div>
-      <AlsoRow also={v.also} index={v.indexPages} tr={tr} />
-      <Stages defs={defs} open={stage} onToggle={(k) => setStage(stage === k ? null : k)} />
-      {panel}
+      <SceneStages rows={rows} partial={partial} className="in-lh" />
+      {/* Las fichas que siguen siendo subpáginas: traerlas adentro (D785). Solo en la página que usan las relaciones. */}
+      {v.pageId === photos.here && <FoldShotsLine v={v} sceneId={photos.here} />}
       <PhotoSources gallery={photos.gallery} complete={v.complete} unread={photos.unread} here={photos.here} tr={tr} />
       <div className="lh-foot">{tr('live.foot', { count: pages })}</div>
     </section>
