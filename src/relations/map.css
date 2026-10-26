@@ -431,6 +431,12 @@
   padding-bottom: 7px;
 }
 
+/* Una fecha que solo tiene plan (todavía sin reporte): apagada, como lo que falta filmar. */
+.mp-drow.planned .mp-date,
+.mp-drow.planned .mp-dd {
+  color: var(--muted);
+}
+
 .mp-srow:not(.head):hover,
 .mp-drow:not(.head):hover {
   background: var(--hover);

@@ -7,7 +7,7 @@ import { existingRelationsSession } from '../ui/relationsUi';
 import { pickerOptions, reasonText, runCreate, createEnv } from './EntityActions';
 import type { CreateWant } from './createEntity';
 import { planOf } from './dayLive';
-import { dayRef } from './liveView';
+import { dayIdOf, dayRef } from './liveView';
 import { fold, scan, type Registry } from './reader';
 import { anchorOf, linkTextInBlock } from './relLink';
 import { setSlashDraft, textWithout } from './slashDraft';
@@ -71,7 +71,9 @@ export interface SlashPlace {
 
 export function slashPlace(snap: RelationSnapshot, title: (id: string) => string | undefined, children: (id: string) => { id: string }[], pageId: string): SlashPlace {
   const role = snap.registration.roles.get(pageId);
-  const dayId = role?.entity?.kind === 'day' ? pageId : role?.partOf?.kind === 'day' ? role.partOf.pageId : null;
+  const live = { snap, title, content: () => undefined };
+  // Un plan que vive en *Planeamiento* toma las escenas cercanas de su día, como uno adentro del día.
+  const dayId = dayIdOf(live, pageId);
   const near: string[] = [];
   const nearLocs: string[] = [];
   const take = (id: string) => {
@@ -83,8 +85,7 @@ export function slashPlace(snap: RelationSnapshot, title: (id: string) => string
   take(dayId ?? pageId);
   if (dayId) {
     for (const c of children(dayId)) take(c.id);
-    // El plan del día también cuando sale del desglose (las fichas con esa fecha, D570): no lo nombra ninguna página suya.
-    const live = { snap, title, content: () => undefined };
+    // El plan del día también cuando sale del desglose (las fichas con esa fecha, D570) o vive afuera del día.
     for (const code of planOf(live, dayRef(live, dayId)).codes) if (!near.includes(code)) near.push(code);
   }
   return { snap, src: { snap, title }, projectId: snap.projectId, ep: role?.ep ?? null, near, nearLocs };

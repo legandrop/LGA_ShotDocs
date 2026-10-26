@@ -1,7 +1,7 @@
 import { mapPath } from '../router';
 import { SEPARATOR, type BlockMeta, type SearchUnit } from '../search/extract';
 import { sceneTitleOf } from './dayLive';
-import type { LiveSource } from './liveView';
+import { dayIdOf, type LiveSource } from './liveView';
 import { INDEX_PAGE_MIN } from './pageRelations';
 import type { MapMention, MapSectionRef, ProjectMapData } from './projectMap';
 import { scan, type SceneEntry } from './reader';
@@ -278,7 +278,7 @@ export function sceneMentions(
     const info = m.pages.get(pageId);
     const role = roles.get(pageId);
     const stage = mention?.stage ?? role?.stage ?? info?.stage ?? 'other';
-    const dayId = role?.entity?.kind === 'day' ? pageId : role?.partOf?.kind === 'day' ? role.partOf.pageId : null;
+    const dayId = dayIdOf(src, pageId);
     const day = dayId ? days.get(dayId) : undefined;
     // El mapa anota solo las páginas que nombran escenas o locaciones; una que entra solo por un link a una ficha (un
     // decorado, una lista de assets) no está ahí: su título sale del árbol, como en `projectMap`.

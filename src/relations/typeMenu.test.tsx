@@ -185,6 +185,30 @@ describe('Scouting y pruebas en Type (Plan_Estructura_Etapas.md)', () => {
     expect(button(page, 'Scouting report')?.querySelector('.check')?.textContent).toBe('By folder');
   });
 
+  it('la carpeta de planes: rótulo Plans y su tooltip', async () => {
+    const { device, server } = await setup();
+    const folder = await device.tree.create(null, '4 | Planeamiento');
+    const host = menu(device, server, folder, { n: 0 });
+    act(() => button(host, 'Type')!.click());
+    act(() => button(host, 'Day plans')!.click());
+    await shown(() => expect(device.tree.get(folder)?.settings?.holds).toBe('plan'));
+    const tag = mount(device, server, <HoldsTag pageId={folder} />);
+    await shown(() => expect(tag.querySelector('.tree-holds')?.textContent).toBe('Plans'));
+    expect(tag.querySelector('.tree-holds')?.getAttribute('data-tip')).toBe('Everything inside, at any depth, is a day plan: it links to its shoot day by date and day number');
+  });
+
+  it('un plan con puntero a su día no lo pierde al volver a elegir Day plan', async () => {
+    const { device, server } = await setup();
+    const page = await device.tree.create(null, 'Plan | Av Castanares');
+    await device.tree.setSetting(page, 'entity', { kind: 'plan', day: 'dia-1' });
+    const host = menu(device, server, page, { n: 0 });
+    act(() => button(host, 'Type')!.click());
+    expect(button(host, 'Day plan')?.getAttribute('aria-checked')).toBe('true');
+    act(() => button(host, 'Day plan')!.click());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(device.tree.get(page)?.settings?.entity).toEqual({ kind: 'plan', day: 'dia-1' });
+  });
+
   it('una página suelta como prueba', async () => {
     const { device, server } = await setup();
     const page = await device.tree.create(null, 'Comparación de técnicas');

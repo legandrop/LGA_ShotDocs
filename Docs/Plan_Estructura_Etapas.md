@@ -173,7 +173,8 @@ sube `min_app_version`.
    sobre una página con la clave aparte y la convertiría en locación o día).
 2. Gana lo más cercano; los documentos valen a cualquier profundidad; las entidades, como hoy.
 3. El tipo de documento se deduce de la carpeta al leer; solo la plantilla y *Type* lo escriben en una página.
-4. Plan → día: link o campo, después lo de adentro, después fecha y jornada que coinciden; si no, *Pending*.
+4. Plan → día: link o campo, después lo de adentro, después fecha y jornada que coinciden; si no, *Pending*. Hecho en
+   v0.277 (D780), con un puntero `entity.day` que escribe el reacomodo para que cada plan conserve su día.
 5. Scouting → varias locaciones: link o campo, título, títulos de sección.
 6. Decorados solo por campo o link, con el valor entero.
 7. Las notas no son un tipo; las pruebas pueden no tener fecha.

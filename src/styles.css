@@ -3535,6 +3535,33 @@ code {
   object-fit: contain;
 }
 
+/* Las tablas de las páginas (D781), como las del Overview: un borde apagado alrededor con las esquinas redondeadas, y
+   adentro solo las líneas suaves entre celdas. BlockNote pinta cada celda con un borde fijo `#ddd`, casi blanco sobre
+   el tema oscuro. `separate` con `border-spacing: 0` deja redondear la tabla (con `collapse` el radio no se ve); el
+   recorte de la tabla (`overflow: hidden`, de ProseMirror) lleva el fondo de las celdas al redondeo. La vista de
+   impresión toma los mismos colores de su tema claro, así el PDF sale igual que la página. */
+.bn-editor [data-content-type='table'] table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.bn-editor [data-content-type='table'] :is(td, th) {
+  border: 0;
+  border-right: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.bn-editor [data-content-type='table'] tr > :is(td, th):last-child {
+  border-right: 0;
+}
+
+.bn-editor [data-content-type='table'] tr:last-child > :is(td, th) {
+  border-bottom: 0;
+}
+
 /* Las tablas sin el lugar de los botones de filas y columnas (y sin recorte, así se parten entre hojas). */
 .print-view .bn-editor [data-content-type='table'] .tableWrapper {
   padding: 0;

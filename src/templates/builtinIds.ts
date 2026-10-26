@@ -13,6 +13,8 @@ export const BUILTIN_TECH_SCOUT = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e06';
 export const BUILTIN_CREATIVE_SCOUT = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e07';
 // *Test report* (Docs/Plan_Estructura_Etapas.md): una prueba; con *Tech scout* y *Creative scout* marca la página.
 export const BUILTIN_TEST = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e08';
+// *Day plan*: el plan de una jornada; nunca es la plantilla del reporte del día (su carpeta se deduciría de reportes).
+export const BUILTIN_PLAN = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e09';
 
 /** Todas las de fábrica (exportar e importar conservan el `template_id` de estas). */
 export const BUILTIN_ALL: readonly string[] = [
@@ -24,4 +26,5 @@ export const BUILTIN_ALL: readonly string[] = [
   BUILTIN_TECH_SCOUT,
   BUILTIN_CREATIVE_SCOUT,
   BUILTIN_TEST,
+  BUILTIN_PLAN,
 ];

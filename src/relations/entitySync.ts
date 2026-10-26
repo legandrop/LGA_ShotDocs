@@ -1,5 +1,5 @@
 import type { PageTree } from '../sync/tree';
-import { BUILTIN_CREATIVE_SCOUT, BUILTIN_LOCATION, BUILTIN_SCENE, BUILTIN_TECH_SCOUT, BUILTIN_TEST } from '../templates/builtinIds';
+import { BUILTIN_CREATIVE_SCOUT, BUILTIN_LOCATION, BUILTIN_PLAN, BUILTIN_SCENE, BUILTIN_TECH_SCOUT, BUILTIN_TEST } from '../templates/builtinIds';
 import { dayReportsMark, isDayReportFolder } from '../templates/dayReport';
 import { docMark, entityMark, holdsDoc, holdsMark, holdsOf, kindReader, type DocKind, type EntityKind, type KindTree } from './kind';
 
@@ -117,7 +117,11 @@ export async function setPageType(tree: SyncTree, id: string, kind: EntityKind |
   const row = tree.get(id);
   if (!row) return;
   if (kind === null) return tree.setSetting(id, 'entity', false);
-  if (kind !== 'scene' && kind !== 'location' && kind !== 'day') return tree.setSetting(id, 'entity', { kind });
+  if (kind !== 'scene' && kind !== 'location' && kind !== 'day') {
+    // El mismo documento: no se toca (un plan conserva el puntero a su día).
+    if (docMark(row) === kind) return;
+    return tree.setSetting(id, 'entity', { kind });
+  }
   const mark = entityMark(row);
   const kept = mark && mark !== 'other' && mark.kind === 'scene' ? (mark.code ?? null) : null;
   const fromTitle = kind === 'scene' ? kindReader(tree).titleCode(id) : null;
@@ -135,8 +139,8 @@ export function installEntityMarks(tree: Pick<PageTree, 'onPlaced'> & SyncTree, 
 }
 
 /**
- * El tipo que da una plantilla: *Scene*, *Location*, *Tech scout*, *Creative scout* y *Test report* de fábrica (las tres
- * últimas, un documento: scouting o prueba), o una propia que salió de una de ellas (*Customize*). Las demás, ninguno.
+ * El tipo que da una plantilla: *Scene*, *Location*, *Tech scout*, *Creative scout*, *Test report* y *Day plan* de
+ * fábrica (las cuatro últimas, un documento: scouting, prueba o plan), o una propia que salió de una de ellas (*Customize*). Las demás, ninguno.
  */
 export function templateEntity(tree: Pick<PageTree, 'get'>, templateId: string | null | undefined): EntityKind | DocKind | null {
   const of = (id: string | null | undefined): EntityKind | DocKind | null =>
@@ -148,7 +152,9 @@ export function templateEntity(tree: Pick<PageTree, 'get'>, templateId: string |
           ? 'scouting'
           : id === BUILTIN_TEST
             ? 'test'
-            : null;
+            : id === BUILTIN_PLAN
+              ? 'plan'
+              : null;
   return of(templateId) ?? (templateId ? of(tree.get(templateId)?.template_id) : null);
 }
 

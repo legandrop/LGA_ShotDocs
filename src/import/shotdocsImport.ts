@@ -16,7 +16,7 @@ import type { LocalDb } from '../sync/localDb';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { PageTree } from '../sync/tree';
 import type { PageRow, PageSettings } from '../sync/types';
-import { entityMark, holdsMark } from '../relations/kind';
+import { docMark, entityMark, holdsDoc, holdsMark } from '../relations/kind';
 import { BUILTIN_ALL } from '../templates/builtinIds';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { editorSchemaOptions } from '../ui/editorSchema';
@@ -480,8 +480,16 @@ export function archiveSettings(raw: Record<string, unknown>, page: (oldId: stri
   const entity = entityMark({ settings: raw } as unknown as PageRow);
   if (entity === false) out.entity = false;
   else if (entity && entity !== 'other') out.entity = entity;
+  // Un documento (scouting, prueba, plan; v0.275): el plan lleva el puntero a su día, con el id nuevo.
+  const doc = docMark({ settings: raw } as unknown as PageRow);
+  if (doc) {
+    const day = doc === 'plan' && isObj(raw.entity) && typeof raw.entity.day === 'string' ? page(raw.entity.day.toLowerCase()) : null;
+    out.entity = day ? { kind: doc, day } : { kind: doc };
+  }
   const holds = holdsMark({ settings: raw } as unknown as PageRow);
   if (holds !== null && holds !== 'other') out.holds = holds;
+  const holdsDocKind = holdsDoc({ settings: raw } as unknown as PageRow);
+  if (holdsDocKind) out.holds = holdsDocKind;
   // La base pide menos de 2000 letras: lo primero que se acorta es la descripción de la plantilla.
   if (JSON.stringify(out).length > SETTINGS_MAX && isObj(out.template)) out.template = { ...out.template, description: (out.template.description ?? '').slice(0, 200) };
   return out;

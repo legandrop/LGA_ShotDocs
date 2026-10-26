@@ -242,6 +242,27 @@ describe('el mapa en la app', () => {
     expect(part.querySelector('.scene-nav-n')!.textContent).toBe('2');
   });
 
+  it('Planes: uno que se contradice va a Pending con los dos días; una fecha solo planeada va en Shoot days', async () => {
+    const { host } = await app(
+      () => '/map/pending',
+      async (d, b) => {
+        const folder = await d.tree.create(null, '4 | Planeamiento', b.projectId);
+        await d.tree.setPatch(folder, { settings: { holds: 'plan' } });
+        await d.tree.create(folder, 'D59 26.02.20 | CENADE', b.projectId);
+        const future = await d.tree.create(folder, 'D90_26.04.01 | La Arenera', b.projectId);
+        await writeBlocks(d, future, [{ p: 'Plates del 104_009.' }]);
+      },
+    );
+    await until(() => complete(host) && [...host.querySelectorAll('.mp-pcard')].some((c) => c.textContent?.includes('D59 26.02.20')), 'el plan en Pending');
+    const card = [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('D59 26.02.20'))!;
+    expect(card.textContent).toContain('its date and its day number point to different shoot days');
+    expect([...card.querySelectorAll('.mp-plink')].map((b) => b.textContent)).toEqual(expect.arrayContaining(['2026-02-19 | Día 59 | CENADE', '2026-02-20 | Día 60 | CENADE']));
+    act(() => navigate('/map/days'));
+    await until(() => host.querySelector('.mp-drow.planned'), 'la fecha planeada');
+    const planned = host.querySelector<HTMLElement>('.mp-drow.planned')!;
+    expect([...planned.querySelectorAll('[role="cell"]')].map((c) => c.textContent)).toEqual(['2026-04-01', 'D90_26.04.01 | La Arenera', 'Planned, no report yet', '1 planned']);
+  });
+
   it('la consulta abierta del / no cuenta en Overview ni en Pending; al cerrarse, sí (D568)', async () => {
     const { built, host } = await app(
       () => mapPath('pending'),

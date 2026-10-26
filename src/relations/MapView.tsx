@@ -653,7 +653,15 @@ function Days({ data, fq, codes, registry }: { data: ProjectMapData; fq: string;
   const rows = data.days.filter(
     (d) => !fq || (codes ? [...d.scenes, ...d.planned].some((c) => codes.has(c)) : fold(`${d.date ?? ''} ${d.title} ${d.locs.join(' ')} ${d.scenes.join(' ')}`).includes(fq)),
   );
-  if (!rows.length) return <p className="mp-empty">{fq ? tr('map.noMatch') : tr('live.reading')}</p>;
+  // Las fechas que solo tienen plan (se planea antes de filmar): en su lugar por fecha, apagadas.
+  const planned = data.plannedDates.filter((p) => !fq || (codes ? p.scenes.some((c) => codes.has(c)) : fold(`${p.date} ${p.plans.map((id) => data.pages.get(id)?.title ?? '').join(' ')} ${p.scenes.join(' ')}`).includes(fq)));
+  if (!rows.length && !planned.length) return <p className="mp-empty">{fq ? tr('map.noMatch') : tr('live.reading')}</p>;
+  type Row = { kind: 'day'; d: MapDay } | { kind: 'plan'; p: (typeof planned)[number] };
+  const all: Row[] = [...rows.map((d) => ({ kind: 'day' as const, d })), ...planned.map((p) => ({ kind: 'plan' as const, p }))].sort((a, b) => {
+    const x = a.kind === 'day' ? (a.d.date ?? '9999') : a.p.date;
+    const y = b.kind === 'day' ? (b.d.date ?? '9999') : b.p.date;
+    return x < y ? -1 : x > y ? 1 : a.kind === b.kind ? 0 : a.kind === 'day' ? -1 : 1;
+  });
   return (
     <div className="mp-grid mp-days" role="table">
       <div className="mp-drow head" role="row">
@@ -662,7 +670,34 @@ function Days({ data, fq, codes, registry }: { data: ProjectMapData; fq: string;
         <span role="columnheader">{tr('map.colLocation')}</span>
         <span role="columnheader">{tr('map.colScenes')}</span>
       </div>
-      {rows.map((d) => {
+      {all.map((row) => {
+        if (row.kind === 'plan') {
+          const p = row.p;
+          return (
+            <div key={`plan:${p.date}`} className="mp-drow planned" role="row">
+              <span className="mp-date mono" role="cell">
+                {p.date}
+              </span>
+              <span className="mp-dt" role="cell">
+                {p.plans.map((id, i) => (
+                  <span key={id}>
+                    {i > 0 && ' · '}
+                    <PageLink pageId={id} className="mp-link" tip={data.pages.get(id)?.title}>
+                      {data.pages.get(id)?.title ?? ''}
+                    </PageLink>
+                  </span>
+                ))}
+              </span>
+              <span className="mp-ls" role="cell">
+                <span className="mp-tag">{tr('map.plannedOnly')}</span>
+              </span>
+              <span className="mp-dd" role="cell">
+                {p.scenes.length ? tr('map.plannedN', { count: p.scenes.length }) : <span className="mp-none">—</span>}
+              </span>
+            </div>
+          );
+        }
+        const d = row.d;
         const plannedOnly = d.planned.filter((c) => !d.scenes.includes(c)).length;
         return (
           <div key={d.pageId} className="mp-drow" role="row">
@@ -821,7 +856,7 @@ function Pending({
   const src = snap ? { snap, title: (id: string) => tree.get(id)?.title } : null;
   const title = (id: string) => data.pages.get(id)?.title ?? '';
   const merges = useMergeRows();
-  const nothing = !data.pending.length && !data.unnumbered.length && !data.duplicates.length && !merges.length;
+  const nothing = !data.pending.length && !data.unnumbered.length && !data.duplicates.length && !data.plans.length && !merges.length;
   // En el selector de *Assign* de un número, primero las escenas que nombran las páginas donde está escrito.
   const nearOf = (code: string): string[] => {
     const out = new Set<string>();
@@ -924,6 +959,40 @@ function Pending({
               <div className="mp-pw">
                 {data.days.find((d) => d.pageId === u.dayId)?.label ?? title(u.dayId)} · {tr('map.photos', { count: u.photos })} · {tr('map.unnumberedHint')}
               </div>
+            </PendingRow>
+          ))}
+          {data.plans.map((p) => (
+            <PendingRow
+              key={`plan:${p.pageId}`}
+              head={
+                <>
+                  <span className="mp-chip day mono">
+                    <Ic name="day" small />
+                    {tr('map.planChip')}
+                  </span>
+                  <span>{tr(p.why === 'conflict' ? 'map.planConflict' : 'map.planTie', { title: title(p.pageId) })}</span>
+                </>
+              }
+              actions={
+                <button className="mp-btn" onClick={() => navigate(pagePath(p.pageId))}>
+                  {tr('map.openPlan')}
+                </button>
+              }
+            >
+              {p.candidates.length > 0 && (
+                <div className="mp-pw">
+                  {tr('map.planCandidates')}{' '}
+                  {p.candidates.map((id, i) => (
+                    <span key={id}>
+                      {i > 0 && ' · '}
+                      <button className="mp-plink" onClick={() => navigate(pagePath(id))}>
+                        {data.days.find((d) => d.pageId === id)?.title ?? title(id)}
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="mp-pnote">{tr('map.planHint')}</div>
             </PendingRow>
           ))}
         </div>

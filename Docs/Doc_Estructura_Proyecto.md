@@ -152,8 +152,18 @@ marcada), **a cualquier profundidad** (`2 | Scouting › Enero › 26.01.29 | Sc
 siguen como arriba (primer nivel y un grupo). La marca de documento no se escribe en cada página: lo de adentro la toma
 de la carpeta al leer, y sacarlo de la carpeta le saca el tipo; solo *Type* y las plantillas la escriben en una página.
 Un documento adentro de una entidad sigue siendo parte de ella (un scouting que quedó en su locación). Un scouting o una
-prueba se conecta con las locaciones que nombra (título, campo *Locación* y títulos de sección), esté donde esté. Los
-planes (parte 3) todavía no se ofrecen en *Type*.
+prueba se conecta con las locaciones que nombra (título, campo *Locación* y títulos de sección), esté donde esté.
+
+**Planes de jornada (v0.277, D780, `src/relations/planDay.ts`).** Un plan es un documento de la etapa de rodaje
+(*Type › Day plan(s)*, plantilla *Day plan*) que vive donde lo ponga cada uno (`4 | Planeamiento › Semana 03`). Su día
+sale, en orden: el puntero `entity.day` de la página (lo escribe el reacomodo de un plan que estaba adentro de su día);
+un campo *Día* con un link al día; la fecha y la jornada del título o de sus campos *Fecha* y *Día*
+(`D03_26.03.25_Palomar`, `D03 25.11.03 | …`, `D19 11.26`). Se conecta si las dos apuntan al mismo día, o si hay una sola
+y apunta a un día único; dos días con la misma fecha (U1/U2) los desempata la unidad del título. Si se contradicen o
+empatan, no se conecta y va a *Overview › Pending* con los candidatos. Un plan con varias fechas («Plaza de Mayo | 21
+Mar | 2,3,4,11 Abr») no es de ningún día. Una fecha con plan y sin día todavía figura en *Shoot days* como planeada. La
+fecha `AA.MM.DD` se lee solo en ese orden (una fecha imposible no se lee al revés); `DD.MM` sin año, contra los días del
+proyecto. Un plan adentro de su día sigue siendo de ese día, y una subpágina de un plan, del día de su plan.
 
 **El número de escena** sale del título, en este orden: uno completo al principio de la primera parte
 (`101_074 | título`, `Escena 101_069A`); uno corto que es toda la primera parte, con el episodio de la carpeta

@@ -35,7 +35,7 @@ export const sidebar = {
   'sidebar.tagPlans': { en: "Plans", es: "Planes" },
   'sidebar.holdsDays': { en: "Everything created inside is a shoot day", es: "Todo lo que se crea adentro es un día de rodaje" },
   'sidebar.holdsScoutings': { en: "Everything inside, at any depth, is a scouting report: it links to the locations it names", es: "Todo lo de adentro, a cualquier profundidad, es un reporte de scouting: se conecta con las locaciones que nombra" },
-  'sidebar.holdsPlans': { en: "Everything inside, at any depth, is a day plan", es: "Todo lo de adentro, a cualquier profundidad, es un plan de jornada" },
+  'sidebar.holdsPlans': { en: "Everything inside, at any depth, is a day plan: it links to its shoot day by date and day number", es: "Todo lo de adentro, a cualquier profundidad, es un plan de jornada: se conecta con su día por la fecha y el número de día" },
   'sidebar.holdsTests': { en: "Everything inside, at any depth, is a test report: it links to the locations it names", es: "Todo lo de adentro, a cualquier profundidad, es un reporte de prueba: se conecta con las locaciones que nombra" },
   'sidebar.addInside': { en: "Add a page inside", es: "Agregar una página adentro" },
   'sidebar.pages': { en: "Pages", es: "Páginas" },

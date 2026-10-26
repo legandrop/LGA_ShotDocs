@@ -1,5 +1,20 @@
 # Changelog — LGA Shot Docs
 
+v0.277 :
+
+Un plan de jornada contaba para un día solo si estaba adentro de su página, así que no se podía tener una carpeta
+*Planeamiento* por semana como en Coda. Ahora un plan es un documento (*Type › Day plan(s)*, plantilla *Day plan* nueva)
+y se conecta con su día en `planDay.ts`: un puntero `entity.day`, un campo *Día* con link, o la fecha y la jornada del
+título (`D03_26.03.25`, `D03 25.11.03`, `D19 11.26`, U1/U2). Si se contradicen o empatan va a *Overview › Pending* con
+los candidatos; una fecha con plan y sin día aparece en *Shoot days* como planeada. La cabecera del día, *Tomorrow*, el
+`/` y el mapa leen los planes de donde estén. Las tablas de las páginas dejan el borde casi blanco de BlockNote y toman el
+de las tablas del Overview: apagado, con las esquinas redondeadas (D781). La auditoría pidió que una hora (`9.30`),
+«sets» o «Mar del Plata» no se lean como fechas, leer `DD.MM` y `MM.DD` y desempatar con la jornada, conectar por la
+fecha cuando la jornada no tiene día (`D00`), no avisar por notas sin fecha, respetar la unidad y que importar un
+`.shotdocs` conserve los documentos y el puntero. Ayuda y docs al día. D780.
+
+[Planes de jornada conectados con su día por fecha, y tablas con el borde del Overview]
+
 v0.276 :
 
 En *Overview › Scouting* la columna del título usaba la grilla de los días (cuatro columnas iguales) y un título como

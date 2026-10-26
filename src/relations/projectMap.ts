@@ -5,6 +5,7 @@ import { INDEX_PAGE_MIN, type MentionVia, type Section } from './pageRelations';
 import { fold } from './reader';
 import { pendingRelations } from './relationIndex';
 import { scoutList, type ScoutRow } from './scoutList';
+import { planLinks, unlinkedPlans } from './planDay';
 import { withoutDraft } from './slashDraft';
 import type { Stage } from './register';
 
@@ -29,6 +30,13 @@ export interface MapDaySection extends MapSectionRef {
   scenes: string[];
   /** Escenas nombradas que no existen. */
   pending: string[];
+}
+
+export interface MapPlanPending {
+  pageId: string;
+  why: 'conflict' | 'tie';
+  /** Los días que podrían ser. */
+  candidates: string[];
 }
 
 export interface MapDay {
@@ -123,6 +131,10 @@ export interface ProjectMapData {
   days: MapDay[];
   /** Los scoutings y pruebas por fecha (`scoutList.ts`). */
   scoutings: ScoutRow[];
+  /** Los planes sin un día claro (`planDay.ts`): fecha y jornada que se contradicen o empatan. */
+  plans: MapPlanPending[];
+  /** Las fechas que tienen plan y todavía no tienen día (se planea antes de filmar), con lo que planean. */
+  plannedDates: { date: string; plans: string[]; scenes: string[] }[];
   pending: MapPending[];
   /**
    * Escenas con el mismo código en dos páginas o más que la persona ve (las relaciones usan la primera del árbol) y, con
@@ -181,7 +193,7 @@ function daySections(sections: Section[]): { scenes: { s: Section; named: Sectio
  * Lo que espera en *Map › Pending*, contado sin armar el mapa entero (para la fila *Map* de la barra lateral): números
  * nombrados que no existen (o que la persona no ve), escenas en dos páginas y secciones con fotos sin número.
  */
-export function pendingSummary(src: Pick<LiveSource, 'snap' | 'title'>): { pending: number; duplicates: number; unnumbered: number; total: number } {
+export function pendingSummary(src: Pick<LiveSource, 'snap' | 'title'>): { pending: number; duplicates: number; unnumbered: number; plans: number; total: number } {
   const { snap } = src;
   let unnumbered = 0;
   for (const [pageId, rel] of snap.pages) {
@@ -192,7 +204,13 @@ export function pendingSummary(src: Pick<LiveSource, 'snap' | 'title'>): { pendi
   // Sin lo que se está tipeando en el menú `/` de escenas (D568).
   const pending = withoutDraft(pendingRelations(snap)).length;
   const duplicates = snap.registration.duplicates.filter((d) => d.pageIds.filter((id) => src.title(id) !== undefined).length > 1).length + dayTwins(src).length;
-  return { pending, duplicates, unnumbered, total: pending + duplicates + unnumbered };
+  const plans = planPending({ ...src, content: () => undefined }).length;
+  return { pending, duplicates, unnumbered, plans, total: pending + duplicates + unnumbered + plans };
+}
+
+/** Los planes que van a *Pending*: los que no se pudieron conectar con un día (`unlinkedPlans`). */
+function planPending(src: LiveSource): MapPlanPending[] {
+  return unlinkedPlans(src).map(({ pageId, link }) => ({ pageId, why: link.why as MapPlanPending['why'], candidates: link.candidates }));
 }
 
 /**
@@ -392,7 +410,22 @@ export function projectMap(src: LiveSource): ProjectMapData {
   for (const d of allDuplicates) for (const id of d.pageIds) notePage(id);
   const scoutings = scoutList(src);
   for (const s of scoutings) notePage(s.pageId);
-  return { scenes, locations, days, scoutings, pending, duplicates: allDuplicates, unnumbered, pages, complete: snap.complete };
+  const plans = planPending(src);
+  for (const p of plans) for (const id of [p.pageId, ...p.candidates]) notePage(id);
+  const byDate = new Map<string, string[]>();
+  for (const [id, l] of planLinks(src)) {
+    if (l.why !== 'noDay' || !l.date) continue;
+    byDate.set(l.date, [...(byDate.get(l.date) ?? []), id]);
+    notePage(id);
+  }
+  const plannedDates = [...byDate]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([date, ids]) => {
+      const codes: string[] = [];
+      for (const id of ids) for (const m of snap.pages.get(id)?.mentions ?? []) if (m.kind === 'scene' && !codes.includes(m.ref)) codes.push(m.ref);
+      return { date, plans: ids, scenes: codes };
+    });
+  return { scenes, locations, days, scoutings, plans, plannedDates, pending, duplicates: allDuplicates, unnumbered, pages, complete: snap.complete };
 }
 
 /**
@@ -407,11 +440,13 @@ export function mapCounts(m: ProjectMapData): {
   pending: number;
   duplicates: number;
   unnumbered: number;
+  plans: number;
   toResolve: number;
 } {
   const pending = m.pending.length;
   const duplicates = m.duplicates.length;
   const unnumbered = m.unnumbered.length;
+  const plans = m.plans.length;
   return {
     scenes: m.scenes.length,
     locations: m.locations.length,
@@ -420,7 +455,8 @@ export function mapCounts(m: ProjectMapData): {
     pending,
     duplicates,
     unnumbered,
-    toResolve: pending + duplicates + unnumbered,
+    plans,
+    toResolve: pending + duplicates + unnumbered + plans,
   };
 }
 
@@ -499,6 +535,8 @@ export function mapJson(m: ProjectMapData, meta: MapMeta): unknown {
       ...(d.unnumbered.length ? { unnumbered: d.unnumbered.map(sec) } : {}),
     })),
     scoutings: m.scoutings.map((s) => ({ page: s.pageId, kind: s.doc, date: s.date, locations: s.locs })),
+    plannedDates: m.plannedDates.map((p) => ({ date: p.date, plans: p.plans, scenes: p.scenes })),
+    plans: m.plans.map((p) => ({ page: p.pageId, why: p.why, candidates: p.candidates })),
     pending: m.pending.map((p) => ({ code: p.code, mentions: p.mentions.map((x) => ({ page: x.pageId, blocks: x.blockIds })) })),
     duplicates: m.duplicates.map((d) => ({ code: d.code, pages: d.pageIds })),
     pages,
@@ -575,6 +613,19 @@ export function mapText(m: ProjectMapData, meta: MapMeta): string {
       const t = title(s.pageId);
       const where = s.locs.length ? s.locs.join(' + ') : 'no location named';
       out.push(`- ${s.date && !t.startsWith(s.date) ? `${s.date} ` : ''}${t}${s.doc === 'test' ? ' (test)' : ''}: ${where}`);
+    }
+  }
+  if (m.plannedDates.length) {
+    out.push('');
+    out.push('## Planned dates without a shoot day yet');
+    for (const p of m.plannedDates) out.push(`- ${p.date}: ${p.plans.map(title).join(', ')}${p.scenes.length ? ` · scenes ${list(p.scenes)}` : ''}`);
+  }
+  if (m.plans.length) {
+    out.push('');
+    out.push('## Day plans without a clear shoot day');
+    for (const p of m.plans) {
+      const why = p.why === 'conflict' ? 'its date and its day number point to different days' : p.why === 'tie' ? 'more than one day fits' : 'no date or day number';
+      out.push(`- ${title(p.pageId)}: ${why}${p.candidates.length ? ` (${p.candidates.map(day).join(' / ')})` : ''}`);
     }
   }
   if (m.pending.length) {

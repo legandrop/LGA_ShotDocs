@@ -4,6 +4,7 @@ import type { BuiltinKind } from './builtin';
 import {
   BUILTIN_CREATIVE_SCOUT,
   BUILTIN_TEST,
+  BUILTIN_PLAN,
   BUILTIN_LOCATION,
   BUILTIN_ONSET,
   BUILTIN_PREPRO,
@@ -98,6 +99,7 @@ const BY_ID = new Map<string, BuiltinKind>([
   [BUILTIN_TECH_SCOUT, 'techScout'],
   [BUILTIN_CREATIVE_SCOUT, 'creativeScout'],
   [BUILTIN_TEST, 'testReport'],
+  [BUILTIN_PLAN, 'dayPlan'],
 ]);
 
 /** Una plantilla propia en la ventana *Templates*. */

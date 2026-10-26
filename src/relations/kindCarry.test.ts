@@ -16,6 +16,16 @@ describe('exportar e importar conservan el tipo', () => {
     expect(archiveSettings({ entity: false, holds: false }, () => null)).toEqual({ entity: false, holds: false });
   });
 
+  it('los documentos (scouting, prueba, plan) vuelven, y el plan con el id nuevo de su día', () => {
+    const page = { parent: 'x', format: { size: 'free', landscape: false } } as never;
+    const out = settingsOf({ entity: { kind: 'plan', day: 'OLD-DAY' } }, page, new Set());
+    const ids = (old: string) => (old === 'old-day' ? 'new-day' : null);
+    expect(archiveSettings(out, ids)).toEqual({ entity: { kind: 'plan', day: 'new-day' } });
+    expect(archiveSettings({ entity: { kind: 'plan', day: 'gone' } }, ids)).toEqual({ entity: { kind: 'plan' } });
+    expect(archiveSettings({ entity: { kind: 'scouting' }, holds: 'test' }, ids)).toEqual({ entity: { kind: 'scouting' }, holds: 'test' });
+    expect(archiveSettings({ holds: 'plan' }, ids)).toEqual({ holds: 'plan' });
+  });
+
   it('lo que no tiene la forma de esta versión no se escribe', () => {
     expect(archiveSettings({ entity: { kind: 'shot' }, holds: 'shots' }, () => null)).toEqual({});
     expect(archiveSettings({ entity: { kind: 'scene', code: '101-074' } }, () => null)).toEqual({ entity: { kind: 'scene' } });

@@ -14,6 +14,7 @@ export const builtinEn: BuiltinTexts = {
     techScout: 'Tech scout',
     creativeScout: 'Creative scout',
     testReport: 'Test report',
+    dayPlan: 'Day plan',
   },
   descriptions: {
     prepro: 'One page per scene: VFX work, shot list, elements to shoot and questions for the crew.',
@@ -24,6 +25,7 @@ export const builtinEn: BuiltinTexts = {
     techScout: 'A technical scout of one or more locations: access and power, light, measurements, VFX notes and photos. The page is marked as a scouting report.',
     creativeScout: 'A scout with the director: notes, shots discussed, references and decisions. The page is marked as a scouting report.',
     testReport: 'A camera, technique or effect test: what was tested, setup, results, photos and conclusions. The page is marked as a test report.',
+    dayPlan: 'How each scene of a shoot day gets solved, before shooting it: VFX needs, scenes, art, post and questions. The page is marked as a day plan and links to its shoot day by its date and day number.',
   },
   vfxWork: [
     'Set extension · matte painting',
@@ -209,6 +211,16 @@ export const builtinEn: BuiltinTexts = {
     resultsHeader: ['Option', 'Result', 'Notes'],
     photos: 'Photos',
     conclusions: 'Conclusions',
+    questionItems: ['Production: ', 'Director: '],
+  },
+  dayPlan: {
+    facts: [['Date'], ['Day'], ['Location']],
+    needs: 'VFX needs',
+    scenes: 'Scenes',
+    scenesHeader: ['Scene', 'On set', 'In post', 'Notes'],
+    art: 'Art department',
+    post: 'Post',
+    photos: 'Photos',
     questionItems: ['Production: ', 'Director: '],
   },
 };

@@ -13,6 +13,7 @@ export const builtinEs: BuiltinTexts = {
     techScout: 'Scouting técnico',
     creativeScout: 'Scouting creativo',
     testReport: 'Reporte de prueba',
+    dayPlan: 'Plan de jornada',
   },
   descriptions: {
     prepro: 'Una página por escena: trabajo de VFX, lista de planos, elementos a filmar y preguntas al equipo.',
@@ -23,6 +24,7 @@ export const builtinEs: BuiltinTexts = {
     techScout: 'Un scouting técnico de una o varias locaciones: acceso y energía, luz, medidas, notas de VFX y fotos. La página queda marcada como scouting.',
     creativeScout: 'Un scouting con dirección: notas, planos conversados, referencias y decisiones. La página queda marcada como scouting.',
     testReport: 'Una prueba de cámara, de una técnica o de un efecto: qué se prueba, cómo, resultados, fotos y conclusiones. La página queda marcada como prueba.',
+    dayPlan: 'Cómo se resuelve cada escena de una jornada, antes de filmarla: necesidades de VFX, escenas, arte, post y preguntas. La página queda marcada como plan de jornada y se conecta con su día por la fecha y el número de día.',
   },
   vfxWork: [
     'Extensión de decorado · matte painting',
@@ -208,6 +210,16 @@ export const builtinEs: BuiltinTexts = {
     resultsHeader: ['Opción', 'Resultado', 'Notas'],
     photos: 'Fotos',
     conclusions: 'Conclusiones',
+    questionItems: ['Producción: ', 'Director: '],
+  },
+  dayPlan: {
+    facts: [['Fecha'], ['Día'], ['Locación']],
+    needs: 'Necesidades VFX',
+    scenes: 'Escenas',
+    scenesHeader: ['Escena', 'En set', 'En post', 'Notas'],
+    art: 'Arte',
+    post: 'Post',
+    photos: 'Fotos',
     questionItems: ['Producción: ', 'Director: '],
   },
 };

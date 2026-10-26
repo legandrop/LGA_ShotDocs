@@ -16,6 +16,7 @@ export function stripKinds(tree: KindTree, pageId: string): BuiltinKind[] {
   if (kind.kind === 'part' && kind.ofKind === 'location') return ['techScout', 'creativeScout', 'testReport'];
   if (kind.kind === 'doc' && kind.doc === 'scouting') return ['techScout', 'creativeScout'];
   if (kind.kind === 'doc' && kind.doc === 'test') return ['testReport'];
+  if (kind.kind === 'doc' && kind.doc === 'plan') return ['dayPlan'];
   if (kind.kind === 'part' && kind.ofKind === 'scene') return ['shot', 'prepro'];
   return DEFAULT_STRIP;
 }

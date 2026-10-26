@@ -1,6 +1,7 @@
 import { fieldDate, fieldValues, normLabel, emptyValue, openQuestionText, type FieldValue, type PageFields } from './fields';
 import { INDEX_PAGE_MIN, type LinkTarget, type Section } from './pageRelations';
 import { cardFields, findFields } from './relationIndex';
+import { plansOfDay } from './planDay';
 import { dayRef, GENERAL_SECTION, pageBlocks, sectionText, type DayRef, type LiveSource, type PageChip, type PhotoRef, type Place } from './liveView';
 
 // Lo que muestra la cabecera viva de un día de rodaje y su tarjeta *Tomorrow* (Docs/Doc_Relaciones.md, sección 11;
@@ -11,7 +12,8 @@ import { dayRef, GENERAL_SECTION, pageBlocks, sectionText, type DayRef, type Liv
 //   tiene algo escrito o fotos, «prepared» si está vacía (la dejó *Prepare* o alguien que todavía no escribió), y
 //   «shot · not in plan» si el plan del día existe y no la nombra. Las escenas del plan sin sección: «planned · no
 //   section». Las secciones de arriba sin número y con fotos («Plates ambulancia») van con su aviso.
-// - **El plan de un día**: lo de adentro del día que no es el reporte (la página *Plan*, D400) → si no hay, las fichas
+// - **El plan de un día**: lo de adentro del día que no es el reporte (la página *Plan*, D400) y los planes de
+//   *Planeamiento* que son de ese día (`planDay.ts`, v0.277) → si no hay, las fichas
 //   del desglose cuyo campo *Fecha Rodaje* es esa fecha → si no, nada (se suma a mano en la tarjeta).
 // - **Tomorrow**: el día siguiente (por fecha, y en el orden de la barra si dos tienen la misma) con su plan y qué
 //   escenas ya tienen sección ahí.
@@ -157,9 +159,13 @@ export function planOf(src: LiveSource, day: DayRef): DayPlan {
   const codes: string[] = [];
   const pages: PageChip[] = [];
   const empty: PageChip[] = [];
+  // Los planes que viven afuera del día (`4 | Planeamiento`), por su puntero, su campo o su fecha (`planDay.ts`); sin
+  // página de día (*Tomorrow* de una fecha nueva), los de esa fecha.
+  const outside = new Set(plansOfDay(src, day.pageId, day.date));
   for (const [pageId, rel] of snap.pages) {
     const role = snap.registration.roles.get(pageId);
-    if (role?.partOf?.kind !== 'day' || role.partOf.pageId !== day.pageId || rel.entities > INDEX_PAGE_MIN) continue;
+    const inside = role?.partOf?.kind === 'day' && role.partOf.pageId === day.pageId && !!day.pageId;
+    if ((!inside && !outside.has(pageId)) || rel.entities > INDEX_PAGE_MIN) continue;
     let named = false;
     for (const m of rel.mentions) {
       if (m.kind !== 'scene') continue;

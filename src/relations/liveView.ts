@@ -5,6 +5,7 @@ import { coordsIn, emptyValue, fieldValues, normLabel, openQuestionText, type Fi
 import { blocksOf, INDEX_PAGE_MIN, type Mention, type PageRelations, type Section } from './pageRelations';
 import { fold, scan, type Registry } from './reader';
 import { entityRelations, type EntityPage, type RelationSnapshot } from './relationIndex';
+import { planDayOf } from './planDay';
 
 // Lo que muestra la cabecera viva de una escena o una locación (Docs/Doc_Relaciones.md, sección 10). Puro: todo sale de
 // la foto del índice de relaciones (`RelationSnapshot`) y de lo que la búsqueda ya leyó de cada página (para los
@@ -235,10 +236,21 @@ function pageText(pb: PageBlocks | null): string {
   return clip(pb.texts.filter((t, i) => t && !pb.levels[i]).slice(0, 4).join(' · '));
 }
 
-/** El día de una página de rodaje: el título del día (o de la página de día que la contiene). */
-export function dayRef(src: LiveSource, pageId: string): DayRef {
+/**
+ * El día de una página: ella misma si es un día, el de arriba si está adentro de uno, el de un plan por su puntero, su
+ * campo o su fecha (`planDay.ts`); si no, `null`.
+ */
+export function dayIdOf(src: LiveSource, pageId: string): string | null {
   const role = src.snap.registration.roles.get(pageId);
-  const dayId = role?.entity?.kind === 'day' ? pageId : role?.partOf?.kind === 'day' ? role.partOf.pageId : pageId;
+  if (role?.entity?.kind === 'day') return pageId;
+  if (role?.partOf?.kind === 'day') return role.partOf.pageId;
+  if (role?.doc === 'plan') return planDayOf(src, pageId);
+  return null;
+}
+
+/** El día de una página de rodaje: el título del día (o de la página de día que la contiene, o el día de un plan). */
+export function dayRef(src: LiveSource, pageId: string): DayRef {
+  const dayId = dayIdOf(src, pageId) ?? pageId;
   const title = src.title(dayId) ?? '';
   const n = dayInTitle(title);
   const part = title.split('|').map((p) => p.trim()).find((p) => /(?:^|\s)(?:day|d[ií]a)\s*\d/i.test(p));

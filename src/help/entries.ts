@@ -307,8 +307,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.templates.text',
     keys: { enter: 'titleEnter', undo: 'undo' },
     words: ['template', 'plantilla', 'report', 'reporte', 'on-set', 'rodaje', 'breakdown', 'desglose', 'preproducción', 'pre-production', 'apply', 'aplicar', 'scene', 'escena', 'location', 'locación', 'scout', 'scouting'],
-    // Subió con *Test report* y la tira en las carpetas de scouting y de pruebas (llegó en v0.117).
-    since: '0.275',
+    // Subió con *Day plan* y la tira en las carpetas de planes (llegó en v0.117).
+    since: '0.277',
   },
   {
     id: 'ownTemplates',
@@ -333,8 +333,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.pageTypes.title',
     text: 'help.pageTypes.text',
     words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'test', 'prueba', 'episode', 'episodio', 'folder', 'carpeta'],
-    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con Scouting y Pruebas.
-    since: '0.275',
+    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los planes de jornada.
+    since: '0.277',
   },
   {
     id: 'projects',
@@ -374,8 +374,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.liveDay.title',
     text: 'help.liveDay.text',
-    words: ['shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana', 'empty copy', 'copia vacía'],
-    since: RESTOS_E19,
+    words: ['day plan', 'plan de jornada', 'planeamiento', 'shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana', 'empty copy', 'copia vacía'],
+    // Subió con los planes fuera del día (v0.277).
+    since: '0.277',
   },
   {
     id: 'livePhotos',
@@ -391,8 +392,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.relationsMap.title',
     text: 'help.relationsMap.text',
     words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
-    // Subió con *Scouting* (v0.275).
-    since: '0.275',
+    // Subió con los planes en *Shoot days* y *Pending* (v0.277).
+    since: '0.277',
   },
   {
     id: 'scenesSection',

@@ -2198,3 +2198,14 @@ perdida) y verificación después sobre la base real (cada uno es documento, tie
 archivos, comentarios e historial no se tocan: van con la página. La versión mínima no hacía falta para este orden (las
 carpetas nuevas están en la raíz, no adentro de la de locaciones); queda subirla a 0.275 cuando haya token.
 
+### D780 · Planes de jornada: conectados con su día por fecha y jornada (2026-10-25)
+**Pedido de Lega:** tener los planes como en Coda (Info o Planeamiento, por semana) y que igual se conecten con su día.
+**Decidido** (`Plan_Estructura_Etapas.md`, decisión 4, con la auditoría de flujo contra Coda): el plan es un documento
+(`entity`/`holds` = `'plan'`); su día sale del puntero `entity.day`, de un campo *Día* con link o de la fecha y la
+jornada del título; si se contradicen o empatan no se pega a ninguno y va a *Pending* (en Coda hay unos 7 planes con
+fecha y jornada que no coinciden, como el D43 de ERSO). `AA.MM.DD` se lee solo así; `DD.MM` sin año, contra los días.
+El reacomodo escribe el puntero con el día donde estaba cada plan, así nada cambia de día al moverlo.
+
+### D781 · Las tablas de las páginas, con el borde del Overview (2026-10-25)
+**Pedido de Lega:** los bordes de las tablas se veían casi blancos en el tema oscuro. **Quedó:** un borde apagado
+alrededor con las esquinas redondeadas y líneas suaves entre celdas, como las tablas del Overview, en oscuro y en claro.

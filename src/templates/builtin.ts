@@ -10,26 +10,27 @@ import {
   BUILTIN_SHOT,
   BUILTIN_TECH_SCOUT,
   BUILTIN_TEST,
+  BUILTIN_PLAN,
 } from './builtinIds';
 
 // Las plantillas de fábrica (Docs/Doc_Plantillas.md, sección 2): viven en el código, en todos los workspaces y
-// proyectos, y andan sin red. Las tres primeras son las de siempre; *Scene*, *Location*, *Tech scout*, *Creative scout* y
-// *Test report* son las de la estructura del proyecto (Docs/Doc_Estructura_Proyecto.md): todas ellas marcan la página
+// proyectos, y andan sin red. Las tres primeras son las de siempre; *Scene*, *Location*, *Tech scout*, *Creative scout*,
+// *Test report* y *Day plan* son las de la estructura del proyecto (Docs/Doc_Estructura_Proyecto.md): todas ellas marcan la página
 // (`settings.entity`, `src/relations/entitySync.ts`). Solo usan bloques que ya conoce la versión mínima publicada (tablas con encabezado,
 // títulos, párrafos, casillas, viñetas, párrafos de guion y preguntas): ningún tipo de bloque ni propiedad nueva.
 // Se arman en el idioma de la interfaz al crearlas (PL9), como la página de práctica. Sin textos de ayuda adentro
 // de la página: los rótulos de las tablas y de las viñetas son contenido; lo demás sale vacío.
 
-export type BuiltinKind = 'prepro' | 'onset' | 'shot' | 'scene' | 'location' | 'techScout' | 'creativeScout' | 'testReport';
+export type BuiltinKind = 'prepro' | 'onset' | 'shot' | 'scene' | 'location' | 'techScout' | 'creativeScout' | 'testReport' | 'dayPlan';
 
-export const BUILTIN_KINDS: BuiltinKind[] = ['prepro', 'onset', 'shot', 'scene', 'location', 'techScout', 'creativeScout', 'testReport'];
+export const BUILTIN_KINDS: BuiltinKind[] = ['prepro', 'onset', 'shot', 'scene', 'location', 'techScout', 'creativeScout', 'testReport', 'dayPlan'];
 
 /**
  * Los ids de las de fábrica, para `pages.template_id` (informativo: de qué plantilla salió una página). Son uuid fijos:
  * no se cambian nunca (el reporte del día deduce la carpeta de reportes por el de *On-Set Report*). Viven en
  * `builtinIds.ts`, que puede ir en la primera carga.
  */
-export { BUILTIN_PREPRO, BUILTIN_ONSET, BUILTIN_SHOT, BUILTIN_SCENE, BUILTIN_LOCATION, BUILTIN_TECH_SCOUT, BUILTIN_CREATIVE_SCOUT, BUILTIN_TEST };
+export { BUILTIN_PREPRO, BUILTIN_ONSET, BUILTIN_SHOT, BUILTIN_SCENE, BUILTIN_LOCATION, BUILTIN_TECH_SCOUT, BUILTIN_CREATIVE_SCOUT, BUILTIN_TEST, BUILTIN_PLAN };
 
 export const BUILTIN_IDS: Record<BuiltinKind, string> = {
   prepro: BUILTIN_PREPRO,
@@ -40,6 +41,7 @@ export const BUILTIN_IDS: Record<BuiltinKind, string> = {
   techScout: BUILTIN_TECH_SCOUT,
   creativeScout: BUILTIN_CREATIVE_SCOUT,
   testReport: BUILTIN_TEST,
+  dayPlan: BUILTIN_PLAN,
 };
 
 /** El nombre de cada una en la dirección de la vista previa (`/practice?template=on-set`). */
@@ -52,6 +54,7 @@ export const BUILTIN_SLUGS: Record<BuiltinKind, string> = {
   techScout: 'tech-scout',
   creativeScout: 'creative-scout',
   testReport: 'test-report',
+  dayPlan: 'day-plan',
 };
 
 export function kindOfSlug(slug: string | null | undefined): BuiltinKind | null {
@@ -174,6 +177,17 @@ export interface BuiltinTexts {
     resultsHeader: string[];
     photos: string;
     conclusions: string;
+    questionItems: string[];
+  };
+  /** *Day plan*: cómo se resuelve cada escena de una jornada antes de filmarla. */
+  dayPlan: {
+    facts: Row[];
+    needs: string;
+    scenes: string;
+    scenesHeader: string[];
+    art: string;
+    post: string;
+    photos: string;
     questionItems: string[];
   };
 }
@@ -364,7 +378,13 @@ function testReport(t: BuiltinTexts): TemplateBlock[] {
   return [facts(x.facts), h2(x.goal), p(), h2(x.setup), p(), h2(x.results), grid(x.resultsHeader, 2), h2(x.photos), p(), h2(x.conclusions), ...bullets(['']), h2(t.questions), ...x.questionItems.map(question)];
 }
 
-const BUILDERS: Record<BuiltinKind, (t: BuiltinTexts) => TemplateBlock[]> = { prepro, onset, shot, scene, location, techScout, creativeScout, testReport };
+/** *Day plan*: necesidades de VFX, escenas con qué se resuelve en set y qué en post, arte, fotos y preguntas. */
+function dayPlan(t: BuiltinTexts): TemplateBlock[] {
+  const x = t.dayPlan;
+  return [facts(x.facts), h2(x.needs), ...bullets(['']), h2(x.scenes), grid(x.scenesHeader, 2), h2(x.art), p(), h2(x.post), p(), h2(x.photos), p(), h2(t.questions), ...x.questionItems.map(question)];
+}
+
+const BUILDERS: Record<BuiltinKind, (t: BuiltinTexts) => TemplateBlock[]> = { prepro, onset, shot, scene, location, techScout, creativeScout, testReport, dayPlan };
 
 /** Los bloques de una plantilla de fábrica, en un idioma. Cada llamada da objetos nuevos (sin ids). */
 export function builtinBlocks(kind: BuiltinKind, lang: string): TemplateBlock[] {

@@ -127,14 +127,14 @@ describe('el mapa del proyecto', () => {
     const src = await sourceOf(d, built.projectId);
     const m = projectMap(src);
     const j = JSON.parse(JSON.stringify(mapJson(m, META)));
-    expect(Object.keys(j)).toEqual(['format', 'version', 'project', 'pageUrl', 'builtAt', 'complete', 'scope', 'counts', 'scenes', 'locations', 'days', 'scoutings', 'pending', 'duplicates', 'pages']);
+    expect(Object.keys(j)).toEqual(['format', 'version', 'project', 'pageUrl', 'builtAt', 'complete', 'scope', 'counts', 'scenes', 'locations', 'days', 'scoutings', 'plannedDates', 'plans', 'pending', 'duplicates', 'pages']);
     expect([j.format, j.version, j.scope, j.complete]).toEqual([MAP_FORMAT, MAP_VERSION, 'project', true]);
     expect(MAP_FORMAT).toBe('shotdocs.map');
     // Cada número es el largo de su lista: nada de «pending: 1» con `pending: []` (O4).
-    expect(j.counts).toEqual({ scenes: 6, locations: 2, days: 6, scoutings: 0, pending: 0, duplicates: 0, unnumbered: 1 });
+    expect(j.counts).toEqual({ scenes: 6, locations: 2, days: 6, scoutings: 0, pending: 0, duplicates: 0, unnumbered: 1, plans: 0 });
     expect(j.pending).toEqual([]);
     expect(mapCounts(m).toResolve).toBe(1);
-    expect(pendingSummary(src)).toEqual({ pending: 0, duplicates: 0, unnumbered: 1, total: 1 });
+    expect(pendingSummary(src)).toEqual({ pending: 0, duplicates: 0, unnumbered: 1, plans: 0, total: 1 });
     const s = j.scenes.find((x: { code: string }) => x.code === '105_027');
     expect(Object.keys(s)).toEqual(['code', 'page', 'title', 'episode', 'plannedAt', 'shot', 'plannedDays', 'cards', 'mentions']);
     expect(s.shot[0]).toMatchObject({ day: built.ids.d59, date: '2026-02-19', locations: ['CENADE'] });

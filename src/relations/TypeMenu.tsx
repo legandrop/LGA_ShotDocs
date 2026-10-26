@@ -10,20 +10,21 @@ import { entityMark, holdsDoc, kindReader, type DocKind, type EntityKind } from 
 import { leftOutBy } from './register';
 
 // *Type* en el menú de la página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): qué es esta página (escena,
-// locación, día de rodaje, scouting, prueba o nada) y qué es lo que se crea adentro (la carpeta da el tipo). Se abre en el mismo menú, en
+// locación, día de rodaje, scouting, prueba, plan de jornada o nada) y qué es lo que se crea adentro (la carpeta da el tipo). Se abre en el mismo menú, en
 // lugar de sus ítems; *Back* vuelve. Solo con permiso para cambiar la fila (`canEditRow`): lo mismo que el título.
 
-// Los documentos (Docs/Plan_Estructura_Etapas.md): un scouting o una prueba. El plan se suma con la parte 3 del plan.
-type Choice = EntityKind | Exclude<DocKind, 'plan'>;
-const CHOICES: readonly Choice[] = ['scene', 'location', 'day', 'scouting', 'test'];
-const PAGE_LABEL: Record<Choice, Key> = { scene: 'type.scene', location: 'type.location', day: 'type.day', scouting: 'type.scouting', test: 'type.test' };
-const HOLDS_LABEL: Record<Choice, Key> = { scene: 'type.scenes', location: 'type.locations', day: 'type.days', scouting: 'type.scoutings', test: 'type.tests' };
+// Los documentos (Docs/Plan_Estructura_Etapas.md): un scouting, una prueba o un plan de jornada.
+type Choice = EntityKind | DocKind;
+const CHOICES: readonly Choice[] = ['scene', 'location', 'day', 'scouting', 'test', 'plan'];
+const PAGE_LABEL: Record<Choice, Key> = { scene: 'type.scene', location: 'type.location', day: 'type.day', scouting: 'type.scouting', test: 'type.test', plan: 'type.plan' };
+const HOLDS_LABEL: Record<Choice, Key> = { scene: 'type.scenes', location: 'type.locations', day: 'type.days', scouting: 'type.scoutings', test: 'type.tests', plan: 'type.plans' };
 const HOLDS_TIP: Record<Choice, Key> = {
   scene: 'sidebar.holdsScenes',
   location: 'sidebar.holdsLocations',
   day: 'sidebar.holdsDays',
   scouting: 'sidebar.holdsScoutings',
   test: 'sidebar.holdsTests',
+  plan: 'sidebar.holdsPlans',
 };
 const isChoice = (v: unknown): v is Choice => CHOICES.includes(v as Choice);
 

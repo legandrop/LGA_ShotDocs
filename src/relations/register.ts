@@ -29,6 +29,8 @@ export interface PageRole {
   doc: DocKind | null;
   /** La página de arriba en el árbol (para las listas de documentos: un documento adentro de otro es parte de él). */
   parent?: string | null;
+  /** El día de un plan, si su página lo dice (`settings.entity.day`, lo escribe el reacomodo; `planDay.ts`). */
+  planDay?: string | null;
   /** El episodio de su escena (para «Esc 27»). */
   ep: string | null;
   /** Fuera de las relaciones (`graph: false` en ella o en una carpeta de arriba, o una plantilla). */
@@ -99,12 +101,16 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
     if (k.kind === 'none') {
       role = { entity: null, partOf: null, doc: null, ep: null, excluded, stage: 'other' };
     } else if (k.kind === 'doc') {
-      // Una prueba se nombra como un scouting (Plan_Estructura_Etapas.md, sección 4); el plan, por ahora, sin etapa.
+      // Una prueba se nombra como un scouting (Plan_Estructura_Etapas.md, sección 4).
       // Adentro de una entidad sigue siendo parte de ella (`within`): un scouting adentro de su locación, como antes.
       const w = k.within;
       const ref = w ? refOf(w.of, w.ofKind, w.code) : null;
       const partOf = w ? { kind: w.ofKind, ref, pageId: w.of } : null;
-      role = { entity: null, partOf, doc: k.doc, ep: epOf(w?.ofKind === 'scene' ? ref : null), excluded, stage: k.doc === 'plan' ? (w ? stageOf(w.ofKind, false) : 'other') : 'scouting' };
+      // Un plan es de la etapa de rodaje (lo planeado para un día); su día sale de `planDay.ts`.
+      // Adentro de una escena o una locación toma la etapa de esa entidad, como antes.
+      role = { entity: null, partOf, doc: k.doc, ep: epOf(w?.ofKind === 'scene' ? ref : null), excluded, stage: k.doc !== 'plan' ? 'scouting' : w && w.ofKind !== 'day' ? stageOf(w.ofKind, false) : 'shoot' };
+      const pointer = (page.settings?.entity as { day?: unknown } | false | undefined) || null;
+      if (k.doc === 'plan' && pointer && typeof pointer.day === 'string') role.planDay = pointer.day;
     } else if (k.kind === 'part') {
       const ref = refOf(k.of, k.ofKind, k.code);
       role = { entity: null, partOf: { kind: k.ofKind, ref, pageId: k.of }, doc: null, ep: epOf(k.ofKind === 'scene' ? ref : null), excluded, stage: stageOf(k.ofKind, false) };
