@@ -1,5 +1,14 @@
 # Changelog — LGA Shot Docs
 
+v0.290 :
+
+El encabezado 1 medía el doble del texto desde v0.272 (32 px con el cuerpo de 16) y a Lega le quedaba grande; con 1,75
+(28 px), como antes, le quedaba chico. Pasa a 1,9375 veces el texto, un punto menos: 31 px (`--sd-h1-step` en
+`styles.css`). En el teléfono sigue achicándose solo si el título de la página es más chico. El encabezado 2, el 3 y el
+texto no cambian.
+
+[Editor - encabezado 1 un punto más chico]
+
 v0.289 :
 
 *Arrange in rows* ponía como mucho 4 fotos por fila (`MAX_PER_ROW` en `imageRows.ts`): seis páginas de guion altas
