@@ -64,6 +64,9 @@ Al escribir el documento de la lógica de la app aparecieron diferencias entre l
 4. **Docs viejos:** `Doc_Estructura_Proyecto.md` (ES2, ES6, «En la pantalla» y «Cómo se decide» con scouting y planning
    como «parte de») y `Doc_Relaciones.md` (§3, §4 sin `set` ni documentos, §10, §22 con cuatro partes del *Overview*).
    `Plan_Estructura_Etapas.md` §4, §6.1 y §3 no coinciden con el código (notas, `Stage`, nombres de *Type*).
+5. **Abrir una página pesada** (medido el 2026-10-27): un día de rodaje de VLLF cuesta 63-77 ms en la web publicada
+   (135-172 la primera vez), casi todo armar el editor de BlockNote. Hoy no hace falta; si alguna vez se nota en
+   equipos lentos, guardar armados los editores de las últimas páginas visitadas.
 
 ### R. Relacionar escenas, locaciones y días (pedido de Lega, 2026-10-08)
 
