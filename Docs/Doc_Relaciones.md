@@ -372,7 +372,7 @@ Un reporte del día (lo que el registro dice que es un día, sección 4) muestra
 
 | Pieza | Archivo |
 |---|---|
-| Qué se muestra (puro, sobre la foto del índice): filas, plan, preguntas, Tomorrow, el título que usa el proyecto | `src/relations/dayLive.ts` (`dayLive`, `planOf`, `openQuestions`, `dayList`, `headingStyleFor`, `linkTargetOf`) |
+| Qué se muestra (puro, sobre la foto del índice): filas, plan, preguntas, Tomorrow, el título que usa el proyecto | `src/relations/dayLive.ts` (`dayLive`, `planOf`, `openQuestions`, `dayList`, `tomorrowOf`, `sameDayOf`, `headingStyleFor`, `linkTargetOf`) |
 | La cabecera del día y la tarjeta | `src/relations/DayHeader.tsx` (usa las piezas de `LiveHeader.tsx`), `liveHeader.css` (`lh-facts`, `lh-mrow`, `lh-tomorrow`, `lh-picker`) |
 | Lo ajustado a mano en la lista de mañana (por dispositivo) | `src/relations/tomorrowPlan.ts` (`shotdocs.tomorrow` en `localStorage`) |
 | Escribir: preparar, deshacer, juntar repetidos | `src/relations/prepareDay.ts` (se baja aparte, con el editor) |
@@ -395,10 +395,30 @@ en un renglón («CENADE · 2 scenes · 7 photos · 2 open questions»); mientra
 que nombra las escenas → si no, las fichas con *Fecha Rodaje* igual a la fecha del título (`cardFields`, sin las copias
 de fichas pegadas en los planes, más la página de la escena si tiene la fecha), por número → si no, nada.
 
-***Tomorrow*.** El día siguiente (por fecha entre los días que la persona ve) con su plan. La lista se ajusta: sacar (×)
-o *Add scene* (selector por número, `5027`, `105-027`, o por título); lo ajustado se guarda en el dispositivo como
-diferencia con el plan, así si el plan cambia se sigue aplicando. Sin permiso de editar mañana, la tarjeta lo dice y
-no tiene el botón. Si el reporte de mañana tiene títulos repetidos vacíos (dos dispositivos), lo avisa.
+***Tomorrow*.** Mañana es el primer día, entre los que la persona ve, con fecha **estrictamente mayor** que la de hoy
+(`tomorrowOf`, D788): otro reporte de la misma fecha («2025-11-05 | Día 05 | Los Laureles» junto a «… | Frente Ruso
+Villarino») no es mañana, va arriba de la tarjeta como «Same day: Día 05 · Los Laureles» (links, `sameDayOf`). Si la
+fecha de mañana tiene varios reportes, el que comparte una locación con hoy; si no, el primero. Las flechas ← → de la
+cabecera siguen la lista entera (también los de la misma fecha). Un día sin fecha usa el siguiente de la lista, como
+antes. La lista se ajusta: sacar (×) o *Add scene* (selector por número, `5027`, `105-027`, o por título); lo ajustado
+se guarda en el dispositivo como diferencia con el plan, así si el plan cambia se sigue aplicando. Sin permiso de editar
+mañana, la tarjeta lo dice y no tiene el botón. Si el reporte de mañana tiene títulos repetidos vacíos (dos
+dispositivos), lo avisa.
+
+La tarjeta cambia según cómo está mañana (D788), con la lista ajustada y lo que dice el reporte de mañana
+(`tomorrow.withSection`, las escenas con sección en un título):
+
+- **Completo** (todas las escenas de la lista tienen sección; al menos una y sin repetidos): un renglón sin el ámbar,
+  «Tomorrow · Día 06 · Thu 6 Nov · Los Laureles», «prepared · 3 of 3 scenes» en verde y «Open Día 06». Sin botón ni
+  escenas. Sin escenas en el plan nunca es completo: queda como siempre, con *Add scene*.
+- **A medias**: las escenas con sección van llenas y con ✓ (tooltip «Already has a section in tomorrow’s report»), las
+  que faltan, punteadas; el botón dice «Add the 2 missing scenes» («Add the missing scene» si es una) y hace lo mismo
+  que *Prepare* (solo agrega lo que falta). Al lado, «Open Día 06».
+- **Vacío**: como siempre, *Prepare tomorrow’s report*, y «Open Día 06».
+- **Ya pasó**: la fecha de mañana es anterior a hoy (la fecha local del dispositivo: `dayLive` la recibe como `today`,
+  así las pruebas la fijan con `setTodayForTests`) **o** el reporte de mañana ya tiene una sección de escena con algo
+  escrito o fotos (la general y las vacías de *Prepare* no cuentan). La tarjeta es un renglón, «Same day: … · Next: Día
+  06 · Thu 6 Nov · Los Laureles», sin escenas ni botón: mirar un día viejo ya no ofrece preparar el siguiente.
 
 ***Prepare tomorrow's report*** (`prepareReport`):
 
@@ -446,11 +466,13 @@ en el documento de «preparado»). Son decoraciones de ProseMirror: no están en
 (prueba con el esquema anterior en `prepareDay.test.ts`). No sube `min_app_version`.
 
 **Pruebas.** `dayLive.test.ts` (filas, plan por página *Plan* y por desglose, copias de fichas en otro día, «prepared»,
-repetidos, título del proyecto, *Prepare* sobre el reporte de verdad con su *Undo*, reporte sin bajar);
+repetidos, título del proyecto, *Prepare* sobre el reporte de verdad con su *Undo*, reporte sin bajar; D788: mañana es
+la primera fecha mayor y prefiere la locación de hoy, el gemelo es «Same day», ya pasó por la fecha o por lo filmado);
 `prepareDay.test.ts` (solo agrega, no duplica, no pisa, otras formas del número, *Undo* con y sin texto, esquema
 anterior, dos dispositivos: repetidos, los dos escribieron, los dos limpian a la vez, el que escribe mientras otro
 limpia); `prepareCollab.test.ts` (dos Y.Doc: título a mano, *Undo* y limpieza con una, dos y tres secciones, estructura inesperada); `prepareSync.test.ts` (dos y tres dispositivos con el servidor de prueba); `dayHeader.test.tsx` (la app montada: cabecera, quitar de la lista, *Prepare* que escribe solo en mañana y no
-en hoy, aviso y *Undo*, decoraciones en el editor, teléfono plegado sin ceros, invitado sin el botón). Arnés:
+en hoy, aviso y *Undo*, decoraciones en el editor, teléfono plegado sin ceros, invitado sin el botón; D788: a medias con el botón que cuenta, completo sin
+botón, ya pasado en un renglón, el último día pasado sin tarjeta, el gemelo como «Same day»). Arnés:
 `src/dev/cabecera-viva.html?page=d59&days=1` (el proyecto sintético con fechas en las fichas y el Día 60 sin plan).
 
 **Decisiones:** D429–D445 en `Doc_Decisiones.md`.
@@ -1033,7 +1055,9 @@ el puntero quieto ya no se pinta (D571). *Today* escribe el espacio de después 
 un cierre (D572).
 
 **La tarjeta del último día** (D573–D577). Un día con fecha y sin día siguiente, con el índice completo y para quien ve el
-proyecto entero, muestra «Tomorrow · Mon 16 Mar · no report yet»: la próxima fecha con escenas en el desglose dentro de
+proyecto entero, muestra «Tomorrow · Mon 16 Mar · no report yet» (desde D788, «sin día siguiente» quiere decir sin un
+día de fecha mayor: un reporte gemelo de la misma fecha no cuenta y va como «Same day» arriba de la tarjeta; si la
+fecha propuesta ya pasó, `proposeTomorrow(…, today).past`, no se ofrece crear nada y solo queda ese renglón): la próxima fecha con escenas en el desglose dentro de
 una semana (o el día siguiente), su plan del desglose (ajustable con × y *Add scene*, guardado en el dispositivo y pasado
 al reporte al crearlo) y *Create and prepare tomorrow’s report*, con el título que va a tener y la carpeta. Al tocarlo
 (`createTomorrow`, corregido en la ronda de la auditoría: D579, D580): lo local primero (`planDayReport`: la carpeta, la
@@ -1058,6 +1082,7 @@ bloque borrado, todo o nada, sin red; `captureNewLinks` con el editor; varias p�
 tarjeta del Día 76: crea, lleva, *Undo*; sin red; un invitado no la ve), `mapView.test.tsx` (*Assign* en *Pending* con
 *Undo*; la consulta abierta no cuenta), `slashRelations.test.tsx` (la parte, la consulta abierta y el menú cerrado),
 `sceneSearch.test.ts` (el orden sin episodio), `todayHover.test.ts` (*Today* y el fondo), `tomorrowNew.test.ts` (fecha,
+fecha ya pasada y el gemelo de la misma fecha, D788,
 título, crear, dos toques, dos dispositivos, sin red, sin permiso, *Undo* con y sin escritura de otro, el reporte que ya
 existía).
 

@@ -18,6 +18,7 @@ import { addToPlan, adjustedPlan, movePlan, removeFromPlan, usePlanAdjust } from
 import { wasRevivedHere } from './cededCopy';
 import { createTomorrow, creatingKey, creatingSnapshot, isCreating, nextDayNumber, nextDayTitle, proposeTomorrow, subscribeCreating, twinsLeft, undoTomorrow, type TomorrowProposal } from './tomorrowNew';
 import type { PreparedSection } from './prepareDay';
+import { localDate } from '../templates/dayReport';
 
 // La cabecera viva de un día de rodaje y su tarjeta *Tomorrow* (Docs/Doc_Relaciones.md, sección 11; maqueta S4 «D»,
 // `c_dia.html`). Es interfaz, como la de escena y locación: no se guarda en la página ni sale impresa. Lo único que
@@ -35,6 +36,24 @@ function longDate(date: string | null): string {
   } catch {
     return date;
   }
+}
+
+/** Hoy en el dispositivo (`AAAA-MM-DD`, hora local), para saber si mañana ya pasó (D788). */
+let todayOverride: string | null = null;
+export const deviceToday = (): string => todayOverride ?? localDate();
+
+/** Las pruebas fijan «hoy»: sus días de rodaje son de febrero y marzo de 2026. `null` vuelve al reloj. */
+export function setTodayForTests(date: string | null): void {
+  todayOverride = date;
+}
+
+/** «Fri 20 Feb» / «vie 20 feb»: la fecha de la tarjeta, sin el año. */
+const cardDate = (date: string) => longDate(date).split(' ').slice(0, 3).join(' ');
+
+/** «Día 06 · jue 6 nov · Los Laureles»: un día en un renglón (la fecha solo si se pide y el rótulo no es la fecha). */
+function dayLine(d: DayRef, withDate: boolean): string {
+  const label = dayShortLabel(d);
+  return [label, withDate && d.date && label === d.label ? cardDate(d.date) : '', d.locs.join(' + ')].filter(Boolean).join(' · ');
 }
 
 /** El título entero de un día para el tooltip, solo si el rótulo corto no lo dice todo. */
@@ -241,6 +260,50 @@ function PlanText({ plan, date, reading, partial, tr }: { plan: DayPlan; date: s
 
 // --- La tarjeta «Tomorrow» -------------------------------------------------------------------------------------
 
+/** Un día como link: lleva a su reporte. */
+function DayLink({ d, src, withDate }: { d: DayRef; src: LiveSource; withDate: boolean }) {
+  return (
+    <button className="lh-sec" onClick={() => navigate(pagePath(d.pageId))} data-tip={dayTitleTip(src, d)}>
+      {dayLine(d, withDate)}
+    </button>
+  );
+}
+
+/** «Same day: Día 05 · Los Laureles»: los otros reportes con la misma fecha que hoy (D788), que no son mañana. */
+function SameDay({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }) {
+  if (!v.sameDay.length) return null;
+  return (
+    <span className="lh-sameday">
+      <span className="lh-via">{tr('day.sameDay')}</span>{' '}
+      {v.sameDay.map((d, i) => (
+        <span key={d.pageId}>
+          {i > 0 && ', '}
+          <DayLink d={d} src={src} withDate={false} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Mañana ya pasó (D788): la tarjeta es un renglón, «Same day: … · Next: Día 06 · jue 6 nov · Los Laureles», sin escenas
+ * ni botón. Sin mañana (un día pasado sin día siguiente), solo los del mismo día, si hay.
+ */
+function PastCard({ v, src, tr, next }: { v: DayLive; src: LiveSource; tr: Translate; next: DayRef | null }) {
+  if (!next && !v.sameDay.length) return null;
+  return (
+    <div className="lh-tomorrow past">
+      <SameDay v={v} src={src} tr={tr} />
+      {next && (
+        <span className="lh-sameday">
+          {v.sameDay.length > 0 && <span className="lh-via"> · </span>}
+          <span className="lh-via">{tr('day.nextDay')}</span> <DayLink d={next} src={src} withDate={true} />
+        </span>
+      )}
+    </div>
+  );
+}
+
 function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }) {
   const services = useServices();
   const perms = usePermissions();
@@ -267,6 +330,11 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
   };
   // El título entero del día de mañana, solo si el rótulo lo acorta (B2 de la auditoría).
   const tomorrowTip = dayTitleTip(src, t.day);
+  // Cómo está mañana (D788), con la lista ajustada: completo (todas con sección), a medias o vacío. Sin escenas en el
+  // plan no es completo; con títulos repetidos, tampoco (*Prepare* los junta).
+  const withSection = new Set(t.withSection);
+  const done = codes.filter((c) => withSection.has(c)).length;
+  const state = codes.length && done === codes.length && !t.repeated.length ? 'complete' : done > 0 ? 'partial' : 'empty';
   const source =
     t.plan.source === 'plan'
       ? tr('day.srcPlan')
@@ -337,21 +405,52 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
     }
   };
 
+  if (t.past) return <PastCard v={v} src={src} tr={tr} next={t.day} />;
+  const open = (
+    <button className="lh-sec lh-open" onClick={() => navigate(pagePath(t.day.pageId))}>
+      {tr('day.openDay', { day: dayShortLabel(t.day) })}
+    </button>
+  );
+  const head = (
+    <div className="th">
+      <Ic name="day" small />
+      <span>
+        {tr.rich('day.tomorrow', { day: <b data-tip={tomorrowTip}>{dayShortLabel(t.day)}</b> })}
+        {t.day.date && dayShortLabel(t.day) === t.day.label && (
+          <>
+            {' · '}
+            <span className="date">{cardDate(t.day.date)}</span>
+          </>
+        )}
+      </span>
+      <LocChips day={t.day} src={src} tr={tr} />
+      {state === 'complete' && (
+        <>
+          <span className="lh-ready">{tr('day.preparedOf', { count: codes.length, done })}</span>
+          {open}
+        </>
+      )}
+    </div>
+  );
+  const same = v.sameDay.length > 0 && (
+    <div className="lh-tsame">
+      <SameDay v={v} src={src} tr={tr} />
+    </div>
+  );
+  // Completo: un renglón, sin escenas ni botón (D788).
+  if (state === 'complete') {
+    return (
+      <div className="lh-tomorrow done">
+        {same}
+        {head}
+      </div>
+    );
+  }
+
   return (
     <div className="lh-tomorrow">
-      <div className="th">
-        <Ic name="day" small />
-        <span>
-          {tr.rich('day.tomorrow', { day: <b data-tip={tomorrowTip}>{dayShortLabel(t.day)}</b> })}
-          {t.day.date && dayShortLabel(t.day) === t.day.label && (
-            <>
-              {' · '}
-              <span className="date">{longDate(t.day.date).split(' ').slice(0, 3).join(' ')}</span>
-            </>
-          )}
-        </span>
-        <LocChips day={t.day} src={src} tr={tr} />
-      </div>
+      {same}
+      {head}
       <div className="lh-via sub">
         {tr('live.scenes', { count: codes.length })} · {source}
       </div>
@@ -359,9 +458,12 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
         {codes.map((code) => {
           const title = titleOf(code);
           const pageId = scenePage(code);
+          // A medias: las que ya tienen sección, llenas y con ✓; las que faltan, punteadas (D788).
+          const has = state === 'partial' && withSection.has(code);
+          const mark = state !== 'partial' ? '' : has ? ' has' : ' miss';
           return (
-            <span key={code} className={`lh-chip scene tchip${pageId ? '' : ' out'}`}>
-              <Ic name="scene" />
+            <span key={code} className={`lh-chip scene tchip${pageId ? '' : ' out'}${mark}`} data-tip={has ? tr('day.hasSectionTip') : undefined}>
+              <Ic name={has ? 'check' : 'scene'} />
               <span className="lh-chip-t">
                 <span className="k">{code}</span>
                 {title && <span className="tl"> {short(title, 24)}</span>}
@@ -398,13 +500,15 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
           <>
             <button className="primary lh-prepare" onClick={() => void prepare()} disabled={busy || creating || (!codes.length && !t.repeated.length)}>
               <Ic name="wand" small />
-              {tr('day.prepare')}
+              {/* Con todas las escenas y algún título repetido, no falta ninguna: el botón vuelve a *Prepare* (limpia). */}
+              {state === 'partial' && done < codes.length ? tr('day.addMissing', { count: codes.length - done }) : tr('day.prepare')}
             </button>
             {creating ? <span role="status">{tr('day.newCreating', { title: dayRow?.title ?? '' })}</span> : waiting ? <span role="status">{tr('day.prepareWaiting', { day: dayShortLabel(t.day) })}</span> : <span>{tr('day.prepareHint')}</span>}
           </>
         ) : (
           <span>{tr('day.cantEdit', { day: dayShortLabel(t.day) })}</span>
         )}
+        {open}
       </div>
     </div>
   );
@@ -519,10 +623,15 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
 
   return (
     <div className="lh-tomorrow new">
+      {v.sameDay.length > 0 && (
+        <div className="lh-tsame">
+          <SameDay v={v} src={src} tr={tr} />
+        </div>
+      )}
       <div className="th">
         <Ic name="day" small />
         <span>
-          {tr.rich('day.newTitle', { date: <b>{longDate(proposal.date).split(' ').slice(0, 3).join(' ')}</b> })}
+          {tr.rich('day.newTitle', { date: <b>{cardDate(proposal.date)}</b> })}
           <span className="lh-via"> · {tr('day.newNoReport')}</span>
         </span>
       </div>
@@ -594,9 +703,10 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
     setOpenRaw(next);
   };
   const reading = !v.complete;
-  // Sin día siguiente: la tarjeta que crea el reporte de mañana (D573). Solo con el índice completo (si no, mañana puede
-  // existir y todavía no estar leído) y si quien mira ve el proyecto entero (si no, mañana puede estar donde no ve).
-  const newTomorrow = !v.tomorrow && !v.next && v.complete && !partial ? proposeTomorrow(src, v.day) : null;
+  // Sin mañana (ningún día con fecha mayor; otro reporte de la misma fecha no cuenta, D788): la tarjeta que crea el
+  // reporte de mañana (D573). Solo con el índice completo (si no, mañana puede existir y todavía no estar leído) y si
+  // quien mira ve el proyecto entero (si no, mañana puede estar donde no ve). Si esa fecha ya pasó, no se ofrece crear.
+  const newTomorrow = !v.tomorrow && v.complete && !partial ? proposeTomorrow(src, v.day, deviceToday()) : null;
   const titleDay = { title: src.title(v.day.pageId) ?? '', label: v.day.label, date: v.day.date };
   const fragment = titleFragment(titleDay);
   // Si lo que dice el título no puede ser UN nombre (varios lugares, demasiado largo), no hay botón: se dice por qué (D711).
@@ -692,7 +802,8 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
         </dd>
       </dl>
       {v.tomorrow && <Tomorrow v={v} src={src} tr={tr} />}
-      {!v.tomorrow && newTomorrow && <TomorrowNew v={v} src={src} tr={tr} proposal={newTomorrow} />}
+      {!v.tomorrow && newTomorrow && !newTomorrow.past && <TomorrowNew v={v} src={src} tr={tr} proposal={newTomorrow} />}
+      {!v.tomorrow && !(newTomorrow && !newTomorrow.past) && <PastCard v={v} src={src} tr={tr} next={null} />}
       <PhotoSources gallery={photos.gallery} complete={v.complete} unread={photos.unread} here={photos.here} tr={tr} />
       <div className="lh-foot">{tr('live.foot', { count: pages })}</div>
     </section>

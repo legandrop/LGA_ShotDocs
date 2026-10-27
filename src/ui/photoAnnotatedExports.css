@@ -12,7 +12,7 @@
 .photo-export-selector button { flex: 1; }
 .photo-export-sheet button { min-height: 40px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
 .photo-export-selector button[aria-pressed=true] { background: var(--hover); border-color: var(--accent); }
-.photo-export-sheet button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.photo-export-sheet button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 .photo-export-sheet button:disabled { opacity: .5; cursor: default; }
 .photo-export-body { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
 .photo-export-body p { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }

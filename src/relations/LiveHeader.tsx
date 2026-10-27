@@ -6,7 +6,7 @@ import { usePermissions, useServices, useTree } from '../services';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
-import { DayHeader } from './DayHeader';
+import { DayHeader, deviceToday } from './DayHeader';
 import { dayLive } from './dayLive';
 import { useLiveOpen, type FoldKind } from './liveFold';
 import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
@@ -56,7 +56,8 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
     const src: LiveSource = { snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) };
     // Las fotos por fuente salen de lo mismo que la cabecera (E8).
     if (kind === 'day') {
-      const data = dayLive(src, pageId);
+      // Con la fecha de hoy del dispositivo: si mañana ya pasó, la tarjeta *Tomorrow* se pliega (D788).
+      const data = dayLive(src, pageId, deviceToday());
       return { kind, data, src, gallery: dayGallery(src, data) } as const;
     }
     if (kind === 'scene') {
@@ -66,7 +67,8 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
     const data = locationLive(src, ref);
     return { kind, data, gallery: locationGallery(src, data) } as const;
     // La foto cambia con cada revisión; el árbol (títulos) también se lee de la foto de esa revisión.
-  }, [snap, kind, ref, pageId, revision, tree, session]); // eslint-disable-line react-hooks/exhaustive-deps
+    // La fecha de hoy también: pasada la medianoche, la tarjeta *Tomorrow* se pliega sin esperar otra pasada.
+  }, [snap, kind, ref, pageId, revision, tree, session, deviceToday()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (out && snap) return <LeftOutLine by={out.own ? null : out.pageId} />;
   if (!view || !snap) return null;
@@ -178,6 +180,7 @@ export const PATHS = {
   right: 'm9 6 6 6-6 6',
   plus: 'M12 5v14M5 12h14',
   x: 'M6 6l12 12M18 6 6 18',
+  check: 'M20 6 9 17l-5-5',
   wand: 'm15 4 5 5L9 20H4v-5zM13 6l5 5',
   warn: 'M21.7 18l-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3M12 9v4M12 17h.01',
   help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.5V14M12 17h.01',

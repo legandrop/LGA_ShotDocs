@@ -15,8 +15,9 @@ import { dayRef, GENERAL_SECTION, pageBlocks, sectionText, type DayRef, type Liv
 // - **El plan de un día**: lo de adentro del día que no es el reporte (la página *Plan*, D400) y los planes de
 //   *Planeamiento* que son de ese día (`planDay.ts`, v0.277) → si no hay, las fichas
 //   del desglose cuyo campo *Fecha Rodaje* es esa fecha → si no, nada (se suma a mano en la tarjeta).
-// - **Tomorrow**: el día siguiente (por fecha, y en el orden de la barra si dos tienen la misma) con su plan y qué
-//   escenas ya tienen sección ahí.
+// - **Tomorrow** (D788): el primer día con fecha estrictamente mayor (otro reporte de la misma fecha es «Same day», no
+//   mañana); si esa fecha tiene varios, el que comparte locación con hoy, o el primero. Con su plan, qué escenas ya
+//   tienen sección ahí y si ya pasó (su fecha es anterior a hoy, o ya tiene una sección de escena con algo filmado).
 
 export type DayStatus = 'shot' | 'prepared' | 'notInPlan';
 
@@ -74,8 +75,11 @@ export interface TomorrowScene {
 
 export interface DayLive {
   day: DayRef;
+  /** El de antes y el de después en la lista de días (las flechas de la cabecera), aunque tengan la misma fecha. */
   prev: DayRef | null;
   next: DayRef | null;
+  /** Los otros reportes con la misma fecha que este (D788), en el orden de la lista. */
+  sameDay: DayRef[];
   rows: DayRow[];
   plan: DayPlan;
   questions: DayQuestion[];
@@ -90,6 +94,13 @@ export interface DayLive {
     scenes: TomorrowScene[];
     /** Escenas con más de una sección en el reporte de mañana y alguna vacía (preparado en dos dispositivos a la vez). */
     repeated: string[];
+    /** Todas las escenas con sección (en el título) en el reporte de mañana, estén o no en el plan. */
+    withSection: string[];
+    /**
+     * Mañana ya pasó (D788): su fecha es anterior a `today` o su reporte ya tiene una sección de escena con algo escrito
+     * o fotos. La tarjeta se pliega a un renglón y no ofrece preparar nada.
+     */
+    past: boolean;
   } | null;
   complete: boolean;
 }
@@ -137,6 +148,27 @@ export function dayList(src: LiveSource): DayRef[] {
       return x < y ? -1 : x > y ? 1 : a.i - b.i;
     })
     .map((x) => x.ref);
+}
+
+/**
+ * «Mañana» de un día (D788): el primer día de la lista con fecha estrictamente mayor; si esa fecha tiene varios reportes
+ * («Día 06 | Los Laureles» y «Día 06 | Frente Ruso»), el que comparte una locación con hoy, o el primero. Un día sin
+ * fecha no sabe cuál es mañana: el siguiente de la lista, como antes.
+ */
+export function tomorrowOf(days: readonly DayRef[], day: DayRef): DayRef | null {
+  if (!day.date) {
+    const at = days.findIndex((d) => d.pageId === day.pageId);
+    return at >= 0 && at < days.length - 1 ? days[at + 1] : null;
+  }
+  const first = days.find((d) => d.date && d.date > day.date!);
+  if (!first) return null;
+  const same = days.filter((d) => d.date === first.date);
+  return same.find((d) => d.locs.some((l) => day.locs.includes(l))) ?? first;
+}
+
+/** Los otros reportes con la misma fecha que un día (D788): «Same day» en la tarjeta. */
+export function sameDayOf(days: readonly DayRef[], day: DayRef): DayRef[] {
+  return day.date ? days.filter((d) => d.pageId !== day.pageId && d.date === day.date) : [];
 }
 
 /** Las fichas de cada escena (lo de adentro de su página), para leer sus campos. */
@@ -263,7 +295,11 @@ export function sectionScenes(src: LiveSource, pageId: string): Set<string> {
   return new Set((rel?.sections ?? []).flatMap((s) => s.scenes.filter((x) => x.kind === 'scene').map((x) => x.ref)));
 }
 
-export function dayLive(src: LiveSource, pageId: string): DayLive {
+/**
+ * `today` (`AAAA-MM-DD`, la fecha local del dispositivo; la pasa la cabecera) decide si mañana ya pasó. Sin él, solo
+ * cuenta lo escrito en el reporte de mañana.
+ */
+export function dayLive(src: LiveSource, pageId: string, today?: string): DayLive {
   const { snap } = src;
   const day = dayRef(src, pageId);
   const days = dayList(src);
@@ -346,18 +382,32 @@ export function dayLive(src: LiveSource, pageId: string): DayLive {
   const questions = openQuestions(src, dayScenes, cards);
 
   let tomorrow: DayLive['tomorrow'] = null;
-  if (next) {
-    const nextPlan = planOf(src, next);
-    const has = sectionScenes(src, next.pageId);
+  const morrow = tomorrowOf(days, day);
+  if (morrow) {
+    const nextPlan = planOf(src, morrow);
+    const has = sectionScenes(src, morrow.pageId);
     tomorrow = {
-      day: next,
+      day: morrow,
       plan: nextPlan,
       scenes: nextPlan.codes.map((code) => ({ code, scenePageId: scenePage(code), sceneTitle: sceneTitle(code), has: has.has(code) })),
-      repeated: repeatedScenes(src, next.pageId),
+      repeated: repeatedScenes(src, morrow.pageId),
+      withSection: [...has],
+      past: (!!today && !!morrow.date && morrow.date < today) || hasShotSection(src, morrow.pageId),
     };
   }
 
-  return { day, prev, next, rows, plan, questions, named, photos, scenes: dayScenes.length, tomorrow, complete: snap.complete };
+  return { day, prev, next, sameDay: sameDayOf(days, day), rows, plan, questions, named, photos, scenes: dayScenes.length, tomorrow, complete: snap.complete };
+}
+
+/**
+ * Si un reporte ya tiene una sección de escena con algo escrito o fotos (D788): ese día ya se filmó. Las secciones sin
+ * número (la general, que la plantilla trae escrita) no cuentan, ni las que dejó *Prepare* vacías.
+ */
+function hasShotSection(src: LiveSource, pageId: string): boolean {
+  const rel = src.snap.pages.get(pageId);
+  if (!rel) return false;
+  const pb = pageBlocks(src.content(pageId));
+  return outerSections(rel.sections).some(({ s, scenes }) => scenes.length > 0 && (s.media.length > 0 || !!sectionText(pb, s)));
 }
 
 /**

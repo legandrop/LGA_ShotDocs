@@ -30,6 +30,7 @@ import { tipRows } from './tipRows';
 import { SyncBadge } from './SyncBadge';
 import { OfflineBadge, OfflineLine } from './SpaceHost';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
+import { datedTip, datedTitle, useLocMatcher, type DatedTitle } from './datedTitle';
 import { createOpenScheduler, isPlainKey, isTreeKey, REVEAL_QUIET_MS, REVEAL_TTL_MS, revealRow, treeKeyAction, visibleRows } from './treeNav';
 
 const EXPANDED_KEY = 'shotdocs-expanded';
@@ -352,11 +353,28 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   // Qué es cada página (para el color del número de una escena, D773): un solo lector por dibujo, que recuerda lo
   // que ya leyó; uno por fila recorría las hermanas de cada escena (cientos de escenas: N² por dibujo).
   const kinds = kindReader(tree);
+  const isLoc = useLocMatcher();
 
   /** Una lista de hermanas: si corresponde, con los títulos divididos y la columna del código alineada. */
   function renderList(parentId: string | null, pages: PageRow[], depth: number, role: 'tree' | 'group') {
-    const split = splitEnabled(tree, parentId) ? splitSiblings(pages) : null;
-    const style = split ? ({ '--code-w': `${split.width}ch` } as CSSProperties) : undefined;
+    const splitOn = splitEnabled(tree, parentId);
+    // Los días, scoutings, pruebas y planes con fecha van en su propia fila (D789) y no cuentan para la columna del
+    // código: una fecha larga (`2025-11-05`) ya no apaga la división de la lista entera.
+    const dated = new Map<string, DatedTitle>();
+    if (splitOn) {
+      for (const page of pages) {
+        const kind = kinds.kindOf(page.id).kind;
+        if (kind !== 'day' && kind !== 'doc') continue;
+        const d = datedTitle(page.title, isLoc);
+        if (d) dated.set(page.id, d);
+      }
+    }
+    const split = splitOn ? splitSiblings(pages.filter((p) => !dated.has(p.id))) : null;
+    const jornadas = [...dated.values()].some((d) => d.jornada);
+    const style = {
+      ...(split ? { '--code-w': `${split.width}ch` } : {}),
+      ...(jornadas ? { '--jor-w': '3ch' } : {}),
+    } as CSSProperties;
     return (
       <ul
         className={role === 'tree' ? 'tree' : undefined}
@@ -376,12 +394,12 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             : undefined
         }
       >
-        {pages.map((page) => renderItem(page, depth, split?.titles.get(page.id) ?? null))}
+        {pages.map((page) => renderItem(page, depth, split?.titles.get(page.id) ?? null, dated.get(page.id) ?? null, jornadas))}
       </ul>
     );
   }
 
-  function renderItem(page: PageRow, depth: number, split: SplitTitle | null) {
+  function renderItem(page: PageRow, depth: number, split: SplitTitle | null, dated: DatedTitle | null, jornadas: boolean) {
     const children = tree.children(page.id);
     const open = expanded.has(page.id);
     const dropClass = drop?.id === page.id ? ` drop-${drop.zone}` : '';
@@ -400,7 +418,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           aria-label={page.title || tr('common.untitled')}
           className={`tree-row${children.length ? ' parent' : ''}${children.length && open ? ' sticky-head' : ''}${page.id === activeId ? ' active' : ''}${menu?.id === page.id ? ' menu-open' : ''}${renaming === page.id ? ' renaming' : ''}${dropClass}`}
           style={{ paddingLeft: 4 + depth * 18, '--depth': depth } as CSSProperties}
-          data-tip={split ? page.title : undefined}
+          data-tip={dated ? datedTip(page.title, dated) : split ? page.title : undefined}
           data-tip-plain
           draggable={renaming !== page.id && perms.canManagePage(page.id)}
           onDragStart={(e) => {
@@ -452,6 +470,15 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
                 if (byKey) focusRow(page.id, true);
               }}
             />
+          ) : dated ? (
+            <span className="label dated">
+              {/* La fecha y la jornada en el violeta de los días; el lugar en el azul de las locaciones solo si la app
+                  lo reconoce (D774); la fila elegida no cambia esos colores (D789). */}
+              <span className="code date">{dated.date}</span>
+              {jornadas && <span className="code jornada">{dated.jornada ?? ''}</span>}
+              {dated.place && <span className={`title place${isLoc(dated.place) ? ' loc' : ''}`}>{dated.place}</span>}
+              {dated.note && <span className="note">{dated.note}</span>}
+            </span>
           ) : split ? (
             <span className="label">
               {/* El número de una escena va en el color de las escenas (D773); el de un episodio o una carpeta, no. */}

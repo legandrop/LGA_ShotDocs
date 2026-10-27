@@ -240,6 +240,19 @@ export const relations = {
     es: "Agrega una sección por escena que todavía no tiene una. Nunca reemplaza ni borra nada.",
   },
   'day.cantEdit': { en: "You can’t edit «{day}»: preparing it needs edit access.", es: "No podés editar «{day}»: para prepararlo hace falta poder editarlo." },
+  // La tarjeta según cómo está mañana (D788): completa, a medias, ya pasada; y los otros reportes de la misma fecha.
+  'day.preparedOf': {
+    en: { one: "prepared · {done} of {count} scene", other: "prepared · {done} of {count} scenes" },
+    es: { one: "preparado · {done} de {count} escena", other: "preparado · {done} de {count} escenas" },
+  },
+  'day.addMissing': {
+    en: { one: "Add the missing scene", other: "Add the {count} missing scenes" },
+    es: { one: "Agregar la escena que falta", other: "Agregar las {count} escenas que faltan" },
+  },
+  'day.hasSectionTip': { en: "Already has a section in tomorrow’s report", es: "Ya tiene una sección en el reporte de mañana" },
+  'day.openDay': { en: "Open {day}", es: "Abrir {day}" },
+  'day.sameDay': { en: "Same day:", es: "Mismo día:" },
+  'day.nextDay': { en: "Next:", es: "Siguiente:" },
   'day.repeated': {
     en: "Prepared on two devices at once ({codes}): Prepare again removes the repeated empty titles.",
     es: "Se preparó en dos dispositivos a la vez ({codes}): Preparar de nuevo saca los títulos repetidos vacíos.",

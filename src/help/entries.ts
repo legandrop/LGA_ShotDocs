@@ -302,7 +302,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['treeExpand', 'treeCollapse', 'treeOpen', 'treeRename', 'sidebarResize'],
     since: BEFORE_HELP,
   },
-  { id: 'pagesTitles', section: 'pages', title: 'help.pagesTitles.title', text: 'help.pagesTitles.text', since: BEFORE_HELP },
+  { id: 'pagesTitles', section: 'pages', title: 'help.pagesTitles.title', text: 'help.pagesTitles.text', since: '0.281' },
   { id: 'title', section: 'pages', title: 'help.title.title', text: 'help.title.text', keys: { enter: 'titleEnter' }, since: TITLE_LONG },
   {
     id: 'templates',
@@ -379,8 +379,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.liveDay.title',
     text: 'help.liveDay.text',
     words: ['day plan', 'plan de jornada', 'planeamiento', 'shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana', 'empty copy', 'copia vacía'],
-    // Subió con los planes fuera del día (v0.277).
-    since: '0.277',
+    // Subió con los planes fuera del día (v0.277) y con la tarjeta Tomorrow por estados (v0.281, D788).
+    since: '0.281',
   },
   {
     id: 'livePhotos',

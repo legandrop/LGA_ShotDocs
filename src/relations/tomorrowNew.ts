@@ -50,6 +50,8 @@ export interface TomorrowProposal {
   plan: DayPlan;
   /** La locación que dicen todas las fichas de esa fecha (D709), si dicen una sola y el registro la reconoce. */
   place: string | null;
+  /** Esa fecha ya pasó (D788): es anterior a hoy. La tarjeta no ofrece crear nada. */
+  past: boolean;
 }
 
 /**
@@ -82,15 +84,15 @@ export function plannedPlace(src: LiveSource, date: string): string | null {
 /**
  * Qué propone la tarjeta para un día sin día siguiente (D573): la próxima fecha con escenas en el desglose dentro de
  * `LOOKAHEAD_DAYS` (en ERSO, del jueves 2 al sábado 4), o si no, el día siguiente; y su plan. Sin fecha en el título del
- * día, nada (no se sabe qué es mañana).
+ * día, nada (no se sabe qué es mañana). `today` (la fecha local del dispositivo) dice si esa fecha ya pasó (D788).
  */
-export function proposeTomorrow(src: LiveSource, day: DayRef): TomorrowProposal | null {
+export function proposeTomorrow(src: LiveSource, day: DayRef, today?: string): TomorrowProposal | null {
   if (!day.date || !isValidDate(day.date)) return null;
   const last = addDays(day.date, LOOKAHEAD_DAYS);
   const next = [...breakdownDates(src)].filter((d) => d > day.date! && d <= last).sort()[0];
   const date = next ?? addDays(day.date, 1);
   const plan = planOf(src, { pageId: '', label: '', date, loc: null, locs: [] });
-  return { date, plan, place: plan.source === 'breakdown' ? plannedPlace(src, date) : null };
+  return { date, plan, place: plan.source === 'breakdown' ? plannedPlace(src, date) : null, past: !!today && date < today };
 }
 
 /**

@@ -331,3 +331,21 @@ describe('reglas del editor', () => {
     expect(CSS).not.toMatch(/\.print-view[^{}]*--bn-colors-highlights/);
   });
 });
+
+// Los links del texto y el botón principal (D787): la raya turquesa del link llega a 3:1 contra el papel (lo que pide un
+// elemento que no es texto) y el texto del botón delineado del modo oscuro, a 4,5:1.
+describe('links y botón principal', () => {
+  const token = (block: RegExp, name: string) => {
+    const body = block.exec(CSS)?.[1] ?? '';
+    return new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, 'i').exec(body)?.[1] ?? 'falta';
+  };
+  const LIGHT = /:root \{([^}]*)\}/;
+  const DARK = /:root\[data-theme='dark'\] \{([^}]*--btn-primary-bg[^}]*)\}/;
+  it('la raya del link', () => {
+    expect(worst(token(LIGHT, '--link-line'), 'light')).toBeGreaterThanOrEqual(3);
+    expect(worst(token(DARK, '--link-line'), 'dark')).toBeGreaterThanOrEqual(3);
+  });
+  it('el texto del botón principal en oscuro (turquesa de texto)', () => {
+    expect(worst(token(DARK, '--accent-text'), 'dark')).toBeGreaterThanOrEqual(4.5);
+  });
+});

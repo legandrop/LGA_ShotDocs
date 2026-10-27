@@ -14,6 +14,7 @@
 //   &e7=1&como=ana                                 lo mismo, visto por una invitada (edita los días, ve el desglose)
 //   &e11=1                                         la tarjeta del último día (E11): 104_008 y 105_029 con fecha de
 //                                                  rodaje 16/03 (el lunes después del Día 76), para ?page=d76
+//   &today=2026-02-01                               la fecha de hoy para Tomorrow (D788): sin ella, todo ya pasó
 //   window.__cabecera = { listo, ids, ir(clave), red(bool) }
 import { createRoot } from 'react-dom/client';
 import '@blocknote/core/fonts/inter.css';
@@ -30,6 +31,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, writeBlocks, type Block } from '../relations/fixtures/proyectoSintetico';
 import { Shell } from '../ui/Workspace';
+import { setTodayForTests } from '../relations/DayHeader';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { unitsFromYDoc } from '../search/extract';
 
@@ -94,6 +96,9 @@ async function drawPhoto(label: string, w = 900, h = 600): Promise<Blob> {
 
 async function main() {
   prefs.init();
+  // `?today=AAAA-MM-DD`: la fecha de hoy para la tarjeta *Tomorrow* (D788); los días del proyecto sintético ya pasaron.
+  const today = new URLSearchParams(location.search).get('today');
+  if (today) setTodayForTests(today);
   const server = new FakeServer();
   const e7 = new URLSearchParams(location.search).get('e7') === '1';
   // E7: con equipo, la app conoce los permisos (sin equipo, no los conoce y no deja crear desde el texto).

@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.281 :
+
+El turquesa gritaba en links y botones, la barra lateral mostraba las fechas de tres maneras (Scouting perdía la
+locación; Rodaje y Planeamiento salían crudos porque un código de más de 7 letras apagaba la división de toda la lista)
+y la tarjeta *Tomorrow* ofrecía preparar un reporte ya preparado y tomaba como «mañana» otro reporte del mismo día.
+Ahora los links van en tinta con una raya turquesa fina y el botón principal en oscuro va delineado (D787); días,
+scoutings y planes muestran fecha corta violeta, jornada y locación azul (D789); y *Tomorrow* es la fecha siguiente,
+con *Same day*, y según el estado dice «prepared», suma solo las escenas que faltan o se pliega a un renglón (D788).
+
+[Links y botones sin turquesa pleno, fechas iguales en la barra y Tomorrow por estados]
+
 v0.280 :
 
 Al traer los planos de ERSO y VLLF con *Bring them all in*, el progreso decía «1 planos adentro» y la fila de

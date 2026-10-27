@@ -2239,3 +2239,30 @@ comentarios o están compartidas aparte. Los nombres repetidos llevan «· 2», 
 ### D786 · Traer los planos de todo el proyecto desde *Pending* (2026-10-26)
 **Decidido** (sin preguntar, como pide Lega): *Overview › Pending* ofrece hacerlo con todas las escenas a la vez, solo al
 dueño o a un admin, con *Stop*. Así ERSO y VLLF se pasan con un clic, sin reimportar.
+
+### D787 · El turquesa, solo para «estás acá»: links con raya y botones sin relleno (2026-10-26)
+**Pedido de Lega:** el turquesa le gusta en la ruta (el «BLOQUE 1» arriba del título) pero no en los links subrayados
+ni en botones como *Prepare tomorrow's report*. **Eligió la opción C** de los mockups (canvas «Colores y barra lateral»):
+los links del texto van con la tinta de la interfaz y una raya fina turquesa (`--link-line`, 3:1 o más contra el papel;
+plena al pasar); el botón principal en oscuro va delineado en turquesa, sin relleno (en claro sigue la tinta rellena);
+las acciones de tarjeta (*Prepare…*) en gris elevado. El turquesa pleno queda para la ruta, lo elegido y el foco; el
+anillo de foco pasa a `--accent-text` (el de relleno daba 2,8:1 en claro). Los rellenos que no son botones de texto
+(micrófono del dictado, número del instalador) siguen con `--primary-bg`.
+
+### D788 · La tarjeta *Tomorrow* ofrece solo lo que falta (2026-10-26)
+**Pedido de Lega:** el botón *Prepare tomorrow's report* aparecía aunque el reporte de mañana ya estuviera preparado, y
+en ERSO el Día 05 · Frente Ruso apuntaba como «mañana» al Día 05 · Los Laureles (el siguiente de la lista, misma fecha).
+**Eligió los estados del mockup:** «mañana» es el primer día con fecha mayor (a igual fecha, el que comparte locación);
+los otros reportes de la misma fecha salen como *Same day*. Completo: un renglón «prepared · N of N scenes» con *Open*,
+sin botón; parcial: ✓ en las escenas con sección y «Add the N missing scenes»; vacío: el botón de siempre; día pasado (la
+fecha del dispositivo o el reporte de mañana ya con algo filmado): un renglón *Same day · Next*. Detalle en
+`Doc_Relaciones.md`, secciones 11 y 18.
+
+### D789 · Los días, scoutings y planes con fecha, iguales en la barra lateral (2026-10-26)
+**Pedido de Lega:** en la barra, Scouting perdía la locación (la tercera parte del título), Rodaje y Planeamiento salían
+crudos (su código pasa de 7 letras y apagaba la división de toda la lista) y la fecha solo se pintaba en la fila
+elegida. **Eligió la opción A:** una página de día, scouting, prueba o plan con una sola fecha clara en el título se ve
+como en el *Overview*: fecha corta `DD/MM` en violeta, jornada (`D05`) al lado, el lugar en azul si la app lo reconoce
+como locación (gris si no) y el resto del título apagado; el tooltip da el título entero con el año. La fila elegida no
+cambia esos colores. Lo que no tiene una fecha clara (ninguna, dos, `05.11` que se lee de dos formas) se ve como antes. Como los títulos
+cortos, sigue el ajuste *Short titles* de la rama: apagado, los títulos se ven enteros.

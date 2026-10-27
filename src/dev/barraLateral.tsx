@@ -48,6 +48,24 @@ async function main() {
     await A.tree.create(pre, 'Vestuario', built.projectId);
     localStorage.setItem('shotdocs-expanded', JSON.stringify([pre, deco]));
   }
+  // `?fechas`: scoutings y planes con los títulos de Lega, para ver la fila con fecha de las tres familias (D789).
+  if (new URLSearchParams(location.search).has('fechas')) {
+    const doc = async (parent: string | null, title: string, holds?: 'scouting' | 'plan') => {
+      const id = await A.tree.create(parent, title, built.projectId);
+      if (holds) await A.tree.setPatch(id, { settings: { holds } });
+      return id;
+    };
+    const sc = await doc(null, '3 | Scouting', 'scouting');
+    await doc(sc, '260106 | Scouting técnico VFX | CENADE');
+    await doc(sc, '260107 | Scouting técnico VFX | La Arenera (estudio)');
+    await doc(sc, '260109 | Scouting técnico VFX | Senade Ezeiza');
+    const pl = await doc(null, '4 | Planeamiento', 'plan');
+    const bloque = await doc(pl, 'Bloque 2');
+    await doc(bloque, 'D37 26.01.18 | CENADE');
+    await doc(bloque, 'D37 26.01.18 | sin lugar (2)');
+    await doc(bloque, 'D38 26.01.19 | La Arenera');
+    localStorage.setItem('shotdocs-expanded', JSON.stringify([sc, pl, bloque, built.ids.rodaje]));
+  }
   await A.engine.syncNow();
   // El proyecto sintético como el elegido (en `/map` no hay página abierta que lo diga).
   localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [server.ownerId]: built.projectId }));

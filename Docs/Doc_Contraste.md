@@ -92,3 +92,12 @@ Queda sin cambio, a propósito: un texto con un color elegido **y** un resaltado
 1,47 ahora en oscuro; 3,84 en claro) es una combinación que elige la persona, y la cita con un resaltado dentro (1,48), que
 ya estaba así en `main`. Pruebas: dos en `src/contrast.test.ts` (los nueve resaltados de BlockNote en oscuro a 4,5:1 o más
 con los tres niveles, solo esos tres tocados, y que ninguna regla de resaltados cuelga del modo claro ni de `.print-view`).
+
+## 6. Links, botón principal y foco (v0.281, D787)
+
+- Link del texto: color `--text` y raya `--link-line` de 1px (#5597a4 en claro, 3,3:1 contra el papel; #218290 en
+  oscuro, 3,7:1); al pasar, la raya en `--accent`. El link no lleva matiz propio: el color queda para lo reconocido.
+- Botón principal (`--btn-primary-*`): en claro, tinta rellena (16,7:1); en oscuro, delineado en `--accent` con texto
+  `--accent-text` (9,6:1). Las acciones de tarjeta van en gris elevado (`--seg-active`).
+- Anillo de foco global: `--accent-text` (#0c6a7d en claro, 5,97:1), porque `--accent` daba 2,8:1 (un control pide 3:1).
+- `src/contrast.test.ts` comprueba la raya y el texto del botón delineado.

@@ -2,9 +2,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ProjectIndex } from '../search/projectIndex';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
-import { dayLive, dayList, dayShortLabel, headingStyleFor, linkTargetOf, planOf, sceneTitleOf } from './dayLive';
+import { dayLive, dayList, dayShortLabel, headingStyleFor, linkTargetOf, planOf, sameDayOf, sceneTitleOf, tomorrowOf } from './dayLive';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
-import type { LiveSource } from './liveView';
+import type { DayRef, LiveSource } from './liveView';
 import { prepareReport, undoPrepared } from './prepareDay';
 import { RelationIndex } from './relationIndex';
 
@@ -181,6 +181,65 @@ describe('la cabecera del día', () => {
     const s = await src();
     expect(headingStyleFor(s, built.ids.d59, 'en')).toEqual({ word: 'Escena', level: 1 });
     expect(dayList(s).map((x) => dayShortLabel(x))).toEqual(['Día 58', 'Día 59', 'Día 60', 'Día 70', '10/03', 'Día 76']);
+  });
+});
+
+describe('mañana y el mismo día (D788)', () => {
+  const day = (pageId: string, date: string | null, locs: string[] = []): DayRef => ({ pageId, label: pageId, date, loc: locs[0] ?? null, locs });
+
+  it('mañana es la primera fecha mayor (no otro reporte de la misma); en esa fecha, el que comparte locación', () => {
+    const days = [
+      day('d05a', '2025-11-05', ['Frente Ruso Villarino']),
+      day('d05b', '2025-11-05', ['Los Laureles']),
+      day('d06a', '2025-11-06', ['Villarino']),
+      day('d06b', '2025-11-06', ['Los Laureles']),
+      day('d07', '2025-11-07'),
+      day('sin', null),
+    ];
+    // El otro reporte del 05 no es mañana: es «Same day».
+    expect(tomorrowOf(days, days[0])?.pageId).toBe('d06a');
+    expect(sameDayOf(days, days[0]).map((d) => d.pageId)).toEqual(['d05b']);
+    // Desde Los Laureles, el del 06 en Los Laureles aunque esté segundo.
+    expect(tomorrowOf(days, days[1])?.pageId).toBe('d06b');
+    expect(sameDayOf(days, days[1]).map((d) => d.pageId)).toEqual(['d05a']);
+    // Sin locación en común: el primero de esa fecha.
+    expect(tomorrowOf(days, day('x', '2025-11-05', ['CENADE']))?.pageId).toBe('d06a');
+    // El último con fecha no tiene mañana (un día sin fecha no cuenta); un día sin fecha, el siguiente de la lista.
+    expect(tomorrowOf(days, days[4])).toBeNull();
+    expect(sameDayOf(days, days[4])).toEqual([]);
+    expect(tomorrowOf(days, days[5])).toBeNull();
+    expect(tomorrowOf([days[5], day('sin2', null)], days[5])?.pageId).toBe('sin2');
+  });
+
+  it('en el proyecto: un gemelo del Día 59 es «Same day» y las flechas lo recorren; mañana sigue siendo el Día 60', async () => {
+    const { d, built, src } = await setup({ days: true });
+    const twin = await d.tree.create(built.ids.rodaje, '2026-02-19 | Día 59 | La Arenera', built.projectId);
+    await writeBlocks(d, twin, [{ h: 1, text: 'Info general' }, { p: 'Segunda unidad.' }]);
+    const s = await src();
+    const v = dayLive(s, built.ids.d59);
+    expect(v.next?.pageId).toBe(twin);
+    expect(v.sameDay.map((x) => x.pageId)).toEqual([twin]);
+    expect(v.tomorrow?.day.label).toBe('Día 60');
+    const w = dayLive(s, twin);
+    expect([w.prev?.label, w.next?.label, w.tomorrow?.day.label]).toEqual(['Día 59', 'Día 60', 'Día 60']);
+    expect(w.sameDay.map((x) => x.pageId)).toEqual([built.ids.d59]);
+  });
+
+  it('mañana ya pasó si su fecha es anterior a hoy o si su reporte tiene una sección de escena con algo escrito', async () => {
+    const { d, built, src } = await setup({ days: true });
+    // El Día 60 del proyecto tiene la sección de 105_029 con texto y fotos: ya se filmó, con cualquier «hoy».
+    let s = await src();
+    expect(dayLive(s, built.ids.d59, '2026-02-01').tomorrow?.past).toBe(true);
+    // Solo secciones vacías (preparado) y la general escrita: no pasó, salvo por la fecha.
+    await writeBlocks(d, built.ids.d60, [{ h: 1, text: 'Info general' }, { p: 'Llamado 7:00.' }, { h: 1, text: 'Escena 105_029a' }, { p: '' }]);
+    s = await src();
+    const t = dayLive(s, built.ids.d59, '2026-02-19').tomorrow!;
+    expect(t.past).toBe(false);
+    expect(t.withSection).toEqual(['105_029']);
+    expect(t.scenes.map((x) => [x.code, x.has])).toEqual([['104_008', false], ['104_009', false], ['105_029', true]]);
+    expect(dayLive(s, built.ids.d59, '2026-02-20').tomorrow?.past).toBe(false);
+    expect(dayLive(s, built.ids.d59, '2026-02-21').tomorrow?.past).toBe(true);
+    expect(dayLive(s, built.ids.d59).tomorrow?.past).toBe(false);
   });
 });
 

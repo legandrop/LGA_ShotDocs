@@ -26,6 +26,11 @@
   --danger-border: #f1c4bf;
   --primary-bg: #1b1a17;
   --primary-text: #fbfaf8;
+  --btn-primary-bg: #1b1a17;
+  --btn-primary-border: #1b1a17;
+  --btn-primary-text: #fbfaf8;
+  --btn-primary-hover: #33322f;
+  --link-line: #5597a4;
   --menu-bg: #ffffff;
   --menu-border: #e4e0d8;
   --seg-bg: #f4f2ee;
@@ -82,6 +87,11 @@
   --danger-border: #5c2e29;
   --primary-bg: #22d3ee;
   --primary-text: #1b1a17;
+  --btn-primary-bg: transparent;
+  --btn-primary-border: var(--accent);
+  --btn-primary-text: var(--accent-text);
+  --btn-primary-hover: rgba(34, 211, 238, 0.12);
+  --link-line: #218290;
   --menu-bg: #22211f;
   --menu-border: #34332f;
   --seg-bg: #171716;
@@ -251,21 +261,24 @@ button:disabled {
   cursor: default;
 }
 
+/* El anillo de foco con el turquesa de texto: el de relleno da 2,8:1 sobre el papel claro (un control pide 3:1). */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 1px;
 }
 
+/* El botón principal (D787): tinta rellena en claro; en oscuro, delineado en turquesa y sin relleno (el relleno
+   turquesa gritaba en cada diálogo). Los rellenos que quedan (micrófono, número del instalador) usan --primary-bg. */
 button.primary {
-  background: var(--primary-bg);
-  border-color: var(--primary-bg);
-  color: var(--primary-text);
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-border);
+  color: var(--btn-primary-text);
   justify-content: center;
   font-weight: 600;
 }
 
 button.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary-bg) 88%, var(--bg));
+  background: var(--btn-primary-hover);
 }
 
 button.secondary {
@@ -1002,7 +1015,7 @@ code {
 }
 
 .tree-row:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: -2px;
 }
 
@@ -1065,6 +1078,39 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* La fila de un día, un scouting, una prueba o un plan (D789): fecha y jornada en el violeta de los días, el lugar en
+   el azul de las locaciones si la app lo reconoce, y lo demás apagado. Elegida, no cambia de colores. */
+.tree-row .label.dated .code.date,
+.tree-row.active .label.dated .code.date {
+  min-width: 5ch;
+  color: var(--day-fg);
+}
+
+.tree-row .label.dated .code.jornada,
+.tree-row.active .label.dated .code.jornada {
+  min-width: var(--jor-w, auto);
+  color: color-mix(in srgb, var(--day-fg) 72%, var(--muted-2));
+}
+
+/* El lugar se achica después de la nota: es lo que se busca en la lista. */
+.tree-row .label.dated .place {
+  flex: 0 1 auto;
+}
+
+.tree-row .label.dated .place.loc {
+  color: var(--loc-fg);
+}
+
+.tree-row .label.dated .note {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted-2);
 }
 
 .untitled {
@@ -1736,10 +1782,18 @@ code {
   color: var(--danger);
 }
 
+/* Los links del texto (D787): la tinta de la interfaz con una raya fina turquesa; al pasar, la raya plena. El color de
+   verdad queda para lo que la app reconoce (escena, locación, día) y el turquesa pleno para lo elegido y el foco. */
 .editor a {
-  color: var(--accent-text);
+  color: var(--text);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-color: var(--link-line);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.editor a:hover {
+  text-decoration-color: var(--accent);
 }
 
 .editor-missing {
@@ -3385,6 +3439,8 @@ code {
    Las reglas de adentro valen igual en pantalla (donde se mide) y al imprimir, así los cortes coinciden;
    por eso no dependen del ancho de la ventana (las del teléfono se pisan acá). */
 .print-view {
+  /* La hoja va siempre en claro: también la raya de los links (D787). */
+  --link-line: #5597a4;
   position: fixed;
   top: 0;
   left: -100000px;
@@ -4439,7 +4495,7 @@ svg.sd-markup text {
 }
 
 .carrete :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 
@@ -6259,6 +6315,11 @@ button.primary.danger {
   background: var(--danger);
   border-color: var(--danger);
   color: #fff;
+}
+
+/* Sin esto, el hover del botón principal (más específico) lo volvía tinta o turquesa. */
+button.primary.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 88%, #000);
 }
 
 .login-workspace {
@@ -8913,7 +8974,7 @@ button.folder-row-main:hover {
 }
 
 .annotator :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 

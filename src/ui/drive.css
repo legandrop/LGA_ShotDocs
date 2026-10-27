@@ -152,16 +152,20 @@ button.drive-card-unembed:hover {
   background: var(--hover);
 }
 
-/* "Open in Drive" del pie, bien visible: es la salida si el reproductor no anda. */
+/* "Open in Drive" del pie, bien visible: es la salida si el reproductor no anda. Con `.editor` delante: la tarjeta va
+   adentro del editor y `.editor a` (styles.css, que carga después) la pintaba como un link de texto. */
+.editor a.drive-card-open,
 a.drive-card-open {
-  border-color: var(--primary-bg);
-  background: var(--primary-bg);
-  color: var(--primary-text);
+  border-color: var(--btn-primary-border);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   font-weight: 600;
+  text-decoration: none;
 }
 
+.editor a.drive-card-open:hover,
 a.drive-card-open:hover {
-  background: color-mix(in srgb, var(--primary-bg) 88%, var(--bg));
+  background: var(--btn-primary-hover);
 }
 
 /* El aviso entre el reproductor y el pie (Safari/iPhone, o el reproductor no cargó). */
@@ -185,6 +189,7 @@ a.drive-card-open:hover {
   color: var(--warn);
 }
 
+.editor a.drive-card-hint-open,
 .drive-card-hint-open {
   color: inherit;
   font-weight: 600;

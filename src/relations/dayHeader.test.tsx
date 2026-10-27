@@ -14,6 +14,7 @@ import { prefs } from '../prefs';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
+import { setTodayForTests } from './DayHeader';
 
 // La cabecera del día y *Prepare tomorrow's report* en la app de verdad (Docs/Doc_Relaciones.md, sección 11): la
 // cabecera no escribe en su página; *Prepare* escribe solo en el reporte de mañana, lleva ahí, avisa con *Undo*; el
@@ -48,6 +49,8 @@ beforeAll(() => {
 beforeEach(() => {
   phone = false;
   localStorage.clear();
+  // Los días del proyecto sintético son de febrero y marzo de 2026: «hoy», antes de todos (D788).
+  setTodayForTests('2026-02-01');
 });
 
 const roots: Root[] = [];
@@ -62,6 +65,7 @@ afterEach(() => {
   }
   document.body.innerHTML = '';
   history.replaceState(null, '', '/');
+  setTodayForTests(null);
 });
 
 const wait = (ms = 30) => act(() => settled(ms));
@@ -115,12 +119,16 @@ function mount(d: Device, start: string): HTMLElement {
   return host;
 }
 
-async function app(start: string): Promise<{ d: Device; built: Built; host: HTMLElement }> {
+async function app(start: string, before?: (d: Device, built: Built) => Promise<void>): Promise<{ d: Device; built: Built; host: HTMLElement }> {
   const d = await makeDevice(new FakeServer());
   devices.push(d);
   const built = await buildProject(d, fakePhoto, { indexPage: false, days: true });
+  if (before) await before(d, built);
   return { d, built, host: mount(d, built.ids[start]) };
 }
+
+/** El Día 60 todavía sin filmar: solo la sección de 105_029, vacía (si tuviera algo escrito, el día ya pasó, D788). */
+const d60Unshot = (d: Device, built: Built) => writeBlocks(d, built.ids.d60, [{ h: 1, text: 'Escena 105_029a' }, { p: '' }]);
 
 const header = (host: HTMLElement) => host.querySelector<HTMLElement>('section.lh');
 const click = (el: Element | null | undefined) => act(() => (el as HTMLElement).click());
@@ -147,7 +155,7 @@ describe('la cabecera del día en la app', () => {
   });
 
   it('Día 59: escenas, preguntas, plan y Tomorrow; Prepare escribe solo en el Día 60, lleva ahí y se deshace', async () => {
-    const { d, built, host } = await app('d59');
+    const { d, built, host } = await app('d59', d60Unshot);
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera completa');
     const lh = header(host)!;
     expect(lh.querySelector('.lh-badge')!.textContent).toBe('Shoot day');
@@ -162,6 +170,11 @@ describe('la cabecera del día en la app', () => {
     const card = lh.querySelector('.lh-tomorrow')!;
     expect(card.textContent).toContain('Tomorrow · Día 60');
     expect(card.textContent).toContain('3 scenes · from the breakdown (Fecha Rodaje 20/02');
+    // A medias (D788): 105_029 ya tiene su sección (✓, llena); las otras dos, punteadas; el botón dice cuántas faltan.
+    expect([...card.querySelectorAll('.tchip.has .k')].map((x) => x.textContent)).toEqual(['105_029']);
+    expect([...card.querySelectorAll('.tchip.miss .k')].map((x) => x.textContent)).toEqual(['104_008', '104_009']);
+    expect(card.querySelector('.lh-prepare')!.textContent).toBe('Add the 2 missing scenes');
+    expect(card.querySelector('.lh-open')!.textContent).toBe('Open Día 60');
     // Tooltips de la app, nunca `title=`.
     expect(lh.querySelectorAll('[title]').length).toBe(0);
     // La cabecera es vista: el documento del Día 59 no cambia con nada de esto.
@@ -173,6 +186,7 @@ describe('la cabecera del día en la app', () => {
     click(card.querySelector('[aria-label="Remove 104_009 from tomorrow"]'));
     await wait();
     expect(header(host)!.querySelector('.lh-tomorrow .chips')!.textContent).not.toContain('104_009');
+    expect(header(host)!.querySelector('.lh-prepare')!.textContent).toBe('Add the missing scene');
     click(header(host)!.querySelector('.lh-prepare'));
     await until(() => location.pathname === pagePath(built.ids.d60), 'el Día 60');
     await until(async () => (await headingsOf(d, built.ids.d60)).includes('Escena 104_008'), 'la sección nueva');
@@ -230,6 +244,8 @@ describe('la cabecera del día en la app', () => {
     devices.push(owner);
     const built = await buildProject(owner, fakePhoto, { indexPage: false, days: true });
     await owner.engine.syncNow();
+    await d60Unshot(owner, built);
+    await owner.engine.syncNow();
     server.addMember('ana', 'member', 'ana@test');
     server.grant('ana', { pageId: built.ids.rodaje }, 'view');
     const guest = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'ana', email: 'ana@test' });
@@ -238,12 +254,102 @@ describe('la cabecera del día en la app', () => {
     await guest.engine.syncNow();
     const host = mount(guest, built.ids.d59);
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera del invitado');
+    await until(() => header(host)?.querySelector('.lh-tomorrow:not(.past)'), 'la tarjeta Tomorrow');
     const lh = header(host)!;
     expect(lh.textContent).toContain('No Plan page and no breakdown date you can see for this day');
     expect(lh.querySelector('.lh-prepare')).toBeNull();
     expect(lh.querySelector('.lh-tomorrow')!.textContent).toContain('You can’t edit «Día 60»');
     // No ve las fichas: nada de sus preguntas ni de sus títulos.
     expect(lh.textContent).not.toContain('¿Todo el interior');
+  });
+});
+
+describe('Tomorrow según cómo está mañana (D788)', () => {
+  it('completo: un renglón verde sin botón ni escenas, con el link al día', async () => {
+    const { host } = await app('d59', (d, built) =>
+      writeBlocks(d, built.ids.d60, [
+        { h: 1, text: 'Escena 104_008' },
+        { p: '' },
+        { h: 1, text: 'Escena 104_009' },
+        { p: '' },
+        { h: 1, text: 'Escena 105_029' },
+        { p: '' },
+      ]),
+    );
+    const card = await shown(() => {
+      const c = header(host)?.querySelector<HTMLElement>('.lh-tomorrow.done');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    expect(card.textContent).toBe('Tomorrow · Día 60 · Fri 20 Feb' + 'CENADE' + 'prepared · 3 of 3 scenes' + 'Open Día 60');
+    expect(card.querySelector('.lh-prepare')).toBeNull();
+    expect(card.querySelector('.tchip')).toBeNull();
+  });
+
+  it('todas con sección y un título repetido: el botón es Prepare (limpia), nunca «Add the 0 missing scenes»', async () => {
+    const { host } = await app('d59', (d, built) =>
+      writeBlocks(d, built.ids.d60, [
+        { h: 1, text: 'Escena 104_008' },
+        { p: '' },
+        { h: 1, text: 'Escena 104_008' },
+        { p: '' },
+        { h: 1, text: 'Escena 104_009' },
+        { p: '' },
+        { h: 1, text: 'Escena 105_029' },
+        { p: '' },
+      ]),
+    );
+    const button = await shown(() => {
+      const b = header(host)?.querySelector<HTMLButtonElement>('.lh-tomorrow .lh-prepare');
+      expect(b).toBeTruthy();
+      return b!;
+    });
+    expect(button.textContent).toBe('Prepare tomorrow’s report');
+  });
+
+  it('mañana ya pasó (por la fecha, o porque su reporte ya tiene algo filmado): un renglón con «Next», sin botón', async () => {
+    // Por lo filmado: el Día 60 del proyecto ya tiene texto y fotos en la sección de 105_029.
+    const { host, built } = await app('d59');
+    const card = await shown(() => {
+      const c = header(host)?.querySelector<HTMLElement>('.lh-tomorrow.past');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    expect(card.textContent).toBe('Next: Día 60 · Fri 20 Feb · CENADE');
+    expect(card.querySelector('.lh-prepare')).toBeNull();
+    click(card.querySelector('.lh-sec'));
+    await shown(() => expect(location.pathname).toBe(pagePath(built.ids.d60)));
+  });
+
+  it('por la fecha: hoy después del Día 60 sin filmar, también plegada; y el último día pasado no ofrece crear nada', async () => {
+    setTodayForTests('2026-10-26');
+    const { host } = await app('d59', d60Unshot);
+    await shown(() => expect(header(host)?.querySelector('.lh-tomorrow.past')?.textContent).toBe('Next: Día 60 · Fri 20 Feb · CENADE'));
+    const last = (await app('d76')).host;
+    await shown(() => expect(last.querySelector('section.lh')?.textContent).toContain('Live'));
+    await act(() => settled(300));
+    expect(last.querySelector('section.lh .lh-tomorrow')).toBeNull();
+  });
+
+  it('dos reportes con la misma fecha: el otro es «Same day» (un link), no mañana; las flechas siguen la lista entera', async () => {
+    const { host, built } = await app('d59', async (d, b) => {
+      await d60Unshot(d, b);
+      // El gemelo del Día 59: misma fecha, otra locación.
+      b.ids.d59b = await d.tree.create(b.ids.rodaje, '2026-02-19 | Día 59 | La Arenera', b.projectId);
+      await writeBlocks(d, b.ids.d59b, [{ h: 1, text: 'Info general' }, { p: 'Segunda unidad.' }]);
+      await d.engine.syncNow();
+    });
+    const card = await shown(() => {
+      const c = header(host)?.querySelector<HTMLElement>('.lh-tomorrow');
+      expect(c?.querySelector('.lh-tsame')).toBeTruthy();
+      return c!;
+    });
+    expect(card.querySelector('.lh-tsame')!.textContent).toBe('Same day: Día 59 · La Arenera (estudio)');
+    expect(card.querySelector('.th')!.textContent).toContain('Tomorrow · Día 60');
+    // Las flechas siguen la lista entera: la de adelante va al gemelo.
+    expect(header(host)!.querySelector('.lh-tools')!.textContent).toContain('Día 59');
+    click(card.querySelector('.lh-tsame .lh-sec'));
+    await shown(() => expect(location.pathname).toBe(pagePath(built.ids.d59b)));
   });
 });
 

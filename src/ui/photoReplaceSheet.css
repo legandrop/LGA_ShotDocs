@@ -4,4 +4,4 @@
 .photo-replace-sheet p { line-height: 1.5; margin: 0 0 20px; }
 .photo-replace-sheet footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .photo-replace-sheet button { min-height: 36px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: inherit; cursor: pointer; }
-.photo-replace-sheet button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.photo-replace-sheet button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }

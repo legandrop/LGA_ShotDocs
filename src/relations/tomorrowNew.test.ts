@@ -118,6 +118,25 @@ describe('qué propone (puro)', () => {
     expect(proposeTomorrow(src, { ...lone, date: null })).toBeNull();
     // La cabecera del Día 76 no tiene tarjeta Tomorrow (no hay día siguiente): ahí va esta.
     expect(dayLive(src, built.ids.d76).tomorrow).toBeNull();
+    // D788: si esa fecha ya pasó, no se ofrece crear nada (la tarjeta lo sabe por `past`); hoy o antes, sí.
+    expect(proposeTomorrow(src, dayRef(src, built.ids.d76), '2026-10-26')?.past).toBe(true);
+    expect(proposeTomorrow(src, dayRef(src, built.ids.d76), '2026-03-16')?.past).toBe(false);
+    expect(proposeTomorrow(src, dayRef(src, built.ids.d76))?.past).toBe(false);
+  });
+});
+
+describe('un reporte gemelo de la misma fecha no es mañana (D788)', () => {
+  it('el último día con un gemelo de su fecha propone crear el de mañana', async () => {
+    const { A, built } = await world();
+    const twin = await A.tree.create(built.ids.rodaje, '2026-03-14 | Día 76 | CENADE', built.projectId);
+    await writeBlocks(A, twin, [{ h: 1, text: 'Info general' }, { p: 'Segunda unidad.' }]);
+    const { src } = await sourceOf(A, built);
+    const v = dayLive(src, built.ids.d76);
+    // Antes, el gemelo era «Tomorrow» y no había tarjeta para crear el de mañana.
+    expect(v.next?.pageId).toBe(twin);
+    expect(v.tomorrow).toBeNull();
+    expect(v.sameDay.map((x) => x.pageId)).toEqual([twin]);
+    expect(proposeTomorrow(src, v.day, '2026-03-14')).toMatchObject({ date: '2026-03-16', past: false });
   });
 });
 

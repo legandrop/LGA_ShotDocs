@@ -427,12 +427,15 @@
   text-align: center;
 }
 
+/* Links como los del texto (D787): tinta con la raya turquesa fina. */
 .lh .lh-sec,
 .lh .lh-lnk {
   font-size: 12.5px;
-  color: var(--accent-text);
+  color: var(--text);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-color: var(--link-line);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -1264,17 +1267,18 @@
   gap: 6px;
   height: 32px;
   padding: 0 12px;
-  border: 1px solid transparent;
+  border: 1px solid var(--seg-active-border);
   border-radius: 8px;
-  background: var(--primary-bg);
-  color: var(--primary-text);
+  background: var(--seg-active);
+  color: var(--text);
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
 }
 
+/* Una acción de tarjeta, no el botón principal (D787): gris elevado. */
 .lh .lh-prepare:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary-bg) 88%, var(--bg));
+  background: color-mix(in srgb, var(--seg-active) 88%, var(--text));
 }
 
 /* En el editor de un reporte: el título de la escena en vivo y la pregunta abierta del desglose (dayDecorations.ts).
@@ -1780,12 +1784,13 @@
 }
 
 .lh.rel-peek .rp-open {
-  background: var(--primary-bg);
-  color: var(--primary-text);
+  border: 1px solid var(--btn-primary-border);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .lh.rel-peek .rp-open:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary-bg) 88%, var(--bg));
+  background: var(--btn-primary-hover);
 }
 
 .lh.rel-peek .rp-link {
@@ -2057,4 +2062,46 @@ button.rel-cant.trash,
 
 .lh .lh-codes {
   color: var(--lh-scene-fg);
+}
+
+/* La tarjeta *Tomorrow* según cómo está mañana (D788). Completa o ya pasada no pide nada: sin el ámbar, un renglón. */
+.lh-tomorrow.done,
+.lh-tomorrow.past {
+  padding: 8px 12px;
+  border-color: var(--border-soft);
+  background: transparent;
+}
+
+.lh-tomorrow.past {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12.5px;
+}
+
+/* «prepared · 3 of 3 scenes», en verde. */
+.lh-tomorrow .lh-ready {
+  font-size: 12px;
+  color: var(--ok);
+}
+
+.lh-tomorrow .lh-open {
+  white-space: nowrap;
+}
+
+/* «Same day: Día 05 · Los Laureles»: arriba de la tarjeta, apagado. */
+.lh-tomorrow .lh-tsame {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+}
+
+.lh-sameday .lh-sec {
+  overflow-wrap: normal;
+}
+
+/* A medias: las escenas que ya tienen sección, llenas con ✓; las que faltan, punteadas. */
+.lh .lh-tomorrow .tchip.miss {
+  border-style: dashed;
+  background: transparent;
 }

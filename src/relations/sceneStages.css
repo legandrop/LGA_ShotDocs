@@ -47,14 +47,17 @@
 
 /* Con `.ss` delante: el Overview pone `.mp a { color: inherit }` y un link de página quedaba blanco, como texto. */
 .ss .ss-a {
-  color: var(--accent-text);
-  text-decoration: none;
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--link-line);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
   border-radius: 3px;
 }
 
+/* Como los links del texto (D787): la raya fina turquesa, plena al pasar. */
 .ss-a:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration-color: var(--accent);
 }
 
 .ss .ss-a.scene {
@@ -67,6 +70,19 @@
 
 .ss .ss-a.day {
   color: var(--day-fg);
+}
+
+/* Una escena, una locación o un día ya se leen por su color: sin raya hasta pasar por encima. */
+.ss .ss-a.scene,
+.ss .ss-a.loc,
+.ss .ss-a.day {
+  text-decoration-color: transparent;
+}
+
+.ss .ss-a.scene:hover,
+.ss .ss-a.loc:hover,
+.ss .ss-a.day:hover {
+  text-decoration-color: currentColor;
 }
 
 .ss-a:focus-visible,
