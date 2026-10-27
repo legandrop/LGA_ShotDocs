@@ -70,6 +70,17 @@
   border: 0;
 }
 
+/* Una carpeta (D797): la grilla de Drive trae íconos y miniaturas grandes que no se pueden cambiar desde afuera (es de
+   otro origen). Se dibuja más grande y se achica entera: entran más archivos por fila y los íconos quedan más chicos.
+   Los clics siguen cayendo donde se ven (el navegador traslada las coordenadas del iframe transformado). */
+.drive-card[data-drive-kind='folder'] .drive-card-player {
+  --drive-folder-zoom: 0.6;
+  width: calc(100% / var(--drive-folder-zoom));
+  height: calc(100% / var(--drive-folder-zoom));
+  transform: scale(var(--drive-folder-zoom));
+  transform-origin: 0 0;
+}
+
 .drive-card-offline {
   position: absolute;
   inset: 0;

@@ -2339,7 +2339,11 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
   (`blockSignature`): un renglón de antes de v0.285 no lo tiene. La admisión del link público lo acepta como parte del
   renglón, de 0 a 1 (`NODE_ATTRS` en `sync/linkShape.ts`).
 - **Tamaño:** de fábrica todo el ancho del texto (en una hoja, el ancho de la hoja) con proporción de video y a lo sumo
-  480 px o el 70 % del alto de la pantalla; un documento o una carpeta, 4:3. Al imprimir queda solo el link.
+  480 px o el 70 % del alto de la pantalla; un documento o una carpeta, 4:3. Al imprimir queda solo el link. La grilla
+  de una carpeta (de Google, con íconos grandes) se dibuja más grande y se achica al 60 % (D797, `--drive-folder-zoom`).
+  **Un link `drive.google.com/open?id=…` puede ser una carpeta** y la app lo toma como archivo (la tarjeta dice «No hay
+  una vista previa disponible»): Drive lo distingue al redirigir (`/drive/folders/…` o `/file/d/…`, sin sesión), pero
+  el navegador no deja leer esa redirección; pendiente que lo resuelva el portero.
   **Ancho elegido (D796):** al pasar por la tarjeta aparecen 1/1, 1/2, 1/3 y 1/4 en el pie (con el dedo, siempre; en
   solo lectura, nunca), los tamaños rápidos de las fotos. Es otra propiedad del mismo párrafo, `driveCardWidth` (la
   parte del renglón; 1 de fábrica, y cualquier valor raro cuenta como 1). Cambiarla no recarga el reproductor. En una

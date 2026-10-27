@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.286 :
+
+La tarjeta de una carpeta de Drive mostraba la grilla de Google con íconos y miniaturas enormes (dos por fila en una
+tarjeta de media página), y desde la app no se puede cambiar su tamaño: el iframe es de otro origen. Ahora, solo en las
+carpetas, el iframe se dibuja a 1/0,6 del tamaño de la tarjeta y se achica al 60 % (`--drive-folder-zoom` en
+`drive.css`): ocupa la misma tarjeta, entran más archivos por fila y los clics siguen cayendo donde se ven. Un video o
+un documento no cambian (D797). Prueba en `src/ui/driveCss.test.ts`.
+
+[Tarjeta de Drive - la grilla de una carpeta más chica]
+
 v0.285 :
 
 Un link de Drive ya escrito no se podía pasar a tarjeta (solo al pegarlo), así que lo importado de Coda quedaba con el
