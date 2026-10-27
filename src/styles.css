@@ -712,6 +712,123 @@ code {
   display: none;
 }
 
+/* La columna de la página: sin tabs no existe (sus hijos quedan como antes, en la fila de la shell); con la barra de
+   tabs (TabStrip.tsx, D811) es una columna con la barra arriba, afuera de lo que se desplaza. */
+.main-col {
+  display: contents;
+}
+
+.main-col:has(> .tab-strip) {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-col:has(> .tab-strip) > .main {
+  min-height: 0;
+}
+
+/* Como los tabs de un navegador, chicos: el elegido del color de la página y pegado a su barra de arriba. */
+.tab-strip {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 34px;
+  padding: 0 8px;
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+
+.app-tab {
+  position: relative;
+  flex: 0 1 200px;
+  min-width: 72px;
+  height: 29px;
+  display: flex;
+  align-items: center;
+  border-radius: 7px 7px 0 0;
+  color: var(--muted);
+}
+
+.app-tab:hover {
+  background: var(--hover);
+}
+
+.app-tab.active {
+  background: var(--bg);
+  color: var(--text);
+  /* Tapa el borde de abajo de la barra: el tab y la página son una sola superficie. */
+  margin-bottom: -1px;
+  height: 30px;
+}
+
+.app-tab-label {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 12px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.app-tab-close {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-right: 5px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  opacity: 0;
+}
+
+.app-tab:hover .app-tab-close,
+.app-tab.active .app-tab-close,
+.app-tab-close:focus-visible {
+  opacity: 1;
+}
+
+.app-tab-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.app-tab-new {
+  flex: none;
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 2px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+}
+
+.app-tab-new:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
 .topbar {
   position: sticky;
   top: 0;

@@ -164,6 +164,8 @@ const forms = (e: Entry): string[] => (typeof e === 'string' ? [e] : [e.one, e.o
 const NOT_GESTURES: Record<string, string> = {
   // "Your finger moves and zooms the photo": explica qué hace el interruptor, no es un renglón de gesto.
   'annotate.penOnlyTip': 'explica el interruptor Only the pencil draws',
+  // «Tab nuevo»: un tab de la app (TabStrip.tsx), no la tecla Tab.
+  'tabs.new': 'un tab de la app, no la tecla',
 };
 
 /**

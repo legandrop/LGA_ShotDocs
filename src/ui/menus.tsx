@@ -36,7 +36,10 @@ import {
   TemplateIcon,
   TrashIcon,
   VideoIcon,
+  OpenIcon,
 } from './icons';
+import { pagePath } from '../router';
+import { openInNewTab, tabsOn } from './tabs';
 import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
 import { isDayReportFolder, isReportPage } from '../templates/dayReport';
 import { requestDayReport, useDayReportFolder } from '../templates/dayReportUi';
@@ -257,6 +260,8 @@ export function PageMenu(props: {
 
   return (
     <div ref={ref} className="menu" role="menu" aria-label={tr('pageMenu.label')} style={{ ...props.position, maxWidth: PAGE_MENU_MAX }}>
+      {/* Los tabs de la app instalada (tabs.ts, D811): Ctrl/⌘+clic en la fila hace lo mismo. */}
+      {tabsOn() && item(tr('tabs.openInNew'), <OpenIcon />, () => openInNewTab(pagePath(props.pageId)))}
       {props.onShare && item(tr('pageMenu.share'), <ShareIcon />, props.onShare)}
       {camera?.kinds.includes('photo') && item(tr('camera.takePhoto'), <CameraIcon />, () => camera.open('photo'))}
       {camera?.kinds.includes('video') && item(tr('camera.recordVideo'), <VideoIcon />, () => camera.open('video'))}

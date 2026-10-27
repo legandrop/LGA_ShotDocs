@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
+import { modPressed } from './findUi';
+import { openInNewTab } from './tabs';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 import { TOUR_ANCHOR_EVENT } from '../tutorial/tourState';
@@ -587,9 +589,21 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           onDragLeave={() => drop?.id === page.id && setDrop(null)}
           onDrop={(e) => onDrop(e, page)}
           onClick={(e) => {
+            // Ctrl/⌘+clic: en un tab nuevo de fondo (en el navegador, en otra pestaña), como un link (D811). Con un link
+            // público no se abre aparte: el clic hace lo de siempre.
+            if (modPressed(e) && !e.altKey && !e.shiftKey && openInNewTab(pagePath(page.id))) return;
             // El foco queda en la fila (Safari no lo da solo): las flechas siguen desde acá.
             e.currentTarget.focus({ preventScroll: true });
             openPage(page.id);
+          }}
+          onMouseDown={(e) => {
+            // La rueda no desplaza la barra con el autoscroll del navegador: abre la página aparte.
+            if (e.button === 1) e.preventDefault();
+          }}
+          onAuxClick={(e) => {
+            if (e.button !== 1) return;
+            e.preventDefault();
+            openInNewTab(pagePath(page.id));
           }}
           onFocus={() => setFocusId(page.id)}
           tabIndex={tabIndex}

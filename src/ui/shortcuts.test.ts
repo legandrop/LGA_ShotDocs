@@ -19,6 +19,7 @@ import { isHistoryShortcut } from './historyUi';
 import { isDayReportShortcut } from '../templates/dayReport';
 import { isAssistantShortcut } from '../assistant/assistantUi';
 import { isDictateShortcut } from '../dictation/dictationUi';
+import { isCloseTabShortcut, isNewTabShortcut, isNextTabShortcut, isPrevTabShortcut } from './TabStrip';
 import { isSearchShortcut } from './projectSearchUi';
 import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
 import { SHORTCUT_FILES, SHORTCUT_RULES } from './shortcutSources';
@@ -229,6 +230,11 @@ const FUNCTIONS: Record<string, { fn: Fn; id: string; keys?: string[] }> = {
   // Atrás y adelante (navHistory.ts): Alt+← / Alt+→ fuera de la Mac, ⌘[ / ⌘] en la Mac (la prueba de abajo).
   isNavBackShortcut: { fn: isNavBackShortcut as Fn, id: 'navBack' },
   isNavForwardShortcut: { fn: isNavForwardShortcut as Fn, id: 'navForward' },
+  // Los tabs de la app instalada (TabStrip.tsx): pasar de tab es Ctrl+Tab fuera de la Mac y ⌘⇧] en la Mac.
+  isNewTabShortcut: { fn: isNewTabShortcut as Fn, id: 'newTab' },
+  isCloseTabShortcut: { fn: isCloseTabShortcut as Fn, id: 'closeTab' },
+  isNextTabShortcut: { fn: isNextTabShortcut as Fn, id: 'nextTab' },
+  isPrevTabShortcut: { fn: isPrevTabShortcut as Fn, id: 'prevTab' },
 };
 
 /** Un evento de teclado sintético para esas teclas, en la Mac (⌘) o en Windows (Ctrl). */
@@ -272,7 +278,8 @@ describe('las funciones is…Shortcut dicen lo mismo que el registro', () => {
       // En la Mac, Ctrl+[ no (Ctrl es otra cosa ahí); con Shift tampoco.
       const macKey = platformKeys(shortcut(id), true)[0];
       expect(fn(eventFor(macKey, true, true) as never, true), `${name} Ctrl en la Mac`).toBe(false);
-      expect(fn({ ...eventFor(macKey, true), shiftKey: true } as never, true)).toBe(false);
+      // Con Shift de más tampoco (salvo que el atajo ya lo lleve: pasar de tab es ⌘⇧]).
+      if (!macKey.includes('Shift')) expect(fn({ ...eventFor(macKey, true), shiftKey: true } as never, true)).toBe(false);
     }
   });
 

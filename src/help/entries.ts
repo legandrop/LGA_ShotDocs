@@ -283,6 +283,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: '0.259',
   },
   {
+    // Los tabs de la app instalada (D811) y las pestañas del navegador (D812): Docs/Doc_Navegacion.md, «Tabs».
+    id: 'tabs',
+    section: 'pages',
+    title: 'help.tabs.title',
+    text: 'help.tabs.text',
+    keys: { new: 'newTab', close: 'closeTab', next: 'nextTab', prev: 'prevTab' },
+    words: ['tab', 'tabs', 'pestaña', 'pestañas', 'new tab', 'tab nuevo', 'ventana', 'window', 'browser', 'navegador', 'Ctrl+T', 'abrir aparte'],
+    since: '0.300',
+  },
+  {
     id: 'pagesTree',
     section: 'pages',
     title: 'help.pagesTree.title',

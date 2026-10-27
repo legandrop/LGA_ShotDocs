@@ -15,6 +15,11 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   navBack: ['NavButtons.tsx', 'navHistory.ts'],
   navForward: ['NavButtons.tsx', 'navHistory.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
+  // Los tabs de la app instalada (tabs.ts): la barra de tabs escucha sus atajos en `window`.
+  newTab: ['TabStrip.tsx'],
+  closeTab: ['TabStrip.tsx'],
+  nextTab: ['TabStrip.tsx'],
+  prevTab: ['TabStrip.tsx'],
   // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts). En el resto, la línea
   // de tiempo del proyecto (P.26, undoTimelineUi.ts); recién reemplazado, también en el panel de buscar (DH9).
   undo: ['PageView.tsx', 'undoTimelineUi.ts', 'ProjectSearch.tsx'],

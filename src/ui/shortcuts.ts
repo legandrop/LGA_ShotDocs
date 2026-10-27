@@ -66,6 +66,12 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'navBack', keys: ['Alt-ArrowLeft'], macKeys: ['Mod-['], place: 'global', owner: 'app', source: 'window' },
   { id: 'navForward', keys: ['Alt-ArrowRight'], macKeys: ['Mod-]'], place: 'global', owner: 'app', source: 'window' },
   { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },
+  // Los tabs de la app instalada (Docs/Doc_Navegacion.md, «Tabs», D811): los de los navegadores. En el navegador son
+  // del navegador (la app no los recibe); en la app instalada, de la app. Pasar de tab en la Mac: ⌘⇧] y ⌘⇧[ (nunca ⌃Tab).
+  { id: 'newTab', keys: ['Mod-t'], place: 'global', context: 'tabs', owner: 'app', source: 'window' },
+  { id: 'closeTab', keys: ['Mod-w'], place: 'global', context: 'tabs', owner: 'app', source: 'window' },
+  { id: 'nextTab', keys: ['Ctrl-Tab'], macKeys: ['Mod-Shift-]'], place: 'global', context: 'tabs', owner: 'app', source: 'window' },
+  { id: 'prevTab', keys: ['Ctrl-Shift-Tab'], macKeys: ['Mod-Shift-['], place: 'global', context: 'tabs', owner: 'app', source: 'window' },
 
   // --- Editor: lo de la app ---
   { id: 'comment', keys: ['Mod-Alt-m'], place: 'editor', owner: 'app', source: 'window' },

@@ -37,7 +37,8 @@ function storedProject(keys: Keys, userId: string): string | null {
   return read<Record<string, string>>(keys.project, {})[userId] ?? null;
 }
 
-function storeProject(keys: Keys, userId: string, projectId: string): void {
+/** Deja elegido un proyecto (el que muestran el inicio, el mapa y la papelera); también los tabs (tabs.ts). */
+export function storeProject(keys: Keys, userId: string, projectId: string): void {
   if (storedProject(keys, userId) === projectId) return;
   write(keys.project, { ...read<Record<string, string>>(keys.project, {}), [userId]: projectId });
   window.dispatchEvent(new Event(EVENT));

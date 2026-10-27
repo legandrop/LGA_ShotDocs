@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from './auth';
 import { stored, t } from './i18n';
 import { pendingInviteTarget } from './invite';
@@ -186,10 +186,119 @@ type Boot =
   | { state: 'loading' }
   | { state: 'busy'; takeOver: () => void }
   | { state: 'lost' }
+  /** Otra pestaña del navegador tomó el control (D812): al volver a esta, sigue sola (`resume`). */
+  | { state: 'paused'; resume: () => void }
   | { state: 'ready'; services: Services }
   /** El usuario no tiene ningún proyecto en este workspace (todavía no le compartieron nada). */
   | { state: 'empty'; retry: () => void }
   | { state: 'error'; message: string; retry: () => void };
+
+/** Otra pestaña tiene el lock y esta está de fondo: espera a que la usen, sin hacer fila. */
+class TabPaused extends Error {}
+
+// Las pestañas del navegador (D812, Docs/Doc_Navegacion.md, «Varias pestañas»). Sigue habiendo una sola que escribe
+// (el lock de abajo); lo nuevo es que la que se usa toma el control sola: le pide a la otra que lo deje (`release`), la
+// otra contesta (`ack`), guarda lo que tiene, suelta el lock y queda en pausa hasta que vuelvan a ella. Si la otra está
+// haciendo algo que no se puede cortar (importar, reemplazar, subir una carpeta, un comentario a medio escribir) contesta
+// `refuse` y esta muestra «tomar el control» como antes. Si no contesta nada (el navegador la congeló), se le saca.
+type HandoffMessage = { type: 'release'; from: string } | { type: 'ack' | 'refuse'; to: string };
+
+/**
+ * Sin respuesta en este tiempo se muestra «tomar el control»: la otra puede estar ocupada (una página pesada, algo
+ * grande pegado) y su `refuse` todavía no salió; sacársela ahí cortaría lo que hace.
+ */
+const HANDOFF_SILENT_MS = 3000;
+/** Sin respuesta en este tiempo, está congelada o colgada: se le saca. Contestó y no soltó: «tomar el control». */
+const HANDOFF_SLOW_MS = 15000;
+
+/** Lo que espera el lock una pestaña que no se usa antes de quedar en pausa. */
+const BRIEF_WAIT_MS = 1500;
+
+const handoffBlockers = new Set<() => boolean>();
+
+/** Algo de esta pestaña que no se puede cortar para dársela a otra (mientras devuelva `true`). */
+export function blockHandoff(busy: () => boolean): () => void {
+  handoffBlockers.add(busy);
+  return () => handoffBlockers.delete(busy);
+}
+
+function handoffChannel(dbName: string): BroadcastChannel | null {
+  return typeof BroadcastChannel === 'function' ? new BroadcastChannel(`shotdocs-handoff:${dbName}`) : null;
+}
+
+function post(channel: BroadcastChannel, message: HandoffMessage): void {
+  try {
+    channel.postMessage(message);
+  } catch {
+    // Un canal cerrado: la otra pestaña igual se entera por el lock.
+  }
+}
+
+/**
+ * Le pide el control a la pestaña que lo tiene. Si dice que no (`refuse`), `refused`. Sin respuesta: a
+ * `HANDOFF_SILENT_MS`, `slow` (se ofrece tomarlo) y a `HANDOFF_SLOW_MS`, `takeOver` (se le saca). Contestó pero no soltó
+ * en `HANDOFF_SLOW_MS`: `slow`. Devuelve cómo dejar de esperar (al recibir el lock, o al cerrar).
+ */
+export function askForHandoff(
+  channel: BroadcastChannel,
+  tabId: string,
+  on: { takeOver: () => void; refused: () => void; slow: () => void },
+  times = { silent: HANDOFF_SILENT_MS, slow: HANDOFF_SLOW_MS },
+): () => void {
+  let answer: 'ack' | 'refuse' | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const onMessage = (e: MessageEvent<HandoffMessage>) => {
+    const m = e.data;
+    if (!m || m.type === 'release' || m.to !== tabId || answer) return;
+    answer = m.type;
+    if (m.type === 'refuse') {
+      clearTimeout(timer);
+      on.refused();
+    }
+  };
+  channel.addEventListener('message', onMessage);
+  post(channel, { type: 'release', from: tabId });
+  timer = setTimeout(() => {
+    if (answer === 'refuse') return;
+    if (answer === null) on.slow();
+    timer = setTimeout(() => {
+      if (answer === 'refuse') return;
+      // Tanto tiempo sin respuesta: el navegador la congeló (lo suyo ya está guardado en el dispositivo, docs.ts lo
+      // escribe al instante) o quedó colgada. Se le saca.
+      if (answer === null) on.takeOver();
+      else on.slow();
+    }, times.slow - times.silent);
+  }, times.silent);
+  return () => {
+    clearTimeout(timer);
+    channel.removeEventListener('message', onMessage);
+  };
+}
+
+/** La pestaña con el control contesta los pedidos de otra: `refuse` mientras `blocked`; si no, `ack` y `release`. */
+export function answerHandoffs(channel: BroadcastChannel, on: { blocked: () => boolean; release: () => void }): () => void {
+  const onMessage = (e: MessageEvent<HandoffMessage>) => {
+    const m = e.data;
+    if (!m || m.type !== 'release') return;
+    if (on.blocked()) {
+      post(channel, { type: 'refuse', to: m.from });
+      return;
+    }
+    post(channel, { type: 'ack', to: m.from });
+    on.release();
+  };
+  channel.addEventListener('message', onMessage);
+  return () => channel.removeEventListener('message', onMessage);
+}
+
+function newTabId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch {
+    // Sin `crypto.randomUUID` (sin HTTPS): alcanza con distinguir las pestañas de este navegador.
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 /**
  * Una sola pestaña o ventana escribe en la base local de un usuario. Con dos a la vez, cada una tendría
@@ -201,28 +310,58 @@ function acquireTabLock(
   name: string,
   handlers: { onBusy: (takeOver: () => void) => void; onLost: () => void },
   signal: AbortSignal,
+  /** Si otra la tiene, esperar en la fila (`false`: solo `BRIEF_WAIT_MS` y después `TabPaused`; una de fondo no hace fila). */
+  queue = true,
 ): Promise<() => void> {
   const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
   if (!locks) return Promise.resolve(() => undefined);
   return new Promise((resolve, reject) => {
     let held = false;
-    const hold = () =>
-      new Promise<void>((release) => {
+    const hold = () => {
+      // Ya lo tiene (por ejemplo, lo tomó y después le tocó el turno en la fila): este se suelta enseguida.
+      if (held) return Promise.resolve();
+      return new Promise<void>((release) => {
         held = true;
         resolve(release);
       });
+    };
     // Si otra ventana toma el control, la promesa del lock se rechaza: esta deja de escribir.
     const watch = (p: Promise<unknown>) =>
       p.catch((err) => {
         if (held) handlers.onLost();
         else reject(err);
       });
+    // La espera en la fila se corta al tomar el control (si no, al soltar, la fila le volvería a dar el lock).
+    const inLine = new AbortController();
+    signal.addEventListener('abort', () => inLine.abort(), { once: true });
     void watch(
       locks.request(name, { ifAvailable: true }, (lock) => {
         if (lock) return hold();
+        if (!queue) {
+          // Un momento en la fila: si la otra se está yendo (una recarga, el segundo arranque de React en desarrollo)
+          // el lock llega enseguida. Si no, a la pausa: no se queda en la fila de una que se está usando.
+          const brief = setTimeout(() => inLine.abort(), BRIEF_WAIT_MS);
+          return locks.request(name, { signal: inLine.signal }, hold).then(
+            () => clearTimeout(brief),
+            (err) => {
+              clearTimeout(brief);
+              if (held) handlers.onLost();
+              else reject(inLine.signal.aborted && !signal.aborted ? new TabPaused() : err);
+            },
+          );
+        }
         // Tomar el control le saca el lock a la otra ventana (por ejemplo, si quedó colgada).
-        handlers.onBusy(() => void watch(locks.request(name, { steal: true }, hold)));
-        return watch(locks.request(name, { signal }, hold));
+        handlers.onBusy(() => {
+          if (held) return;
+          inLine.abort();
+          void watch(locks.request(name, { steal: true }, hold));
+        });
+        return locks.request(name, { signal: inLine.signal }, hold).catch((err) => {
+          // Cortada por tomar el control: no es haber perdido el lock.
+          if (inLine.signal.aborted && !signal.aborted) return;
+          if (held) handlers.onLost();
+          else reject(err);
+        });
       }),
     );
   });
@@ -242,28 +381,71 @@ export interface LinkBoot {
 export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link?: LinkBoot): Boot {
   const [boot, setBoot] = useState<Boot>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  // Otra pestaña tiene el control (D812). Mientras tanto la pantalla de esta es la de la pausa: lo de adentro se
+  // desmonta antes de que se cierren los servicios (el efecto de abajo se limpia después que sus hijos).
+  const [paused, setPaused] = useState(false);
+  const [tabId] = useState(newTabId);
+  // La persona la retomó (un toque, una tecla, *Continue here*): la usa aunque el navegador todavía no le dé el foco.
+  const [touched] = useState(() => ({ current: false }));
+  const resume = useCallback(() => {
+    touched.current = true;
+    setPaused(false);
+  }, [touched]);
 
   useEffect(() => {
+    if (paused) return;
     let cancelled = false;
     let cleanup: (() => void) | null = null;
     const abort = new AbortController();
     let releaseLock: (() => void) | null = null;
+    let channel: BroadcastChannel | null = null;
+    let stopAsking = () => undefined as void;
 
-    (async () => {
+    const run = (async () => {
       const dbName = workspace.config.storage.db(user.id);
-      releaseLock = await acquireTabLock(
-        `lock:${dbName}`,
-        {
-          onBusy: (takeOver) => setBoot({ state: 'busy', takeOver }),
-          onLost: () => {
-            cleanup?.();
-            cleanup = null;
-            setBoot({ state: 'lost' });
+      channel = handoffChannel(dbName);
+      // Pide el control solo la pestaña que se usa: una abierta de fondo (la rueda en un link), o una ventana visible al
+      // costado que vuelve a arrancar sola (sin proyectos reintenta cada minuto), espera a que la usen.
+      const using = touched.current || typeof document === 'undefined' || (document.visibilityState !== 'hidden' && document.hasFocus());
+      touched.current = false;
+      try {
+        releaseLock = await acquireTabLock(
+          `lock:${dbName}`,
+          {
+            onBusy: (takeOver) => {
+              if (!channel) {
+                setBoot({ state: 'busy', takeOver });
+                return;
+              }
+              const busy = () => !cancelled && setBoot({ state: 'busy', takeOver });
+              stopAsking = askForHandoff(channel, tabId, { takeOver: () => !cancelled && takeOver(), refused: busy, slow: busy });
+            },
+            onLost: () => {
+              cleanup?.();
+              cleanup = null;
+              // Otra pestaña la tomó sin preguntar (congelada, o «tomar el control»): pausa, como si hubiera pedido.
+              setPaused(true);
+            },
           },
-        },
-        abort.signal,
-      );
+          abort.signal,
+          using,
+        );
+      } catch (err) {
+        if (err instanceof TabPaused) {
+          if (!cancelled) setPaused(true);
+          return;
+        }
+        throw err;
+      }
+      stopAsking();
       if (cancelled) return releaseLock();
+      // Desde acá esta pestaña tiene el control: otra que lo pida lo recibe, salvo que esto esté en algo que no se corta.
+      const stopAnswering = channel
+        ? answerHandoffs(channel, {
+            blocked: () => [...handoffBlockers].some((busy) => busy()),
+            release: () => !cancelled && setPaused(true),
+          })
+        : () => undefined;
       const db = await openLocalDb(dbName);
       if (cancelled) return db.close();
       const remote = link?.remote ?? new SupabaseRemote(workspace.client, __APP_VERSION__);
@@ -280,7 +462,9 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
           const first = await remote.ensureWorkspace();
           if (!first) {
             db.close();
-            // Sin proyectos no se escribe nada: otra pestaña puede abrir mientras tanto.
+            // Sin proyectos no se escribe nada: otra pestaña puede abrir mientras tanto (y esta ya no le contesta: no
+            // tiene el control para darlo).
+            stopAnswering();
             releaseLock?.();
             releaseLock = null;
             if (!cancelled) setBoot({ state: 'empty', retry: () => setAttempt((n) => n + 1) });
@@ -549,10 +733,38 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
     return () => {
       cancelled = true;
       abort.abort();
+      stopAsking();
+      channel?.close();
       if (cleanup) cleanup();
-      else releaseLock?.();
+      // A mitad del arranque: el lock se suelta cuando el arranque frena en su próximo control (si no, otra pestaña
+      // empezaría a escribir mientras esta todavía guarda algo, como la marca del workspace).
+      else void run.finally(() => releaseLock?.());
     };
-  }, [workspace, user, attempt, link]);
+  }, [workspace, user, attempt, link, paused, tabId]);
+
+  // En pausa, volver a esta pestaña la retoma: verla con el foco, o tocarla.
+  useEffect(() => {
+    if (!paused) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) resume();
+    };
+    window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', onVisible);
+    document.addEventListener('pointerdown', resume, true);
+    document.addEventListener('keydown', resume, true);
+    return () => {
+      window.removeEventListener('focus', resume);
+      document.removeEventListener('visibilitychange', onVisible);
+      document.removeEventListener('pointerdown', resume, true);
+      document.removeEventListener('keydown', resume, true);
+    };
+  }, [paused, resume]);
+
+  // Mientras arranca de nuevo se ve «Opening…», no lo de la vez anterior.
+  useEffect(() => {
+    if (paused) setBoot({ state: 'loading' });
+  }, [paused]);
+
 
   useEffect(() => {
     if (boot.state !== 'error' && boot.state !== 'empty') return;
@@ -568,5 +780,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser, link
     };
   }, [boot.state]);
 
+  // Después de todos los hooks (el mismo orden en pausa y sin pausa).
+  if (paused) return { state: 'paused', resume };
   return boot;
 }

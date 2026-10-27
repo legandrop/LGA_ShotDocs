@@ -10,6 +10,7 @@ import { useLinkMode } from '../linkMode';
 import {
   ServicesContext,
   type LinkBoot,
+  blockHandoff,
   useBootServices,
   usePermissions,
   useRemoved,
@@ -56,6 +57,7 @@ import { CommentsToggle } from './CommentsToggle';
 import { draftLossAccepted, hasDrafts, setDraftOwner, signOutAccepted } from './commentsUi';
 import { MentionsBell } from './MentionsBell';
 import { Sidebar } from './Sidebar';
+import { TabStrip, useTabsHost } from './TabStrip';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
 import { SpaceHost } from './SpaceHost';
@@ -171,6 +173,20 @@ export function Workspace({ user, link }: { user: AuthUser; link?: LinkBoot }) {
     );
   }
   if (boot.state === 'empty') return <NoProjectsBoot user={user} onRetry={boot.retry} link={!!link} />;
+  if (boot.state === 'paused') {
+    // Otra pestaña del navegador tiene el control (D812): al volver acá (el foco o un toque) sigue sola.
+    return (
+      <main className="center-screen">
+        <div className="card">
+          <h1>{tr('shell.paused.title')}</h1>
+          <p className="muted">{tr('shell.paused.text')}</p>
+          <button className="primary" onClick={boot.resume}>
+            {tr('shell.paused.continue')}
+          </button>
+        </div>
+      </main>
+    );
+  }
   return (
     <ServicesContext.Provider value={boot.services}>
       {/* Un error que no dejó seguir: pantalla con *Reload* en vez de blanco, con la sincronización viva (ErrorBarrier.tsx). */}
@@ -362,6 +378,8 @@ export function Shell() {
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
+    // Otra pestaña del navegador no se lleva el control mientras esto corre (services.ts, D812): lo que esperar no resuelve.
+    const unblock = blockHandoff(() => importing.get().running || replaceRunning({ docs }) || !!folders?.busy() || (hasDrafts() && !draftLossAccepted()));
     let live = true;
     const unwatch = watchPendingWrites({
       owner: services,
@@ -382,6 +400,7 @@ export function Shell() {
     return () => {
       live = false;
       window.removeEventListener('beforeunload', onBeforeUnload);
+      unblock();
       unwatch();
     };
   }, [services, comments, docs, tree, media, folders, context]);
@@ -419,6 +438,8 @@ export function Shell() {
   const projectId = useCurrentProject();
   const revision = tree.getRevision();
   const linkMode = useLinkMode();
+  // Los tabs de la app instalada (tabs.ts, D811): con una cuenta, no con un link público.
+  useTabsHost(!linkMode);
   // La dirección vieja de la papelera (`/trash`, un marcador o un link de antes): la papelera es una sola y está en
   // el selector de proyectos; se abre ahí, sobre el inicio del proyecto. Con un link público no hay papelera: la
   // página compartida.
@@ -469,6 +490,9 @@ export function Shell() {
       <Sidebar onBrowse={(id) => (keepNav.current = id)} />
       <SidebarResizer />
       <div className="scrim" onClick={() => setNavOpen(false)} />
+      {/* La barra de tabs va arriba de la columna, afuera de lo que se desplaza (sin tabs, la columna no existe: `contents`). */}
+      <div className="main-col">
+      <TabStrip />
       <main className="main">
         {route.name === 'practice' ? (
           // La práctica arma su propia barra de arriba con sus servicios en memoria (tutorial/PracticeView.tsx).
@@ -559,6 +583,7 @@ export function Shell() {
           </>
         )}
       </main>
+      </div>
       {pageMenu && pageId && (
         <PageMenu
           pageId={pageId}

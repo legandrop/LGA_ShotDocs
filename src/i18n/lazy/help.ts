@@ -110,6 +110,11 @@ export const help = {
     en: "‹ and › at the top of the page take you back to the pages you opened before, and forward again after going back, like in a browser. They also work in the installed app, which has no browser buttons. They're dimmed when there's nowhere to go inside the app.",
     es: "‹ y › arriba de la página te llevan a las páginas que abriste antes, y otra vez adelante después de volver, como en un navegador. También funcionan en la app instalada, que no tiene los botones del navegador. Se ven apagados cuando no hay a dónde ir dentro de la app.",
   },
+  'help.tabs.title': { en: "Tabs", es: "Tabs" },
+  'help.tabs.text': {
+    en: "In the installed app, {new} opens a new tab with the page you're on, and Ctrl/⌘+click or the mouse wheel on a page opens it in a tab behind. Each tab keeps its own back and forward. {close} closes it, {next} and {prev} switch tabs. The tabs come back when you open the app again. In a browser, use its own tabs: open as many as you want, and the one you're using takes over (the others wait, and continue when you go back to them).",
+    es: "En la app instalada, {new} abre un tab nuevo con la página en la que estás, y Ctrl/⌘+clic o la rueda del mouse sobre una página la abre en un tab de fondo. Cada tab tiene su atrás y adelante. {close} lo cierra, {next} y {prev} pasan de un tab a otro. Los tabs vuelven al abrir la app otra vez. En un navegador, usá sus propias pestañas: abrí las que quieras y la que estás usando toma el control (las otras esperan y siguen cuando volvés a ellas).",
+  },
   'help.pagesExpand.title': { en: "Expand subpages when selecting a page", es: "Expandir subpáginas al elegir una página" },
   'help.pagesExpand.text': {
     en: "Clicking a page in the sidebar expands it and shows all its direct subpages. The rest of the tree folds so that only the way to that page stays open. In the account menu, Expand subpages offers On click (the default) or Manual. The arrow still expands or collapses a page; clicking the page again expands it again. This preference follows your account across devices and works offline.",
@@ -786,6 +791,10 @@ export const help = {
   'shortcut.find': { en: "Find and replace in the page", es: "Buscar y reemplazar en la página" },
   'shortcut.navBack': { en: "Back to the page you were on", es: "Volver a la página anterior" },
   'shortcut.navForward': { en: "Forward again, after going back", es: "Adelante otra vez, después de volver" },
+  'shortcut.newTab': { en: "New tab with this page (installed app)", es: "Tab nuevo con esta página (app instalada)" },
+  'shortcut.closeTab': { en: "Close the tab (installed app)", es: "Cerrar el tab (app instalada)" },
+  'shortcut.nextTab': { en: "Next tab (installed app)", es: "Tab siguiente (app instalada)" },
+  'shortcut.prevTab': { en: "Previous tab (installed app)", es: "Tab anterior (app instalada)" },
   'shortcut.print': { en: "Export PDF / print the page", es: "Exportar PDF / imprimir la página" },
   'shortcut.history': { en: "Version history of the page", es: "Historial de versiones de la página" },
   'shortcut.newDayReport': {

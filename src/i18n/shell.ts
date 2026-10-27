@@ -3,6 +3,20 @@ import type { Dict } from './types';
 // La pantalla principal: abrir el workspace, la barra de arriba, el inicio y los avisos de invitación.
 
 export const shell = {
+  // Los tabs de la app instalada (Docs/Doc_Navegacion.md, sección «Tabs», D811).
+  'tabs.label': { en: "Tabs", es: "Tabs" },
+  'tabs.new': { en: "New tab", es: "Tab nuevo" },
+  'tabs.close': { en: "Close tab", es: "Cerrar tab" },
+  'tabs.home': { en: "Home", es: "Inicio" },
+  'tabs.page': { en: "Page", es: "Página" },
+  'tabs.openInNew': { en: "Open in new tab", es: "Abrir en un tab nuevo" },
+  // El navegador: otra pestaña de la app tomó el control (services.ts, D812).
+  'shell.paused.title': { en: "Open in another tab", es: "Abierta en otra pestaña" },
+  'shell.paused.text': {
+    en: "Shot Docs is working in another tab of this browser. Come back here and it continues where you left it.",
+    es: "Shot Docs está trabajando en otra pestaña de este navegador. Volvé acá y sigue donde la dejaste.",
+  },
+  'shell.paused.continue': { en: "Continue here", es: "Seguir acá" },
   // Reemplazar en el proyecto (Docs/Doc_Buscar.md): lo que se ve con el panel cerrado y al salir mientras corre.
   'replace.runningLeave': {
     en: "Replacing in the project is still running. Wait until it finishes, or press Stop.",

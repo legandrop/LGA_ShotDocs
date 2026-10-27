@@ -1,6 +1,8 @@
 import { navigate, pagePath, parseRoute } from '../router';
 import { pageLink, type PageLinkOrigin } from '../pageLink';
 import { LOGICAL_PAGE_HREF } from './pageLinkView';
+import { modPressed } from './findUi';
+import { appPath, openInNewTab, tabsOn } from './tabs';
 
 export interface PageLinkContext {
   readonly origin: PageLinkOrigin;
@@ -84,6 +86,9 @@ export function editorLinkClick(e: MouseEvent, context?: PageLinkContext): boole
   if (!link) return false;
   if (context && (!context.current() || !context.root()?.contains(link))) { e.preventDefault(); return true; }
   if (followInternalLink(e, context)) return true;
+  // Ctrl/⌘+clic en un link de la app, en la app instalada: en un tab nuevo de fondo (tabs.ts, D811).
+  const path = tabsOn() && modPressed(e) ? appPath(link.getAttribute(LOGICAL_PAGE_HREF) ?? link.getAttribute('href')) : null;
+  if (path && openInNewTab(path)) return true;
   window.open(link.href, link.target || '_blank', 'noopener,noreferrer');
   return true;
 }

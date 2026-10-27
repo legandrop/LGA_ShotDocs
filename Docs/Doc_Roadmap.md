@@ -50,6 +50,16 @@ Ordenados en cuatro grupos: el plan de workspaces (primero), los pedidos de Lega
 ya, en orden), lo que se puede hacer sin que Lega decida nada, y lo que espera una decisión o una acción de
 Lega.
 
+### T. Tabs y pestañas (v0.300, D811-D812): lo que queda
+
+1. **Cambiar de tab vuelve a armar la página** (un tab por vez): es lo mismo que abrirla, 63-77 ms en la web en un día
+   de VLLF. Si se nota, guardar armados los editores de los últimos tabs (va con L.5).
+2. **Arrastrar los tabs** para reordenarlos, y tabs en el teléfono: no pedidos.
+3. **Pestañas del navegador:** cada vez que se pasa de una a otra, la que llega arranca de nuevo (~0,2-0,8 s medidos en
+   desarrollo). Que dos escriban a la vez de verdad sería mover la base y la sincronización a un `SharedWorker`; no
+   hace falta mientras alcance con esto.
+4. En la app de escritorio (Tauri, futura) Ctrl+T también será de la app: revisar que `tabsAvailable()` la incluya.
+
 ### L. Lo que encontró `Doc_Logica.md` (2026-10-27)
 
 Al escribir el documento de la lógica de la app aparecieron diferencias entre los docs, la ayuda y el código:

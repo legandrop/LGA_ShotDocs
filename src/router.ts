@@ -127,8 +127,24 @@ function subscribe(fn: () => void): () => void {
   };
 }
 
+/**
+ * Mientras un tab de la app instalada rearma el historial (`rebuildHistory`, ui/tabs.ts), la ruta que se ve es la de
+ * destino: las vueltas del historial de en el medio no abren páginas.
+ */
+let held: { pathname: string; search: string } | null = null;
+
+export function holdRoute(path: string): void {
+  const url = new URL(path, location.origin);
+  held = { pathname: url.pathname, search: url.search };
+}
+
+export function releaseRoute(): void {
+  held = null;
+  window.dispatchEvent(new Event(EVENT));
+}
+
 export function useRoute(): Route {
-  const pathname = useSyncExternalStore(subscribe, () => location.pathname);
+  const pathname = useSyncExternalStore(subscribe, () => held?.pathname ?? location.pathname);
   return parseRoute(pathname);
 }
 
@@ -140,6 +156,6 @@ export function useRoute(): Route {
 export const STAY_PARAM = 'stay';
 
 export function useSearchParam(name: string): string | null {
-  const search = useSyncExternalStore(subscribe, () => location.search);
+  const search = useSyncExternalStore(subscribe, () => held?.search ?? location.search);
   return new URLSearchParams(search).get(name);
 }

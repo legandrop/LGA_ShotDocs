@@ -2449,3 +2449,25 @@ una; pidió la solución más profesional.
 persona frena. Una tecla que llega mientras la app dibuja la página anterior, o que esperó en cola más de 50 ms, cuenta
 como seguida: no abre otra página pesada en el medio. La pulsación suelta con la app libre sigue abriendo al instante.
 Lo que queda: que la página de rodaje en sí se dibuje más rápido (medirlo primero).
+
+### D811 · Tabs adentro de la app instalada (2026-10-27)
+**Pedido de Lega:** Ctrl+T abre otro tab adentro de la app, con el mismo proyecto, otro, la misma página u otra, sin
+que se rompa nada.
+**Quedó así:** solo en la app instalada y fuera del teléfono (en un navegador, Ctrl+T es del navegador y la página no
+lo recibe; ahí se usan sus pestañas, D812). Ctrl/⌘+T abre un tab con la página que se ve; Ctrl/⌘+clic, la rueda o
+*Open in new tab* del menú lo abren de fondo; Ctrl/⌘+W cierra; Ctrl+Tab / Ctrl+Shift+Tab (⌘⇧] / ⌘⇧[ en la Mac) pasan.
+La barra de tabs aparece recién con dos (con uno la app se ve como siempre). Cada tab tiene su atrás y adelante, su
+proyecto y su desplazamiento, y vuelven al abrir la app. Se ve un tab por vez: el de ahora es la dirección de la
+ventana. Un tab de otro workspace no se puede (cambiar de workspace recarga la app).
+**Cómo se revierte:** `tabsAvailable()` en `src/ui/tabs.ts` devolviendo `false`.
+
+### D812 · Varias pestañas del navegador a la vez (2026-10-27)
+**Pedido de Lega:** en el navegador, poder tener varias pestañas abiertas. Hasta v0.299 la segunda mostraba «abierta en
+otra pestaña» con *Take over* y había que tocarlo cada vez.
+**Quedó así:** sigue escribiendo una sola pestaña (es lo que cuida que no se pierdan datos), pero la que se usa toma el
+control sola: le pide a la otra que lo deje, la otra guarda y queda en pausa («Open in another tab»), y al volver a
+ella (el foco o un toque) lo pide de vuelta. Una pestaña abierta de fondo espera sin sacarle el control a nadie. Si la
+otra está importando, reemplazando, subiendo una carpeta o tiene un comentario a medio escribir, dice que no y aparece
+*Take over* como antes (también si no contesta en 3 s: puede estar ocupada); si no contesta en 15 s (el navegador la
+congeló), se le saca.
+**Cómo se revierte:** `handoffChannel()` en `src/services.ts` devolviendo `null` (vuelve el *Take over* de siempre).

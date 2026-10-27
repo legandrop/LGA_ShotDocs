@@ -45,6 +45,8 @@ interface Saved {
   s: string;
   max: number;
   at: number;
+  /** La dirección de cada posición del tramo (los tabs de la app instalada, tabs.ts); puede faltar. */
+  p?: (string | null)[];
 }
 
 let installed: { win: Window; uninstall: () => void } | null = null;
@@ -57,6 +59,16 @@ let overlay = false;
 let pending: ReturnType<typeof setTimeout> | null = null;
 /** Hasta cuándo no se acepta otro atrás o adelante (`QUIET_MS` desde el último). */
 let quietUntil = 0;
+/** La dirección de cada posición del tramo (`null` si no se sabe): para guardar el historial de un tab al dejarlo. */
+let paths: (string | null)[] = [];
+/**
+ * Desde qué posición del tramo las entradas son de este documento. Al recargar, las de antes son de la carga anterior:
+ * volver a ellas con `history.go` recargaría la app, así que `rebuildHistory` no pasa de acá.
+ */
+let docStart = 0;
+/** Las funciones del historial sin envolver: `rebuildHistory` arma las entradas con sus propias marcas. */
+let rawPush: History['pushState'] | null = null;
+let rawReplace: History['replaceState'] | null = null;
 let snapshot: NavPosition = { canBack: false, canForward: false };
 const listeners = new Set<() => void>();
 
@@ -108,15 +120,24 @@ function readSaved(win: Window): Saved | null {
     if (!raw) return null;
     const v = JSON.parse(raw) as Partial<Saved>;
     if (typeof v.s !== 'string' || !Number.isInteger(v.max) || !Number.isInteger(v.at)) return null;
-    return { s: v.s, max: v.max as number, at: v.at as number };
+    const p = Array.isArray(v.p) ? v.p.map((x) => (typeof x === 'string' && x.startsWith('/') ? x : null)) : undefined;
+    return { s: v.s, max: v.max as number, at: v.at as number, p };
   } catch {
     return null;
   }
 }
 
+/** La dirección de la entrada de ahora (sin el `#`: la ruta y lo que va después del `?`). */
+function here(win: Window): string {
+  return win.location.pathname + win.location.search;
+}
+
 function save(win: Window): void {
+  // Una capa (el carrete, «Show me») no es una página del tab: al rearmarlo no se reabre.
+  paths[idx] = overlay ? null : here(win);
+  if (paths.length > max + 1) paths.length = max + 1;
   try {
-    win.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ s: seg, max, at: idx } satisfies Saved));
+    win.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ s: seg, max, at: idx, p: paths } satisfies Saved));
   } catch {
     // Sin `sessionStorage` (modo privado estricto): el registro vale hasta recargar.
   }
@@ -151,6 +172,7 @@ function sync(win: Window, type: string, replace: History['replaceState']): void
     seg = newSegment();
     idx = 0;
     max = 0;
+    paths = [];
     replace.call(win.history, tagged(state, { s: seg, i: 0 }), '');
   } else {
     seg = tag.s;
@@ -160,8 +182,13 @@ function sync(win: Window, type: string, replace: History['replaceState']): void
       // Recargar conserva las entradas de adelante. Volver con atrás o adelante a un documento del mismo tramo: si
       // se había salido a otro sitio, lo de adelante de donde se salió ya no existe; se cuenta solo hasta ahí.
       max = type === 'reload' ? Math.max(idx, saved.max) : Math.max(idx, Math.min(saved.max, saved.at));
-    } else max = idx;
+      paths = saved.p ? saved.p.slice(0, max + 1) : [];
+    } else {
+      max = idx;
+      paths = [];
+    }
   }
+  docStart = idx;
   save(win);
 }
 
@@ -183,6 +210,7 @@ function observe(win: Window, replace: History['replaceState']): void {
     seg = tag.s;
     idx = tag.i;
     max = idx;
+    paths = [];
     overlay = isOverlay(state);
   } else {
     // Volver de una capa olvida lo de adelante (era la capa, ya cerrada).
@@ -207,6 +235,8 @@ export function installNavHistory(win: Window = window): () => void {
   const replace = history.replaceState;
   const ownPush = history.hasOwnProperty('pushState');
   const ownReplace = history.hasOwnProperty('replaceState');
+  rawPush = push;
+  rawReplace = replace;
   sync(win, navigationType(win), replace);
   history.pushState = function pushState(state: unknown, unused: string, url?: string | URL | null) {
     const next = idx + 1;
@@ -248,10 +278,124 @@ export function installNavHistory(win: Window = window): () => void {
     if (pending !== null) clearTimeout(pending);
     pending = null;
     quietUntil = 0;
+    rawPush = null;
+    rawReplace = null;
     installed = null;
   };
   installed = { win, uninstall };
   return uninstall;
+}
+
+/** El historial de un tab: sus direcciones, de la más vieja a la de ahora y lo de adelante, y en cuál está. */
+export interface TabHistory {
+  stack: string[];
+  at: number;
+}
+
+/** Un tab no guarda más que estas posiciones (las más viejas se olvidan). */
+export const TAB_HISTORY_MAX = 20;
+
+/**
+ * El historial del tab de ahora (los tabs de la app instalada, `ui/tabs.ts`): las posiciones del tramo con dirección
+ * conocida, sin repetir seguidas (una capa como el carrete tiene la dirección de su página) y sin pasar de
+ * `TAB_HISTORY_MAX`.
+ */
+export function historyStack(win: Window = window): TabHistory {
+  const stack: string[] = [];
+  let at = 0;
+  for (let i = 0; i <= max; i++) {
+    const path = i === idx ? here(win) : paths[i];
+    if (path && stack[stack.length - 1] !== path) stack.push(path);
+    if (i === idx) at = Math.max(0, stack.length - 1);
+  }
+  if (stack.length === 0) return { stack: [here(win)], at: 0 };
+  const cut = Math.max(0, stack.length - TAB_HISTORY_MAX);
+  return { stack: stack.slice(cut), at: Math.max(0, at - cut) };
+}
+
+/** Va `delta` posiciones en el historial y espera la vuelta (o un segundo, si no llega). */
+function travel(win: Window, delta: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, 1000);
+    function done() {
+      clearTimeout(timer);
+      win.removeEventListener('popstate', done);
+      resolve();
+    }
+    win.addEventListener('popstate', done);
+    win.history.go(delta);
+  });
+}
+
+/**
+ * Cambia el historial de la ventana por el de otro tab: vuelve al principio del tramo de ahora y arma ahí las entradas
+ * del tab, en un tramo nuevo, con la de `at` como la de ahora. Así atrás y adelante (los botones, los atajos y los
+ * botones del mouse) recorren solo las páginas de ese tab. Mientras tanto la ruta no se mueve (`holdRoute` del router,
+ * lo hace quien llama): las vueltas de en el medio no abren páginas.
+ */
+export async function rebuildHistory(next: TabHistory, win: Window = window): Promise<void> {
+  if (!installed || installed.win !== win || !rawPush || !rawReplace) return;
+  const push = rawPush;
+  const replace = rawReplace;
+  const stack = next.stack.length ? next.stack : ['/'];
+  const at = Math.min(Math.max(0, next.at), stack.length - 1);
+  if (pending !== null) clearTimeout(pending);
+  pending = null;
+  // Safari no acepta más de 100 cambios del historial en 30 s (Chrome ignora los de más): pasando seguido de tab, el
+  // tab vuelve con su página nada más, sin su atrás.
+  const now = Date.now();
+  while (historyCalls.length && now - historyCalls[0] > HISTORY_WINDOW_MS) historyCalls.shift();
+  const full = historyCalls.length + stack.length + 2 > HISTORY_BUDGET;
+  const entries = full ? [stack[at]] : stack;
+  const current = full ? 0 : at;
+  // Solo hasta donde empieza este documento: más atrás es la carga de antes (volver ahí recargaría la app).
+  if (idx > docStart) await travel(win, docStart - idx);
+  seg = newSegment();
+  overlay = false;
+  try {
+    replace.call(win.history, tagged(null, { s: seg, i: 0 }), '', entries[0]);
+    record();
+    for (let i = 1; i < entries.length; i++) {
+      push.call(win.history, tagged(null, { s: seg, i }), '', entries[i]);
+      record();
+    }
+    // Con una sola entrada no hubo ningún `pushState`: lo de adelante del tab anterior seguiría ahí. Una copia de esta
+    // la corta (adelante queda apagado igual: `max` es 0).
+    if (entries.length === 1) {
+      push.call(win.history, tagged(null, { s: seg, i: 1 }), '', entries[0]);
+      record();
+      await travel(win, -1);
+    } else if (current < entries.length - 1) await travel(win, current - (entries.length - 1));
+    idx = current;
+    max = entries.length - 1;
+    paths = entries.slice();
+  } catch {
+    // El navegador no dejó (el tope de arriba): el registro sigue lo que quedó, sin adelante.
+    const tag = readNavTag(win.history.state);
+    const fresh = !tag || tag.s === seg;
+    if (tag) seg = tag.s;
+    idx = tag?.i ?? 0;
+    max = idx;
+    // Las direcciones de atrás no se saben (eran del tab anterior); el principio de este documento, si se volvió al
+    // tramo viejo, sigue donde estaba.
+    paths = [];
+    if (fresh) docStart = 0;
+    save(win);
+    emit();
+    return;
+  }
+  docStart = 0;
+  save(win);
+  emit();
+}
+
+/** Los cambios del historial que hizo `rebuildHistory` en los últimos `HISTORY_WINDOW_MS`. */
+const historyCalls: number[] = [];
+const HISTORY_WINDOW_MS = 30_000;
+const HISTORY_BUDGET = 80;
+
+function record(): void {
+  historyCalls.push(Date.now());
 }
 
 /** Dónde está el registro (para las pruebas y el diagnóstico). */

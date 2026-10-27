@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.300 :
+
+No había tabs: la app mostraba una sola página, y en el navegador la segunda pestaña quedaba en «abierta en otra
+pestaña» hasta tocar *Take over*, porque escribe una sola (el lock de la base local). Ahora la app instalada tiene tabs
+(`tabs.ts`, `TabStrip.tsx`, D811): Ctrl/⌘+T, W y Ctrl+Tab, Ctrl/⌘+clic o la rueda para abrir de fondo; se ve uno
+por vez y cada uno rearma su propio historial al volver (`rebuildHistory`, con la ruta quieta). En el navegador, la pestaña
+que se usa toma el control sola (D812): le pide a la otra que lo deje, la otra guarda y queda en pausa; dice que no
+mientras importa, reemplaza, sube una carpeta o hay un comentario a medio escribir, y si no contesta se le saca. Arreglado
+de paso: tras *Take over* la fila del lock podía quedarse con él para siempre.
+
+[Tabs en la app instalada y varias pestañas del navegador]
+
 v0.299 :
 
 Navegando con las flechas por las páginas de rodaje la app se clavaba: cada página pesada tarda en dibujarse, las teclas

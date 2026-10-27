@@ -77,7 +77,7 @@ In development. What works today:
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
 - The page tree, the block editor with autosave and pasted images, light and dark themes and
   per-account appearance settings. Back and forward buttons (‹ ›) at the top of the page return to the pages you
-  opened before, also in the installed app; Alt+← / Alt+→ (⌘[ / ⌘] on a Mac) do the same. The app can be installed (PWA): *Install app* in the account menu (and a
+  opened before, also in the installed app; Alt+← / Alt+→ (⌘[ / ⌘] on a Mac) do the same. The installed app has tabs: Ctrl/⌘+T opens one, Ctrl/⌘+click or the mouse wheel opens a page in a tab behind, and each tab keeps its own back and forward. In a browser you can keep several tabs open: the one you use takes over and the others wait. The app can be installed (PWA): *Install app* in the account menu (and a
   dismissible banner on phones) shows the exact steps for iPhone, Android and desktop, with a direct *Install*
   button where the browser offers one. On iPhone the installed app keeps its own storage, which Safari does not
   clear. *Update now* shows an activity indicator and a waiting message immediately, and disables update buttons
