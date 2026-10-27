@@ -20,6 +20,11 @@ export interface SyncStatus {
   /** El último intento de hablar con el servidor tuvo respuesta (aunque fuera un error). */
   online: boolean;
   syncing: boolean;
+  /**
+   * Páginas que faltan bajar en este ciclo (lo que cambió en otro dispositivo), solo cuando la bajada pasa de
+   * `DOWNLOADING_AFTER_MS`: así una página que llega en un instante no hace parpadear la pastilla (D791). 0 si no.
+   */
+  downloading?: number;
   pendingOps: number;
   /** Páginas con contenido sin subir, incluidas las que todavía no se pudieron guardar en el dispositivo. */
   pendingPages: number;
@@ -95,6 +100,8 @@ const COMPACT_CLAIMS_PER_ROUND = 3;
 const COMPACT_RETRY_ROWS = 50;
 const COMPACT_RETRY_MS = 30 * 60_000;
 const PULL_CONCURRENCY = 4;
+/** La pastilla dice «Downloading…» si la bajada del contenido tarda más que esto (D791). */
+const DOWNLOADING_AFTER_MS = 800;
 /**
  * Lo que contestan `push_page_update` y `pull_page_content` cuando la página no existe o la sesión no puede editarla
  * (o verla): así queda guardado el rechazo del contenido (`DocState.rejected`).
@@ -725,25 +732,49 @@ export class SyncEngine {
             )
             .filter((r) => this.options.pullOnly?.(r.id, cursors.get(r.id)?.cursor ?? 0) ?? true)
             .map((r) => r.id);
-      await runPool(stale, PULL_CONCURRENCY, (id) =>
-        this.docs.pullPage(id, this.remote, { contentEpoch: epochs.get(id) }).then((n) => {
-          if (n > 0) this.lastActivityAt = Date.now();
-        }, (err) => {
-          // Lo mismo al bajar: esta página se reintenta en la próxima vuelta y las demás siguen.
-          if (isTimeout(err)) {
-            contentError = REQUEST_TIMEOUT;
-            return;
-          }
-          if (!isPermanent(err)) throw err;
-          // Una página que el árbol muestra y la base no deja bajar: se dice en palabras, no con el código.
-          contentError = errorMessage(err) === PAGE_NOT_FOUND ? t('commentError.pageNotFound') : errorMessage(err);
-        }),
-      );
+      // «Downloading N pages…» mientras baja lo de otro dispositivo, si tarda (D791): cuenta las que faltan. Sale siempre
+      // en 0, también si la bajada se corta por un error. Las bajadas que siguen después de ese error (`runPool` no las
+      // frena) ya no tocan la cuenta: `live` en falso, así no pisan la del ciclo siguiente.
+      let left = stale.length;
+      let live = true;
+      const showDownloading = setTimeout(() => {
+        if (live && !this.stopped && left > 0) this.patch({ downloading: left });
+      }, DOWNLOADING_AFTER_MS);
+      const pulled = () => {
+        left--;
+        if (live && this.status.downloading) this.patch({ downloading: left });
+      };
+      try {
+        await runPool(stale, PULL_CONCURRENCY, (id) =>
+          this.docs
+            .pullPage(id, this.remote, { contentEpoch: epochs.get(id) })
+            .then(
+              (n) => {
+                if (n > 0) this.lastActivityAt = Date.now();
+              },
+              (err) => {
+                // Lo mismo al bajar: esta página se reintenta en la próxima vuelta y las demás siguen.
+                if (isTimeout(err)) {
+                  contentError = REQUEST_TIMEOUT;
+                  return;
+                }
+                if (!isPermanent(err)) throw err;
+                // Una página que el árbol muestra y la base no deja bajar: se dice en palabras, no con el código.
+                contentError = errorMessage(err) === PAGE_NOT_FOUND ? t('commentError.pageNotFound') : errorMessage(err);
+              },
+            )
+            .finally(pulled),
+        );
+      } finally {
+        live = false;
+        clearTimeout(showDownloading);
+        if (this.status.downloading) this.patch({ downloading: 0 });
+      }
 
       halt();
       // Qué fotos y videos usa cada página (papelera de archivos): después de subir y bajar el contenido,
       // así se compara con documentos al día. Un error acá no corta la sincronización del texto.
-      await this.reconcileMedia().catch(() => undefined);
+      await this.reconcileMedia(new Set(stale)).catch(() => undefined);
 
       halt();
       // Las bases limpias de las páginas con lectores (sus errores no cortan el ciclo: las arma el próximo).
@@ -915,7 +946,7 @@ export class SyncEngine {
    * entero y lo de este dispositivo tiene que estar subido (si no, el servidor todavía muestra el bloque).
    * Si falta algo, solo se suman usos, y la página se vuelve a mirar en el próximo ciclo.
    */
-  private async reconcileMedia(): Promise<void> {
+  private async reconcileMedia(pulled: ReadonlySet<string> = new Set()): Promise<void> {
     const media = this.options.media;
     if (!media?.tracksUsage) return;
     // Un link con Can edit no registra usos de archivos: los vincula y desvincula el dispositivo de un editor al
@@ -944,64 +975,104 @@ export class SyncEngine {
     // sus fotos y videos llegaron con el documento y casi siempre el servidor ya los tiene registrados. Se
     // pregunta una vez cuáles (una lectura por cada 100 páginas) para no mandarlos de a uno ni contarlos como
     // cambios sin subir (B.14). Sin respuesta, se sigue como siempre: se mandan todos.
-    // También las que tienen filas sin confirmar (las anotó el editor al abrirlas, D601): una página que ya se había
-    // comparado y a la que le llegó una foto de otro dispositivo, por ejemplo.
+    // También las que tienen filas sin confirmar (las anotó el editor al abrirlas, D601), y las que muestran un archivo
+    // del que este dispositivo no tiene fila ni lo agregó acá (D790): una página que ya se había comparado y a la que le
+    // llegaron fotos de otro dispositivo (traer los planos de una escena desde otra computadora mostraba acá «Uploading
+    // 688 changes…» y mandaba 688 `link_page_file` que no cambiaban nada).
     const neverAsked = new Set(pages.filter((id) => media.usageMark(id) === undefined && !this.usesAsked.has(id)));
     // Con muchas páginas por mirar (todas las marcas cambiaron a la vez), un solo recorrido de las filas (D614).
     const withUnconfirmed = await media.pagesWithUnconfirmed(pages.filter((id) => !neverAsked.has(id)));
-    const unseen = pages.filter((id) => neverAsked.has(id) || withUnconfirmed.has(id));
-    const onServer = unseen.length > 0 ? await media.serverUses(unseen).catch(() => null) : null;
-    if (onServer) for (const id of unseen) this.usesAsked.add(id);
+    const asked = pages.filter((id) => neverAsked.has(id) || withUnconfirmed.has(id));
+    const onServer = asked.length > 0 ? await media.serverUses(asked).catch(() => null) : null;
+    if (onServer) for (const id of asked) this.usesAsked.add(id);
+    // Las que se bajaron en este ciclo y muestran un archivo sin fila (D790). Para saberlo hay que abrir su documento, y
+    // va después de la lectura de arriba: entre bajar y leer, otro dispositivo puede quitar un uso, y una lectura que ya
+    // no lo tiene haría reactivarlo (A1 de trash.test.ts). Una página que no se bajó ahora solo suma archivos propios,
+    // que ya tienen fila (o vienen de una comparación anterior que la escribió): no se abre dos veces.
+    if (this.stopped) return;
+    const rest = pages.filter((id) => pulled.has(id) && !neverAsked.has(id) && !withUnconfirmed.has(id));
+    // Si no se puede leer, como antes: lo nuevo se manda.
+    const withNew = rest.length > 0 ? await this.pagesWithNewUses(media, rest).catch(() => new Set<string>()) : new Set<string>();
+    if (this.stopped) return;
+    const fresh = withNew.size > 0 ? await media.serverUses([...withNew]).catch(() => null) : null;
+    const usesOf = (pageId: string) => (withNew.has(pageId) ? fresh : onServer)?.get(pageId);
     for (const pageId of pages) {
       if (this.stopped) break;
       const snap = await this.docs.snapshot(pageId);
       try {
-        // Completo ya se miró arriba (el cursor solo avanza); acá, que todo se haya podido leer.
-        const current = !snap.state.unreadable && snap.supported;
-        const uploaded = !hasUnsyncedContent(snap.state, snap.dirty) && !snap.state.rejected;
-        const ids = mediaIdsInDoc(snap.doc);
-        let unlink = current && uploaded;
-        // La primera vez que esta página quitaría un archivo, se comprueba que todo su historial en el
-        // servidor se pueda leer: una versión anterior de la app pudo descartar un update ilegible sin
-        // anotarlo (`unreadable` es de esta versión). Sin red o con algo ilegible, no se quita nada.
-        if (unlink && !media.isVerified(pageId) && (await media.wouldUnlink(pageId, ids))) {
-          const wait = this.verifyWait.get(pageId);
-          if (wait && Date.now() < wait.until) {
-            unlink = false;
-          } else {
-            try {
-              unlink = await this.verifyHistory(pageId, snap.state.cursor);
-              this.verifyWait.delete(pageId);
-            } catch {
-              // Sin red o con un error: no se quita, y no se vuelve a bajar el historial en cada ciclo.
-              const failures = (wait?.failures ?? 0) + 1;
-              this.verifyWait.set(pageId, { failures, until: Date.now() + Math.min(60_000 * 2 ** (failures - 1), 3_600_000) });
-              unlink = false;
-            }
-          }
-        }
-        // Con algo propio en camino, la lectura puede ser vieja para las fotos que trae lo propio (una copia que volvió a
-        // poner una foto que otro dispositivo quitó entre la lectura y la comparación): esas se mandan. Las demás están
-        // en el servidor con su `seq` y la lectura vale (D611). Si no se sabe qué es propio, se manda todo.
-        const uses = onServer?.get(pageId);
-        const server = uploaded ? uses : serverUsesBesidesOwn(uses, snap.doc, snap.state.syncedSV);
-        // Un archivo agregado acá que el documento todavía no muestra, dentro de la espera: la página no queda mirada,
-        // así se lo quita cuando la espera pase aunque el documento no vuelva a cambiar (D615).
-        let graceWait = false;
-        await media.reconcilePage(pageId, ids, {
-          unlink,
-          seenSeq: snap.state.cursor,
-          onServer: server,
-          onGraceWait: () => (graceWait = true),
-        });
-        // Solo queda "mirada" si se pudo quitar lo que hiciera falta; si no (a medio subir, algo ilegible o
-        // desconocido, sin comprobar, o un archivo propio en espera), se vuelve a mirar en el próximo ciclo.
-        if (unlink && !graceWait) marks[pageId] = mark(snap.state);
+        await this.reconcileOne(media, pageId, snap, mediaIdsInDoc(snap.doc), usesOf, marks, mark);
       } finally {
         snap.doc.destroy();
       }
     }
     await media.setUsageMarks(marks);
+  }
+
+  /** Cuáles de estas páginas muestran un archivo que este dispositivo no conocía (D790; ver `MediaQueue.pagesWithNewUses`). */
+  private async pagesWithNewUses(media: MediaQueue, pageIds: string[]): Promise<Set<string>> {
+    const docIds = new Map<string, Set<string>>();
+    for (const pageId of pageIds) {
+      if (this.stopped) break;
+      const snap = await this.docs.snapshot(pageId);
+      try {
+        docIds.set(pageId, mediaIdsInDoc(snap.doc));
+      } finally {
+        snap.doc.destroy();
+      }
+    }
+    return media.pagesWithNewUses(docIds);
+  }
+
+  /** Compara una página con sus fotos y videos (lo de adentro del recorrido de `reconcileMedia`). */
+  private async reconcileOne(
+    media: MediaQueue,
+    pageId: string,
+    snap: Awaited<ReturnType<PageDocs['snapshot']>>,
+    ids: Set<string>,
+    usesOf: (pageId: string) => Map<string, { foreign: boolean }> | undefined,
+    marks: Record<string, string>,
+    mark: (state: DocState) => string,
+  ): Promise<void> {
+    // Completo ya se miró arriba (el cursor solo avanza); acá, que todo se haya podido leer.
+    const current = !snap.state.unreadable && snap.supported;
+    const uploaded = !hasUnsyncedContent(snap.state, snap.dirty) && !snap.state.rejected;
+    let unlink = current && uploaded;
+    // La primera vez que esta página quitaría un archivo, se comprueba que todo su historial en el
+    // servidor se pueda leer: una versión anterior de la app pudo descartar un update ilegible sin
+    // anotarlo (`unreadable` es de esta versión). Sin red o con algo ilegible, no se quita nada.
+    if (unlink && !media.isVerified(pageId) && (await media.wouldUnlink(pageId, ids))) {
+      const wait = this.verifyWait.get(pageId);
+      if (wait && Date.now() < wait.until) {
+        unlink = false;
+      } else {
+        try {
+          unlink = await this.verifyHistory(pageId, snap.state.cursor);
+          this.verifyWait.delete(pageId);
+        } catch {
+          // Sin red o con un error: no se quita, y no se vuelve a bajar el historial en cada ciclo.
+          const failures = (wait?.failures ?? 0) + 1;
+          this.verifyWait.set(pageId, { failures, until: Date.now() + Math.min(60_000 * 2 ** (failures - 1), 3_600_000) });
+          unlink = false;
+        }
+      }
+    }
+    // Con algo propio en camino, la lectura puede ser vieja para las fotos que trae lo propio (una copia que volvió a
+    // poner una foto que otro dispositivo quitó entre la lectura y la comparación): esas se mandan. Las demás están
+    // en el servidor con su `seq` y la lectura vale (D611). Si no se sabe qué es propio, se manda todo.
+    const uses = usesOf(pageId);
+    const server = uploaded ? uses : serverUsesBesidesOwn(uses, snap.doc, snap.state.syncedSV);
+    // Un archivo agregado acá que el documento todavía no muestra, dentro de la espera: la página no queda mirada,
+    // así se lo quita cuando la espera pase aunque el documento no vuelva a cambiar (D615).
+    let graceWait = false;
+    await media.reconcilePage(pageId, ids, {
+      unlink,
+      seenSeq: snap.state.cursor,
+      onServer: server,
+      onGraceWait: () => (graceWait = true),
+    });
+    // Solo queda "mirada" si se pudo quitar lo que hiciera falta; si no (a medio subir, algo ilegible o
+    // desconocido, sin comprobar, o un archivo propio en espera), se vuelve a mirar en el próximo ciclo.
+    if (unlink && !graceWait) marks[pageId] = mark(snap.state);
   }
 
   /**

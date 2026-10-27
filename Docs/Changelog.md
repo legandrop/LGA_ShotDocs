@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.282 :
+
+Después de traer los planos de VLLF a sus escenas en la PC, la Mac mostró «Uploading 688 changes…» sin que faltara nada.
+La comparación de fotos le preguntaba al servidor qué usos tenía solo por las páginas que nunca había comparado o que
+estaban abiertas, así que las fotos que llegaban a una escena ya conocida quedaban «por mandar»: salían 688
+`link_page_file` de a uno y la base ya tenía las 689 filas. Ahora también pregunta por las páginas que traen archivos
+desconocidos y manda solo lo que falta (D790). Además, la pastilla no tenía un estado de bajada: ahora, si
+bajar lo de otro dispositivo tarda, dice «Downloading N pages…» con una flecha para abajo (D791). Ayuda y docs al día.
+
+[Sincronización - lo que llega de otro dispositivo no cuenta como por subir, y «Downloading» en la pastilla]
+
 v0.281 :
 
 El turquesa gritaba en links y botones, la barra lateral mostraba las fechas de tres maneras (Scouting perdía la

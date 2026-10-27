@@ -59,6 +59,9 @@ export const SyncedIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM7
 export const UploadingIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM10 13V7.25M7.5 9.5L10 7l2.5 2.5', {
   strokeWidth: 1.7,
 });
+export const DownloadingIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM10 7v5.75M7.5 10.5L10 13l2.5-2.5', {
+  strokeWidth: 1.7,
+});
 export const OfflineIcon = icon('M6.5 15h7a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 6 7.5 3.75 3.75 0 0 0 6.5 15zM3.5 3.5l13 13', {
   strokeWidth: 1.6,
 });

@@ -2266,3 +2266,16 @@ como en el *Overview*: fecha corta `DD/MM` en violeta, jornada (`D05`) al lado, 
 como locación (gris si no) y el resto del título apagado; el tooltip da el título entero con el año. La fila elegida no
 cambia esos colores. Lo que no tiene una fecha clara (ninguna, dos, `05.11` que se lee de dos formas) se ve como antes. Como los títulos
 cortos, sigue el ajuste *Short titles* de la rama: apagado, los títulos se ven enteros.
+
+### D790 · Lo que llega de otro dispositivo no cuenta como «por subir» (2026-10-27)
+**Pedido de Lega:** después de traer los planos a sus escenas en la PC, la Mac mostró «Subiendo 688 cambios…» sin que
+faltara nada. Eran los usos de las fotos que llegaron con las páginas: la base ya los tenía (689 filas de `page_files`
+creadas desde la PC) y la Mac los volvía a mandar, uno por uno, sin escribir nada. La comparación de fotos ahora le
+pregunta al servidor también por las páginas ya comparadas que traen archivos que el dispositivo no conocía, y solo
+manda lo que falta. Detalle en `Doc_Sincronizacion.md`, "Papelera de archivos".
+
+### D791 · La pastilla dice «Downloading» mientras baja lo de otro dispositivo (2026-10-27)
+**Pedido de Lega:** si está bajando, que diga bajando y no subiendo. La pastilla no tenía un estado de bajada: solo
+contaba lo que el dispositivo iba a mandar. Ahora, si la bajada del contenido pasa de 0,8 s, dice «Downloading N
+pages…» («Bajando N páginas…») con una flecha para abajo y cuenta las que faltan. Lo propio por subir sigue ganando.
+Detalle en `Doc_Sincronizacion.md`, "Estado visible".

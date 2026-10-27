@@ -764,6 +764,18 @@ selector de proyectos: `Doc_Proyectos_Borrar.md`, "Cómo quedó: una sola papele
   están en el servidor con su `seq`: un `unlink` de otro dispositivo que no las vio lo rechaza `p_seen_seq`. Sin
   `syncedSV`, o si el cálculo falla, esa página se manda entera, sin cortar la comparación de las siguientes. Antes, una
   letra escrita durante la primera bajada en una página de 52 fotos hacía mandar las 52.
+- **Fotos que llegan de otro dispositivo a una página ya comparada** (D790). La comparación también le pregunta al
+  servidor (`serverUses`) por las páginas **bajadas en ese ciclo** que muestran un archivo del que este dispositivo no
+  tiene fila ni lo agregó acá (`MediaQueue.pagesWithNewUses`): casi siempre llegó de otro dispositivo, que ya registró
+  el uso. Lo que el servidor tiene queda confirmado sin mandar nada; lo que no, se manda como siempre, y si la lectura
+  falla se manda todo. Una página que no se bajó en el ciclo solo suma archivos propios, que ya tienen fila: no se mira.
+  Orden: primero la lectura de siempre (nunca comparadas y con filas sin confirmar), después se abre cada página bajada
+  para ver qué archivos muestra (y se cierra), después una segunda lectura solo para las que traen algo nuevo (casi
+  nunca hay) y recién ahí la comparación. Abrir antes de la primera lectura la atrasaba, y entre bajar y leer otro
+  dispositivo puede quitar un uso que una lectura más nueva ya no tiene: se lo reactivaría (A1 de `trash.test.ts` lo
+  encontró en una primera versión). Para las páginas nuevas de D790 esa ventana existe, pero antes mandaban siempre.
+  Antes, traer los planos de VLLF a sus escenas desde la PC (689 usos registrados ahí) mostraba en la Mac «Uploading 688
+  changes…» y mandaba 688 `link_page_file` que no cambiaban nada (`remoteUses.test.ts`).
 - **Abrir una página antes de compararla no cuenta sus fotos** (D601, D602). El editor, al abrir una página, anota
   las fotos del documento (`linkOnOpen` en `src/media/usage.ts`). Si el documento es lo que vino del servidor (la
   página existe ahí, no tiene nada propio sin guardar, sin subir ni rechazado y guardar no está fallando), cada foto
@@ -1896,7 +1908,11 @@ una tendría su propia cola y su propio documento en memoria.
 La barra lateral dice, en este orden de gravedad: si no se pudo guardar en el dispositivo, si no hay
 conexión (y cuántos cambios quedaron guardados en el dispositivo), si el servidor rechazó algo (con
 "Retry"), si hubo un problema al sincronizar aunque no haya nada pendiente, cuántos cambios faltan subir y,
-si no hay nada de eso, que todo está sincronizado. Las fotos y los videos cuentan como cambios pendientes
+si no hay nada de eso, cuántas páginas está bajando (lo que cambió en otro dispositivo, con la flecha para abajo:
+"Downloading 12 pages…", D791) o que todo está sincronizado. "Downloading" sale solo si la bajada del ciclo pasa de
+0,8 s (`DOWNLOADING_AFTER_MS`, así una página que llega en un instante no hace parpadear la pastilla), cuenta las
+páginas que faltan y vuelve a 0 al terminar, también si la bajada se corta. Lo propio por subir gana: es lo que todavía
+no está a salvo. Las fotos y los videos cuentan como cambios pendientes
 (con el porcentaje de la subida en curso); los detenidos por un error cuentan como rechazados, con su
 nombre y el error en el detalle. Lo mismo los comentarios: pendientes mientras no suben, rechazados (con la
 página, el comienzo del texto y el motivo) si el servidor no los acepta.

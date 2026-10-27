@@ -676,8 +676,8 @@ export const help = {
   // --- Sin red ---
   'help.syncStatus.title': { en: "What the sync status means", es: "Qué dice el estado de sincronización" },
   'help.syncStatus.text': {
-    en: "Under the project name (on a phone, the icon at the top): All synced, changes not uploaded yet, offline, or a new version of the app to load.",
-    es: "Debajo del nombre del proyecto (en el teléfono, el ícono de arriba): todo sincronizado, cambios sin subir, sin conexión, o una versión nueva de la app para cargar.",
+    en: "Under the project name (on a phone, the icon at the top): All synced, changes not uploaded yet, pages being downloaded from another device, offline, or a new version of the app to load.",
+    es: "Debajo del nombre del proyecto (en el teléfono, el ícono de arriba): todo sincronizado, cambios sin subir, páginas que se están bajando de otro dispositivo, sin conexión, o una versión nueva de la app para cargar.",
   },
   'help.availableOffline.title': { en: "Use pages without a connection", es: "Usar páginas sin conexión" },
   'help.availableOffline.text': {

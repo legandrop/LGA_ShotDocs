@@ -1240,6 +1240,36 @@ export class MediaQueue {
     return out;
   }
 
+  /**
+   * Cuáles de estas páginas muestran un archivo del que este dispositivo no tiene fila ni lo agregó acá (`docIds`, de
+   * `mediaIdsInDoc`): casi siempre llegó de otro dispositivo, que ya registró el uso. `reconcilePage` lo pondría por
+   * mandar; la comparación del motor le pregunta antes al servidor por estas páginas (D790). Solo lee.
+   */
+  async pagesWithNewUses(docIds: ReadonlyMap<string, ReadonlySet<string>>): Promise<Set<string>> {
+    const out = new Set<string>();
+    if (!this.db || docIds.size === 0) return out;
+    const own = new Set((await this.db.getAll('files')).map((r) => `${r.pageId}:${r.id}`));
+    // Como `pagesWithUnconfirmed`: con muchas páginas, un solo recorrido de las filas (D614).
+    const known = new Set<string>();
+    if (docIds.size > UNCONFIRMED_SCAN_FROM) {
+      for (const link of await this.db.getAll('links')) if (docIds.has(link.pageId)) known.add(link.key);
+    } else {
+      for (const pageId of docIds.keys()) {
+        for (const link of await this.db.getAll('links', IDBKeyRange.bound(`${pageId}:`, `${pageId}:\uffff`))) known.add(link.key);
+      }
+    }
+    for (const [pageId, ids] of docIds) {
+      for (const id of ids) {
+        const key = `${pageId}:${id}`;
+        if (!known.has(key) && !own.has(key)) {
+          out.add(pageId);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
   /** El archivo es de otro proyecto que la página (si se saben los dos). */
   private isForeign(pageId: string, fileProject: string | null | undefined): boolean {
     const pageProject = this.options.projectOf?.(pageId);

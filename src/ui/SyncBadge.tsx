@@ -3,7 +3,7 @@ import { localize, t, useT, type Translate } from '../i18n';
 import type { MediaFailure } from '../media/queue';
 import type { SyncStatus } from '../sync/engine';
 import { useServices, useSyncStatus, useTree } from '../services';
-import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
+import { DownloadingIcon, ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
 import { rejectionText } from './teamText';
 import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
@@ -27,6 +27,9 @@ import {
 export type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
 const TONE_ICONS = { ok: SyncedIcon, busy: UploadingIcon, offline: OfflineIcon, warn: WarningIcon, error: ErrorIcon };
+
+/** El ícono de la pastilla: con la flecha para abajo mientras baja lo de otro dispositivo (D791). */
+const iconFor = (tone: Tone, down: boolean) => (down && tone === 'busy' ? DownloadingIcon : TONE_ICONS[tone]);
 
 /** Qué comentario no se pudo subir, en el detalle. */
 function commentAction(tr: Translate, kind: 'add' | 'edit' | 'delete' | 'resolve' | 'import' | 'mentions', page: string): string {
@@ -57,7 +60,7 @@ function useVisitorTreeBehind(): boolean {
   return useSyncExternalStore(link?.subscribeLinkEdits ?? noSubscribe, link?.treeBehind ?? never);
 }
 
-function useSyncTone(): { tone: Tone; text: string; rejected: number } {
+function useSyncTone(): { tone: Tone; text: string; rejected: number; down: boolean } {
   const status = useSyncStatus();
   const pending = usePendingCount();
   const visitor = useVisitorEdits();
@@ -71,7 +74,7 @@ export function syncTone(
   pending: number,
   visitorWaiting: boolean,
   tr: Translate,
-): { tone: Tone; text: string; rejected: number } {
+): { tone: Tone; text: string; rejected: number; down: boolean } {
   const changes = tr('sync.changes', { count: pending });
   const rejected = status.failedOps + status.rejectedPages + status.failedMedia + status.failedComments;
   // La cola de fotos y videos tiene su propio ciclo: su error cuenta mientras le quede algo por subir.
@@ -79,6 +82,7 @@ export function syncTone(
   const commentError = status.pendingComments > 0 ? status.commentError : null;
   let tone: Tone = 'ok';
   let text = tr('sync.allSynced');
+  let down = false;
   if (status.localError) {
     tone = 'error';
     text = tr('sync.localError');
@@ -102,6 +106,11 @@ export function syncTone(
         : sending
           ? tr('sync.uploading', { changes })
           : tr('sync.notUploaded', { changes });
+  } else if (status.downloading) {
+    // Lo que cambió en otro dispositivo, bajando (D791). Lo propio por subir va antes: es lo que no está a salvo.
+    tone = 'busy';
+    text = tr('sync.downloading', { count: status.downloading });
+    down = true;
   } else if (status.lastSyncAt === null) {
     tone = 'busy';
     text = tr('sync.syncing');
@@ -111,16 +120,16 @@ export function syncTone(
   }
   // La base vieja no frena la subida: el texto sigue diciendo el estado real y el aviso va en el detalle.
   if ((rejected > 0 || status.warning || status.mediaWarning || status.schemaBehind) && tone !== 'error') tone = 'warn';
-  return { tone, text, rejected };
+  return { tone, text, rejected, down };
 }
 
 /** Versión chica para la barra de arriba en el teléfono: solo el ícono, con el texto como etiqueta. */
 export function SyncIcon({ onClick }: { onClick: () => void }) {
-  const { tone, text } = useSyncTone();
+  const { tone, text, down } = useSyncTone();
   const status = useSyncStatus();
   const pending = usePendingCount();
   const tr = useT();
-  const Icon = TONE_ICONS[tone];
+  const Icon = iconFor(tone, down);
   // Sin conexión se dice con palabras, también en el teléfono (D-25): "Offline · 700" al lado del ícono, según la
   // conexión y no según el tono (con algo rechazado el tono pasa a aviso, y justo ahí importa saber que no hay red).
   // El `data-tip` no repite lo que ya se lee.
@@ -153,14 +162,14 @@ export function SyncBadge() {
   const pending = usePendingCount();
   const [details, setDetails] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const { tone, text, rejected } = useSyncTone();
+  const { tone, text, rejected, down } = useSyncTone();
   // Lo rechazado que *Retry* puede volver a mandar: todo menos las ediciones apartadas por un conflicto (no están en
   // la cola; la persona elige en el panel de comentarios).
   const retryable = rejected - (status.failedComments > 0 ? comments.failures().filter((f) => f.conflictOf).length : 0);
   const visitor = useVisitorEdits();
   const treeBehind = useVisitorTreeBehind();
   const tr = useT();
-  const Icon = TONE_ICONS[tone];
+  const Icon = iconFor(tone, down);
   const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
   const commentError = status.pendingComments > 0 ? status.commentError : null;
   const hasDetails =

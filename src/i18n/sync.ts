@@ -25,6 +25,10 @@ export const sync = {
   'sync.uploading': { en: "Uploading {changes}…", es: "Subiendo {changes}…" },
   'sync.notUploaded': { en: "{changes} not uploaded", es: "{changes} sin subir" },
   'sync.syncing': { en: "Syncing…", es: "Sincronizando…" },
+  'sync.downloading': {
+    en: { one: "Downloading {count} page…", other: "Downloading {count} pages…" },
+    es: { one: "Bajando {count} página…", other: "Bajando {count} páginas…" },
+  },
   'sync.rejected': {
     en: { one: "{count} change rejected by the server", other: "{count} changes rejected by the server" },
     es: { one: "{count} cambio rechazado por el servidor", other: "{count} cambios rechazados por el servidor" },
