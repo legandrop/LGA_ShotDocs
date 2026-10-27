@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { locale, useT } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { mapPath, navigate, pagePath, useRoute, useSearchParam, type MapTab } from '../router';
@@ -7,7 +7,8 @@ import { CollapseIcon, ExpandIcon } from '../ui/icons';
 import { setNavOpen, useNavOpen } from '../ui/navStore';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
-import { revealRow } from '../ui/treeNav';
+import { AUTO_COLLAPSE, isPlainKey, revealRow } from '../ui/treeNav';
+import { goToRow, markOpenedFromOverview, openedFromOverview, OVERVIEW_ROW, overviewTarget, sidebarStep } from '../ui/sidebarRows';
 import { dayList, dayShortLabel } from './dayLive';
 import { setIndex } from './liveView';
 import { mergeRows } from './merge';
@@ -147,6 +148,29 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   // La fila de la escena abierta se lleva a la vista al abrirla y al abrir el cajón del teléfono, debajo de lo que queda
   // pegado arriba (`revealRow`, D771). Si su parte o su episodio estaban plegados, la fila aparece un dibujo después (el
   // efecto de arriba los despliega): queda pendiente hasta que exista.
+  // ↑/↓ con el foco en una parte, un episodio o una fila recorren la barra entera, *Pages* incluido, y abren lo anterior o
+  // lo siguiente como un clic (pedido de Lega, D806; `sidebarRows.ts`). Con la tecla apretada, al soltar.
+  const onRowsKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || !isPlainKey(e.nativeEvent)) return;
+    const from = e.target instanceof Element ? e.target.closest<HTMLElement>(OVERVIEW_ROW) : null;
+    if (!from) return;
+    e.preventDefault();
+    const next = sidebarStep(from, e.key === 'ArrowDown' ? 1 : -1);
+    if (next) goToRow(next, e.repeat);
+  };
+  // Lo que se abre desde acá lo dice (`markOpenedFromOverview`): *Pages* se pliega y no se mueve.
+  const onRowsClick = (e: MouseEvent) => {
+    const link = e.target instanceof Element ? e.target.closest('a') : null;
+    if (link && plainClick(e)) markOpenedFromOverview(overviewTarget(link.getAttribute('href') ?? ''));
+  };
+  // Y una página abierta por otro camino (el árbol, un link, la búsqueda, atrás) pliega lo de acá (colapso automático).
+  useEffect(() => {
+    if (!AUTO_COLLAPSE || !activePage || openedFromOverview(activePage)) return;
+    const f = readFold(projectId);
+    if (f.part !== null || f.eps.length) update({ ...f, part: null, eps: [] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage, projectId]);
+
   const navOpen = useNavOpen();
   const activeRow = useRef<HTMLAnchorElement | null>(null);
   const toReveal = useRef(false);
@@ -430,7 +454,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   if (pending > 0) parts.push(partRow('pending', tr('sidebar.pending'), <span className="map-nav-count">{pending}</span>, null));
 
   return (
-    <div className="scene-nav ov-nav" style={{ '--code-w': `${codeWidth}ch` } as CSSProperties}>
+    <div className="scene-nav ov-nav" style={{ '--code-w': `${codeWidth}ch` } as CSSProperties} onKeyDown={onRowsKey} onClickCapture={onRowsClick}>
       <div
         className="ov-head nav-title sticky-head"
         onClick={(e) => {

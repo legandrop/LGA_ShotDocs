@@ -19,6 +19,9 @@ import { sceneStageRows } from './sceneStageRows';
 import type { SceneLive } from './liveView';
 import { OVERVIEW_PAGE as SCENES_PAGE } from './OverviewNav';
 
+// Lo de acá es el Overview sin el colapso automático (lo desplegado se recuerda); con el colapso: sidebarRows.test.ts.
+vi.mock('../ui/treeNav', async (original) => ({ ...(await original<typeof import('../ui/treeNav')>()), AUTO_COLLAPSE: false }));
+
 // *Overview* de la barra lateral con *Scenes* adentro (Docs/Doc_Relaciones.md, secciones 21 y 22) y la lista de las
 // páginas de una escena, en la app de verdad: aparece sola en un proyecto con escenas, por episodio y plegable (recordado por proyecto), cada escena
 // abre sus páginas por etapa con el lugar exacto, Overview › Scenes despliega la misma lista con «N pages», un invitado ve solo

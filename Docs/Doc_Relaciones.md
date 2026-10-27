@@ -1365,6 +1365,10 @@ como en el árbol. Lo plegado (el bloque, la parte y el episodio) se recuerda po
 (`localStorage` `shotdocs-overview-nav`; reemplaza a `shotdocs-scenes-nav`, que se ignora). De fábrica, el bloque
 abierto con *Scenes* desplegada. Al bajar, el título y la parte desplegada quedan pegados arriba (D771). Cada lista
 dibuja 60 filas y «Show 60 more», y la fila abierta siempre se ve.
+**Un solo árbol con *Pages* (D806):** ↑/↓ recorren las partes, los episodios y las filas y siguen en *Pages* sin cortes;
+una parte o una fila se abre como un clic y un episodio solo recibe el foco. Con el colapso automático (D805), lo
+abierto desde acá pliega *Pages*, y una página abierta por otro camino pliega la parte desplegada: lo recordado vale
+hasta la próxima página.
 
 ## 23. Una escena: dónde está cada cosa, y sus planos adentro (v0.279, D783–D786)
 

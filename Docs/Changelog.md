@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.296 :
+
+En las listas del *Overview* las flechas no hacían nada, y desde la primera página de *Pages* ↑ no seguía: eran dos
+listas separadas, con el colapso solo en *Pages*. Ahora la barra es un solo recorrido (`sidebarRows.ts`, D806): ↑/↓
+pasan por las partes, episodios y filas del *Overview* y por el árbol sin cortes; partes y filas abren como un clic. Lo abierto
+desde el *Overview* pliega *Pages* y lo abierto por otro camino pliega el *Overview*. Con la tecla apretada, la marca
+de elegida sigue al foco enseguida y no recién al soltar.
+
+[Barra lateral - Overview y Pages como un solo árbol con las flechas]
+
 v0.295 :
 
 Al abrir una página, el árbol solo abría sus madres y dejaba abierto todo lo demás, y la fila quedaba donde cayera. Ahora,

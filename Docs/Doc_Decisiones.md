@@ -2408,3 +2408,13 @@ adelante, un switch en Settings; por ahora una constante en sí.
 **Quedó así:** `AUTO_COLLAPSE = true` en `treeNav.ts`. Vale para todo lo que abre una página: clic, flechas, link,
 búsqueda, atrás y adelante. Lo plegado o desplegado a mano se pisa al abrir otra página. Las ramas de otros proyectos no
 se tocan. El centro es el de la zona que se ve, debajo de los títulos pegados.
+
+### D806 · Overview y Pages, un solo árbol (2026-10-27)
+**Pedido de Lega:** las flechas tienen que recorrer también las listas del *Overview* y pasar de *Pages* al *Overview* y al
+revés; lo que se despliega en uno pliega el otro, «todo debería funcionar como la misma cosa»; y con la tecla apretada,
+la fila elegida tiene que cambiar enseguida.
+**Quedó así:** ↑/↓ recorren, en el orden en que se ven, los nombres de las partes, los episodios y las filas del *Overview*
+y las filas de *Pages*. Una parte se abre (y se despliega, una sola a la vez), un episodio solo recibe el foco (Enter lo
+despliega), una fila se abre como un clic. Con el colapso automático, lo abierto desde el *Overview* (una vista del
+mapa o una página de sus listas) pliega todo *Pages* sin moverlo, y una página abierta por otro camino pliega la parte
+abierta del *Overview*. La marca de elegida sigue al foco con la tecla apretada; la página se abre al frenar.
