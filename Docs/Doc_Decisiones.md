@@ -2317,3 +2317,13 @@ por una: una captura del guion no tiene color (saturación media menor a 1 sobre
 casi blancos; acertó en las 36 imágenes que Lega ya había acomodado a mano. Con dos fotos seguidas, *Arrange in rows*
 las estira a media página: se dejan en un tercio, como las acomodó Lega. Hechos a mano por Lega dos scoutings de
 VLLF; aplicado a otros dos para que Lega lo apruebe antes de seguir con el resto.
+
+### D796 · Un link de Drive escrito pasa a tarjeta, la tarjeta elige su ancho y los links van del color del texto (2026-10-27)
+**Pedido de Lega:** en Coda muchas veces el link a un video de Drive estaba dos veces, escrito y como embebido; en la
+app la tarjeta ya muestra el reproductor y el link. Para dejar uno solo, la barra que aparece sobre un link de Drive ya
+escrito (video, foto, carpeta o documento) suma **Show as card**, que lo convierte en tarjeta como **Card** al pegar. La
+tarjeta elige su ancho como las fotos (1/1, 1/2, 1/3, 1/4, al pasar el mouse): `driveCardWidth`, otra propiedad del
+párrafo, que una versión vieja ignora (muestra la tarjeta entera). Además, los links del texto tenían otro color (el de
+la interfaz, más claro) que el texto que los rodea: ahora van del mismo color que ese texto, según el nivel de
+contraste, y lo único que los distingue es la raya turquesa. Lega va a probarlo a mano antes de limpiar los links
+repetidos de los scoutings.

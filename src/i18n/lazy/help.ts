@@ -369,6 +369,11 @@ export const help = {
     en: "Paste a Google Drive link and choose how it stays: as a link, as text, or as a card with a player. {pick} choose, Esc keeps the link.",
     es: "Pegá un link de Google Drive y elegí cómo queda: como link, como texto o como tarjeta con reproductor. {pick} eligen, Esc deja el link.",
   },
+  'help.driveCard.title': { en: "A Drive link as a card", es: "Un link de Drive como tarjeta" },
+  'help.driveCard.text': {
+    en: "A Google Drive link already in the page (a video, a photo, a folder or a document) becomes a card with a player from Show as card, in the bar that appears on the link. Over the card, 1/1, 1/2, 1/3 and 1/4 choose how much of the line it takes, like photos. Show as link turns it back into a link.",
+    es: "Un link de Google Drive que ya está en la página (un video, una foto, una carpeta o un documento) pasa a ser una tarjeta con reproductor desde Mostrar como tarjeta, en la barra que aparece sobre el link. Sobre la tarjeta, 1/1, 1/2, 1/3 y 1/4 eligen cuánto del renglón ocupa, como las fotos. Mostrar como link la vuelve un link.",
+  },
 
   // --- Comentarios ---
   'help.comments.title': { en: "Comments", es: "Comentarios" },

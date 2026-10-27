@@ -48,7 +48,7 @@ const STR: AttrRule = { type: 'string' };
 const BOOL: AttrRule = { type: 'boolean' };
 const SPAN: AttrRule = { type: 'number', int: true, min: 1, max: MAX_SPAN };
 const PX: AttrRule = { type: 'number', min: 0, max: MAX_PX };
-/** Una parte del ancho (`rowWidth` de una imagen en una fila, `w` de una foto en línea): de 0 a 1. */
+/** Una parte del ancho (`rowWidth` de una imagen en una fila, `w` de una foto en línea, el ancho de una tarjeta de Drive): de 0 a 1. */
 const FRACTION: AttrRule = { type: 'number', min: 0, max: 1 };
 const COLORS = { backgroundColor: STR, textColor: STR };
 const BLOCK = { ...COLORS, textAlignment: ALIGN };
@@ -60,7 +60,7 @@ const BLOCK = { ...COLORS, textAlignment: ALIGN };
 export const NODE_ATTRS: Readonly<Record<string, Readonly<Record<string, AttrRule>>>> = {
   blockGroup: {},
   blockContainer: { id: STR },
-  paragraph: { ...BLOCK, script: BOOL, question: BOOL, driveCard: BOOL, pageBreak: BOOL },
+  paragraph: { ...BLOCK, script: BOOL, question: BOOL, driveCard: BOOL, driveCardWidth: FRACTION, pageBreak: BOOL },
   heading: { ...BLOCK, level: { type: 'number', values: [1, 2, 3, 4, 5, 6] }, isToggleable: BOOL },
   bulletListItem: BLOCK,
   numberedListItem: { ...BLOCK, start: { type: 'number', nullable: true, int: true, min: 0, max: 1_000_000 } },

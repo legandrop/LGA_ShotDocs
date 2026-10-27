@@ -1,5 +1,5 @@
 import type { BlockNoteEditor } from '@blocknote/core';
-import type { Node as PMNode } from '@tiptap/pm/model';
+import { Mark, type Node as PMNode } from '@tiptap/pm/model';
 import type { EditorView, ViewMutationRecord } from '@tiptap/pm/view';
 import { t } from '../i18n';
 import '../i18n/lazy/editor';
@@ -19,6 +19,23 @@ import { driveOpenUrl, drivePreviewUrl, parseDriveLink, sameDriveLink, type Driv
 // Google (Drive lo resuelve adentro del iframe; la app no ve nada de eso).
 
 export const DRIVE_CARD_PROP = 'driveCard';
+
+/** El ancho de la tarjeta, como parte del renglón (D796). De fábrica, todo el renglón. */
+export const DRIVE_CARD_WIDTH_PROP = 'driveCardWidth';
+
+/** Los anchos que se eligen en la tarjeta: los mismos tamaños rápidos de las fotos. */
+export const DRIVE_CARD_WIDTHS: readonly { w: number; text: string; tip: 'imageSize.full' | 'imageSize.half' | 'imageSize.third' | 'imageSize.quarter' }[] = [
+  { w: 1, text: '1/1', tip: 'imageSize.full' },
+  { w: 1 / 2, text: '1/2', tip: 'imageSize.half' },
+  { w: 1 / 3, text: '1/3', tip: 'imageSize.third' },
+  { w: 1 / 4, text: '1/4', tip: 'imageSize.quarter' },
+];
+
+/** El ancho guardado, o todo el renglón si no es uno válido (de otra versión, o escrito a mano). */
+export function driveCardWidth(value: unknown): number {
+  const w = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(w) && w >= 0.1 && w < 1 ? w : 1;
+}
 
 /** El primer link de Drive válido del contenido de un bloque (formato de BlockNote). */
 export function driveLinkInContent(content: unknown): DriveLink | null {
@@ -126,7 +143,21 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
   unembed.type = 'button';
   unembed.className = 'drive-card-unembed';
   unembed.textContent = t('driveCard.showAsLink');
-  actions.append(open, unembed);
+  // El ancho (D796): los tamaños rápidos de las fotos, solo con permiso de edición.
+  const sizes = document.createElement('span');
+  sizes.className = 'drive-card-sizes';
+  const sizeButtons = DRIVE_CARD_WIDTHS.map(({ w, text: label, tip }) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'drive-card-size';
+    b.textContent = label;
+    b.dataset.tip = t(tip);
+    b.setAttribute('aria-label', t(tip));
+    b.addEventListener('click', () => setWidth(w));
+    return { w, b };
+  });
+  sizes.append(...sizeButtons.map((x) => x.b));
+  actions.append(sizes, open, unembed);
   foot.append(icon, text, actions);
 
   // Entre el reproductor y el pie: un aviso discreto con "Open in Drive" si el reproductor puede no andar
@@ -154,6 +185,14 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
   if (cookieHint) showHint(cookieHint);
 
   card.append(frame, hint, foot);
+
+  const applyWidth = () => {
+    const w = driveCardWidth(current.attrs[DRIVE_CARD_WIDTH_PROP]);
+    card.classList.toggle('drive-card-sized', w < 1);
+    card.style.setProperty('--drive-card-w', String(w));
+    for (const { w: f, b } of sizeButtons) b.classList.toggle('is-active', Math.abs(f - w) < 1e-4);
+  };
+  applyWidth();
 
   const chrome = [frame, icon, actions, hint];
 
@@ -215,25 +254,38 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
     document.addEventListener('pointerdown', onOutside, true);
   });
 
-  unembed.addEventListener('click', () => {
-    if (!editor.isEditable) return;
+  /** El id del bloque de la tarjeta (solo con permiso de edición). */
+  const blockId = (): string | null => {
+    if (!editor.isEditable) return null;
     const pos = getPos();
-    if (pos === undefined) return;
+    if (pos === undefined) return null;
     const container = view.state.doc.resolve(pos).parent;
-    if (container.type.name !== 'blockContainer') return;
-    editor.updateBlock(container.attrs.id as string, { props: { [DRIVE_CARD_PROP]: false } } as never);
+    return container.type.name === 'blockContainer' ? (container.attrs.id as string) : null;
+  };
+
+  unembed.addEventListener('click', () => {
+    const id = blockId();
+    if (!id) return;
+    editor.updateBlock(id, { props: { [DRIVE_CARD_PROP]: false } } as never);
     editor.focus();
   });
+
+  function setWidth(w: number) {
+    const id = blockId();
+    if (!id || Math.abs(driveCardWidth(current.attrs[DRIVE_CARD_WIDTH_PROP]) - w) < 1e-4) return;
+    editor.updateBlock(id, { props: { [DRIVE_CARD_WIDTH_PROP]: w } } as never);
+  }
 
   return {
     dom: card,
     contentDOM: text,
-    // Mientras el link no cambie, la tarjeta sigue (el reproductor no se recarga al editar el texto). Si
-    // cambian las propiedades o el link, se vuelve a dibujar.
+    // Mientras el link no cambie, la tarjeta sigue (el reproductor no se recarga al editar el texto ni al cambiar el
+    // ancho). Si cambia otra propiedad o el link, se vuelve a dibujar.
     update: (next: PMNode) => {
-      if (next.type !== current.type || !next.sameMarkup(current)) return false;
+      if (next.type !== current.type || !sameButWidth(next, current)) return false;
       if (!sameDriveLink(driveLinkInNode(next), link)) return false;
       current = next;
+      applyWidth();
       return true;
     },
     // Lo que cambia en el reproductor, la tapa o los botones no es parte del documento.
@@ -251,6 +303,14 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
       document.removeEventListener('pointerdown', onOutside, true);
     },
   };
+}
+
+/** Las mismas propiedades y marcas, salvo el ancho de la tarjeta. */
+function sameButWidth(a: PMNode, b: PMNode): boolean {
+  if (!Mark.sameSet(a.marks, b.marks)) return false;
+  const keys = new Set([...Object.keys(a.attrs), ...Object.keys(b.attrs)]);
+  keys.delete(DRIVE_CARD_WIDTH_PROP);
+  return [...keys].every((k) => a.attrs[k] === b.attrs[k]);
 }
 
 /** El iframe del reproductor. La dirección sale solo del id (ver driveLinks.ts). */

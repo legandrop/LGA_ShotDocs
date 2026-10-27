@@ -1,5 +1,15 @@
-import { ComponentsContext, LinkToolbar, LinkToolbarController, useComponentsContext, type Components } from '@blocknote/react';
+import {
+  ComponentsContext,
+  DeleteLinkButton,
+  EditLinkButton,
+  LinkToolbar,
+  LinkToolbarController,
+  OpenLinkButton,
+  useComponentsContext,
+  type Components,
+} from '@blocknote/react';
 import { forwardRef, useMemo, type ComponentType, type ReactNode, type Ref } from 'react';
+import { DriveLinkCardButton } from './DriveLinkCardButton';
 import { asAction, tipRows, type TipEnv } from './tipRows';
 
 // Los botones propios de BlockNote en la barra de formato (Bold, Italic, Underline, Strike, alinear, Colors, Nest, Link,
@@ -108,10 +118,22 @@ export function LinkToolbarTips({ children }: { children: ReactNode }) {
 
 type LinkToolbarProps = Parameters<typeof LinkToolbar>[0];
 
+// Los botones de BlockNote y, con un link de Drive, "Show as card" (D796) antes de borrar el link.
 function PageLinkToolbar(props: LinkToolbarProps) {
   return (
     <LinkToolbarTips>
-      <LinkToolbar {...props} />
+      <LinkToolbar {...props}>
+        <EditLinkButton
+          url={props.url}
+          text={props.text}
+          range={props.range}
+          setToolbarOpen={props.setToolbarOpen}
+          setToolbarPositionFrozen={props.setToolbarPositionFrozen}
+        />
+        <OpenLinkButton url={props.url} />
+        <DriveLinkCardButton url={props.url} range={props.range} setToolbarOpen={props.setToolbarOpen} />
+        <DeleteLinkButton range={props.range} setToolbarOpen={props.setToolbarOpen} />
+      </LinkToolbar>
     </LinkToolbarTips>
   );
 }

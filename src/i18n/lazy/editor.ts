@@ -201,6 +201,7 @@ export const editor = {
   'driveCard.tap': { en: "Tap to use the player", es: "Tocá para usar el reproductor" },
   'driveCard.open': { en: "Open in Drive", es: "Abrir en Drive" },
   'driveCard.showAsLink': { en: "Show as link", es: "Mostrar como link" },
+  'driveCard.showAsCard': { en: "Show as card", es: "Mostrar como tarjeta" },
   'driveCard.cookies': {
     en: "In Safari and on iPhone, only files shared by link may play here.",
     es: "En Safari y en el iPhone, puede que acá solo se reproduzcan los archivos compartidos por link.",

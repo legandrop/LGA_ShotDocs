@@ -1795,10 +1795,12 @@ code {
   color: var(--danger);
 }
 
-/* Los links del texto (D787): la tinta de la interfaz con una raya fina turquesa; al pasar, la raya plena. El color de
-   verdad queda para lo que la app reconoce (escena, locación, día) y el turquesa pleno para lo elegido y el foco. */
+/* Los links del texto (D787, D796): el mismo color que el texto que los rodea (el del nivel de contraste, el de un
+   encabezado o un color elegido) con una raya fina turquesa; al pasar, la raya plena. Lo único que los distingue es la
+   raya. El color de verdad queda para lo que la app reconoce (escena, locación, día) y el turquesa pleno para lo elegido
+   y el foco. */
 .editor a {
-  color: var(--text);
+  color: inherit;
   text-decoration: underline;
   text-decoration-color: var(--link-line);
   text-decoration-thickness: 1px;
@@ -2057,7 +2059,7 @@ code {
 
 /* El contraste del texto (Docs/Doc_Contraste.md): el encabezado y la negrita con su tono, solo con el color por
    defecto. Todo lo que pone su propio color (un color elegido para unas letras o un bloque, que BlockNote pinta en
-   el bloque y en sus hijos; un link; la cita, gris; lo borrado del historial) cambia los tonos por `currentColor`, que
+   el bloque y en sus hijos; la cita, gris; lo borrado del historial) cambia los tonos por `currentColor`, que
    en `color` es el color heredado: así la negrita y los encabezados de adentro siguen con ese color, nunca con el tono
    por defecto. La negrita de un encabezado va con el encabezado. Con *No contrast* estas reglas no corren: queda
    exactamente lo de siempre (el texto común es `--text`). */
@@ -2078,7 +2080,6 @@ code {
     [data-style-type='textColor'],
     [data-text-color]:not([data-text-color='default']),
     .bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default'])),
-    a,
     blockquote,
     .hist-del
   ) {

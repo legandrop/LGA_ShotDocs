@@ -881,6 +881,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['listClose'],
     since: BEFORE_HELP,
   },
+  {
+    id: 'driveCard',
+    section: 'drive',
+    title: 'help.driveCard.title',
+    text: 'help.driveCard.text',
+    words: ['tarjeta', 'card', 'video', 'miniatura', 'thumbnail', 'reproductor', 'player', 'ancho', 'width', 'tamaño', 'size', 'mitad', 'half', 'tercio', 'third', 'carpeta', 'folder'],
+    since: '0.285',
+  },
 
   // --- Comentarios y preguntas ---
   {

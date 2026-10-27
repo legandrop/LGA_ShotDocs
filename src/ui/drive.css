@@ -38,6 +38,12 @@
   background: var(--surface);
 }
 
+/* Con un ancho elegido (D796): esa parte del renglón, como las fotos. Sin él, todo el renglón. */
+.drive-card.drive-card-sized {
+  flex: 0 0 auto;
+  width: calc(var(--drive-card-w) * 100%);
+}
+
 /* Proporción de video, con un alto razonable; en una hoja se ajusta al ancho del texto. */
 .drive-card-frame {
   position: relative;
@@ -107,8 +113,9 @@
 
 .drive-card-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   padding: 7px 10px 7px 12px;
   border-top: 1px solid var(--border);
 }
@@ -120,7 +127,8 @@
 }
 
 .bn-container .drive-card-text {
-  flex: 1;
+  /* En una tarjeta angosta los botones pasan abajo del link en vez de aplastarlo. */
+  flex: 1 1 12em;
   min-width: 0;
   margin: 0;
   font-size: 14px;
@@ -129,9 +137,71 @@
 
 .drive-card-actions {
   display: inline-flex;
-  flex: none;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+/* En una tarjeta angosta (D796) la dirección ocupa hasta dos renglones; al pasar por la tarjeta (para editarla) se ve
+   entera. El cursor queda en el editor, no en el renglón: por eso va por el paso del mouse y no por el foco. Con el dedo
+   (sin mouse) y en la hoja impresa o el PDF, entera siempre. */
+@media (hover: hover) {
+  .bn-container .drive-card-sized:not(:hover) .drive-card-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .print-view .bn-container .drive-card-sized .drive-card-text {
+    display: block;
+    overflow: visible;
+  }
+}
+
+/* Los tamaños (D796): aparecen al pasar por la tarjeta o con el foco adentro; con el dedo, siempre. */
+.drive-card-sizes {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.drive-card:hover .drive-card-sizes,
+.drive-card:focus-within .drive-card-sizes {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .drive-card-sizes {
+    opacity: 1;
+  }
+}
+
+button.drive-card-size {
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 6px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  background: transparent;
+}
+
+button.drive-card-size:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+button.drive-card-size.is-active {
+  background: var(--seg-active, var(--hover));
+  color: var(--text);
 }
 
 .drive-card-open,
@@ -196,20 +266,12 @@ a.drive-card-open:hover {
   text-underline-offset: 2px;
 }
 
-/* En solo lectura no se puede volver a link. */
-.bn-editor[contenteditable='false'] .drive-card-unembed {
+/* En solo lectura no se puede volver a link ni cambiar el ancho. */
+.bn-editor[contenteditable='false'] :is(.drive-card-unembed, .drive-card-sizes) {
   display: none;
 }
 
-@media (max-width: 520px) {
-  .drive-card-foot {
-    flex-wrap: wrap;
-  }
 
-  .drive-card-actions {
-    margin-left: auto;
-  }
-}
 
 /* Al imprimir queda el link: el reproductor no sirve en papel. */
 @media print {

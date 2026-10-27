@@ -301,6 +301,21 @@ describe('lo que A ya tiene idéntico no se copia (D707)', () => {
     expect(blockSignature(blocksToCopy(a, docOf([bold('Director: Ana')]))[0])).not.toBe(blockSignature(blocksToCopy(docOf([]), docOf([para('Director: Ana')]))[0]));
   });
 
+  it('un renglón escrito antes de v0.285 (sin el ancho de la tarjeta) es igual al mismo escrito después (D796)', () => {
+    const now = docOf([para('Director: Ana')]);
+    const block = (now.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).get(0) as Y.XmlElement;
+    const paragraph = block.get(0) as Y.XmlElement;
+    expect(String(paragraph.getAttribute('driveCardWidth'))).toBe('1');
+    const before = blockSignature(block);
+    paragraph.removeAttribute('driveCardWidth');
+    expect(blockSignature(block)).toBe(before);
+    // En una tarjeta con otro ancho, el ancho sí cuenta.
+    paragraph.setAttribute('driveCard', true as never);
+    const card = blockSignature(block);
+    paragraph.setAttribute('driveCardWidth', 0.5 as never);
+    expect(blockSignature(block)).not.toBe(card);
+  });
+
   it('cuenta cuántas veces: si B tiene dos iguales y A una, la otra se copia', () => {
     const a = docOf([para('Igual')]);
     const b = docOf([para('Igual'), para('Igual')]);

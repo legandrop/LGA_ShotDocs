@@ -5,8 +5,9 @@ import { TextSelection } from '@tiptap/pm/state';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { blocksThirdPartyCookies, DRIVE_FRAME_SANDBOX, PLAYER_TIMEOUT_MS } from './driveCard';
-import { applyDrivePaste, createDrivePaste, driveLinkFromClipboard, findPastedDriveLink } from './drivePaste';
+import { blocksThirdPartyCookies, DRIVE_CARD_WIDTH_PROP, DRIVE_FRAME_SANDBOX, driveCardWidth, PLAYER_TIMEOUT_MS } from './driveCard';
+import { canShowAsCard } from './DriveLinkCardButton';
+import { applyDrivePaste, createDrivePaste, driveLinkFromClipboard, findPastedDriveLink, showLinkAsCard } from './drivePaste';
 import { DRIVE_CARD_PROP, paragraphProps, QUESTION_PROP, schema, SCRIPT_PROP } from './editorSchema';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
 import { schema as soloScriptSchema } from './fixtures/editorSchemaSoloScript';
@@ -487,5 +488,183 @@ describe('pegar un link de Drive', () => {
     expect(applyDrivePaste(editor, target, 'card')).toBe(false);
     expect(isCard(editor, 0)).toBe(false);
     expect(findPastedDriveLink(editor, 1)).toBeNull();
+  });
+});
+
+// D796: "Show as card" en la barra del link y el ancho de la tarjeta (1, 1/2, 1/3, 1/4).
+const widthOf = (e: BlockNoteEditor, i: number) => (e.document[i].props as Record<string, unknown>)[DRIVE_CARD_WIDTH_PROP];
+
+/** El rango del primer link del documento (como el `range` que le da BlockNote a la barra del link). */
+function linkRange(editor: BlockNoteEditor): { from: number; to: number } {
+  let range: { from: number; to: number } | null = null;
+  editor.prosemirrorState.doc.descendants((node, pos) => {
+    if (range || !node.isText || !node.marks.some((m) => m.type.name === 'link')) return !range;
+    range = { from: pos, to: pos + node.nodeSize };
+    return false;
+  });
+  return range!;
+}
+
+describe('"Show as card" en la barra del link (D796)', () => {
+  it('un renglón que es solo el link pasa a ser la tarjeta', async () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [
+      { type: 'paragraph', content: 'Antes' },
+      { type: 'paragraph', content: [{ type: 'link', href: URL_FILE, content: URL_FILE }] },
+      { type: 'paragraph', content: 'Después' },
+    ]);
+    const id = editor.document[1].id;
+    const { from, to } = linkRange(editor);
+    expect(showLinkAsCard(editor, from, to, URL_FILE)).toBe(true);
+    await tick();
+    expect(editor.document[1].id).toBe(id);
+    expect(isCard(editor, 1)).toBe(true);
+    expect(texts(editor)).toEqual(['Antes', URL_FILE, 'Después']);
+    expect(editor.domElement!.querySelectorAll('.drive-card iframe')).toHaveLength(1);
+  });
+
+  it('la dirección pelada dentro de un texto sale de ahí y la tarjeta va debajo', () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [
+      { type: 'paragraph', content: ['Mirá ', { type: 'link', href: URL_FILE, content: URL_FILE }, ' y avisame'] as never },
+    ]);
+    const { from, to } = linkRange(editor);
+    expect(showLinkAsCard(editor, from, to, URL_FILE)).toBe(true);
+    expect(texts(editor).slice(0, 2)).toEqual(['Mirá  y avisame', URL_FILE]);
+    expect(isCard(editor, 0)).toBe(false);
+    expect(isCard(editor, 1)).toBe(true);
+  });
+
+  it('un link con palabras propias deja las palabras (sin el link) y la tarjeta lleva la dirección', () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [
+      { type: 'paragraph', content: ['Mirá ', { type: 'link', href: URL_FILE, content: 'el video' }, ' y avisame'] as never },
+    ]);
+    const { from, to } = linkRange(editor);
+    expect(showLinkAsCard(editor, from, to, URL_FILE)).toBe(true);
+    expect(texts(editor).slice(0, 2)).toEqual(['Mirá el video y avisame', URL_FILE]);
+    expect(hrefs(editor)[0]).toEqual([]);
+    expect(hrefs(editor)[1]).toEqual([URL_FILE]);
+    expect(isCard(editor, 1)).toBe(true);
+  });
+
+  it('un título que es solo el link no pierde el nivel: queda sin el link y la tarjeta va debajo', () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [{ type: 'heading', props: { level: 2 }, content: [{ type: 'link', href: URL_FILE, content: URL_FILE }] } as never]);
+    const { from, to } = linkRange(editor);
+    expect(showLinkAsCard(editor, from, to, URL_FILE)).toBe(true);
+    expect(editor.document[0].type).toBe('heading');
+    expect((editor.document[0].props as Record<string, unknown>).level).toBe(2);
+    expect(texts(editor).slice(0, 2)).toEqual([URL_FILE, URL_FILE]);
+    expect(hrefs(editor)[0]).toEqual([]);
+    expect(isCard(editor, 1)).toBe(true);
+  });
+
+  it('una foto en línea dentro del link no se pierde (auditoría de v0.285)', () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: ['Mirá ', { type: 'link', href: URL_FILE, content: URL_FILE }, ' y avisame'] as never }]);
+    const { from, to } = linkRange(editor);
+    const view = editor.prosemirrorView!;
+    const photo = view.state.schema.nodes.photo.create({ url: 'https://example.invalid/a.jpg', name: 'a.jpg' }, null, [view.state.schema.marks.link.create({ href: URL_FILE })]);
+    view.dispatch(view.state.tr.insert(from + 5, photo));
+    const photos = () => { let n = 0; editor.prosemirrorState.doc.descendants((x) => { if (x.type.name === 'photo') n++; }); return n; };
+    expect(photos()).toBe(1);
+    expect(showLinkAsCard(editor, from, to + 1, URL_FILE)).toBe(true);
+    expect(photos()).toBe(1);
+    expect(isCard(editor, 1)).toBe(true);
+  });
+
+  it('un link que no es de Drive no cambia nada, y el botón no aparece ahí ni en el pie de una tarjeta', () => {
+    const editor = mount(new Y.Doc());
+    const other = 'https://example.com/video.mov';
+    editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: [{ type: 'link', href: other, content: other }] }, card()]);
+    const { from, to } = linkRange(editor);
+    expect(canShowAsCard(editor.prosemirrorState.doc, from, other)).toBe(false);
+    expect(showLinkAsCard(editor, from, to, other)).toBe(false);
+    expect(isCard(editor, 0)).toBe(false);
+    // El link del pie de la tarjeta: ya es una tarjeta.
+    let footLink = -1;
+    editor.prosemirrorState.doc.descendants((node, pos) => {
+      if (node.isText && node.marks.some((m) => m.attrs.href === URL_FILE)) footLink = pos;
+      return footLink < 0;
+    });
+    expect(canShowAsCard(editor.prosemirrorState.doc, footLink, URL_FILE)).toBe(false);
+    expect(canShowAsCard(editor.prosemirrorState.doc, from, URL_FILE)).toBe(true);
+  });
+});
+
+describe('el ancho de la tarjeta (D796)', () => {
+  it('lee solo anchos válidos; lo demás es todo el renglón', () => {
+    expect(driveCardWidth(1 / 3)).toBeCloseTo(1 / 3);
+    expect(driveCardWidth('0.5')).toBe(0.5);
+    for (const raro of [undefined, null, 0, -1, 2, 1, Number.NaN, 'x', 0.05]) expect(driveCardWidth(raro)).toBe(1);
+  });
+
+  it('los tamaños de la tarjeta cambian el ancho sin recargar el reproductor; en solo lectura no hacen nada', async () => {
+    const { editor } = newPage();
+    await tick();
+    const el = editor.domElement!.querySelector<HTMLElement>('.drive-card')!;
+    const iframe = el.querySelector('iframe');
+    const third = [...el.querySelectorAll<HTMLButtonElement>('.drive-card-size')].find((b) => b.textContent === '1/3')!;
+    editor.isEditable = false;
+    third.click();
+    expect(widthOf(editor, 1)).toBe(1);
+    editor.isEditable = true;
+    third.click();
+    await tick();
+    expect(widthOf(editor, 1)).toBeCloseTo(1 / 3);
+    const now = editor.domElement!.querySelector<HTMLElement>('.drive-card')!;
+    expect(now).toBe(el);
+    expect(now.querySelector('iframe')).toBe(iframe);
+    expect(now.classList.contains('drive-card-sized')).toBe(true);
+    expect(Number(now.style.getPropertyValue('--drive-card-w'))).toBeCloseTo(1 / 3);
+    expect(third.classList.contains('is-active')).toBe(true);
+    [...now.querySelectorAll<HTMLButtonElement>('.drive-card-size')].find((b) => b.textContent === '1/1')!.click();
+    await tick();
+    expect(widthOf(editor, 1)).toBe(1);
+    expect(now.classList.contains('drive-card-sized')).toBe(false);
+  });
+
+  it('la versión publicada (sin el ancho) abre la tarjeta entera; editar otro bloque no le saca el ancho', async () => {
+    const { doc, editor } = newPage();
+    editor.updateBlock(editor.document[1], { props: { [DRIVE_CARD_WIDTH_PROP]: 1 / 2 } } as never);
+    await tick();
+    const docOld = new Y.Doc();
+    Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
+    const updates: Uint8Array[] = [];
+    docOld.on('update', (u: Uint8Array) => updates.push(u));
+    const old = mount(docOld, mainSchema);
+    await tick();
+    expect(texts(old)).toEqual(['Plano de referencia:', 'Plano 12.mov', 'Nota.']);
+    expect((old.document[1].props as Record<string, unknown>)[DRIVE_CARD_PROP]).toBe(true);
+    expect(old.domElement!.querySelector('.drive-card')?.classList.contains('drive-card-sized')).toBe(false);
+    old.setTextCursorPosition(old.document[2], 'end');
+    old.insertInlineContent(' Editada en la publicada.');
+    await tick();
+    for (const u of updates) Y.applyUpdate(doc, u);
+    await tick();
+    expect(texts(editor)[2]).toBe('Nota. Editada en la publicada.');
+    expect(widthOf(editor, 1)).toBe(0.5);
+  });
+
+  it('si la versión publicada edita la tarjeta, se pierde a lo sumo el ancho: el texto, el link y la tarjeta quedan', async () => {
+    const { doc, editor } = newPage();
+    editor.updateBlock(editor.document[1], { props: { [DRIVE_CARD_WIDTH_PROP]: 1 / 2 } } as never);
+    await tick();
+    const docOld = new Y.Doc();
+    Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
+    const updates: Uint8Array[] = [];
+    docOld.on('update', (u: Uint8Array) => updates.push(u));
+    const old = mount(docOld, mainSchema);
+    await tick();
+    old.setTextCursorPosition(old.document[1], 'end');
+    old.insertInlineContent(' (toma 3)');
+    await tick();
+    for (const u of updates) Y.applyUpdate(doc, u);
+    await tick();
+    expect(texts(editor)).toEqual(['Plano de referencia:', 'Plano 12.mov (toma 3)', 'Nota.']);
+    expect(hrefs(editor)[1]).toEqual([URL_FILE]);
+    expect(isCard(editor, 1)).toBe(true);
+    expect([0.5, 1]).toContain(widthOf(editor, 1));
   });
 });

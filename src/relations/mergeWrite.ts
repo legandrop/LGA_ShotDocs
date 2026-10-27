@@ -132,12 +132,16 @@ export function blockSignature(node: Y.XmlElement | Y.XmlText): string {
   if (node instanceof Y.XmlText) return `t${stable(node.toDelta())}`;
   const attrs = { ...node.getAttributes() } as Record<string, unknown>;
   if (node.nodeName === CONTAINER) delete attrs.id;
+  // El ancho de la tarjeta de Drive (D796) lo escribe en todo párrafo nuevo el editor desde v0.285; uno de antes no lo
+  // tiene. Solo dice algo en una tarjeta con otro ancho que el de fábrica: si no, no cuenta (auditoría de v0.285).
+  if (String(attrs.driveCard) !== 'true' || String(attrs.driveCardWidth) === '1') delete attrs.driveCardWidth;
   const kids = node.toArray().map((c) => (c instanceof Y.XmlElement || c instanceof Y.XmlText ? blockSignature(c) : stable(c)));
   return `<${node.nodeName} ${stable(attrs)}>${kids.join('')}</>`;
 }
 
-/** Del aspecto de un párrafo: un renglón en blanco lo es con cualquiera. */
-const LOOKS = new Set(['textColor', 'backgroundColor', 'textAlignment']);
+/** Del aspecto de un párrafo: un renglón en blanco lo es con cualquiera (el ancho de la tarjeta de Drive, D796, solo dice algo
+ * con `driveCard`, que sí cuenta). */
+const LOOKS = new Set(['textColor', 'backgroundColor', 'textAlignment', 'driveCardWidth']);
 
 /**
  * Un renglón en blanco: un párrafo sin texto ni nada adentro y sin ninguna marca (salto de página, pregunta, script, tarjeta

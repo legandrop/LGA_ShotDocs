@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.285 :
+
+Un link de Drive ya escrito no se podía pasar a tarjeta (solo al pegarlo), así que lo importado de Coda quedaba con el
+link dos veces; la tarjeta no tenía tamaño (siempre todo el ancho) y los links del texto iban en el color claro de la
+interfaz, distinto del texto que los rodea. Ahora la barra del link suma *Show as card* con un link de Drive
+(`showLinkAsCard`, `DriveLinkCardButton.tsx`); la tarjeta suma 1/1, 1/2, 1/3 y 1/4 en el pie al pasar el mouse
+(`driveCardWidth` del párrafo, sin recargar el reproductor; una versión vieja la muestra entera); y `.editor a` toma el
+color del texto (`inherit`), con la raya turquesa como única diferencia (D796). Ayuda: *Un link de Drive como tarjeta*.
+
+[Editor - link de Drive a tarjeta, ancho de la tarjeta y links del color del texto]
+
 v0.284 :
 
 Al navegar la barra lateral con el teclado, la fila con el foco tenía un borde turquesa alrededor, distinto de la fila

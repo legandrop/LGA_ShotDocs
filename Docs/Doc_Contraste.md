@@ -95,8 +95,11 @@ con los tres niveles, solo esos tres tocados, y que ninguna regla de resaltados 
 
 ## 6. Links, botón principal y foco (v0.281, D787)
 
-- Link del texto: color `--text` y raya `--link-line` de 1px (#5597a4 en claro, 3,3:1 contra el papel; #218290 en
-  oscuro, 3,7:1); al pasar, la raya en `--accent`. El link no lleva matiz propio: el color queda para lo reconocido.
+- Link del texto: el mismo color que el texto que lo rodea (`color: inherit`, D796: el tono del nivel de contraste, el
+  de un encabezado o un color elegido; hasta v0.284 era `--text`, más claro que el texto común) y raya `--link-line` de
+  1px (#5597a4 en claro, 3,3:1 contra el papel; #218290 en oscuro, 3,7:1); al pasar, la raya en `--accent`. Lo único
+  que lo distingue es la raya. Ya no está en la lista de lo que pone su propio color: una negrita dentro de un link va
+  con el tono de la negrita.
 - Botón principal (`--btn-primary-*`): en claro, tinta rellena (16,7:1); en oscuro, delineado en `--accent` con texto
   `--accent-text` (9,6:1). Las acciones de tarjeta van en gris elevado (`--seg-active`).
 - Anillo de foco global: `--accent-text` (#0c6a7d en claro, 5,97:1), porque `--accent` daba 2,8:1 (un control pide 3:1).

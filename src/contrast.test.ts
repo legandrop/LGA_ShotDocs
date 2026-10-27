@@ -247,18 +247,19 @@ describe('reglas del editor', () => {
     }
   });
 
-  it('todo lo que pone su propio color cambia los tonos por el color heredado (un color elegido, un link, la cita)', () => {
+  it('todo lo que pone su propio color cambia los tonos por el color heredado (un color elegido, la cita)', () => {
     const rule = ruleAt('.bn-container .bn-default-styles :is(');
     for (const s of [
       "[data-style-type='textColor']",
       "[data-text-color]:not([data-text-color='default'])",
       ".bn-block:has(> .bn-block-content[data-text-color]:not([data-text-color='default']))",
-      'a,',
       'blockquote,',
       '.hist-del',
     ]) {
       expect(rule, s).toContain(s);
     }
+    // El link ya no pone color propio (D796): toma el del texto que lo rodea, y su negrita sigue con su tono.
+    expect(rule).not.toContain(' a,');
     expect(rule).toContain('--ink-heading: currentColor');
     expect(rule).toContain('--ink-bold: currentColor');
   });
@@ -341,6 +342,11 @@ describe('links y botón principal', () => {
   };
   const LIGHT = /:root \{([^}]*)\}/;
   const DARK = /:root\[data-theme='dark'\] \{([^}]*--btn-primary-bg[^}]*)\}/;
+  it('el link tiene el color del texto que lo rodea: lo único que cambia es la raya (D796)', () => {
+    const rule = /\n\.editor a \{([^}]*)\}/.exec(CSS)?.[1] ?? 'falta';
+    expect(rule).toContain('color: inherit');
+    expect(rule).toContain('text-decoration-color: var(--link-line)');
+  });
   it('la raya del link', () => {
     expect(worst(token(LIGHT, '--link-line'), 'light')).toBeGreaterThanOrEqual(3);
     expect(worst(token(DARK, '--link-line'), 'dark')).toBeGreaterThanOrEqual(3);

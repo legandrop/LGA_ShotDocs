@@ -2329,8 +2329,23 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
   - `allow-storage-access-by-user-activation` deja que el reproductor, después de un toque, le pida al
     navegador su propia sesión (API Storage Access). **Solo ayuda si Drive la pide**, y hoy no está
     documentado que lo haga: no hay que contar con eso. No le da acceso a nada de la app.
-- **Tamaño:** todo el ancho del texto (en una hoja, el ancho de la hoja) con proporción de video y a lo sumo
+- **Un link ya escrito pasa a tarjeta (D796):** la barra del link (al pararse o pasar por él) suma **Show as card**
+  entre *Open in new tab* y *Remove link*, solo con un link de Drive, con permiso de edición y fuera del pie de una
+  tarjeta (`ui/DriveLinkCardButton.tsx`, `showLinkAsCard` en `ui/drivePaste.ts`). Como **Card** al pegar: si un párrafo
+  es solo el link, el párrafo es la tarjeta; si la dirección pelada está dentro de un texto, sale de ahí y la tarjeta va
+  debajo. Todo lo demás queda en su lugar sin el link y la tarjeta va debajo: un link con palabras propias («ver el
+  video»), un título, una lista o una casilla (no pierden nivel, número ni marca) y un link con una foto en línea adentro
+  (auditoría de v0.285: borrarlo la perdía). Al juntar páginas, el ancho de fábrica no cuenta en la firma de un bloque
+  (`blockSignature`): un renglón de antes de v0.285 no lo tiene. La admisión del link público lo acepta como parte del
+  renglón, de 0 a 1 (`NODE_ATTRS` en `sync/linkShape.ts`).
+- **Tamaño:** de fábrica todo el ancho del texto (en una hoja, el ancho de la hoja) con proporción de video y a lo sumo
   480 px o el 70 % del alto de la pantalla; un documento o una carpeta, 4:3. Al imprimir queda solo el link.
+  **Ancho elegido (D796):** al pasar por la tarjeta aparecen 1/1, 1/2, 1/3 y 1/4 en el pie (con el dedo, siempre; en
+  solo lectura, nunca), los tamaños rápidos de las fotos. Es otra propiedad del mismo párrafo, `driveCardWidth` (la
+  parte del renglón; 1 de fábrica, y cualquier valor raro cuenta como 1). Cambiarla no recarga el reproductor. En una
+  tarjeta angosta la dirección del pie ocupa hasta dos renglones (entera al pasar el mouse) y los botones bajan.
+  Una versión que no la conoce muestra la tarjeta entera; si edita esa línea pierde a lo sumo el ancho (prueba en
+  `ui/driveCard.test.ts`, «el ancho de la tarjeta»).
 - **Sin red** la tarjeta muestra el link y el aviso *You're offline*; el reproductor carga solo cuando
   vuelve la red.
 - **En el teléfono** una tapa transparente sobre el reproductor deja deslizar la página sin que el iframe se

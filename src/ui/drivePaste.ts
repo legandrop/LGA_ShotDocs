@@ -153,6 +153,45 @@ export function applyDrivePaste(editor: AnyEditor, target: DrivePasteTarget, cho
   return true;
 }
 
+/**
+ * "Show as card" de la barra del link (D796): el link de Drive escrito en `from`..`to` pasa a ser una tarjeta, como
+ * "Card" al pegar. Si el bloque es un párrafo que es solo el link, el párrafo es la tarjeta. Si el link está dentro de un
+ * texto, la tarjeta va debajo del bloque y del texto sale la dirección pelada. Lo demás queda en su lugar, sin el link, y
+ * la tarjeta va debajo: un link con palabras propias ("ver el video", para no romper la oración), un título, una lista o
+ * una casilla (no pierden el nivel, el número ni la marca) y un link con algo que no es texto adentro (una foto en línea:
+ * borrarlo la perdía, auditoría de v0.285). Devuelve `false` si no es un link de Drive o ya no está ahí.
+ */
+export function showLinkAsCard(editor: AnyEditor, from: number, to: number, href: string): boolean {
+  const link = parseDriveLink(href);
+  const { doc } = editor.prosemirrorState;
+  if (!link || from >= to || to > doc.content.size) return false;
+  const $from = doc.resolve(from);
+  if (!$from.parent.isTextblock || !$from.sameParent(doc.resolve(to))) return false;
+  const text = doc.textBetween(from, to);
+  const target: DrivePasteTarget = { from, to, href, text, link };
+  const block = blockAt(doc, from);
+  if (!block) return false;
+  let onlyText = true;
+  doc.nodesBetween(from, to, (node) => {
+    if (node.isInline && !node.isText) onlyText = false;
+    return onlyText;
+  });
+  const paragraph = $from.parent.type.name === 'paragraph';
+  const onlyLink = block.direct && $from.parent.textContent.trim() === text.trim();
+  if (onlyText && ((onlyLink && paragraph) || (!onlyLink && parseDriveLink(text.trim())))) return applyDrivePaste(editor, target, 'card');
+  const linkMark = editor.prosemirrorState.schema.marks.link;
+  editor.transact((tr) => {
+    tr.removeMark(from, to, linkMark);
+  });
+  const [card] = editor.insertBlocks(
+    [{ type: 'paragraph', props: paragraphProps('driveCard'), content: [{ type: 'link', href, content: href }] } as never],
+    block.id,
+    'after',
+  );
+  if (card) moveCursorAfter(editor, card.id);
+  return true;
+}
+
 /** El cursor, en el bloque que sigue a la tarjeta (o al final de la tarjeta si no hay dónde). */
 function moveCursorAfter(editor: AnyEditor, blockId: string) {
   try {
