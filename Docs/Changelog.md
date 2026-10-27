@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.299 :
+
+Navegando con las flechas por las páginas de rodaje la app se clavaba: cada página pesada tarda en dibujarse, las teclas
+apretadas mientras tanto esperaban en cola y, al llegar, parecían pulsaciones sueltas, así que cada una abría otra
+página pesada. Ahora `createOpenScheduler` cuenta como seguida toda tecla que llega mientras la app está ocupada o
+que esperó en cola más de 50 ms (`timeStamp` contra `performance.now()`): la marca corre fila por fila al instante
+y solo se abre la última, al frenar (D810).
+
+[Barra lateral - las flechas no encolan páginas pesadas]
+
 v0.298 :
 
 Después de un clic en *Scenes* o *Sets* del *Overview*, ↑/↓ desplazaban la barra y ← → no hacían nada. Solo el nombre

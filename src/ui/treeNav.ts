@@ -155,18 +155,53 @@ export interface OpenScheduler {
   pending(): string | null;
 }
 
+/** Una tecla que esperó en cola más que esto encontró a la app ocupada (dibujando una página pesada). */
+export const QUEUED_MS = 50;
+// Cuánto esperó en cola la última tecla: de cuando se apretó (`timeStamp`) a cuando la app la atiende. Una medición
+// fuera de rango (un navegador con otra base de tiempo, o el reloj recortado por privacidad) no cuenta: no puede
+// demorar todas las pulsaciones.
+let keyQueuedMs = 0;
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      const q = performance.now() - e.timeStamp;
+      keyQueuedMs = e.timeStamp > 0 && q > 0 && q < 5000 ? q : 0;
+    },
+    true,
+  );
+}
+
 /**
  * Abrir páginas al moverse con las flechas sin encolar cargas: una pulsación suelta abre la página al instante;
  * con la tecla apretada o pulsaciones más seguidas que `delay`, el foco corre fila por fila y solo se abre la
  * última, `delay` ms después de la última tecla. Así nunca se arma una fila de páginas abriéndose una tras otra.
+ * Mientras la app está ocupada dibujando la página recién abierta (las de rodaje pesan), lo que llega también cuenta
+ * como seguido: esas teclas esperaban en cola, y medidas al llegar parecían sueltas y abrían una página pesada cada una
+ * (pedido de Lega, D810). El reloj de «seguido» arranca cuando la app vuelve a estar libre, no cuando se abrió; y una
+ * tecla que esperó en cola (la página se leyó y se dibujó después, sin avisar) también cuenta como seguida.
  */
 export function createOpenScheduler(
   open: (id: string) => void,
-  { delay = OPEN_DELAY_MS, now = () => performance.now() }: { delay?: number; now?: () => number } = {},
+  {
+    delay = OPEN_DELAY_MS,
+    now = () => performance.now(),
+    queued = () => keyQueuedMs,
+  }: { delay?: number; now?: () => number; queued?: () => number } = {},
 ): OpenScheduler {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let target: string | null = null;
   let last = -Infinity;
+  // Abierta una página, hasta la primera tarea libre (después de dibujarla).
+  let busy = false;
+  const openNow = (id: string) => {
+    open(id);
+    busy = true;
+    setTimeout(() => {
+      busy = false;
+      last = now();
+    }, 0);
+  };
   const cancel = () => {
     if (timer !== null) clearTimeout(timer);
     timer = null;
@@ -175,18 +210,18 @@ export function createOpenScheduler(
   return {
     request(id, repeat = false) {
       const t = now();
-      const burst = repeat || timer !== null || t - last < delay;
+      const burst = repeat || timer !== null || busy || queued() > QUEUED_MS || t - last < delay;
       last = t;
       cancel();
       if (!burst) {
-        open(id);
+        openNow(id);
         return;
       }
       target = id;
       timer = setTimeout(() => {
         timer = null;
         target = null;
-        open(id);
+        openNow(id);
       }, delay);
     },
     cancel,

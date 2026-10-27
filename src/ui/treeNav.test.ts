@@ -95,13 +95,47 @@ describe('createOpenScheduler', () => {
     vi.useFakeTimers();
     let t = 1000;
     const opened: string[] = [];
-    const s = createOpenScheduler((id) => opened.push(id), { delay: 150, now: () => t });
+    let wait = 0;
+    const s = createOpenScheduler((id) => opened.push(id), { delay: 150, now: () => t, queued: () => wait });
+    // Lo que ya está listo corre antes de que pase el tiempo (dibujar la página abierta, en la app).
     const advance = (ms: number) => {
+      vi.advanceTimersByTime(0);
       t += ms;
       vi.advanceTimersByTime(ms);
     };
-    return { s, opened, advance };
+    return { s, opened, advance, busy: (ms: number) => (t += ms), queuedFor: (ms: number) => (wait = ms) };
   }
+
+  it('una tecla que esperó en cola (la página se dibujó más tarde) no abre al instante', () => {
+    const { s, opened, advance, queuedFor } = setup();
+    s.request('a');
+    advance(1000);
+    queuedFor(300);
+    s.request('b');
+    expect(opened).toEqual(['a']);
+    queuedFor(0);
+    advance(150);
+    expect(opened).toEqual(['a', 'b']);
+  });
+
+  it('una página pesada no encola las teclas que llegaron mientras se dibujaba (D810)', () => {
+    const { s, opened, advance, busy } = setup();
+    s.request('a');
+    expect(opened).toEqual(['a']);
+    // La página tarda 800 ms en dibujarse; las teclas apretadas mientras tanto llegan después, de golpe.
+    busy(800);
+    s.request('b');
+    s.request('c');
+    expect(opened).toEqual(['a']);
+    advance(150);
+    expect(opened).toEqual(['a', 'c']);
+    // Y lo que llega enseguida después de abrir c, también espera.
+    busy(600);
+    s.request('d');
+    expect(opened).toEqual(['a', 'c']);
+    advance(150);
+    expect(opened).toEqual(['a', 'c', 'd']);
+  });
 
   it('una pulsación suelta abre al instante', () => {
     const { s, opened, advance } = setup();

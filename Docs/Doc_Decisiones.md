@@ -2441,3 +2441,11 @@ mientras *Semana 02* siga plegada; recién al desplegar otra cosa. A prueba: Leg
 `X` (→, su flecha, un clic con *On click*, crear o soltar una página adentro) deja abiertas sus madres, `X` y lo que ya
 estaba abierto adentro de `X`, y pliega lo demás de su proyecto (`collapseForExpand`). Abrir una página de una rama
 plegada (un link, la búsqueda, Atrás) sigue dejando solo su rama (D805). Lo del *Overview* no cambia (D806, D807).
+
+### D810 · Las flechas no encolan páginas pesadas (2026-10-27)
+**Pedido de Lega:** apretando las flechas seguido por las páginas de rodaje, la app se clavaba intentando cargar cada
+una; pidió la solución más profesional.
+**Quedó así:** como en un explorador de archivos, la selección se mueve al instante y la página se abre recién cuando la
+persona frena. Una tecla que llega mientras la app dibuja la página anterior, o que esperó en cola más de 50 ms, cuenta
+como seguida: no abre otra página pesada en el medio. La pulsación suelta con la app libre sigue abriendo al instante.
+Lo que queda: que la página de rodaje en sí se dibuje más rápido (medirlo primero).
