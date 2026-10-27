@@ -669,3 +669,51 @@ describe('el ancho de la tarjeta (D796)', () => {
     expect([0.5, 1]).toContain(widthOf(editor, 1));
   });
 });
+
+describe('la grilla de una carpeta (D797)', () => {
+  it('una carpeta se arma con el ancho fijo y se achica al marco; un video no; al destruirla se deja de mirar', async () => {
+    const observers: { cb: ResizeObserverCallback; disconnected: boolean }[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        entry: { cb: ResizeObserverCallback; disconnected: boolean };
+        constructor(cb: ResizeObserverCallback) {
+          this.entry = { cb, disconnected: false };
+          observers.push(this.entry);
+        }
+        observe() {}
+        disconnect() {
+          this.entry.disconnected = true;
+        }
+      },
+    );
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('drive-card-frame') ? 330 : 0;
+    });
+    const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('drive-card-frame') ? 247.5 : 0;
+    });
+    try {
+      const FOLDER = `https://drive.google.com/drive/folders/${ID}`;
+      const editor = mount(new Y.Doc());
+      editor.replaceBlocks(editor.document, [card(FOLDER, FOLDER), card()]);
+      await tick();
+      const [folder, video] = [...editor.domElement!.querySelectorAll<HTMLIFrameElement>('.drive-card iframe')];
+      expect(folder.classList.contains('drive-card-folder')).toBe(true);
+      expect(video.classList.contains('drive-card-folder')).toBe(false);
+      expect(observers).toHaveLength(1);
+      observers[0].cb([], {} as ResizeObserver);
+      expect(folder.style.width).toBe('1100px');
+      expect(parseFloat(folder.style.height)).toBeCloseTo(825);
+      expect(folder.style.transform).toBe('scale(0.3)');
+      expect(video.style.transform).toBe('');
+      editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: 'Nada' }]);
+      await tick();
+      expect(observers[0].disconnected).toBe(true);
+    } finally {
+      width.mockRestore();
+      height.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+});

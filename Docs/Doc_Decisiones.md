@@ -2331,7 +2331,9 @@ repetidos de los scoutings.
 ### D797 · La grilla de una carpeta de Drive, más chica (2026-10-27)
 **Pedido de Lega:** en la tarjeta de una carpeta, los íconos y las miniaturas de la grilla de Google eran demasiado
 grandes. La grilla es de Google (otro origen) y no se le puede cambiar el tamaño: la tarjeta la dibuja más grande y la
-achica entera al 60 %, solo en las carpetas. Si sigue grande o queda chica, el número es `--drive-folder-zoom`.
+achica entera al 60 %, solo en las carpetas. **Corregido en v0.287:** Lega quiere que en el mismo espacio entren cinco
+archivos por fila, no dos más chicos; Google pone las columnas según el ancho del iframe al cargar, así que la grilla se
+arma siempre con 1100 px (`FOLDER_GRID_WIDTH`) y se achica al ancho de la tarjeta (`folderGridFit`).
 Además, en Iglesia Santa Cruz los links `drive.google.com/open?id=…` de «Fotos de locación» y «Escaneo de locación»
 eran carpetas (lo dice la redirección de Drive, sin sesión) y la tarjeta los tomaba como archivo («No hay una vista
 previa disponible»): se cambiaron por `drive.google.com/drive/folders/<id>`. Que la app lo reconozca sola queda

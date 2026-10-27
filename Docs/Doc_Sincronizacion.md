@@ -2340,7 +2340,8 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
   renglón, de 0 a 1 (`NODE_ATTRS` en `sync/linkShape.ts`).
 - **Tamaño:** de fábrica todo el ancho del texto (en una hoja, el ancho de la hoja) con proporción de video y a lo sumo
   480 px o el 70 % del alto de la pantalla; un documento o una carpeta, 4:3. Al imprimir queda solo el link. La grilla
-  de una carpeta (de Google, con íconos grandes) se dibuja más grande y se achica al 60 % (D797, `--drive-folder-zoom`).
+  de una carpeta (de Google) se arma siempre con 1100 px de ancho, cinco archivos por fila, y se achica al ancho de la
+  tarjeta (D797, `FOLDER_GRID_WIDTH` y `folderGridFit` en `ui/driveCard.ts`, con un `ResizeObserver`).
   **Un link `drive.google.com/open?id=…` puede ser una carpeta** y la app lo toma como archivo (la tarjeta dice «No hay
   una vista previa disponible»): Drive lo distingue al redirigir (`/drive/folders/…` o `/file/d/…`, sin sesión), pero
   el navegador no deja leer esa redirección; pendiente que lo resuelva el portero.

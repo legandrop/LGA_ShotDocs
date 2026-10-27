@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.287 :
+
+La v0.286 achicaba la grilla de una carpeta al 60 %, pero seguían entrando dos archivos por fila: Google decide las
+columnas según el ancho del iframe cuando carga, y achicar todo dejaba la misma grilla, solo más chica. Ahora el iframe
+de una carpeta se arma siempre con 1100 px de ancho (`FOLDER_GRID_WIDTH`, cinco archivos por fila) y la tarjeta lo
+achica a su ancho real con un `ResizeObserver` (`folderGridFit` en `driveCard.ts`), así que en el mismo espacio entran
+cinco, con cualquier ancho de tarjeta y sin recargar la carpeta (D797).
+
+[Tarjeta de Drive - cinco archivos por fila en una carpeta]
+
 v0.286 :
 
 La tarjeta de una carpeta de Drive mostraba la grilla de Google con íconos y miniaturas enormes (dos por fila en una

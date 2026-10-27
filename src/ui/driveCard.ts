@@ -84,6 +84,20 @@ export function blocksThirdPartyCookies(ua: string = navigator.userAgent, touchM
   return /Safari\//.test(ua) && !/Chrome\/|Chromium\/|CriOS\/|FxiOS\/|EdgiOS\/|Edg\/|OPR\/|Android/.test(ua);
 }
 
+/**
+ * El ancho con el que se arma la grilla de una carpeta (D797): Google pone las columnas según el ancho del iframe al
+ * cargar (unos 215 px por archivo), así que con este ancho fijo entran cinco por fila. La tarjeta la achica entera a
+ * su ancho real, sea cual sea (1/1, 1/2, 1/3), sin recargarla.
+ */
+export const FOLDER_GRID_WIDTH = 1100;
+
+/** La escala de la grilla de una carpeta para un marco de `width` × `height` (nunca agranda). */
+export function folderGridFit(width: number, height: number): { zoom: number; width: number; height: number } | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const zoom = Math.min(1, width / FOLDER_GRID_WIDTH);
+  return { zoom, width: width / zoom, height: height / zoom };
+}
+
 /** Cuánto se espera a que el reproductor cargue (ya en pantalla) antes de ofrecer abrirlo en Drive. */
 export const PLAYER_TIMEOUT_MS = 15_000;
 
@@ -224,9 +238,29 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
     observer.observe(frame);
   };
 
+  // La grilla de una carpeta, con ancho fijo y achicada al marco (D797).
+  let sizer: ResizeObserver | null = null;
+  const fitFolder = (iframe: HTMLIFrameElement) => {
+    const fit = folderGridFit(frame.clientWidth, frame.clientHeight);
+    if (!fit) return;
+    iframe.style.width = `${fit.width}px`;
+    iframe.style.height = `${fit.height}px`;
+    iframe.style.transform = `scale(${fit.zoom})`;
+  };
   const showPlayer = () => {
     if (frame.querySelector('iframe')) return;
     const iframe = playerFrame(link);
+    if (link.kind === 'folder') {
+      iframe.classList.add('drive-card-folder');
+      // Recién creada la tarjeta todavía no está en la página (el marco mide 0) y esto no hace nada: el tamaño lo pone el
+      // primer aviso del `ResizeObserver`, antes de que cargue la carpeta (`loading="lazy"`). Sirve cuando la red vuelve
+      // con la tarjeta ya en pantalla.
+      fitFolder(iframe);
+      if (typeof ResizeObserver !== 'undefined') {
+        sizer = new ResizeObserver(() => fitFolder(iframe));
+        sizer.observe(frame);
+      }
+    }
     frame.replaceChildren(iframe, shield);
     watch(iframe);
   };
@@ -299,6 +333,7 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
     stopEvent: (e: Event) => chrome.some((el) => el.contains(e.target as Node)),
     destroy: () => {
       stopWatching();
+      sizer?.disconnect();
       window.removeEventListener('online', onOnline);
       document.removeEventListener('pointerdown', onOutside, true);
     },
