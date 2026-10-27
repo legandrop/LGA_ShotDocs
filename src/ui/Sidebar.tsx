@@ -508,7 +508,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             />
           ) : dated ? (
             <span className="label dated">
-              {/* La fecha y la jornada en el violeta de los días; el lugar en el azul de las locaciones solo si la app
+              {/* La fecha y la jornada en el color de los días; el lugar en el azul de las locaciones solo si la app
                   lo reconoce (D774); la fila elegida no cambia esos colores (D789). */}
               {jornadas && <span className="code jornada">{dated.jornada ?? ''}</span>}
               <span className="code date">{dated.date}</span>

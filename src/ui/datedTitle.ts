@@ -7,7 +7,7 @@ import { useCurrentProject } from './project';
 import { existingRelationsSession } from './relationsUi';
 
 // La fila de la barra lateral de un día de rodaje, un scouting, una prueba o un plan (D789): las tres familias con fecha
-// se ven igual, como en el *Overview*. A la izquierda, la jornada (`D05`, primero: D792) y la fecha corta (DD/MM, violeta); después el
+// se ven igual, como en el *Overview*. A la izquierda, la jornada (`D05`, primero: D792) y la fecha corta (DD/MM, en el color de los días); después el
 // lugar (azul si la app lo reconoce como locación) y lo que quede del título, apagado. Solo lee el título: un título sin
 // una fecha clara (dos fechas, ninguna, una que se lee de dos formas) se ve como siempre.
 

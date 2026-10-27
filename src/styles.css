@@ -152,8 +152,9 @@
   --ink-script: var(--ink-body);
 }
 
-/* El color de las escenas (frambuesa), el de las locaciones (azul) y el de los días y las fechas (violeta), en toda la
-   app: barra lateral, árbol, lupa, mapa, texto y fichas (Lega, 2026-10-25, D773 y D774). Solo lo que la app reconoce
+/* El color de las escenas (frambuesa), el de las locaciones (azul), el de los decorados (violeta: los dos lugares, el
+   real y el de la historia, en tonos vecinos) y el de los días y las fechas (terracota), en toda la app: barra lateral,
+   árbol, lupa, mapa, texto y fichas (Lega, 2026-10-25, D773 y D774; decorados y días, 2026-10-27, D803). Solo lo que la app reconoce
    lleva color; los estados van en verde (`--ok`), ámbar (`--warn`) y rojo (`--danger`), y el acento (turquesa) es para
    lo elegido, los links y el foco. La hoja impresa va siempre en claro. */
 :root,
@@ -164,9 +165,12 @@
   --loc-fg: #3451b2;
   --loc-bg: #eaeefc;
   --loc-line: #9fb1ec;
-  --day-fg: #6d3fc0;
-  --day-bg: #f1ebfb;
-  --day-line: #bba3e6;
+  --set-fg: #6d3fc0;
+  --set-bg: #f1ebfb;
+  --set-line: #bba3e6;
+  --day-fg: #a64b1b;
+  --day-bg: #fbece3;
+  --day-line: #e6b096;
   --ok-bg: #e7f0ea;
   --ok-line: #b9d3c1;
 }
@@ -178,9 +182,12 @@
   --loc-fg: #9db2ff;
   --loc-bg: rgba(120, 144, 255, 0.14);
   --loc-line: rgba(157, 178, 255, 0.42);
-  --day-fg: #b99cff;
-  --day-bg: rgba(170, 130, 255, 0.14);
-  --day-line: rgba(196, 168, 255, 0.4);
+  --set-fg: #b99cff;
+  --set-bg: rgba(170, 130, 255, 0.14);
+  --set-line: rgba(196, 168, 255, 0.4);
+  --day-fg: #f0a274;
+  --day-bg: rgba(240, 150, 100, 0.13);
+  --day-line: rgba(240, 162, 116, 0.4);
   --ok-bg: rgba(124, 196, 150, 0.12);
   --ok-line: rgba(124, 196, 150, 0.32);
 }
@@ -1161,7 +1168,7 @@ code {
   white-space: nowrap;
 }
 
-/* La fila de un día, un scouting, una prueba o un plan (D789): fecha y jornada en el violeta de los días, el lugar en
+/* La fila de un día, un scouting, una prueba o un plan (D789): fecha y jornada en el color de los días, el lugar en
    el azul de las locaciones si la app lo reconoce, y lo demás apagado. Elegida, no cambia de colores. */
 .tree-row .label.dated .code.date,
 .tree-row.active .label.dated .code.date {

@@ -2380,3 +2380,12 @@ van. La barra se parte en tres: arriba **solo el selector** (v0.292: Lega no qui
 el medio, que es lo único que se desplaza (`.sidebar-scroll`, donde siguen pegados los títulos de D771), y el pie con la
 cuenta en un renglón de 36 px (antes 48). La barra de desplazamiento del medio es fina (4 px a la vista), oscura, sin
 flechas, y está escondida: aparece con el mouse en su franja (14 px del borde) o mientras se desplaza.
+
+### D803 · Decorados en violeta y días en terracota (2026-10-27)
+**Pedido de Lega:** los decorados tienen que diferenciarse de las locaciones, pero con colores parecidos: los dos son
+«dónde» (el lugar de la historia y el real). Propuso pasar el violeta de los días a los decorados y darles otro color a
+los días. Eligió con una prueba sobre la app (cinco paletas, oscuro y claro, escena, locación, decorado y día).
+**Eligió:** decorados en el violeta de antes (`--set-*`: `#6d3fc0` en claro, `#b99cff` en oscuro) y días y fechas en
+terracota (`--day-*`: `#a64b1b`, `#f0a274`). Queda la regla: los lugares en tonos fríos, el tiempo en uno cálido, las
+escenas en frambuesa. Hoy el violeta va en el chip del decorado de las cabeceras y en el renglón *Set* de la escena;
+cuando el decorado sea entidad (parte 4 de `Plan_Estructura_Etapas.md`), en todos lados.

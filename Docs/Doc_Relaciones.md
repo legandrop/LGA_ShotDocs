@@ -1389,8 +1389,8 @@ que la nombran; si ninguno, los de la locación donde se filmó, «de …»), *T
 día con sus planes), *Shoot | Reports* (un día por renglón con sus secciones y sus fotos; un día que solo la nombra en el
 texto, aparte) y *Other* (lo que la nombra fuera de las etapas; las páginas índice, plegadas). *Breakdown*, *Location*,
 *Scouting*, *Planning* y *Shoot* van siempre: vacíos dicen que no hay, o *Reading…* mientras el índice lee (D402);
-*Set*, *Open questions*, *Tests* y *Other*, solo con algo. Los colores de D774: escena en frambuesa, locación en azul,
-día en violeta, lo demás en el acento. El Overview los muestra en la vista de la escena y en la fila desplegada de
+*Set*, *Open questions*, *Tests* y *Other*, solo con algo. Los colores de D774 y D803: escena en frambuesa, locación en
+azul, decorado en violeta, día en terracota, lo demás en el acento. El Overview los muestra en la vista de la escena y en la fila desplegada de
 *Scenes*; la cabecera viva de la página de la escena, los mismos sin *Breakdown* (es esa página). Una escena en dos
 páginas lo dice arriba y lleva a *Pending*.
 

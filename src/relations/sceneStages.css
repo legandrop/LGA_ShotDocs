@@ -72,15 +72,23 @@
   color: var(--day-fg);
 }
 
-/* Una escena, una locación o un día ya se leen por su color: sin raya hasta pasar por encima. */
+/* El renglón *Set*: los decorados en violeta (D803), también el que no tiene página que abrir. */
+.ss .ss-row[data-row='set'] .ss-a,
+.ss .ss-row[data-row='set'] .ss-txt {
+  color: var(--set-fg);
+}
+
+/* Una escena, una locación, un decorado o un día ya se leen por su color: sin raya hasta pasar por encima. */
 .ss .ss-a.scene,
 .ss .ss-a.loc,
+.ss .ss-row[data-row='set'] .ss-a,
 .ss .ss-a.day {
   text-decoration-color: transparent;
 }
 
 .ss .ss-a.scene:hover,
 .ss .ss-a.loc:hover,
+.ss .ss-row[data-row='set'] .ss-a:hover,
 .ss .ss-a.day:hover {
   text-decoration-color: currentColor;
 }

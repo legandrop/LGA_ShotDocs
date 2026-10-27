@@ -256,7 +256,7 @@
 }
 
 /* Lo que la app reconoce va en su color en todas las tablas (D774): la locación en azul, el día y la fecha en
-   violeta. */
+   terracota (D803). */
 .mp-nm {
   display: flex;
   align-items: center;

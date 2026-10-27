@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.293 :
+
+Los decorados no tenían color (el chip de la cabecera y el renglón *Set* de la escena iban como texto común) y los días
+usaban el violeta. Lega pidió que decorado y locación se distingan con tonos vecinos, porque los dos son lugares, y eligió
+la paleta con una prueba sobre la app: los decorados pasan al violeta (variables nuevas `--set-*` en `styles.css`) y los
+días y las fechas a terracota (`--day-*`), en claro y en oscuro (D803). Como todo usa las mismas variables, el cambio
+llega solo a la cabecera, el árbol, el Overview, la tarjeta del día y el mapa.
+
+[Colores - decorados en violeta y días en terracota]
+
 v0.292 :
 
 Al pasar a desplazar solo el medio de la barra lateral (v0.291), el árbol quedó con la barra de desplazamiento clásica de

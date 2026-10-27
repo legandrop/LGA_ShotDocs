@@ -142,7 +142,7 @@ a.map-nav-count:focus-visible {
 }
 
 /* Los colores de cada cosa (D774): el número de una escena va en frambuesa (scenesNav.css), el de un día en
-   violeta y el nombre de una locación en azul. */
+   terracota (D803) y el nombre de una locación en azul. */
 .ov-days .scene-nav-row .code {
   color: var(--day-fg);
 }
