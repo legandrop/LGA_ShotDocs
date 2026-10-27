@@ -694,6 +694,17 @@ importar, en el editor de la página (un solo cambio, que se deshace con un desh
   Shift+Enter dentro del mismo párrafo. Si vienen en párrafos seguidos, se juntan en uno.
 - **Cómo distinguirlas:** sobre la miniatura dibujada a 64 × 64, la captura del guion tiene saturación media menor a 1
   (sobre 255) y más del 60 % de píxeles casi blancos (los tres canales por encima de 215); una foto no.
+- **Links de Drive (D796, D797):** en Coda el link a un video solía estar dos veces, escrito y como embebido (que la
+  importación vuelve tarjeta). El link escrito que repite una tarjeta de la página se saca (el renglón si es solo el link;
+  si no, solo el link y el texto queda); un link escrito sin tarjeta pasa a tarjeta, salvo **«Escaneo de locación», que
+  queda como link**; todas las tarjetas a la mitad del ancho. Un link `drive.google.com/open?id=…` puede ser una carpeta:
+  Drive lo dice al redirigir (`/drive/folders/…` o `/file/d/…`, sin sesión) y se reescribe como
+  `drive.google.com/drive/folders/<id>`, así la tarjeta muestra la carpeta.
+- **Encabezados, planos e imágenes (D798):** «Generales», «General» y cada «Escena N…» en encabezado 1 (los subtítulos
+  de una sección quedan como están); dos párrafos vacíos antes de cualquier encabezado (salvo el primer bloque); un
+  «Plano NN:» con un párrafo vacío arriba y su texto debajo, con Shift+Enter dentro del mismo párrafo; y una imagen
+  nunca en el mismo renglón que un texto (Shift+Enter entre los dos). Los párrafos vacíos se crean con los atributos por
+  defecto del esquema, nunca escritos a mano. Antes y después se comparan el texto (sin espacios) y la cantidad de fotos.
 
 ### Varios docs en un proyecto (2026-10-17)
 

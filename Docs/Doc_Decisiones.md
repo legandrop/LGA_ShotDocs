@@ -2338,3 +2338,12 @@ Además, en Iglesia Santa Cruz los links `drive.google.com/open?id=…` de «Fot
 eran carpetas (lo dice la redirección de Drive, sin sesión) y la tarjeta los tomaba como archivo («No hay una vista
 previa disponible»): se cambiaron por `drive.google.com/drive/folders/<id>`. Que la app lo reconozca sola queda
 pendiente (tendría que preguntarlo el portero).
+
+### D798 · Encabezados en 1, aire antes de cada encabezado y de cada plano, imágenes en su renglón (2026-10-27)
+**Pedido de Lega:** en las páginas que vienen de Coda, «Generales» y cada «Escena N…» estaban en encabezado 2 (alguno en
+3) y deben ser **encabezado 1**; los subtítulos de una sección («Interior», «Exterior», «Fotos de locación») quedan como
+están. Antes de cualquier encabezado van **dos renglones vacíos**, así cada sección queda separada de la anterior (salvo
+el primer bloque de la página). Un **«Plano NN:»** lleva un renglón vacío arriba y su texto **debajo**, con Shift+Enter,
+nunca seguido en el mismo renglón. Y una **imagen nunca comparte renglón con texto**: en Coda no se notaba, en la app
+sí; va con Shift+Enter antes o después. Es formato de datos, no de la app: se aplicó en los 29 scoutings de VLLF y queda
+anotado en `Doc_Importar_Coda.md` para Planeamiento de VLLF y para ERSO.
