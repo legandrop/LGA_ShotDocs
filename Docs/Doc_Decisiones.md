@@ -2292,5 +2292,5 @@ Detalle en `Doc_Sincronizacion.md`, "Estado visible".
 cursiva como primer renglón y casi siempre repetía el título (a veces con la fecha en otra forma, o solo el lugar).
 Ahora no se pone si no agrega nada (`subtitleRepeats`: todas sus palabras están en el título, con las fechas y las
 jornadas en cualquier forma). Sacados de ERSO y VLLF los 93 que ya estaban. Quedan 180 que suman algo (`Reporte`, el
-día de la semana, otra fecha u otra jornada, como `D43 26.01.27 | COFA | Lunes` bajo `D44 26.01.27 | COFA`): a decidir
-con Lega.
+día de la semana, otra fecha u otra jornada, como `D43 26.01.27 | COFA | Lunes` bajo `D44 26.01.27 | COFA`): Lega
+decidió dejarlos como están (2026-10-27).
