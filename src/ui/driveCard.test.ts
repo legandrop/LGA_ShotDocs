@@ -9,6 +9,7 @@ import { blocksThirdPartyCookies, DRIVE_CARD_WIDTH_PROP, DRIVE_FRAME_SANDBOX, dr
 import { canShowAsCard } from './DriveLinkCardButton';
 import { applyDrivePaste, createDrivePaste, driveLinkFromClipboard, findPastedDriveLink, showLinkAsCard } from './drivePaste';
 import { DRIVE_CARD_PROP, paragraphProps, QUESTION_PROP, schema, SCRIPT_PROP } from './editorSchema';
+import { schema as anteriorSchema } from './fixtures/editorSchemaAnterior';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
 import { schema as soloScriptSchema } from './fixtures/editorSchemaSoloScript';
 import { findUnknownContent, knownContent } from './unknownContent';
@@ -625,7 +626,7 @@ describe('el ancho de la tarjeta (D796)', () => {
     expect(now.classList.contains('drive-card-sized')).toBe(false);
   });
 
-  it('la versión publicada (sin el ancho) abre la tarjeta entera; editar otro bloque no le saca el ancho', async () => {
+  it('una versión sin el ancho (v0.083-v0.092, congelada) abre la tarjeta entera; editar otro bloque no le saca el ancho', async () => {
     const { doc, editor } = newPage();
     editor.updateBlock(editor.document[1], { props: { [DRIVE_CARD_WIDTH_PROP]: 1 / 2 } } as never);
     await tick();
@@ -633,21 +634,21 @@ describe('el ancho de la tarjeta (D796)', () => {
     Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
     const updates: Uint8Array[] = [];
     docOld.on('update', (u: Uint8Array) => updates.push(u));
-    const old = mount(docOld, mainSchema);
+    const old = mount(docOld, anteriorSchema);
     await tick();
     expect(texts(old)).toEqual(['Plano de referencia:', 'Plano 12.mov', 'Nota.']);
     expect((old.document[1].props as Record<string, unknown>)[DRIVE_CARD_PROP]).toBe(true);
     expect(old.domElement!.querySelector('.drive-card')?.classList.contains('drive-card-sized')).toBe(false);
     old.setTextCursorPosition(old.document[2], 'end');
-    old.insertInlineContent(' Editada en la publicada.');
+    old.insertInlineContent(' Editada en la vieja.');
     await tick();
     for (const u of updates) Y.applyUpdate(doc, u);
     await tick();
-    expect(texts(editor)[2]).toBe('Nota. Editada en la publicada.');
+    expect(texts(editor)[2]).toBe('Nota. Editada en la vieja.');
     expect(widthOf(editor, 1)).toBe(0.5);
   });
 
-  it('si la versión publicada edita la tarjeta, se pierde a lo sumo el ancho: el texto, el link y la tarjeta quedan', async () => {
+  it('si una versión sin el ancho edita la tarjeta, se pierde a lo sumo el ancho: el texto, el link y la tarjeta quedan', async () => {
     const { doc, editor } = newPage();
     editor.updateBlock(editor.document[1], { props: { [DRIVE_CARD_WIDTH_PROP]: 1 / 2 } } as never);
     await tick();
@@ -655,7 +656,7 @@ describe('el ancho de la tarjeta (D796)', () => {
     Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
     const updates: Uint8Array[] = [];
     docOld.on('update', (u: Uint8Array) => updates.push(u));
-    const old = mount(docOld, mainSchema);
+    const old = mount(docOld, anteriorSchema);
     await tick();
     old.setTextCursorPosition(old.document[1], 'end');
     old.insertInlineContent(' (toma 3)');

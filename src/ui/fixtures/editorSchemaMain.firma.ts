@@ -33,6 +33,7 @@ export const FIRMA_PUBLICADA: string[] = [
   'atributo numberedListItem.textColor = "default"',
   'atributo paragraph.backgroundColor = "default"',
   'atributo paragraph.driveCard = false',
+  'atributo paragraph.driveCardWidth = 1',
   'atributo paragraph.pageBreak = false',
   'atributo paragraph.question = false',
   'atributo paragraph.script = false',

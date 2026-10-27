@@ -23,7 +23,7 @@ import type { Node as PMNode, Slice } from '@tiptap/pm/model';
 import { type EditorState, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { cellThumbsExtension, DEFAULT_THUMB_HEIGHT, THUMB_HEIGHT_PROP } from '../cellThumbs';
-import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from '../driveCard';
+import { createDriveCardView, DRIVE_CARD_PROP, DRIVE_CARD_WIDTH_PROP, driveLinkInContent } from '../driveCard';
 import { imageRowsExtension, ROW_WIDTH_PROP } from '../imageRowsEditor';
 import { quietExternalHtml } from '../quietImage';
 import { photoSpec } from '../inlinePhoto';
@@ -59,9 +59,10 @@ export const QUESTION_PROP = 'question';
 //
 // Un link de Drive que se ve como tarjeta con el reproductor (paso 13): un párrafo con el link y
 // `driveCard: true` (ver driveCard.ts). Si se pierde la propiedad, queda el párrafo con el link. No va
-// junto con Script ni con pregunta.
+// junto con Script ni con pregunta. Su ancho (`driveCardWidth`, la parte del renglón: 1, 1/2, 1/3, 1/4) es otra
+// propiedad del mismo párrafo (D796): una versión que no la conoce la ignora y muestra la tarjeta entera.
 
-export { DRIVE_CARD_PROP };
+export { DRIVE_CARD_PROP, DRIVE_CARD_WIDTH_PROP };
 
 // --- Salto de hoja -----------------------------------------------------------------------------------
 //
@@ -243,6 +244,7 @@ const createParagraph = createBlockSpec(
       [SCRIPT_PROP]: { default: false },
       [QUESTION_PROP]: { default: false },
       [DRIVE_CARD_PROP]: { default: false },
+      [DRIVE_CARD_WIDTH_PROP]: { default: 1 },
       [PAGE_BREAK_PROP]: { default: false },
     },
     content: 'inline',

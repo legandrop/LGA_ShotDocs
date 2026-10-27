@@ -20,10 +20,7 @@ import { FIRMA_PUBLICADA } from './fixtures/editorSchemaMain.firma';
 // Lo nuevo de una tanda que todavía no se publicó va en NUEVO_SIN_PUBLICAR (una línea por diferencia, como la muestra el
 // error), con su prueba de que la versión publicada lo conserva. Al publicarla: `npm run esquema:publicado` (regenera el
 // fixture y la firma y vacía la lista; cómo y cuándo, en scripts/esquema-publicado.mjs).
-const NUEVO_SIN_PUBLICAR: string[] = [
-  // D796: el ancho de la tarjeta de Drive. La versión publicada la abre entera (driveCard.test.ts, «el ancho de la tarjeta»).
-  'atributo paragraph.driveCardWidth = 1',
-];
+const NUEVO_SIN_PUBLICAR: string[] = [];
 
 /** La firma del esquema de unas opciones del editor. */
 function signature(options: unknown): string[] {
