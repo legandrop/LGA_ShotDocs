@@ -98,8 +98,12 @@ export const editor = {
     es: "Las fotos elegidas, en orden, con la misma altura en cada fila",
   },
   'photoSize.notAdjacent': {
-    en: "Select images that are next to each other, with no text between them",
-    es: "Elegí fotos que estén seguidas, sin texto en el medio",
+    en: "Select images that are next to each other or on lines right below each other, with no text between them",
+    es: "Elegí fotos seguidas o en renglones contiguos, sin texto en el medio",
+  },
+  'photoSize.arrangeJoin': {
+    en: "Moves the selected images into one line, in order, with the same height in each row",
+    es: "Pasa las fotos elegidas a un solo renglón, en orden, con la misma altura en cada fila",
   },
   'photoTip.view': {
     en: "Opens it full screen, with every photo and video on the page",

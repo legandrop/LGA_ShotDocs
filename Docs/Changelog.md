@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.288 :
+
+*Arrange in rows* solo se prendía con fotos seguidas en el mismo renglón: dos páginas de guion altas, una debajo de la
+otra (con Shift+Enter o en párrafos seguidos), no se podían poner lado a lado sin cortarlas y pegarlas a mano. Ahora,
+si entre las fotos elegidas solo hay saltos de renglón, espacios o el borde entre párrafos (también renglones vacíos),
+el botón se prende y las junta en un solo renglón antes de acomodarlas (`joinable`, `joinAndArrange`, `joinPhotos` en
+`inlinePhotoSize.ts`), en pasos chicos que no borran ningún bloque ni recrean las fotos del primer renglón, así lo que
+otro dispositivo edite a la vez no se pierde (pruebas con dos dispositivos en `inlinePhotoJoin.test.ts`); se deshace en
+un paso. Con texto, otra foto, un título o un salto de hoja en el medio sigue apagado. Ayuda y tooltip al día (D799).
+
+[Fotos - acomodar en filas fotos de renglones contiguos]
+
 v0.287 :
 
 La v0.286 achicaba la grilla de una carpeta al 60 %, pero seguían entrando dos archivos por fila: Google decide las

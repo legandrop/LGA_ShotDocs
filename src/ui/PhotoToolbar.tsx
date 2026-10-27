@@ -52,7 +52,7 @@ interface PhotoChoice {
   url: string | null;
   name: string;
   key: string | null;
-  arrange: { positions: number[]; adjacent: boolean } | null;
+  arrange: { positions: number[]; adjacent: boolean; join: boolean } | null;
   /** Los bloques de las fotos (sin repetir) y su alineación, si es la misma en todos. */
   blocks: string[];
   align: Alignment | null;
@@ -125,7 +125,8 @@ const sameChoice = (a: PhotoChoice | null, b: PhotoChoice | null) =>
     a.tables.join() === b.tables.join() &&
     a.thumbHeight === b.thumbHeight &&
     a.arrange?.positions.join() === b.arrange?.positions.join() &&
-    a.arrange?.adjacent === b.arrange?.adjacent);
+    a.arrange?.adjacent === b.arrange?.adjacent &&
+    a.arrange?.join === b.arrange?.join);
 
 /** Las fotos en línea elegidas (y lo que se puede hacer con ellas), o `null`. */
 export function usePhotoChoice(): PhotoChoice | null {
@@ -180,9 +181,11 @@ export function PhotoSizeButtons() {
     ? tr('photoSize.notAdjacent')
     : !ready
       ? tr('imageSize.waiting')
-      : many
-        ? tr('photoSize.arrangeSelected')
-        : tr('imageSize.arrangeHint');
+      : arrange?.join
+        ? tr('photoSize.arrangeJoin')
+        : many
+          ? tr('photoSize.arrangeSelected')
+          : tr('imageSize.arrangeHint');
   // En una celda (entrega 5, D32): solo la miniatura del alto de una fila (`w = 0`, con lo que entran) y todo el ancho
   // de la celda. 1/2, 1/3, 1/4 y "Arrange in rows" no van: en una columna de 120 px (la de fábrica) dejaban la foto más
   // chica que la miniatura. El tirador sigue agrandándola dentro de la celda. Con una mezcla de celdas y renglones, la

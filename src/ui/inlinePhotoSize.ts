@@ -4,6 +4,7 @@ import type { EditorView } from '@tiptap/pm/view';
 import { arrangeRows } from './imageRows';
 import { PHOTO, photoLine } from './inlinePhoto';
 import { thumbSize } from './sharpMarks';
+import { asOneUndoStep } from './undoGuard';
 
 // El tamaño de las fotos en línea elegidas y "Arrange in rows" sobre ellas (Docs/Doc_Fotos_En_Linea.md, entrega 2).
 // `w` es la parte del renglón, como `rowWidth` de las fotos-bloque (imageRows.ts): los mismos tamaños rápidos y el
@@ -55,18 +56,74 @@ export function areAdjacent(doc: PMNode, positions: readonly number[]): boolean 
   return first >= 0 && positions.every((p, i) => run[first + i] === p);
 }
 
+/** Un relleno entre dos fotos de renglones contiguos: un salto de renglón (Shift+Enter) o un texto de solo espacios. */
+function isFiller(node: PMNode): boolean {
+  return node.type.name === 'hardBreak' || (node.isText && !node.text!.trim());
+}
+
+/** Todo el contenido de `parent` entre los desplazamientos `from` y `to` es relleno. */
+function fillerBetween(parent: PMNode, from: number, to: number): boolean {
+  let ok = true;
+  parent.forEach((child, offset) => {
+    if (offset + child.nodeSize > from && offset < to && !isFiller(child)) ok = false;
+  });
+  return ok;
+}
+
+/** Dónde está la foto `pos`: su párrafo, el bloque (`blockContainer`) y el grupo de bloques que lo tiene. */
+function photoPlace(doc: PMNode, pos: number) {
+  const $pos = doc.resolve(pos);
+  if ($pos.depth < 2 || $pos.parent.type.name !== 'paragraph') return null;
+  const block = $pos.node($pos.depth - 1);
+  if (block.type.name !== 'blockContainer' || block.childCount !== 1) return null;
+  return { $pos, offset: $pos.parentOffset, groupStart: $pos.start($pos.depth - 2), index: $pos.index($pos.depth - 2) };
+}
+
+/**
+ * Las fotos elegidas están en renglones contiguos (Lega, 2026-10-27, D799): entre una y la siguiente solo hay saltos de
+ * renglón, espacios o el borde entre dos párrafos seguidos (también párrafos vacíos en el medio). "Arrange in rows"
+ * las junta en un solo renglón. Solo párrafos hermanos sin bloques anidados, y fuera de una tabla: lo demás no se junta.
+ */
+export function joinable(doc: PMNode, positions: readonly number[]): boolean {
+  if (positions.length < 2) return false;
+  if (!positions.every((p) => doc.nodeAt(p)?.type.name === PHOTO)) return false;
+  for (let i = 1; i < positions.length; i++) {
+    const a = photoPlace(doc, positions[i - 1]);
+    const b = photoPlace(doc, positions[i]);
+    if (!a || !b || a.groupStart !== b.groupStart || positions[i] <= positions[i - 1]) return false;
+    if (a.index === b.index) {
+      if (!fillerBetween(a.$pos.parent, a.offset + 1, b.offset)) return false;
+      continue;
+    }
+    if (!fillerBetween(a.$pos.parent, a.offset + 1, a.$pos.parent.content.size)) return false;
+    if (!fillerBetween(b.$pos.parent, 0, b.offset)) return false;
+    const group = a.$pos.node(a.$pos.depth - 2);
+    for (let k = a.index + 1; k < b.index; k++) {
+      const block = group.child(k);
+      const text = block.firstChild;
+      if (block.childCount !== 1 || text?.type.name !== 'paragraph' || !fillerBetween(text, 0, text.content.size)) return false;
+      // Un salto de hoja, una pregunta, un Script o una tarjeta vacíos en el medio no son renglones vacíos: no se cruzan.
+      if (['pageBreak', 'question', 'script', 'driveCard'].some((k) => text.attrs[k] === true)) return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Lo que acomoda "Arrange in rows": con una foto elegida, las fotos seguidas de su renglón; con varias, esas (si
- * están seguidas). `null` si no hay qué acomodar (una sola, o con letras en el medio: `adjacent` falso).
+ * están seguidas, o en renglones contiguos: `join`, D799). `null` si no hay qué acomodar (una sola). `adjacent`
+ * falso: hay letras u otras cosas en el medio y no se puede.
  */
-export function arrangeTarget(state: EditorState): { positions: number[]; adjacent: boolean } | null {
+export function arrangeTarget(state: EditorState): { positions: number[]; adjacent: boolean; join: boolean } | null {
   const chosen = selectedPhotos(state);
   if (chosen.length === 0) return null;
   if (chosen.length === 1) {
     const run = runAround(state.doc, chosen[0]);
-    return run.length > 1 ? { positions: run, adjacent: true } : null;
+    return run.length > 1 ? { positions: run, adjacent: true, join: false } : null;
   }
-  return { positions: chosen, adjacent: areAdjacent(state.doc, chosen) };
+  if (areAdjacent(state.doc, chosen)) return { positions: chosen, adjacent: true, join: false };
+  const join = joinable(state.doc, chosen);
+  return { positions: chosen, adjacent: join, join };
 }
 
 /** Pone el mismo ancho a todas esas fotos, en un solo cambio. */
@@ -142,6 +199,7 @@ export function gapRatioAt(view: EditorView, pos: number): number | null {
 export function arrangeSelected(view: EditorView): boolean {
   const target = arrangeTarget(view.state);
   if (!target || !target.adjacent) return false;
+  if (target.join) return joinAndArrange(view, target.positions);
   const aspects = new Map<number, number | null>();
   const run = runAround(view.state.doc, target.positions[0]);
   for (const p of run) aspects.set(p, aspectAt(view, p));
@@ -155,4 +213,92 @@ export function arrangeSelected(view: EditorView): boolean {
   }
   if (tr.docChanged) view.dispatch(tr);
   return tr.docChanged;
+}
+
+/**
+ * Junta en un renglón las fotos de renglones contiguos (`joinable`) y las acomoda en filas (D799). Quedan elegidas,
+ * como después de acomodar fotos seguidas.
+ */
+export function joinAndArrange(view: EditorView, positions: readonly number[]): boolean {
+  if (!joinable(view.state.doc, positions)) return false;
+  const aspects = positions.map((p) => aspectAt(view, p));
+  const gap = gapRatioAt(view, positions[0]);
+  if (gap === null || aspects.some((a) => a === null)) return false;
+  return joinPhotos(view, positions, aspects as number[], gap);
+}
+
+/**
+ * El cambio de `joinAndArrange`, con las proporciones (en el orden de `positions`) ya medidas. Va en pasos chicos, cada
+ * uno su propia transacción (`asOneUndoStep` los junta en un paso de deshacer), porque con otro dispositivo editando a la vez un
+ * cambio grande perdía cosas (auditoría de D799):
+ *   1. las fotos de los otros párrafos se copian, en orden, pegadas a la última elegida del primero;
+ *   2. las originales salen de sus párrafos junto con los saltos y espacios que las rodean. **Ningún bloque se borra**
+ *      (un párrafo que queda vacío, queda): lo que otro dispositivo escriba sin red en él, o un comentario anclado a él,
+ *      no se pierde, y el texto que seguía a una foto se queda con el formato de su párrafo;
+ *   3. en el primer párrafo se sacan solo los saltos y espacios entre las elegidas (las fotos no se recrean: un cambio
+ *      que otro dispositivo les haga a la vez se conserva), y lo que quedó de relleno al final, si se movieron fotos;
+ *   4. los anchos de "Arrange in rows".
+ */
+export function joinPhotos(view: EditorView, positions: readonly number[], aspects: readonly number[], gap: number): boolean {
+  if (!joinable(view.state.doc, positions)) return false;
+  // Un solo paso de deshacer, separado de lo que se hizo justo antes (sin esto, el medio segundo en que Yjs agrupa los
+  // cambios pegaba la unión a lo último que se escribió: auditoría de D799).
+  return asOneUndoStep(view.state, () => joinSteps(view, positions, aspects, gap));
+}
+
+function joinSteps(view: EditorView, positions: readonly number[], aspects: readonly number[], gap: number): boolean {
+  const doc0 = view.state.doc;
+  const $first = doc0.resolve(positions[0]);
+  const firstEnd = $first.end();
+  const inFirst = positions.filter((p) => p < firstEnd);
+  const later = positions.slice(inFirst.length);
+  let group = [...inFirst];
+  if (later.length) {
+    // 1. Las copias, pegadas a la última del primer párrafo.
+    const at = inFirst[inFirst.length - 1] + 1;
+    const tr1 = view.state.tr.insert(at, later.map((p) => doc0.nodeAt(p)!));
+    view.dispatch(tr1);
+    group = [...inFirst, ...later.map((_, i) => at + i)];
+    // 2. Las originales y su relleno salen de sus párrafos; los párrafos quedan.
+    const tr2 = view.state.tr;
+    const moved = later.map((p) => tr1.mapping.map(p));
+    const ranges: [number, number][] = [];
+    for (let i = 0; i < moved.length; ) {
+      const $p = tr2.doc.resolve(moved[i]);
+      const end = $p.end();
+      let j = i;
+      while (j + 1 < moved.length && moved[j + 1] < end) j++;
+      let to = moved[j] + 1;
+      for (let n = tr2.doc.nodeAt(to); to < end && n && isFiller(n); n = tr2.doc.nodeAt(to)) to += n.nodeSize;
+      ranges.push([$p.start(), to]);
+      i = j + 1;
+    }
+    for (const [from, to] of ranges.reverse()) tr2.delete(from, to);
+    view.dispatch(tr2);
+    group = group.map((p) => tr2.mapping.map(p));
+  }
+  // 3. El relleno entre las elegidas del primer párrafo (y el del final, si se movieron fotos).
+  const tr3 = view.state.tr;
+  const cuts: [number, number][] = [];
+  for (let k = 1; k < group.length; k++) if (group[k] > group[k - 1] + 1) cuts.push([group[k - 1] + 1, group[k]]);
+  if (later.length) {
+    const last = group[group.length - 1] + 1;
+    const end = tr3.doc.resolve(last).end();
+    if (last < end && fillerBetween(tr3.doc.resolve(last).parent, last - tr3.doc.resolve(last).start(), end - tr3.doc.resolve(last).start())) cuts.push([last, end]);
+  }
+  for (const [from, to] of cuts.reverse()) tr3.delete(from, to);
+  if (tr3.docChanged) view.dispatch(tr3);
+  group = group.map((p) => tr3.mapping.map(p));
+  // 4. Los anchos.
+  const doc = view.state.doc;
+  if (!group.every((p, i) => p === group[0] + i && doc.nodeAt(p)?.type.name === PHOTO)) return true;
+  const widths = arrangeWidths(doc, group, (p) => aspects[p - group[0]] ?? 0, gap);
+  const tr4 = view.state.tr;
+  for (const [pos, change] of widths) {
+    if (change.w !== undefined) tr4.setNodeAttribute(pos, 'w', change.w);
+    if ((tr4.doc.nodeAt(pos)?.attrs.rowStart ?? null) !== change.rowStart) tr4.setNodeAttribute(pos, 'rowStart', change.rowStart);
+  }
+  tr4.setSelection(TextSelection.create(tr4.doc, group[0], group[0] + group.length));
+  view.dispatch(tr4);
+  return true;
 }

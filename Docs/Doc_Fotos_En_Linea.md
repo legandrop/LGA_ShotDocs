@@ -576,7 +576,21 @@ Lega probó la entrega 2 y la rechazó como estaba: la foto en línea tenía men
   medido en la entrega 1).
 - ***Arrange in rows*** acomoda **solo las elegidas** (pedido de Lega; la auditoría de la entrega 2 sacó la propuesta
   de sumar la fila de antes): con una sola elegida, las seguidas de su renglón. Si hay texto entre las elegidas, el
-  botón queda apagado y dice *Select images that are next to each other, with no text between them*. Para que queden
+  botón queda apagado y dice *Select images that are next to each other or on lines right below each other, with no
+  text between them*. **Renglones contiguos (D799, 2026-10-27):** si entre una elegida y la siguiente solo hay saltos
+  de renglón (Shift+Enter), espacios o el borde entre párrafos hermanos (también párrafos vacíos en el medio), el botón
+  se prende y las **junta en un solo renglón** antes de acomodarlas (`joinable`, `joinAndArrange`, `joinPhotos`), en
+  pasos chicos que `asOneUndoStep` junta en un solo deshacer (que no se lleva lo escrito justo antes): las fotos de otros párrafos se copian pegadas a la última del
+  primero; las originales salen de sus párrafos con los saltos que las rodean, **sin borrar ningún bloque** (un párrafo
+  que queda vacío, queda; el texto que seguía a una foto se queda en su párrafo, con su formato y sus comentarios); en
+  el primer párrafo solo se sacan los saltos entre las elegidas, sin recrearlas; y al final los anchos. Así lo que otro
+  dispositivo escriba a la vez no se pierde, y tampoco lo que les cambie a las fotos del primer párrafo (la primera
+  versión borraba el bloque de la última foto y recreaba todas: lo encontró la auditoría, pruebas en
+  `inlinePhotoJoin.test.ts`). **Excepciones:** las fotos que vienen de otro párrafo se recrean, así que un cambio que
+  otro dispositivo les haga a la vez (renombrarla, anotarla) se pierde; si dos dispositivos juntan las mismas fotos sin
+  red, una queda dos veces (como al convertir fotos-bloque); y los párrafos que quedan vacíos quedan como renglones
+  vacíos, para borrarlos a mano. No junta a través de un texto, de una foto sin elegir, de otro tipo de bloque, de un salto de hoja, una
+  pregunta o un Script vacíos, de bloques anidados ni dentro de una tabla. Para que queden
   en filas propias dentro de una tanda más larga, la primera elegida y la foto que sigue a la última llevan una marca
   nueva del nodo, `rowStart` ("empieza fila": las filas se cortan ahí; solo `true` o nada, así una foto sin la marca
   se guarda igual que antes); ningún ancho de las otras cambia. La última fila no se estira: queda con la altura que le

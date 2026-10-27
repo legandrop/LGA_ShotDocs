@@ -13,6 +13,8 @@ import {
   arrangeTarget,
   arrangeWidths,
   areAdjacent,
+  joinable,
+  joinPhotos,
   onlyPhotosSelected,
   runAround,
   selectedPhotos,
@@ -79,11 +81,11 @@ describe('qué fotos están elegidas', () => {
   it('qué acomoda: con una elegida, las seguidas de su renglón; con varias, esas (avisa si no están seguidas)', () => {
     const E = mount([p('a', ph('F1'), ph('F2'), ph('F3'), 'y', ph('F4'))]);
     choose(E, 'F2');
-    expect(arrangeTarget(view(E).state)).toEqual({ positions: ['F1', 'F2', 'F3'].map((n) => pos(E, n)), adjacent: true });
+    expect(arrangeTarget(view(E).state)).toEqual({ positions: ['F1', 'F2', 'F3'].map((n) => pos(E, n)), adjacent: true, join: false });
     choose(E, 'F4');
     expect(arrangeTarget(view(E).state)).toBeNull();
     range(E, pos(E, 'F2'), pos(E, 'F3') + 1);
-    expect(arrangeTarget(view(E).state)).toEqual({ positions: [pos(E, 'F2'), pos(E, 'F3')], adjacent: true });
+    expect(arrangeTarget(view(E).state)).toEqual({ positions: [pos(E, 'F2'), pos(E, 'F3')], adjacent: true, join: false });
     range(E, pos(E, 'F3'), pos(E, 'F4') + 1);
     expect(arrangeTarget(view(E).state)?.adjacent).toBe(false);
   });
@@ -165,6 +167,72 @@ describe('acomodar las elegidas', () => {
     wrap.append(dom);
     const back = DOMParser.fromSchema(schemaOf).parseSlice(wrap).content.firstChild!.firstChild ?? DOMParser.fromSchema(schemaOf).parseSlice(wrap).content.firstChild!;
     expect(back.type.name === 'photo' ? back.attrs.rowStart : back.firstChild?.attrs.rowStart).toBe(true);
+  });
+});
+
+describe('fotos en renglones contiguos (D799)', () => {
+  const hb = { type: 'hardBreak' } as never;
+  const names = (e: BlockNoteEditor) => {
+    const out: string[] = [];
+    view(e).state.doc.descendants((n) => {
+      if (n.isTextblock) out.push(n.content.content.map((c) => (c.type.name === PHOTO ? String(c.attrs.name) : c.type.name === 'hardBreak' ? '/' : c.text)).join(' '));
+      return !n.isTextblock;
+    });
+    return out;
+  };
+  const join = (e: BlockNoteEditor, chosen: string[]) => {
+    return joinPhotos(view(e), chosen.map((n) => pos(e, n)), chosen.map(() => 0.7), 8 / 700);
+  };
+
+  it('con Shift+Enter en el medio: se puede, y quedan en un renglón, en filas, elegidas', () => {
+    const E = mount([p('a', 'Escena', hb, ph('A', 0.5), hb, ph('B', 0.5), hb, ph('C', 0.5), hb, 'fin')]);
+    range(E, pos(E, 'A'), pos(E, 'C') + 1);
+    expect(arrangeTarget(view(E).state)).toMatchObject({ adjacent: true, join: true });
+    expect(join(E, ['A', 'B', 'C'])).toBe(true);
+    expect(names(E)[0]).toBe('Escena / A B C / fin');
+    expect(widths(E, ['A', 'B', 'C'])).toEqual(arrangeRows([0.7, 0.7, 0.7], { gapRatio: 8 / 700 }).map((w) => +w.toFixed(4)));
+    expect(selectedPhotos(view(E).state)).toEqual(['A', 'B', 'C'].map((n) => pos(E, n)));
+  });
+
+  it('en párrafos seguidos (con Enter), también con uno vacío en el medio: las fotos pasan al de la primera y ningún bloque se borra', () => {
+    const E = mount([p('a', 'antes'), p('b', ph('A'), hb), p('c'), p('d', ph('B'), hb, 'después'), p('e', 'otro')]);
+    range(E, pos(E, 'A'), pos(E, 'B') + 1);
+    expect(arrangeTarget(view(E).state)).toMatchObject({ adjacent: true, join: true });
+    expect(join(E, ['A', 'B'])).toBe(true);
+    expect(names(E)).toEqual(['antes', 'A B', '', 'después', 'otro']);
+    expect(E.document.map((b) => b.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(selectedPhotos(view(E).state)).toEqual(['A', 'B'].map((n) => pos(E, n)));
+  });
+
+  it('un salto de hoja, una pregunta, un Script o una tarjeta vacíos en el medio no se cruzan', () => {
+    for (const props of [{ pageBreak: true }, { question: true }, { script: true }, { driveCard: true }]) {
+      const E = mount([p('a', ph('A')), { id: 'm', type: 'paragraph', props, content: [] } as never, p('c', ph('B'))]);
+      expect(joinable(view(E).state.doc, [pos(E, 'A'), pos(E, 'B')])).toBe(false);
+    }
+  });
+
+  it('solo algunas de las elegibles: la de abajo que no se eligió queda donde estaba', () => {
+    const E = mount([p('a', ph('chica'), hb, ph('A'), hb, ph('B'), hb, ph('chica2'))]);
+    range(E, pos(E, 'A'), pos(E, 'B') + 1);
+    expect(join(E, ['A', 'B'])).toBe(true);
+    expect(names(E)[0]).toBe('chica / A B / chica2');
+  });
+
+  it('con texto en el medio, una foto sin elegir o un título: no se puede', () => {
+    const E = mount([p('a', ph('A'), hb, 'texto', hb, ph('B'))]);
+    expect(joinable(view(E).state.doc, [pos(E, 'A'), pos(E, 'B')])).toBe(false);
+    const F = mount([p('a', ph('A')), p('b', ph('X')), p('c', ph('B'))]);
+    expect(joinable(view(F).state.doc, [pos(F, 'A'), pos(F, 'B')])).toBe(false);
+    const G = mount([p('a', ph('A')), { type: 'heading', props: { level: 2 }, content: 'Título' } as never, p('c', ph('B'))]);
+    expect(joinable(view(G).state.doc, [pos(G, 'A'), pos(G, 'B')])).toBe(false);
+    range(E, pos(E, 'A'), pos(E, 'B') + 1);
+    expect(arrangeTarget(view(E).state)).toMatchObject({ adjacent: false, join: false });
+  });
+
+  it('fotos ya seguidas: el acomodar de siempre, sin juntar', () => {
+    const E = mount([p('a', ph('A'), ph('B'))]);
+    range(E, pos(E, 'A'), pos(E, 'B') + 1);
+    expect(arrangeTarget(view(E).state)).toMatchObject({ adjacent: true, join: false });
   });
 });
 

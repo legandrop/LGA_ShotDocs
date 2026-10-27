@@ -2347,3 +2347,11 @@ el primer bloque de la página). Un **«Plano NN:»** lleva un renglón vacío a
 nunca seguido en el mismo renglón. Y una **imagen nunca comparte renglón con texto**: en Coda no se notaba, en la app
 sí; va con Shift+Enter antes o después. Es formato de datos, no de la app: se aplicó en los 29 scoutings de VLLF y queda
 anotado en `Doc_Importar_Coda.md` para Planeamiento de VLLF y para ERSO.
+
+### D799 · «Arrange in rows» con fotos de renglones contiguos, y páginas de guion altas en una fila (2026-10-27)
+**Pedido de Lega:** poder elegir dos o más fotos que están en renglones contiguos (una debajo de la otra, con Shift+Enter
+o con Enter) y que «Arrange in rows» se prenda y las ponga en una sola fila; antes solo se prendía con fotos seguidas
+en el mismo renglón. Entre las elegidas solo puede haber saltos de renglón, espacios o renglones vacíos; con texto, otra
+foto o un título en el medio no se juntan. **En los datos:** las capturas del guion chicas van una por renglón (nunca
+dos lado a lado), y las páginas de guion enteras (altas) que van seguidas se ponen en una fila; una captura chica
+antes o después queda en su renglón. Se aplica a los scoutings de VLLF y queda anotado para Planeamiento y ERSO.
