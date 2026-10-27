@@ -25,6 +25,8 @@ export function overviewParent(row: Element): HTMLElement | null {
 
 /** Una fila del árbol de *Pages* a la que llegan las flechas desde el *Overview*: la abre `Sidebar` (su `browse`). */
 export const TREE_GO_EVENT = 'shotdocs:tree-go';
+/** Las flechas se fueron del árbol al *Overview*: el árbol saca su marca de elegida (una sola fila marcada, D808). */
+export const TREE_AWAY_EVENT = 'shotdocs:tree-away';
 export interface TreeGo {
   id: string;
   repeat: boolean;
@@ -43,6 +45,17 @@ export function sidebarStep(from: Element, dir: 1 | -1): HTMLElement | null {
   const rows = [...scroll.querySelectorAll<HTMLElement>(ROWS)];
   const at = rows.indexOf(from as HTMLElement);
   return at < 0 ? null : (rows[at + dir] ?? null);
+}
+
+/**
+ * Desde algo que no es una fila (el título *Overview*, su botón de plegar, el título *Pages*): la primera fila que viene
+ * después (`dir` 1) o la última que viene antes (-1). Así las flechas recorren la barra desde ahí, en vez de desplazarla
+ * (lo encontró la auditoría con clics reales, D808).
+ */
+export function sidebarStepAround(from: Element, dir: 1 | -1): HTMLElement | null {
+  const rows = [...(from.closest('.sidebar-scroll')?.querySelectorAll<HTMLElement>(ROWS) ?? [])];
+  const after = (r: Element) => !!(from.compareDocumentPosition(r) & Node.DOCUMENT_POSITION_FOLLOWING) && !from.contains(r);
+  return dir === 1 ? (rows.find(after) ?? null) : (rows.filter((r) => !after(r) && !from.contains(r)).pop() ?? null);
 }
 
 // Qué se abrió desde el *Overview* (una página o `'map'`, una vista del mapa): eso pliega *Pages* y no centra su árbol;
@@ -136,12 +149,18 @@ export function goToRow(row: HTMLElement, repeat: boolean): void {
   if (row.classList.contains('tree-row')) {
     opener.cancel();
     unmark();
+    // Lo elegido del *Overview* deja de verse elegido: la marca pasa al árbol. Al abrirse la página, React vuelve a
+    // escribir la clase de lo que cambió.
+    for (const cur of document.querySelectorAll('.ov-nav .scene-nav-row.active, .ov-nav .ov-part.on')) {
+      cur.classList.remove(cur.classList.contains('ov-part') ? 'on' : 'active');
+    }
     clearOpenedFromOverview();
     const id = row.dataset.page;
     if (id) window.dispatchEvent(new CustomEvent<TreeGo>(TREE_GO_EVENT, { detail: { id, repeat } }));
     return;
   }
   row.focus({ preventScroll: true });
+  window.dispatchEvent(new Event(TREE_AWAY_EVENT));
   const nav = row.closest<HTMLElement>('.sidebar-scroll');
   if (nav) revealRow(row, nav);
   if (!(row instanceof HTMLAnchorElement)) {

@@ -21,10 +21,6 @@ export const sidebar = {
   'sidebar.mapPending': { en: { one: "{count} pending", other: "{count} pending" }, es: { one: "{count} pendiente", other: "{count} pendientes" } },
   // *Scenes* adentro de *Overview* (Docs/Doc_Relaciones.md, sección 21).
   'sidebar.scenes': { en: "Scenes", es: "Escenas" },
-  'sidebar.scenesTip': {
-    en: "Each scene opens every page that talks about it",
-    es: "Cada escena abre todas las páginas que hablan de ella",
-  },
   'sidebar.scenesMore': { en: { one: "Show {count} more", other: "Show {count} more" }, es: { one: "Mostrar {count} más", other: "Mostrar {count} más" } },
   'sidebar.scenesNoEpisode': { en: "No episode", es: "Sin episodio" },
   // El rótulo de una carpeta con tipo (Doc_Estructura_Proyecto.md, «Tipo de página»).

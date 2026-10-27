@@ -50,6 +50,21 @@ Ordenados en cuatro grupos: el plan de workspaces (primero), los pedidos de Lega
 ya, en orden), lo que se puede hacer sin que Lega decida nada, y lo que espera una decisión o una acción de
 Lega.
 
+### L. Lo que encontró `Doc_Logica.md` (2026-10-27)
+
+Al escribir el documento de la lógica de la app aparecieron diferencias entre los docs, la ayuda y el código:
+
+1. **Plantillas que el lector no entiende** (`FIELD_LABELS` en `fields.ts`): *Fecha de rodaje (planeada)* de la
+   plantilla *Scene* (el día no recibe su fecha planeada; el plan solo lee *Fecha Rodaje*) y *Decorado · Locación* de
+   *Pre-production Notes*.
+2. **Copy overview y Copy JSON sin decorados** (`projectMap.ts` no tiene `sets`); la ayuda no lo avisa.
+3. **Ayuda incompleta:** `help.liveHeader` sin el renglón *Tests | Reports*; `help.liveHeaderFields` describe los *Sets*
+   de una locación con la regla vieja (D424); los tooltips de *Overview* y *Copy overview* no nombran decorados ni
+   scouting.
+4. **Docs viejos:** `Doc_Estructura_Proyecto.md` (ES2, ES6, «En la pantalla» y «Cómo se decide» con scouting y planning
+   como «parte de») y `Doc_Relaciones.md` (§3, §4 sin `set` ni documentos, §10, §22 con cuatro partes del *Overview*).
+   `Plan_Estructura_Etapas.md` §4, §6.1 y §3 no coinciden con el código (notas, `Stage`, nombres de *Type*).
+
 ### R. Relacionar escenas, locaciones y días (pedido de Lega, 2026-10-08)
 
 El método está en `Doc_Estructura_Proyecto.md` (ES1 a ES10, D355). Hoy lo arma una reorganización al importar, con

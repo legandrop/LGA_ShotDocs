@@ -34,6 +34,7 @@ import { datedTitle, useLocMatcher, type DatedTitle } from './datedTitle';
 import {
   AUTO_COLLAPSE,
   centerRow,
+  collapseForExpand,
   collapseToBranch,
   createOpenScheduler,
   isPlainKey,
@@ -45,7 +46,7 @@ import {
   treeKeyAction,
   visibleRows,
 } from './treeNav';
-import { clearOpenedFromOverview, goToRow, openedFromOverview, sidebarEdge, sidebarStep, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
+import { clearOpenedFromOverview, goToRow, openedFromOverview, sidebarEdge, sidebarStep, sidebarStepAround, TREE_AWAY_EVENT, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
 
 /** Llevar la fila a la vista: centrada con el colapso automático (treeNav.ts), si no, lo justo para que se vea. */
 const showRow = AUTO_COLLAPSE ? centerRow : revealRow;
@@ -179,7 +180,11 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     const branch = fromOverview || !activeId ? [] : tree.ancestors(activeId).map((p) => p.id);
     // Lo que no es de este proyecto, o no está en el árbol (otro workspace, algo que todavía no bajó), queda como estaba.
     const outside = (id: string) => tree.get(id)?.workspace_id !== project;
-    setExpanded((prev) => collapseToBranch(prev, branch, fromOverview ? '' : activeId!, outside));
+    // Si la fila ya se ve (sus madres están abiertas: las flechas, un clic en el árbol), no se pliega nada: el colapso
+    // llega cuando algo se despliega (`expand`, D809). Un link o la búsqueda a una rama cerrada sí la deja sola.
+    setExpanded((prev) =>
+      !fromOverview && branch.every((id) => prev.has(id)) ? prev : collapseToBranch(prev, branch, fromOverview ? '' : activeId!, outside),
+    );
   }
   // La fila hasta donde llegaron las flechas con la tecla apretada: se marca como la elegida enseguida, aunque la página
   // se abra recién al soltar (pedido de Lega).
@@ -371,7 +376,16 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
 
   const expand = (id: string) => {
     settle.current = null;
-    setExpanded((prev) => new Set(prev).add(id));
+    if (!AUTO_COLLAPSE) {
+      setExpanded((prev) => new Set(prev).add(id));
+      return;
+    }
+    // Desplegar es lo que pliega lo demás de su proyecto (D809).
+    const project = tree.get(id)?.workspace_id;
+    const ancestors = tree.ancestors(id).map((p) => p.id);
+    setExpanded((prev) =>
+      collapseForExpand(prev, ancestors, id, (other) => tree.isDescendant(other, id), (other) => tree.get(other)?.workspace_id !== project),
+    );
   };
   /** Elegir explícitamente una página abre sólo su nivel; las flechas y plegar siguen siendo manuales. */
   const openPage = (id: string) => {
@@ -707,7 +721,13 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   useEffect(() => {
     const on = (e: Event) => treeGo.current((e as CustomEvent<TreeGo>).detail);
     window.addEventListener(TREE_GO_EVENT, on);
-    return () => window.removeEventListener(TREE_GO_EVENT, on);
+    // Y las que se van al *Overview*: ninguna fila del árbol queda marcada hasta que se abra algo.
+    const away = () => setBrowsing('');
+    window.addEventListener(TREE_AWAY_EVENT, away);
+    return () => {
+      window.removeEventListener(TREE_GO_EVENT, on);
+      window.removeEventListener(TREE_AWAY_EVENT, away);
+    };
   }, []);
   const lostKey = useRef<(e: globalThis.KeyboardEvent) => void>(() => undefined);
   lostKey.current = (e) => {
@@ -776,7 +796,20 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           adentro, y se va con el final del árbol (pedido de Lega, 2026-10-25). */}
       <div className="pages-section">
       <div className="section-title sticky-head" data-tour="pages">
-        <button className="nav-title pages-head" aria-expanded={!pagesClosed} onClick={() => foldPages(!pagesClosed)}>
+        <button
+          className="nav-title pages-head"
+          aria-expanded={!pagesClosed}
+          onClick={() => foldPages(!pagesClosed)}
+          onKeyDown={(e) => {
+            // Las flechas siguen por la barra desde el título (no la desplazan): ↓ a su primera fila, ↑ al *Overview*.
+            if (!isPlainKey(e.nativeEvent)) return;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              const next = sidebarStepAround(e.currentTarget, e.key === 'ArrowDown' ? 1 : -1);
+              if (next) goToRow(next, e.repeat);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
+          }}
+        >
           <span className="nav-title-label">{tr('sidebar.pages')}</span>
           {pagesClosed ? <ExpandIcon size={14} /> : <CollapseIcon size={14} />}
         </button>

@@ -62,6 +62,24 @@ export function collapseToBranch(
   return next.size === prev.size && [...next].every((id) => prev.has(id)) ? prev : next;
 }
 
+/**
+ * Desplegar `id` con el colapso automático: lo demás de su proyecto se pliega y quedan abiertas sus madres, `id` y lo
+ * que ya estaba abierto adentro de `id`. Es el momento del colapso: llegar a una carpeta plegada con las flechas no
+ * pliega nada; desplegarla, sí (pedido de Lega, D809).
+ */
+export function collapseForExpand(
+  prev: Set<string>,
+  ancestors: readonly string[],
+  id: string,
+  inside: (other: string) => boolean,
+  outside: (other: string) => boolean = () => false,
+): Set<string> {
+  const next = new Set(ancestors);
+  next.add(id);
+  for (const other of prev) if (outside(other) || inside(other)) next.add(other);
+  return next;
+}
+
 /** Las teclas que mueven el foco por el árbol: las que siguen andando si el foco se perdió después de tocarlo. */
 export function isTreeMoveKey(key: string): boolean {
   return key === 'ArrowUp' || key === 'ArrowDown' || key === 'Home' || key === 'End';

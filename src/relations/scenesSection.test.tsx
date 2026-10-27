@@ -129,10 +129,10 @@ describe('Overview y Scenes en la barra lateral', () => {
     const { host } = mount(d, pagePath(built.ids.notas));
     await shown(() => expect(eps(host).length).toBe(3));
     const head = scenesPart(host)!;
-    // Adentro de Overview, arriba de Pages (D772); con un tooltip de la app (nunca `title=`), el total y los episodios
-    // cerrados. De fábrica, Scenes es la parte desplegada.
+    // Adentro de Overview, arriba de Pages (D772); sin tooltip (Lega, D808: no agregaba nada), con el total y los
+    // episodios cerrados. De fábrica, Scenes es la parte desplegada.
     expect(head.textContent).toBe('Scenes24');
-    expect(head.querySelector('[data-tip]')!.getAttribute('data-tip')).toContain('every page that talks about it');
+    expect(head.querySelector('[data-tip]')).toBeNull();
     expect(host.querySelectorAll('.sidebar [title]').length).toBe(0);
     const nav = host.querySelector('.sidebar')!;
     const order = [...nav.querySelectorAll('.ov-nav, .section-title')].map((x) => (x.classList.contains('ov-nav') ? 'overview' : 'pages'));
@@ -312,6 +312,14 @@ describe('Overview y Scenes en la barra lateral', () => {
     click(part('Shoot days').querySelector('.toggle'));
     expect(open()).toEqual([]);
     expect(location.pathname).toBe(pagePath(built.ids.d59));
+    // Un clic en cualquier lugar de la fila (o en su flecha) deja el foco en la parte, como en *Pages*: si quedara en
+    // el documento o en el botón, las flechas desplazarían la barra en vez de recorrerla (Lega, D808).
+    host.querySelector<HTMLElement>('.ov-fold')!.focus();
+    click(part('Scenes'));
+    expect(document.activeElement).toBe(part('Scenes').querySelector('.ov-part-name'));
+    click(part('Locations').querySelector('.toggle'));
+    expect(document.activeElement).toBe(part('Locations').querySelector('.ov-part-name'));
+    click(part('Locations').querySelector('.toggle'));
     // El título pliega el bloque entero (y se recuerda); tocar el nombre lo vuelve a abrir en la parte desplegada o, sin
     // ninguna, en *Locations*.
     click(host.querySelector('.ov-fold'));

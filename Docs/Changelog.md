@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.298 :
+
+Después de un clic en *Scenes* o *Sets* del *Overview*, ↑/↓ desplazaban la barra y ← → no hacían nada. Solo el nombre
+de una parte tomaba el foco: un clic en el hueco, el número o la flecha lo dejaba en el documento o en el botón, y ahí
+las teclas no eran del árbol. Ahora cualquier clic en la fila deja el foco en la parte, como en *Pages*, y la flecha sale
+del recorrido con Tab (D808); los títulos *Overview* y *Pages* también siguen con las flechas, con la tecla apretada
+hay una sola fila marcada y llegar a *Pending* pliega la parte abierta. *Scenes* ya no tiene tooltip. Además el colapso
+automático ya no pliega al pasar a una fila que se ve: pliega al desplegar algo o al abrir una rama cerrada (D809).
+
+[Barra lateral - foco en el Overview tras un clic y colapso solo al desplegar]
+
 v0.297 :
 
 En el *Overview* las flechas no se portaban como en *Pages*: el foco de una parte salía con el contorno del navegador,

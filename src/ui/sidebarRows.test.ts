@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearOpenedFromOverview, goToRow, markOpenedFromOverview, openedFromOverview, overviewParent, overviewTarget, sidebarStep, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
+import { clearOpenedFromOverview, goToRow, markOpenedFromOverview, openedFromOverview, overviewParent, overviewTarget, sidebarStep, sidebarStepAround, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
 
 // La barra lateral como un solo recorrido (D806): el Overview y el árbol de Pages, en el orden en que se ven.
 
@@ -8,6 +8,7 @@ function bar(): HTMLElement {
   document.body.innerHTML = `
     <div class="sidebar-scroll">
       <div class="scene-nav ov-nav">
+        <div class="ov-head"><a class="nav-title-label" href="/map">Overview</a><button class="ov-fold">-</button></div>
         <div class="ov-part"><a class="ov-part-name" href="/map/locations">Locations</a></div>
         <div class="ov-part"><a class="ov-part-name" href="/map/scenes">Scenes</a></div>
         <button class="scene-nav-ep">Episode 105</button>
@@ -17,6 +18,7 @@ function bar(): HTMLElement {
         <div class="ov-part"><a class="ov-part-name" href="/map/pending">Pending</a></div>
       </div>
       <div class="pages-section">
+        <button class="pages-head">Pages</button>
         <div role="tree">
           <div class="tree-row" data-page="guia" tabindex="0">Guía</div>
           <div class="tree-row" data-page="pre" tabindex="-1">Preproducción</div>
@@ -33,6 +35,15 @@ afterEach(() => {
 });
 
 describe('un solo recorrido', () => {
+  it('desde un título (Overview, su botón de plegar, Pages) las flechas entran a la fila de al lado (D808)', () => {
+    bar();
+    expect(sidebarStepAround(q('.nav-title-label'), 1)?.textContent).toBe('Locations');
+    expect(sidebarStepAround(q('.ov-fold'), 1)?.textContent).toBe('Locations');
+    expect(sidebarStepAround(q('.nav-title-label'), -1)).toBeNull();
+    expect(sidebarStepAround(q('.pages-head'), 1)?.dataset.page).toBe('guia');
+    expect(sidebarStepAround(q('.pages-head'), -1)?.textContent).toBe('Pending');
+  });
+
   it('↑ desde la primera página sube al Overview; ↓ desde lo último del Overview baja a Pages', () => {
     bar();
     expect(sidebarStep(q('[data-page="guia"]'), -1)?.textContent).toBe('Pending');

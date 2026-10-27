@@ -9,7 +9,7 @@ import { setNavOpen, useNavOpen } from '../ui/navStore';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { AUTO_COLLAPSE, isPlainKey, revealRow } from '../ui/treeNav';
-import { clickedByKeys, goToRow, markOpenedFromOverview, openedFromOverview, OVERVIEW_ROW, overviewParent, overviewTarget, sidebarEdge, sidebarStep } from '../ui/sidebarRows';
+import { clickedByKeys, goToRow, markOpenedFromOverview, openedFromOverview, OVERVIEW_ROW, overviewParent, overviewTarget, sidebarEdge, sidebarStep, sidebarStepAround } from '../ui/sidebarRows';
 import { dayList, dayShortLabel } from './dayLive';
 import { setIndex } from './liveView';
 import { mergeRows } from './merge';
@@ -164,7 +164,16 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const onRowsKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!isPlainKey(e.nativeEvent)) return;
     const from = e.target instanceof Element ? e.target.closest<HTMLElement>(OVERVIEW_ROW) : null;
-    if (!from) return;
+    if (!from) {
+      // El título, su botón de plegar o sus pendientes: ↓ entra a la primera fila; ← → no hacen nada (no desplazan).
+      if (!(e.target instanceof Element) || !e.target.closest('.ov-head, .ov-fold')) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const next = sidebarStepAround(e.target, e.key === 'ArrowDown' ? 1 : -1);
+        if (next) goToRow(next, e.repeat);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
+      return;
+    }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       const next = sidebarStep(from, e.key === 'ArrowDown' ? 1 : -1);
@@ -288,6 +297,12 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     if (tab === part && !activeScene) return;
     browsedPart.current = part;
     go(part);
+  };
+  // *Pending* no tiene lista: llegar ahí (con las flechas o un clic) pliega la parte desplegada, como las demás partes.
+  const openPending = () => {
+    const f = readFold(projectId);
+    if (f.part !== null) update({ ...f, part: null, eps: [] });
+    go('pending');
   };
   const togglePart = (part: Part) => update({ ...fold, part: fold.part === part ? null : part });
 
@@ -471,20 +486,19 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   };
 
   /** El renglón de una parte: la flecha pliega o despliega; el resto de la fila abre su pestaña. */
-  const partRow = (part: Part | 'pending', label: string, count: ReactNode, body: (() => ReactNode) | null, tip?: string) => {
+  const partRow = (part: Part | 'pending', label: string, count: ReactNode, body: (() => ReactNode) | null) => {
     const open = part !== 'pending' && fold.part === part && !!body;
     const on = tab === part && !activeScene;
     const name = (
       <a
         className="ov-part-name"
         href={mapPath(part)}
-        data-tip={tip}
         aria-current={on ? 'page' : undefined}
         onClick={(e) => {
           if (!plainClick(e)) return;
           e.preventDefault();
           e.stopPropagation();
-          if (part === 'pending') go('pending');
+          if (part === 'pending') openPending();
           else if (clickedByKeys() || expandSubpages !== 'onClick') browsePart(part);
           else openPart(part);
         }}
@@ -499,7 +513,9 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
           className={`ov-part${open ? ' sticky-head' : ''}${on ? ' on' : ''}`}
           onClick={(e) => {
             if (!plainClick(e)) return;
-            if (part === 'pending') go('pending');
+            // El foco queda en la parte, como en una fila de *Pages*: las flechas siguen desde acá.
+            e.currentTarget.querySelector<HTMLElement>('a.ov-part-name')?.focus({ preventScroll: true });
+            if (part === 'pending') openPending();
             else if (expandSubpages !== 'onClick') browsePart(part);
             else openPart(part);
           }}
@@ -509,8 +525,10 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
               className="toggle"
               aria-expanded={open}
               aria-label={open ? tr('sidebar.collapse') : tr('sidebar.expand')}
+              tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
+                e.currentTarget.closest('.ov-part')?.querySelector<HTMLElement>('a.ov-part-name')?.focus({ preventScroll: true });
                 togglePart(part as Part);
               }}
             >
@@ -531,7 +549,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const parts: ReactNode[] = [];
   if (counts.locations) parts.push(partRow('locations', tr('sidebar.locations'), <span className="scene-nav-n">{counts.locations}</span>, locationsBody));
   if (counts.sets) parts.push(partRow('sets', tr('sidebar.sets'), <span className="scene-nav-n">{counts.sets}</span>, setsBody));
-  if (counts.scenes) parts.push(partRow('scenes', tr('sidebar.scenes'), <span className="scene-nav-n">{counts.scenes}</span>, scenesBody, tr('sidebar.scenesTip')));
+  if (counts.scenes) parts.push(partRow('scenes', tr('sidebar.scenes'), <span className="scene-nav-n">{counts.scenes}</span>, scenesBody));
   if (counts.scouting) parts.push(partRow('scouting', tr('sidebar.scouting'), <span className="scene-nav-n">{counts.scouting}</span>, scoutingBody));
   if (counts.days) parts.push(partRow('days', tr('sidebar.days'), <span className="scene-nav-n">{counts.days}</span>, daysBody));
   if (pending > 0) parts.push(partRow('pending', tr('sidebar.pending'), <span className="map-nav-count">{pending}</span>, null));
@@ -544,6 +562,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
           if (!plainClick(e)) return;
           update({ ...fold, closed: false });
           go(headPart);
+          // El *Overview* está arriba de todo: con la barra desplazada, lo que se abre quedaría fuera de la vista.
+          e.currentTarget.closest('.sidebar-scroll')?.scrollTo({ top: 0 });
         }}
       >
         <a

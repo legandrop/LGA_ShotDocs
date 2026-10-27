@@ -217,25 +217,25 @@ describe('al abrir una página quedan abiertas solo sus madres', () => {
     expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
   });
 
-  it('en la misma rama no pliega lo que hace falta para verla', async () => {
+  it('abrir una página que ya se ve no pliega nada: el colapso llega al desplegar algo (D809)', async () => {
     const { ids } = await app();
-    // Uno.A es madre de la abierta y queda abierta al abrirla.
     go(pagePath(ids.a));
-    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
-    // Uno.B: su madre (Uno) sigue abierta; Uno.A, que no es de su rama, se pliega.
     go(pagePath(ids.b));
-    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.B', 'Dos', 'Tres']);
-    expect(row('Uno.A').getAttribute('aria-expanded')).toBe('false');
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
+    // Desplegar Tres pliega lo demás de su proyecto.
+    act(() => row('Tres').querySelector<HTMLButtonElement>('.toggle')!.click());
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
   });
 
-  it('lo desplegado a mano se pisa al abrir otra página; desplegar sin cambiar de página, no', async () => {
+  it('desplegar deja abierto lo que ya estaba abierto adentro; un clic en Manual no pliega nada', async () => {
     const { ids } = await app();
-    act(() => row('Tres').querySelector<HTMLButtonElement>('.toggle')!.click());
-    // Desplegar no abre otra página: no se pliega nada.
-    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres', 'Tres.C']);
     clickRow('Dos');
     expect(path()).toBe(pagePath(ids.dos));
-    expect(titles()).toEqual(['Uno', 'Dos', 'Tres']);
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
+    // Plegar y volver a desplegar Uno: Uno.A, que estaba abierta adentro, sigue abierta.
+    act(() => row('Uno').querySelector<HTMLButtonElement>('.toggle')!.click());
+    act(() => row('Uno').querySelector<HTMLButtonElement>('.toggle')!.click());
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
   });
 
   it('un clic con «On click» deja abierta la página elegida y pliega lo demás', async () => {
@@ -245,15 +245,23 @@ describe('al abrir una página quedan abiertas solo sus madres', () => {
     expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
   });
 
-  it('con las flechas también: al salir de una rama se pliega, y la fila del foco sigue con el foco', async () => {
+  it('con las flechas, salir de una rama no la pliega; desplegar la siguiente, sí (Lega, D809)', async () => {
     const { ids } = await app();
     clickRow('Uno.B');
-    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.B', 'Dos', 'Tres']);
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
     await wait(OPEN_DELAY_MS + 30);
     press('ArrowDown');
+    await wait(OPEN_DELAY_MS + 30);
+    press('ArrowDown');
+    expect(path()).toBe(pagePath(ids.tres));
+    expect(focusedTitle()).toBe('Tres');
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
+    press('ArrowRight');
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
+    expect(focusedTitle()).toBe('Tres');
+    await wait(OPEN_DELAY_MS + 30);
+    press('ArrowUp');
     expect(path()).toBe(pagePath(ids.dos));
-    expect(focusedTitle()).toBe('Dos');
-    expect(titles()).toEqual(['Uno', 'Dos', 'Tres']);
     await wait(OPEN_DELAY_MS + 30);
     press('ArrowUp');
     expect(path()).toBe(pagePath(ids.uno));
@@ -322,8 +330,8 @@ describe('las flechas siguen en el árbol si el foco se perdió después de toca
     await wait(OPEN_DELAY_MS + 30);
     const e = press('ArrowUp', s);
     expect(e.defaultPrevented).toBe(true);
-    // Desde la abierta (Uno.B), la de arriba: Uno.A, plegada al abrir Uno.B.
-    expect(path()).toBe(pagePath(ids.a));
+    // Desde la abierta (Uno.B), la de arriba: Uno.A.1 (abrir Uno.B, que ya se veía, no plegó Uno.A: D809).
+    expect(path()).toBe(pagePath(ids.a1));
   });
 
   it('si lo último que se tocó no fue el árbol, las flechas no son del árbol', async () => {

@@ -2425,3 +2425,19 @@ sin desplegar una parte al llegar con las flechas.
 **Quedó así:** las partes y los episodios son carpetas y las filas son páginas. → despliega o pasa al primer hijo; ←
 pliega o sube a la madre. Llegar a una parte con ↑/↓ abre su vista sin desplegarla (la que estaba desplegada sigue así)
 y pliega las demás. Un clic en una parte la despliega solo con *Expand subpages: On click* (D737).
+
+### D808 · Un clic en una parte del Overview deja el foco ahí, y Scenes sin tooltip (2026-10-27)
+**Pedido de Lega:** después de un clic en *Scenes* o *Sets*, ↑/↓ desplazaban la barra y ← → no hacían nada; y el
+tooltip de *Scenes* («Cada escena abre todas las páginas que hablan de ella») no debería existir.
+**Quedó así:** un clic en cualquier lugar de la fila de una parte (el nombre, el hueco, el número o la flecha) deja el
+foco en la parte, como una fila de *Pages*. Antes solo el nombre lo tomaba: el resto de la fila dejaba el foco en el
+documento o en el botón de la flecha, y ahí las teclas no eran del árbol. La flecha sale del recorrido con Tab, como en
+*Pages*. *Scenes* queda sin tooltip.
+
+### D809 · El colapso automático pliega al desplegar, no al moverse (2026-10-27)
+**Pedido de Lega:** bajando con el teclado de un día de *Semana 01* a *Semana 02*, *Semana 01* no se tiene que plegar
+mientras *Semana 02* siga plegada; recién al desplegar otra cosa. A prueba: Lega lo usa y decide si queda o se revierte.
+**Quedó así:** abrir una página que ya se ve en el árbol (las flechas, un clic en *Manual*) no pliega nada. Desplegar
+`X` (→, su flecha, un clic con *On click*, crear o soltar una página adentro) deja abiertas sus madres, `X` y lo que ya
+estaba abierto adentro de `X`, y pliega lo demás de su proyecto (`collapseForExpand`). Abrir una página de una rama
+plegada (un link, la búsqueda, Atrás) sigue dejando solo su rama (D805). Lo del *Overview* no cambia (D806, D807).

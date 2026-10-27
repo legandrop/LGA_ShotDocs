@@ -11,6 +11,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 
 | Documento | Qué tiene |
 |---|---|
+| [`Doc_Logica.md`](Doc_Logica.md) | **Empezar acá:** la lógica de la app de una sola lectura: todo es una página, los tipos (escena, locación, decorado y día; scouting, prueba y plan; «parte de»), cómo reconoce la app las relaciones, la cabecera viva, el *Overview*, cómo se carga cada etapa y lo que falta. |
 | [`Plan_ShotDocs.md`](Plan_ShotDocs.md) | El plan de arranque: qué es la app, la arquitectura, el modelo de datos, la sincronización offline, los permisos para compartir, las plantillas, el autohosteo y las fases. Lo que se cierra pasa a los otros documentos. |
 | [`Plan_Workspaces.md`](Plan_Workspaces.md) | El plan de workspaces, equipo, invitados, archivos en Drive, copia de seguridad y hosting, con su orden de trabajo (sección 10) y cómo se hace cada paso (sección 11). |
 | [`Plan_Estructura_Etapas.md`](Plan_Estructura_Etapas.md) | El árbol por etapas como en Coda (notas, breakdown, scouting, pruebas, planeamiento, rodaje): el tipo de cada página por su marca o la de su carpeta, los links por contenido (escena, locación y decorado como tercera entidad), el plan unido a su día por la fecha, y cómo se reacomodan ERSO y VLLF. Reemplaza ES2 y ES6 de `Doc_Estructura_Proyecto.md` cuando quede implementado. |
