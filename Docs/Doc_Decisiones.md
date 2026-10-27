@@ -2355,3 +2355,12 @@ en el mismo renglón. Entre las elegidas solo puede haber saltos de renglón, es
 foto o un título en el medio no se juntan. **En los datos:** las capturas del guion chicas van una por renglón (nunca
 dos lado a lado), y las páginas de guion enteras (altas) que van seguidas se ponen en una fila; una captura chica
 antes o después queda en su renglón. Se aplica a los scoutings de VLLF y queda anotado para Planeamiento y ERSO.
+
+### D800 · Hasta seis fotos por fila al acomodar, y las páginas de guion cortas también en fila (2026-10-27)
+**Pedido de Lega:** seis páginas de guion seguidas (Embotellamiento Sarandí, escena 120) tienen que poder ir en una
+sola fila, y *Arrange in rows* las partía en dos de tres: tenía un tope de 4 por fila. Sube a 6 **solo cuando toda la
+fila son verticales**; con fotos comunes o mezcladas sigue en 4 (si no, la cuenta armaba pocas filas muy bajas). En un
+teléfono, seis páginas en una fila se ven chiquitas (unos 51 × 71 px cada una). Además, en los datos, una página de guion cortada
+(más ancha que alta, como la segunda de la escena 37 de Pizzería Santa María, ancho/alto 1,42) cuenta como página y va
+en la fila con la anterior: el corte para separar capturas chicas pasa de 1,2 a 1,5 (las tablas del desglose de varias
+escenas están en 1,7 o más).

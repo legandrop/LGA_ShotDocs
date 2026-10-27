@@ -19,7 +19,10 @@ const MIN_ROW_WIDTH = 1e-4;
 const DEFAULT_ASPECT = 1.5;
 /** 8 px de espacio en un área de texto de 700 px, en unidades del ancho. */
 const DEFAULT_GAP_RATIO = 8 / 700;
-const MAX_PER_ROW = 4;
+/** Como mucho cuántas fotos por fila (Lega, 2026-10-27, D800: seis páginas de guion en una fila). */
+const MAX_PER_ROW = 6;
+/** Como mucho cuántas por fila si alguna de la fila no es vertical: con fotos comunes, lo de siempre. */
+const COMMON_PER_ROW = 4;
 /** Lo más bajo y lo más alto que puede quedar una fila de "Arrange in rows", en veces el alto ideal. */
 const MIN_ROW_HEIGHT = 0.5;
 const MAX_ROW_HEIGHT = 2.2;
@@ -93,7 +96,7 @@ export function snapRowWidth(f: number, tolerance = 0.02): number {
 // --- Acomodar en filas ------------------------------------------------------------------------------
 
 export interface ArrangeOptions {
-  /** Como mucho cuántas fotos por fila (4). */
+  /** Como mucho cuántas fotos por fila (6). */
   maxPerRow?: number;
   /** El espacio entre fotos sobre el ancho del área de texto (8 / 700). */
   gapRatio?: number;
@@ -168,8 +171,13 @@ function partition(
   best[0] = 0;
   for (let j = 1; j <= n; j++) {
     let sum = 0;
+    let allTall = true;
     for (let i = j - 1; i >= 0 && j - i <= maxPerRow; i--) {
       sum += a[i];
+      // Más de 4 por fila solo si todas son verticales (páginas de guion, D800): con fotos comunes mezcladas, el costo
+      // (un término por fila) prefería pocas filas bajas, y el tope de 4 era lo que lo frenaba (auditoría de D800).
+      allTall = allTall && a[i] < 1;
+      if (j - i > COMMON_PER_ROW && !allTall) break;
       if (best[i] === Infinity) continue;
       const h = (1 - (j - i - 1) * g) / sum;
       if (!(h > 0)) continue;

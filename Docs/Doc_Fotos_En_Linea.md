@@ -107,7 +107,7 @@ paso 2 deja de ser previo: se publica la v0.078 (paso 1 y 3 juntos) y **después
   valen para **todas las fotos de la selección**.
 - **Acomodar.** Con dos o más fotos en la selección: *Arrange in rows* reparte **esas** fotos, en su orden,
   con el algoritmo que ya existe (`arrangeRows` en `src/ui/imageRows.ts`: filas de la misma altura que
-  llenan el ancho, como mucho 4 por fila). Con una sola foto elegida: las fotos seguidas de su renglón. Un
+  llenan el ancho, como mucho 4 por fila, 6 si son todas verticales, D800). Con una sola foto elegida: las fotos seguidas de su renglón. Un
   solo deshacer. Para que cada fila quede entera, las fotos acomodadas tienen que estar seguidas en el mismo
   párrafo, sin texto en el medio; si la selección tiene texto entre fotos, el botón avisa (*Select images
   that are next to each other*).

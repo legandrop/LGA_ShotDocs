@@ -705,8 +705,8 @@ importar, en el editor de la página (un solo cambio, que se deshace con un desh
   «Plano NN:» con un párrafo vacío arriba y su texto debajo, con Shift+Enter dentro del mismo párrafo; y una imagen
   nunca en el mismo renglón que un texto (Shift+Enter entre los dos). Los párrafos vacíos se crean con los atributos por
   defecto del esquema, nunca escritos a mano. Antes y después se comparan el texto (sin espacios) y la cantidad de fotos.
-- **Capturas del guion (D799):** dos capturas pegadas en el mismo renglón, si alguna es chica (ancho/alto ≥ 1,2), van
-  separadas con Shift+Enter; las páginas de guion enteras (ancho/alto < 1,2) seguidas se ponen en una fila, como
+- **Capturas del guion (D799):** dos capturas pegadas en el mismo renglón, si alguna es chica (ancho/alto ≥ 1,5), van
+  separadas con Shift+Enter; las páginas de guion (ancho/alto < 1,5, también una cortada) seguidas se ponen en una fila, como
   *Arrange in rows* sobre fotos de renglones contiguos (`joinPhotos`). Las filas ya acomodadas a mano no se tocan.
 
 ### Varios docs en un proyecto (2026-10-17)

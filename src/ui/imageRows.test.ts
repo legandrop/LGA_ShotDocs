@@ -17,7 +17,7 @@ const sum = (xs: readonly number[]) => xs.reduce((s, x) => s + x, 0);
 const pick = <T,>(xs: readonly T[], idx: readonly number[]) => idx.map((i) => xs[i]);
 
 /**
- * Lo que tiene que cumplir cualquier resultado de `arrangeRows`: mismo largo, filas de como mucho 4, todas
+ * Lo que tiene que cumplir cualquier resultado de `arrangeRows`: mismo largo, filas de como mucho 6, todas
  * llenas menos la última, y cada fila a una sola altura con cualquier ancho. Devuelve las filas.
  */
 function checkArrangement(aspects: readonly number[], fracs: readonly number[]): number[][] {
@@ -31,7 +31,7 @@ function checkArrangement(aspects: readonly number[], fracs: readonly number[]):
   // Cada foto en una fila, en orden y sin saltear ninguna.
   expect(rows.flat()).toEqual(aspects.map((_, i) => i));
   rows.forEach((row, r) => {
-    expect(row.length).toBeLessThanOrEqual(4);
+    expect(row.length).toBeLessThanOrEqual(6);
     const s = sum(pick(fracs, row));
     if (r < rows.length - 1) expect(Math.abs(s - 1)).toBeLessThan(1e-4);
     expect(s).toBeLessThanOrEqual(1 + 1e-6);
@@ -202,18 +202,17 @@ describe('arrangeRows', () => {
     expect(f[3] + f[4]).toBeCloseTo(1, 10);
   });
 
-  it('nueve verticales: dos filas de cuatro y la novena sola, a la altura de la anterior', () => {
+  it('nueve verticales: una fila de cinco y la última de cuatro, a la altura de la anterior (con 4 por fila eran 4, 4 y una sola)', () => {
     const a = Array<number>(9).fill(V);
     const f = arrangeRows(a);
-    expect(checkArrangement(a, f)).toEqual([[0, 1, 2, 3], [4, 5, 6, 7], [8]]);
-    expect(f[8]).toBeLessThan(1);
+    expect(checkArrangement(a, f)).toEqual([[0, 1, 2, 3, 4], [5, 6, 7, 8]]);
     // Entre filas con distinta cantidad de fotos la altura igual vale con el ancho del cálculo (8 px de
     // espacio en 700); dentro de una fila, con cualquiera.
     const h = rowHeights(f, a, 700, GAP);
     expect(Math.abs(h[8] - h[7])).toBeLessThan(0.1);
   });
 
-  it('nunca más de 4 por fila, ni con muchas verticales (que querrían ir de a más)', () => {
+  it('nunca más de 6 por fila, ni con muchas verticales (que querrían ir de a más)', () => {
     for (const a of [Array<number>(9).fill(V), Array<number>(10).fill(0.5), Array<number>(8).fill(4)]) {
       checkArrangement(a, arrangeRows(a));
     }
@@ -299,5 +298,27 @@ describe('tiradores', () => {
   it('los tamaños rápidos son 1, 1/2, 1/3 y 1/4, y se imantan a sí mismos', () => {
     expect(ROW_PRESETS).toEqual([1, 1 / 2, 1 / 3, 1 / 4]);
     for (const p of ROW_PRESETS) expect(snapRowWidth(p)).toBe(p);
+  });
+});
+
+describe('seis por fila (D800)', () => {
+  it('seis páginas de guion altas entran en una fila; nueve verticales, 5 y 4', () => {
+    expect(groupRows(arrangeRows([0.93, 0.6, 0.56, 0.6, 0.7, 0.69])).map((r) => r.length)).toEqual([6]);
+    expect(groupRows(arrangeRows(Array(9).fill(2 / 3))).map((r) => r.length)).toEqual([5, 4]);
+  });
+
+  it('con fotos comunes, y mezcladas, sale lo mismo que con 4 por fila', () => {
+    const tandas = [
+      Array(5).fill(4 / 3),
+      [1.5, 1.5, 1.5, 1.5, 2 / 3],
+      [1.5, 1.5, 1.5, 2 / 3, 2 / 3, 2 / 3],
+      [16 / 9, 16 / 9, 16 / 9, 2 / 3, 2 / 3],
+      Array(5).fill(1),
+      Array(6).fill(1),
+      Array(6).fill(1.5),
+      Array(10).fill(1.5),
+      [1.02, 1.42],
+    ];
+    for (const a of tandas) expect(arrangeRows(a)).toEqual(arrangeRows(a, { maxPerRow: 4 }));
   });
 });

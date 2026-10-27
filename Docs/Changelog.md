@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.289 :
+
+*Arrange in rows* ponía como mucho 4 fotos por fila (`MAX_PER_ROW` en `imageRows.ts`): seis páginas de guion altas
+quedaban en dos filas de tres y no había forma de ponerlas en una. Ahora una fila puede tener hasta 6, pero solo si
+todas son verticales (`COMMON_PER_ROW` en `partition`): sin esa condición, el costo (un término por fila) prefería pocas
+filas bajas y cambiaba casi todas las tandas mezcladas (cinco fotos de iPhone en una fila de 100 px; lo encontró la
+auditoría). Con fotos comunes o mezcladas sale lo mismo que con 4; seis páginas de guion van en una fila y nueve
+verticales en 5 y 4 (antes 4, 4 y una sola). Pruebas que comparan contra el tope de 4 (D800).
+
+[Fotos - hasta seis por fila al acomodar]
+
 v0.288 :
 
 *Arrange in rows* solo se prendía con fotos seguidas en el mismo renglón: dos páginas de guion altas, una debajo de la

@@ -198,7 +198,7 @@ Una auditoría independiente revisó este diseño contra el código real de Bloc
    el editor con foco). Con el mouse, el clic abre solo si ya estaba elegida o si es doble clic
    (`detail >= 2`); con ⌘/Ctrl no abre. Sin escuchar `dblclick` (abriría dos veces). Teléfono y solo
    lectura, como hoy. `cursor: zoom-in` solo en la elegida o en solo lectura.
-8. **Acomodar en filas:** en orden, programación dinámica con como mucho 4 por fila, costo `ln(h/H)²` con
+8. **Acomodar en filas:** en orden, programación dinámica con como mucho 4 por fila (6 si son todas verticales, D800), costo `ln(h/H)²` con
    límites 0,5·H a 2,2·H (al principio se pensó 1,6·H: con eso dos apaisadas no llenaban una fila), `H` = el alto de una foto 3:2 a un tercio del ancho (descontando espacios). La
    última fila se calcula llena y recién después, si queda más alta que 2,2·H, se achica sin llenar (como
    la tanda termina en un bloque que no es foto, nada sube a esa fila). Toda fila que no es la última
@@ -257,7 +257,7 @@ quedan alineadas arriba).
   otras fotos o videos seguidos. Actúa sobre esa tanda entera, tomada al hacer clic. Se apaga mientras carga
   alguna miniatura (la proporción sale de ahí) y se prende solo cuando terminan; una foto sin miniatura,
   rota o con el marcador de "todavía no está" cuenta como 3:2.
-- `arrangeRows` (`src/ui/imageRows.ts`): partición en orden por programación dinámica, como mucho 4 por fila,
+- `arrangeRows` (`src/ui/imageRows.ts`): partición en orden por programación dinámica, como mucho 4 por fila (6 si son todas verticales, D800),
   costo `ln(h/H)²` con `H` el alto de una 3:2 a un tercio del ancho, límites 0,5·H a 2,2·H. La última fila se
   calcula llena y, si queda más alta que 2,2·H, se achica a la altura de la anterior (o a 2,2·H si es la
   única). Dos apaisadas llenan una fila; una sola foto queda a unos dos tercios del ancho.
