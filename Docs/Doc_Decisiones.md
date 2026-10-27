@@ -2376,6 +2376,7 @@ arriba) y **eligió la barra de arriba**: va antes del menú de la página, desp
 
 ### D802 · El selector de proyectos y la cuenta, siempre fijos en la barra lateral (2026-10-27)
 **Pedido de Lega:** al bajar por la barra, el selector de proyectos de arriba y la fila de la cuenta de abajo nunca se
-van. La barra se parte en tres: arriba (selector, *All synced* y la descarga sin red), el medio, que es lo único que se
-desplaza (`.sidebar-scroll`, donde siguen pegados los títulos de D771), y el pie con la cuenta. Así también se ve
-siempre cuánto falta sincronizar.
+van. La barra se parte en tres: arriba **solo el selector** (v0.292: Lega no quiere *All synced* fijo, se va al bajar),
+el medio, que es lo único que se desplaza (`.sidebar-scroll`, donde siguen pegados los títulos de D771), y el pie con la
+cuenta en un renglón de 36 px (antes 48). La barra de desplazamiento del medio es fina (4 px a la vista), oscura, sin
+flechas, y está escondida: aparece con el mouse en su franja (14 px del borde) o mientras se desplaza.

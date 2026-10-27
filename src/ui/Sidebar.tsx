@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
@@ -88,6 +88,42 @@ function IndexProgress() {
   );
 }
 
+/** Cuánto antes del borde derecho ya cuenta como estar sobre la barra de desplazamiento, y cuánto sigue a la vista después de desplazar. */
+const SCROLLBAR_ZONE = 14;
+const SCROLLBAR_LINGER_MS = 900;
+
+/**
+ * La barra de desplazamiento del árbol está escondida (styles.css, `.show-scrollbar`): aparece mientras el mouse está
+ * en su franja y mientras se desplaza, y se va sola un rato después. Se toca la clase directamente: un mouse que se mueve
+ * no redibuja la barra lateral.
+ */
+function useScrollbarReveal(ref: RefObject<HTMLDivElement | null>) {
+  const near = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const show = (on: boolean) => ref.current?.classList.toggle('show-scrollbar', on);
+  const hideLater = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => show(near.current), SCROLLBAR_LINGER_MS);
+  };
+  useEffect(() => () => (timer.current ? clearTimeout(timer.current) : undefined), []);
+  return {
+    scrolled: () => {
+      show(true);
+      hideLater();
+    },
+    moved: (e: MouseEvent<HTMLDivElement>) => {
+      const was = near.current;
+      near.current = e.clientX >= e.currentTarget.getBoundingClientRect().right - SCROLLBAR_ZONE;
+      if (near.current) show(true);
+      else if (was) hideLater();
+    },
+    left: () => {
+      near.current = false;
+      hideLater();
+    },
+  };
+}
+
 /**
  * `onBrowse` se llama justo antes de que el árbol abra la página `id` sin que la persona la haya elegido con un
  * clic ni con Enter (las flechas, o plegar una madre de la página abierta): en el teléfono, el cajón sigue
@@ -158,6 +194,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   // un desplazamiento es nuestro (su evento `scroll` no cuenta como de la persona).
   const lastManualScroll = useRef(0);
   const ownScrollUntil = useRef(0);
+  const scrollbar = useScrollbarReveal(navEl);
 
   // Abrir una página desde el árbol sin clic (flechas, plegar una madre de la abierta). Siempre la última
   // versión, para el temporizador de `opener`.
@@ -557,20 +594,21 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
 
   return (
     <nav className="sidebar" aria-label={tr('sidebar.pages')}>
-      {/* Arriba y abajo quedan fijos: el selector de proyectos (con lo que falta sincronizar) y la cuenta. Solo se
-          desplaza lo del medio, `.sidebar-scroll` (pedido de Lega, 2026-10-27, D802). */}
-      <div className="sidebar-top">
-        {linkMode ? <LinkHeader /> : <ProjectSwitcher />}
-        <SyncBadge />
-        <OfflineLine />
-      </div>
+      {/* Arriba y abajo quedan fijos: solo el selector de proyectos y la cuenta. Lo demás, desde *All synced*, se desplaza
+          en `.sidebar-scroll` (pedido de Lega, 2026-10-27, D802). */}
+      <div className="sidebar-top">{linkMode ? <LinkHeader /> : <ProjectSwitcher />}</div>
       <div
         ref={navEl}
         className="sidebar-scroll"
         onScroll={() => {
           if (Date.now() > ownScrollUntil.current) lastManualScroll.current = Date.now();
+          scrollbar.scrolled();
         }}
+        onMouseMove={scrollbar.moved}
+        onMouseLeave={scrollbar.left}
       >
+      <SyncBadge />
+      <OfflineLine />
       {/* *Overview* (Docs/Doc_Relaciones.md, secciones 12 y 21; D772): locaciones, escenas, días y pendientes, armados con
           lo que dicen las páginas; solo en un proyecto con escenas, locaciones o días. */}
       {!linkMode && <OverviewNav />}

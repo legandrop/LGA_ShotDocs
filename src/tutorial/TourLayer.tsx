@@ -6,6 +6,7 @@ import { navigate, PRACTICE_PATH, useRoute } from '../router';
 import { useServices } from '../services';
 import { isPhoneLayout } from '../ui/commentsUi';
 import { placeNear, type Rect } from '../ui/floating';
+import { revealRow } from '../ui/treeNav';
 import { setNavOpen } from '../ui/navStore';
 import { notify } from '../ui/notice';
 import { shortcutLabel } from '../ui/shortcuts';
@@ -440,8 +441,13 @@ function useAnchorRect(anchor: TourAnchor | null, inDrawer: boolean): Rect | nul
       const els = anchorElements(anchor);
       if (els.length > 0 && !scrolled) {
         scrolled = true;
-        // El cajón del teléfono se desliza: lo de adentro no se desplaza.
+        // El cajón del teléfono se desliza: `scrollIntoView` movería también la página. Adentro del cajón solo se desplaza
+        // el árbol (`.sidebar-scroll`, donde está *All synced* desde D802), y ahí se lleva lo señalado a la vista.
         if (!inDrawer) els[0].scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+        else {
+          const tree = els[0].closest<HTMLElement>('.sidebar-scroll');
+          if (tree) revealRow(els[0], tree);
+        }
       }
       const next = union(els);
       setRect((old) => (same(old, next) ? old : next));

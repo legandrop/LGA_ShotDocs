@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.292 :
+
+Al pasar a desplazar solo el medio de la barra lateral (v0.291), el árbol quedó con la barra de desplazamiento clásica de
+Windows, ancha, clara, con flechas y siempre a la vista: antes no tenía estilo propio y la del contenedor nuevo salió
+así. Ahora es fina (4 px a la vista), oscura y sin flechas, y aparece solo con el mouse en su franja o mientras se
+desplaza (`useScrollbarReveal` en `Sidebar.tsx`, `.show-scrollbar`). Además, arriba queda fijo solo el selector de
+proyectos (*All synced* se va al bajar, como antes) y la fila de la cuenta pasa de 48 a 36 px, con el avatar de 22 (D802).
+
+[Barra lateral - barra de desplazamiento fina y escondida, y cuenta más baja]
+
 v0.291 :
 
 Al bajar por la barra lateral se iban el selector de proyectos y la cuenta: toda la barra era un solo bloque que se

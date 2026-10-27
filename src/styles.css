@@ -628,8 +628,8 @@ code {
   padding-top: calc(16px + env(safe-area-inset-top));
 }
 
-/* Arriba (el proyecto y lo que falta sincronizar) y abajo (la cuenta y la ayuda) quedan fijos; solo se desplaza lo del
-   medio (D802). Llega de borde a borde de la barra, así la barra de desplazamiento queda contra el borde. */
+/* Arriba (el selector de proyectos) y abajo (la cuenta) quedan fijos; solo se desplaza lo del medio, desde *All synced*
+   (D802). Llega hasta el borde derecho de la barra, así la barra de desplazamiento queda contra el borde. */
 .sidebar-top {
   flex: none;
   min-width: 0;
@@ -643,7 +643,52 @@ code {
   overflow-x: hidden;
   overflow-y: auto;
   margin: 0 -12px;
-  padding: 0 12px 8px;
+  padding: 0 4px 8px 12px;
+  /* Los 8 px de la barra de desplazamiento siempre reservados: con o sin desplazamiento, el árbol tiene el mismo ancho. */
+  scrollbar-gutter: stable;
+}
+
+/* La barra de desplazamiento (pedido de Lega, 2026-10-27): fina (4 px a la vista), apagada, sin flechas, y escondida.
+   Aparece al pasar el mouse por su franja o mientras se desplaza (`.show-scrollbar`, Sidebar.tsx), como la de la Mac. */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track,
+.sidebar-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-button {
+  display: none;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: transparent padding-box;
+  transition: background-color 0.2s;
+}
+
+.sidebar-scroll.show-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover,
+.sidebar-scroll::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--text) 30%, transparent);
+}
+
+/* Firefox no tiene las de arriba: la fina del sistema, del mismo color. */
+@supports not selector(::-webkit-scrollbar) {
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .sidebar-scroll.show-scrollbar {
+    scrollbar-color: color-mix(in srgb, var(--text) 18%, transparent) transparent;
+  }
 }
 
 .main {
@@ -1246,7 +1291,7 @@ code {
 .sidebar-footer {
   flex: none;
   min-width: 0;
-  padding-top: 10px;
+  padding-top: 6px;
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -1270,19 +1315,27 @@ code {
   box-shadow: 0 0 0 2px var(--sidebar-bg);
 }
 
+/* Un renglón, del alto de una fila del árbol más poco (pedido de Lega, 2026-10-27: antes 48 px). */
 .account-button {
   border: none;
   flex: 1;
   min-width: 0;
-  height: 48px;
+  height: 36px;
   padding: 0 8px;
-  gap: 10px;
+  gap: 8px;
   text-align: left;
   border-radius: 8px;
 }
 
 .account-button[aria-expanded='true'] {
   background: var(--active);
+}
+
+/* El avatar, del alto del renglón de texto. */
+.account-button .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
 }
 
 .account-button .email {
