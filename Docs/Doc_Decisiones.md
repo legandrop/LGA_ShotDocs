@@ -2306,3 +2306,14 @@ mouse por una fila mostraba un tooltip con el nombre de la página, que ya se ve
 (tampoco el del título cortado ni el que sumaba el año) ni del *Overview*. Queda uno solo: el de un scouting del
 *Overview* que muestra sus locaciones, que da el título del scouting (no se ve en la fila). El + conserva el suyo. El
 título entero de una fila cortada con «…» se ve abriendo la página.
+
+### D795 · Las fotos a un tercio y las capturas del guion a la mitad (2026-10-27)
+**Pedido de Lega:** es el formato de sus proyectos, para todas las páginas (empezando por los scoutings) y para lo que
+se importe de Coda. Una **foto** va a un tercio del ancho de la página; dos o tres fotos seguidas, sin texto en el
+medio, van en la misma fila (de a tres por fila, con *Arrange in rows*; un salto de renglón entre ellas no cuenta como
+texto y se saca). Una **captura del guion** (página blanca con texto) va a la mitad del ancho, cada una en su renglón,
+y entre una y otra va un salto de Shift+Enter (el mismo párrafo), no un párrafo nuevo. Para separarlas sin mirar una
+por una: una captura del guion no tiene color (saturación media menor a 1 sobre 255) y más del 60 % de sus píxeles son
+casi blancos; acertó en las 36 imágenes que Lega ya había acomodado a mano. Con dos fotos seguidas, *Arrange in rows*
+las estira a media página: se dejan en un tercio, como las acomodó Lega. Hechos a mano por Lega dos scoutings de
+VLLF; aplicado a otros dos para que Lega lo apruebe antes de seguir con el resto.

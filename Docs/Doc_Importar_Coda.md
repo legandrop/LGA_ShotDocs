@@ -682,6 +682,19 @@ originales sin quitarles nada. Reglas que tiene que cumplir:
 
 Ese paso es propio de cada doc (sabe cómo se escribieron sus escenas y sus locaciones) y no vive en este repo.
 
+### Fotos y capturas del guion (2026-10-27, D795)
+
+El formato de las páginas de Lega, que la importación todavía no aplica sola: se acomoda desde la app después de
+importar, en el editor de la página (un solo cambio, que se deshace con un deshacer).
+
+- **Foto:** un tercio del ancho. Dos o tres seguidas sin texto en el medio van en la misma fila (*Arrange in rows*, de a
+  tres; si hay un salto de renglón entre ellas, se saca). Con dos, *Arrange in rows* las estira a media página: se dejan
+  en un tercio.
+- **Captura del guion** (página blanca con texto): la mitad del ancho, una por renglón, separadas con un salto de
+  Shift+Enter dentro del mismo párrafo. Si vienen en párrafos seguidos, se juntan en uno.
+- **Cómo distinguirlas:** sobre la miniatura dibujada a 64 × 64, la captura del guion tiene saturación media menor a 1
+  (sobre 255) y más del 60 % de píxeles casi blancos (los tres canales por encima de 215); una foto no.
+
 ### Varios docs en un proyecto (2026-10-17)
 
 Un proyecto puede venir repartido en varios docs de Coda (preproducción, scoutings, reportes de rodaje). Se exporta
