@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearOpenedFromOverview, goToRow, markOpenedFromOverview, openedFromOverview, overviewTarget, sidebarStep, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
+import { clearOpenedFromOverview, goToRow, markOpenedFromOverview, openedFromOverview, overviewParent, overviewTarget, sidebarStep, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
 
 // La barra lateral como un solo recorrido (D806): el Overview y el árbol de Pages, en el orden en que se ven.
 
@@ -37,9 +37,10 @@ describe('un solo recorrido', () => {
     bar();
     expect(sidebarStep(q('[data-page="guia"]'), -1)?.textContent).toBe('Pending');
     expect(sidebarStep(q('a[href="/map/pending"]'), 1)?.dataset.page).toBe('guia');
-    // Partes, episodios y filas, en orden; «Show 60 more» no es una fila.
+    // Partes, episodios y filas, en orden; «Show 60 more» también (con ↓ se llega a lo recortado).
     expect(sidebarStep(q('a[href="/map/scenes"]'), 1)?.textContent).toBe('Episode 105');
-    expect(sidebarStep(q('a[href="/map/scenes?scene=105_026"]'), 1)?.textContent).toBe('Pending');
+    expect(sidebarStep(q('a[href="/map/scenes?scene=105_026"]'), 1)?.textContent).toBe('Show 60 more');
+    expect(sidebarStep(q('button.scene-nav-more'), 1)?.textContent).toBe('Pending');
     // En los extremos de la barra, nada.
     expect(sidebarStep(q('a[href="/map/locations"]'), -1)).toBeNull();
     expect(sidebarStep(q('[data-page="pre"]'), 1)).toBeNull();
@@ -73,6 +74,21 @@ describe('un solo recorrido', () => {
     goToRow(q('button.scene-nav-ep'), false);
     expect(document.activeElement).toBe(q('button.scene-nav-ep'));
     expect([...document.querySelectorAll('.scene-nav-row.active')].map((a) => a.textContent)).toEqual(['025']);
+  });
+
+  it('← sube a la madre: de una escena a su episodio, de un episodio o de otra fila a su parte', () => {
+    document.body.innerHTML = `
+      <div class="sidebar-scroll"><div class="ov-nav"><ul>
+        <li><div class="ov-part"><button class="toggle"></button><a class="ov-part-name" data-part="scenes" href="/map/scenes">Scenes</a></div>
+          <ul class="scene-nav-eps"><li><button class="scene-nav-ep" data-ep="105">Episode 105</button>
+            <ul class="scene-nav-list"><li><a class="scene-nav-row" href="/map/scenes?scene=105_025">025</a></li></ul></li></ul></li>
+        <li><div class="ov-part"><a class="ov-part-name" data-part="days" href="/map/days">Shoot days</a></div>
+          <ul class="scene-nav-list"><li><a class="scene-nav-row" href="/p/d59">Día 59</a></li></ul></li>
+      </ul></div></div>`;
+    expect(overviewParent(q('a[href="/map/scenes?scene=105_025"]'))?.textContent).toBe('Episode 105');
+    expect(overviewParent(q('button.scene-nav-ep'))?.textContent).toBe('Scenes');
+    expect(overviewParent(q('a[href="/p/d59"]'))?.textContent).toBe('Shoot days');
+    expect(overviewParent(q('a[data-part="days"]'))).toBeNull();
   });
 
   it('lo abierto desde el Overview se anota por destino: otra página abierta después no cuenta', () => {

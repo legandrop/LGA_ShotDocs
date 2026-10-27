@@ -968,7 +968,9 @@ code {
 }
 
 .sidebar .tree-row.sticky-head.active,
-.sidebar .tree-row.sticky-head:focus-visible {
+.sidebar .tree-row.sticky-head:focus-visible,
+.sidebar .scene-nav-ep.sticky-head:focus-visible,
+.sidebar .ov-part.sticky-head:has(> .ov-part-name:focus-visible) {
   background: var(--active);
 }
 

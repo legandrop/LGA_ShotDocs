@@ -82,10 +82,11 @@ a.map-nav-count:focus-visible {
   background: var(--hover);
 }
 
+/* La raya en el turquesa de texto, como la de una fila elegida (D794). */
 .ov-part.on {
   background: var(--active);
   font-weight: 500;
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent-text);
 }
 
 .ov-part .toggle {
@@ -126,7 +127,23 @@ a.map-nav-count:focus-visible {
   outline: none;
 }
 
-.ov-part-name:focus-visible,
+/* Una parte con el foco del teclado se ve como una fila de *Pages* con el foco (D806). */
+.ov-part:has(> .ov-part-name:focus-visible) {
+  background: var(--active);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--accent-text);
+}
+
+.ov-part-name:focus-visible {
+  outline: none;
+}
+
+@media (forced-colors: active) {
+  .ov-part:has(> .ov-part-name:focus-visible) {
+    outline: 2px solid CanvasText;
+  }
+}
+
 .ov-head .nav-title-label:focus-visible,
 .ov-fold:focus-visible,
 .ov-part .toggle:focus-visible {

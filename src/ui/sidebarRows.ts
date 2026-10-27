@@ -5,14 +5,35 @@ import { createOpenScheduler, revealRow } from './treeNav';
 // uno pliega el otro (el colapso automático de `treeNav.ts` vale para los dos).
 
 /** Lo que se recorre del *Overview*: el nombre de cada parte, cada episodio y cada fila de sus listas. */
-export const OVERVIEW_ROW = 'a.ov-part-name, button.scene-nav-ep, a.scene-nav-row';
-const ROWS = '.ov-nav a.ov-part-name, .ov-nav button.scene-nav-ep, .ov-nav a.scene-nav-row, [role="tree"] .tree-row';
+export const OVERVIEW_ROW = 'a.ov-part-name, button.scene-nav-ep, a.scene-nav-row, button.scene-nav-more';
+const ROWS =
+  '.ov-nav a.ov-part-name, .ov-nav button.scene-nav-ep, .ov-nav a.scene-nav-row, .ov-nav button.scene-nav-more, [role="tree"] .tree-row';
+
+/**
+ * La madre de una parte del *Overview* (como `parentId` en el árbol): de una escena, su episodio; de un episodio o de
+ * una fila de otra lista, el nombre de su parte. Una parte no tiene.
+ */
+export function overviewParent(row: Element): HTMLElement | null {
+  const li = row.closest('li')?.parentElement?.closest('li');
+  if (!li) return null;
+  for (const child of li.children) {
+    if (child.matches('button.scene-nav-ep')) return child as HTMLElement;
+    if (child.classList.contains('ov-part')) return child.querySelector<HTMLElement>('a.ov-part-name');
+  }
+  return null;
+}
 
 /** Una fila del árbol de *Pages* a la que llegan las flechas desde el *Overview*: la abre `Sidebar` (su `browse`). */
 export const TREE_GO_EVENT = 'shotdocs:tree-go';
 export interface TreeGo {
   id: string;
   repeat: boolean;
+}
+
+/** La primera o la última fila de toda la barra (Inicio y Fin). */
+export function sidebarEdge(from: Element, last: boolean): HTMLElement | null {
+  const rows = [...(from.closest('.sidebar-scroll')?.querySelectorAll<HTMLElement>(ROWS) ?? [])];
+  return (last ? rows[rows.length - 1] : rows[0]) ?? null;
 }
 
 /** La fila que sigue (`dir` 1) o la anterior (-1) a `from` en toda la barra, o `null` en los extremos. */
@@ -46,29 +67,46 @@ export function openedFromOverview(target: string | null): boolean {
 
 // Con la tecla apretada, la fila del foco se marca como la elegida enseguida (no al soltar). En el *Overview* la marca
 // se pone a mano en el DOM: al abrirse la fila, React vuelve a escribir la clase de las dos filas que cambian.
-let marks: { el: Element; had: boolean }[] = [];
+let marks: { el: Element; cls: string; had: boolean }[] = [];
 function unmark(): void {
-  for (const m of marks.reverse()) m.el.classList.toggle('active', m.had);
+  for (const m of marks.reverse()) m.el.classList.toggle(m.cls, m.had);
   marks = [];
 }
-/** Una fila cuya marca de elegida sigue a la página abierta (o a la escena): la de una locación sin página no. */
-function markable(row: HTMLElement): boolean {
+/**
+ * Lo que lleva la marca de elegida de `row` y su clase: una fila (`active`) o la parte entera (`on`). Solo si esa marca
+ * sigue a lo abierto (una locación sin página, no).
+ */
+function holder(row: HTMLElement): [Element, string] | null {
   const href = row.getAttribute('href') ?? '';
-  return row.classList.contains('scene-nav-row') && (href.startsWith('/p/') || href.includes('scene='));
+  if (row.classList.contains('scene-nav-row')) return href.startsWith('/p/') || href.includes('scene=') ? [row, 'active'] : null;
+  if (row.classList.contains('ov-part-name')) {
+    const part = row.closest('.ov-part');
+    return part ? [part, 'on'] : null;
+  }
+  return null;
 }
 function mark(row: HTMLElement): void {
   unmark();
   const box = row.closest('.ov-nav');
-  if (!box || !markable(row)) return;
-  for (const cur of box.querySelectorAll('.scene-nav-row.active')) {
-    if (cur === row) continue;
-    marks.push({ el: cur, had: true });
-    cur.classList.remove('active');
+  const own = holder(row);
+  if (!box || !own) return;
+  for (const cur of box.querySelectorAll('.scene-nav-row.active, .ov-part.on')) {
+    if (cur === own[0]) continue;
+    const cls = cur.classList.contains('ov-part') ? 'on' : 'active';
+    marks.push({ el: cur, cls, had: true });
+    cur.classList.remove(cls);
   }
-  if (!row.classList.contains('active')) {
-    marks.push({ el: row, had: false });
-    row.classList.add('active');
+  if (!own[0].classList.contains(own[1])) {
+    marks.push({ el: own[0], cls: own[1], had: false });
+    own[0].classList.add(own[1]);
   }
+}
+
+// El clic que da `goToRow` (no la persona): una parte se abre sin desplegarse, como una carpeta a la que se llega con
+// las flechas en *Pages*.
+let keyClick = false;
+export function clickedByKeys(): boolean {
+  return keyClick;
 }
 
 let target: HTMLAnchorElement | null = null;
@@ -82,7 +120,12 @@ const opener = createOpenScheduler(() => {
   }
   // Se abre: las marcas quedan (React las corrige al dibujar la fila abierta).
   marks = [];
-  row.click();
+  keyClick = true;
+  try {
+    row.click();
+  } finally {
+    keyClick = false;
+  }
 });
 
 /**

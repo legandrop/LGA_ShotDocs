@@ -2418,3 +2418,10 @@ y las filas de *Pages*. Una parte se abre (y se despliega, una sola a la vez), u
 despliega), una fila se abre como un clic. Con el colapso automático, lo abierto desde el *Overview* (una vista del
 mapa o una página de sus listas) pliega todo *Pages* sin moverlo, y una página abierta por otro camino pliega la parte
 abierta del *Overview*. La marca de elegida sigue al foco con la tecla apretada; la página se abre al frenar.
+
+### D807 · El Overview, con el teclado de una carpeta (2026-10-27)
+**Pedido de Lega:** que el *Overview* funcione igual que *Pages*, no distinto: sin el recuadro de foco, con ← y →, y
+sin desplegar una parte al llegar con las flechas.
+**Quedó así:** las partes y los episodios son carpetas y las filas son páginas. → despliega o pasa al primer hijo; ←
+pliega o sube a la madre. Llegar a una parte con ↑/↓ abre su vista sin desplegarla (la que estaba desplegada sigue así)
+y pliega las demás. Un clic en una parte la despliega solo con *Expand subpages: On click* (D737).

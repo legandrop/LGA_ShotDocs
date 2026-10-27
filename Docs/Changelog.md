@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.297 :
+
+En el *Overview* las flechas no se portaban como en *Pages*: el foco de una parte salía con el contorno del navegador,
+← y → no hacían nada, y llegar a una parte con ↑/↓ la desplegaba. Las partes y los episodios no tenían el teclado de
+una carpeta. Ahora → despliega o pasa al primer hijo y ← pliega o sube a la madre (`overviewParent`); llegar a una parte
+abre su vista sin desplegarla (`browsePart`), y un clic la despliega solo con *Expand subpages: On click*. El foco de una
+parte o un episodio se ve como el de una fila de *Pages*. Inicio y Fin van a los extremos de toda la barra, Espacio abre
+y «Show N more» se alcanza con ↓.
+
+[Barra lateral - el Overview con el mismo teclado que Pages]
+
 v0.296 :
 
 En las listas del *Overview* las flechas no hacían nada, y desde la primera página de *Pages* ↑ no seguía: eran dos

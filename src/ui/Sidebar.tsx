@@ -45,7 +45,7 @@ import {
   treeKeyAction,
   visibleRows,
 } from './treeNav';
-import { clearOpenedFromOverview, goToRow, openedFromOverview, sidebarStep, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
+import { clearOpenedFromOverview, goToRow, openedFromOverview, sidebarEdge, sidebarStep, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
 
 /** Llevar la fila a la vista: centrada con el colapso automático (treeNav.ts), si no, lo justo para que se vea. */
 const showRow = AUTO_COLLAPSE ? centerRow : revealRow;
@@ -464,6 +464,12 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     // Solo con el foco en la fila misma (no en el renombrado ni en sus botones) y la tecla sola.
     if (e.target !== e.currentTarget || !isTreeKey(e.key) || !isPlainKey(e.nativeEvent)) return;
     e.preventDefault();
+    // Inicio y Fin van al principio y al final de toda la barra, *Overview* incluido (D806).
+    if (e.key === 'Home' || e.key === 'End') {
+      const edge = sidebarEdge(e.currentTarget, e.key === 'End');
+      if (edge && edge !== e.currentTarget) goToRow(edge, false);
+      return;
+    }
     const action = treeKeyAction(rows, id, e.key);
     if (action.type === 'go') {
       // El foco pasa ya; la página se abre al instante o, con la tecla apretada, al frenar (treeNav.ts).

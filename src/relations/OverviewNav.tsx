@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { locale, useT } from '../i18n';
 import { useLinkMode } from '../linkMode';
+import { usePrefs } from '../prefs';
 import { mapPath, navigate, pagePath, useRoute, useSearchParam, type MapTab } from '../router';
 import { useServices, useTree } from '../services';
 import { CollapseIcon, ExpandIcon } from '../ui/icons';
@@ -8,7 +9,7 @@ import { setNavOpen, useNavOpen } from '../ui/navStore';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { AUTO_COLLAPSE, isPlainKey, revealRow } from '../ui/treeNav';
-import { goToRow, markOpenedFromOverview, openedFromOverview, OVERVIEW_ROW, overviewTarget, sidebarStep } from '../ui/sidebarRows';
+import { clickedByKeys, goToRow, markOpenedFromOverview, openedFromOverview, OVERVIEW_ROW, overviewParent, overviewTarget, sidebarEdge, sidebarStep } from '../ui/sidebarRows';
 import { dayList, dayShortLabel } from './dayLive';
 import { setIndex } from './liveView';
 import { mergeRows } from './merge';
@@ -88,6 +89,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const route = useRoute();
   const sceneQuery = useSearchParam('scene');
   const projectId = useCurrentProject();
+  // Un clic en una parte la despliega solo con *Expand subpages: On click*, como una carpeta de *Pages* (D737).
+  const { expandSubpages } = usePrefs();
   const tree = useTree();
   const revision = useSyncExternalStore(session.relations.subscribe, session.relations.getRevision);
   // Lo que se tipea en el menú `/` de escenas no cuenta mientras el menú está abierto (D568).
@@ -137,7 +140,14 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   // La vista del centro manda: al abrir una pestaña (desde acá, desde la vista o por la dirección) se despliega su parte
   // y se pliegan las otras; al abrir una escena, también su episodio. Después se puede plegar. Una pestaña vacía (un
   // proyecto sin locaciones en `/map`) no pliega lo que estaba: esa parte no se dibuja.
+  // La parte a la que se llegó con las flechas: su vista se abre sin desplegarla (`browsePart`).
+  const browsedPart = useRef<MapTab | null>(null);
   useEffect(() => {
+    if (browsedPart.current && browsedPart.current === tab && !activeScene) {
+      browsedPart.current = null;
+      return;
+    }
+    browsedPart.current = null;
     if (!tab || tab === 'pending' || sizes[tab] === 0) return;
     const f = readFold(projectId);
     const eps = activeEp !== null ? [activeEp] : f.eps;
@@ -148,15 +158,73 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   // La fila de la escena abierta se lleva a la vista al abrirla y al abrir el cajón del teléfono, debajo de lo que queda
   // pegado arriba (`revealRow`, D771). Si su parte o su episodio estaban plegados, la fila aparece un dibujo después (el
   // efecto de arriba los despliega): queda pendiente hasta que exista.
-  // ↑/↓ con el foco en una parte, un episodio o una fila recorren la barra entera, *Pages* incluido, y abren lo anterior o
-  // lo siguiente como un clic (pedido de Lega, D806; `sidebarRows.ts`). Con la tecla apretada, al soltar.
+  // El teclado, igual que en el árbol de *Pages* (pedido de Lega, D806; `sidebarRows.ts`): ↑/↓ recorren la barra entera,
+  // *Pages* incluido, y abren lo anterior o lo siguiente (con la tecla apretada, al soltar); → despliega o pasa al
+  // primer hijo; ← pliega o sube a la madre. Las partes y los episodios son las carpetas; las filas, las hojas.
   const onRowsKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || !isPlainKey(e.nativeEvent)) return;
+    if (!isPlainKey(e.nativeEvent)) return;
     const from = e.target instanceof Element ? e.target.closest<HTMLElement>(OVERVIEW_ROW) : null;
     if (!from) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = sidebarStep(from, e.key === 'ArrowDown' ? 1 : -1);
+      if (next) goToRow(next, e.repeat);
+      return;
+    }
+    if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      const edge = sidebarEdge(from, e.key === 'End');
+      if (edge && edge !== from) goToRow(edge, false);
+      return;
+    }
+    // Espacio abre como Enter (un link solo se abre con Enter).
+    if (e.key === ' ' && from instanceof HTMLAnchorElement) {
+      e.preventDefault();
+      from.click();
+      return;
+    }
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     e.preventDefault();
-    const next = sidebarStep(from, e.key === 'ArrowDown' ? 1 : -1);
-    if (next) goToRow(next, e.repeat);
+    const right = e.key === 'ArrowRight';
+    const toChild = () => {
+      const next = sidebarStep(from, 1);
+      if (next) goToRow(next, false);
+    };
+    const toParent = () => {
+      const up = overviewParent(from);
+      if (up) goToRow(up, false);
+    };
+    // Plegar lo que tiene adentro lo abierto lo lleva a lo plegado, como plegar una madre de la página abierta en *Pages*:
+    // se abre la vista de la parte (sin volver a desplegarla).
+    const holdsOpen = () => !!from.closest('li')?.querySelector('a.scene-nav-row.active');
+    const part = from.dataset.part as Part | 'pending' | undefined;
+    const ep = from.dataset.ep;
+    if (part) {
+      if (part === 'pending') return;
+      const open = fold.part === part;
+      if (right) {
+        if (open) toChild();
+        else update({ ...fold, closed: false, part });
+      } else if (open) {
+        const inside = holdsOpen();
+        update({ ...fold, part: null });
+        if (inside) browsePart(part);
+      }
+    } else if (ep !== undefined) {
+      const open = fold.eps.includes(ep);
+      if (right) {
+        if (open) toChild();
+        else update({ ...fold, eps: [ep] });
+      } else if (open) {
+        const inside = holdsOpen();
+        update({ ...fold, eps: [] });
+        if (inside) browsePart('scenes');
+      } else {
+        toParent();
+      }
+    } else if (!right) {
+      toParent();
+    }
   };
   // Lo que se abre desde acá lo dice (`markOpenedFromOverview`): *Pages* se pliega y no se mueve.
   const onRowsClick = (e: MouseEvent) => {
@@ -208,6 +276,17 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   };
   const openPart = (part: Part) => {
     update({ ...fold, closed: false, part });
+    go(part);
+  };
+  /**
+   * Llegar a una parte con las flechas: abre su vista sin desplegarla y pliega las demás, como una carpeta de *Pages*
+   * (la que ya estaba desplegada sigue así).
+   */
+  const browsePart = (part: Part) => {
+    const f = readFold(projectId);
+    if (f.part !== null && f.part !== part) update({ ...f, part: null, eps: [] });
+    if (tab === part && !activeScene) return;
+    browsedPart.current = part;
     go(part);
   };
   const togglePart = (part: Part) => update({ ...fold, part: fold.part === part ? null : part });
@@ -277,6 +356,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
             <li key={g.ep}>
               <button
                 className={`scene-nav-ep${isOpen ? ' sticky-head' : ''}`}
+                data-ep={g.ep}
                 aria-expanded={isOpen}
                 onClick={() => update({ ...fold, eps: isOpen ? [] : [g.ep] })}
               >
@@ -405,8 +485,10 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
           e.preventDefault();
           e.stopPropagation();
           if (part === 'pending') go('pending');
+          else if (clickedByKeys() || expandSubpages !== 'onClick') browsePart(part);
           else openPart(part);
         }}
+        data-part={part}
       >
         {label}
       </a>
@@ -418,6 +500,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
           onClick={(e) => {
             if (!plainClick(e)) return;
             if (part === 'pending') go('pending');
+            else if (expandSubpages !== 'onClick') browsePart(part);
             else openPart(part);
           }}
         >
