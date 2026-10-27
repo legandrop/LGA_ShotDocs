@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createOpenScheduler, isPlainKey, isTreeKey, revealDelta, revealRow, treeKeyAction, visibleRows, type VisibleRow } from './treeNav';
+import { collapseToBranch, createOpenScheduler, isPlainKey, isTreeKey, revealDelta, revealRow, treeKeyAction, visibleRows, type VisibleRow } from './treeNav';
 
 // Las reglas del teclado del árbol de páginas, sin la interfaz.
 
@@ -200,5 +200,19 @@ describe('revealRow', () => {
     const c = area(0, 0, 50);
     expect(revealRow(el(box(0, 0)), c)).toBe(0);
     expect(c.scrollTop).toBe(50);
+  });
+});
+
+describe('collapseToBranch (colapso automático)', () => {
+  it('deja solo las madres, la página si ya estaba abierta y lo de otros proyectos', () => {
+    const prev = new Set(['uno', 'a', 'tres', 'otro-proyecto']);
+    const next = collapseToBranch(prev, ['uno'], 'a', (id) => id === 'otro-proyecto');
+    expect(next).toEqual(new Set(['uno', 'a', 'otro-proyecto']));
+    // Una página cerrada no se abre por abrirla.
+    expect(collapseToBranch(prev, ['tres'], 'c')).toEqual(new Set(['tres']));
+  });
+  it('si no cambia nada, devuelve lo mismo (sin redibujar)', () => {
+    const prev = new Set(['uno', 'a']);
+    expect(collapseToBranch(prev, ['uno', 'a'], 'a1')).toBe(prev);
   });
 });

@@ -15,6 +15,10 @@ import { Sidebar } from './Sidebar';
 import { OPEN_DELAY_MS } from './treeNav';
 import { Shell } from './Workspace';
 
+// Estas pruebas son del árbol con el colapso automático apagado (lo que va a ser el switch de Settings): lo desplegado
+// a mano se queda al cambiar de página. Prendido: sidebarAutoCollapse.test.tsx.
+vi.mock('./treeNav', async (original) => ({ ...(await original<typeof import('./treeNav')>()), AUTO_COLLAPSE: false }));
+
 // El árbol de páginas con el teclado (patrón de árbol de WAI-ARIA) y plegar una madre de la página abierta, con
 // la barra lateral de verdad contra el árbol y la base local en memoria.
 

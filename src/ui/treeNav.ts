@@ -38,6 +38,35 @@ export function visibleRows(
   return out;
 }
 
+/**
+ * Colapso automático: cada vez que se abre una página (clic, flechas, un link, atrás y adelante, la búsqueda), el árbol
+ * de *Pages* deja abiertas solo las madres de la página abierta (y la página misma, si ya estaba abierta) y su fila queda
+ * centrada en la barra (`centerRow`). Lo plegado o desplegado a mano se pisa al abrir otra página. Más adelante va a ser
+ * un switch en Settings; hoy queda prendido.
+ */
+export const AUTO_COLLAPSE = true;
+
+/**
+ * Lo desplegado después de abrir `activeId` con el colapso automático: sus madres (`branch`), la página misma si ya
+ * estaba desplegada, y lo de otros proyectos (`outside`) tal cual. Si no cambia nada, devuelve `prev` (sin redibujar).
+ */
+export function collapseToBranch(
+  prev: Set<string>,
+  branch: readonly string[],
+  activeId: string,
+  outside: (id: string) => boolean = () => false,
+): Set<string> {
+  const next = new Set(branch);
+  if (prev.has(activeId)) next.add(activeId);
+  for (const id of prev) if (outside(id)) next.add(id);
+  return next.size === prev.size && [...next].every((id) => prev.has(id)) ? prev : next;
+}
+
+/** Las teclas que mueven el foco por el árbol: las que siguen andando si el foco se perdió después de tocarlo. */
+export function isTreeMoveKey(key: string): boolean {
+  return key === 'ArrowUp' || key === 'ArrowDown' || key === 'Home' || key === 'End';
+}
+
 /** Lo que hace una tecla en el árbol. */
 export type TreeAction =
   | { type: 'none' }
@@ -182,14 +211,22 @@ export function revealDelta(
  * (`.sticky-head`, D771). Son las que están en los bloques que contienen a la fila y van antes que ella.
  */
 export function topCover(row: HTMLElement, container: HTMLElement): number {
-  let cover = 0;
+  return stickyStack(row, container).reduce((sum, head) => sum + head.getBoundingClientRect().height, 0);
+}
+
+/** Los títulos y las madres que se le pegan encima a `row` al bajar (D771), de arriba abajo. */
+function stickyStack(row: HTMLElement, container: HTMLElement): HTMLElement[] {
+  const heads: HTMLElement[] = [];
   for (let node = row.parentElement; node && node !== container; node = node.parentElement) {
+    const here: HTMLElement[] = [];
     for (const child of node.children) {
       if (child === row || child.contains(row) || !child.classList.contains('sticky-head')) continue;
-      if (child.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING) cover += child.getBoundingClientRect().height;
+      if (child.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING) here.push(child as HTMLElement);
     }
+    // Se sube de la madre más cercana a la más lejana: cada bloque va antes que los de adentro.
+    heads.unshift(...here);
   }
-  return cover;
+  return heads;
 }
 
 /** Dónde arranca lo pegado, desde el borde de arriba de la barra: su margen de arriba más `--sticky-top`. */
@@ -233,4 +270,61 @@ export function revealRow(row: HTMLElement, container: HTMLElement): number {
   }
   if (delta) container.scrollTop += delta;
   return delta;
+}
+
+/**
+ * Cuánto desplazar `container` para que `row` quede en el centro de lo que se ve: entre lo pegado arriba que de verdad
+ * queda pegado con ese desplazamiento (el título de *Pages* y las madres abiertas, D771) y lo que tapa el borde de abajo
+ * (`scroll-padding-bottom`). Positivo, hacia abajo; el navegador lo frena en los extremos.
+ */
+export function centerDelta(row: HTMLElement, container: HTMLElement): number {
+  const r = row.getBoundingClientRect();
+  const c = container.getBoundingClientRect();
+  if (!r.height || !c.height) return 0;
+  const top = c.top + container.clientTop;
+  const bottom = top + container.clientHeight - bottomCover(container);
+  // Cada pegado: dónde estaría sin pegarse (el borde de arriba de su bloque, del que es el primer hijo) y el lugar
+  // donde se pega, uno debajo del otro desde `--sticky-top`.
+  let slot = top + Math.max(0, stickyStart(container));
+  const stack = stickyStack(row, container).map((head) => {
+    const height = head.getBoundingClientRect().height;
+    const natural = (head.parentElement ?? head).getBoundingClientRect().top;
+    const at = slot;
+    slot += height;
+    return { natural, at, bottom: at + height };
+  });
+  const mid = r.top + r.height / 2;
+  const deltaFor = (zoneTop: number) => mid - (zoneTop + bottom) / 2;
+  /** Hasta dónde tapa lo pegado si se desplaza `delta`. */
+  const coverFor = (delta: number) => {
+    let cover = top;
+    for (const head of stack) if (head.natural - delta < head.at) cover = Math.max(cover, head.bottom);
+    return cover;
+  };
+  // Lo que tapa arriba depende de cuánto se desplace (una madre cerca de la fila no llega a pegarse), y cuánto se
+  // desplaza depende de lo que tapa: unas vueltas alcanzan para que se asiente.
+  let zoneTop = stack.length ? stack[stack.length - 1].bottom : top;
+  let delta = deltaFor(zoneTop);
+  for (let i = 0; i < 4; i++) {
+    const next = coverFor(delta);
+    if (next === zoneTop) return Math.abs(delta) < 1 ? 0 : Math.round(delta);
+    zoneTop = next;
+    delta = deltaFor(zoneTop);
+  }
+  // No se asienta: una madre justo en el borde se pega con un desplazamiento y no con el otro. Se deja justo en su
+  // lugar pegado, que queda entre los dos.
+  const other = deltaFor(coverFor(delta));
+  const [lo, hi] = delta < other ? [delta, other] : [other, delta];
+  const edge = stack.find((head) => head.natural - lo < head.at !== head.natural - hi < head.at);
+  if (edge) delta = Math.min(hi, Math.max(lo, edge.natural - edge.at));
+  return Math.abs(delta) < 1 ? 0 : Math.round(delta);
+}
+
+/** Centra `row` en `container` (el navegador frena el desplazamiento arriba y abajo). Devuelve cuánto desplazó. */
+export function centerRow(row: HTMLElement, container: HTMLElement): number {
+  const delta = centerDelta(row, container);
+  if (!delta) return 0;
+  const before = container.scrollTop;
+  container.scrollTop = before + delta;
+  return container.scrollTop - before;
 }

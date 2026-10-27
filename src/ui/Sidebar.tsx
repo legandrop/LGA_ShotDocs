@@ -31,7 +31,25 @@ import { SyncBadge } from './SyncBadge';
 import { OfflineBadge, OfflineLine } from './SpaceHost';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
 import { datedTitle, useLocMatcher, type DatedTitle } from './datedTitle';
-import { createOpenScheduler, isPlainKey, isTreeKey, REVEAL_QUIET_MS, REVEAL_TTL_MS, revealRow, treeKeyAction, visibleRows } from './treeNav';
+import {
+  AUTO_COLLAPSE,
+  centerRow,
+  collapseToBranch,
+  createOpenScheduler,
+  isPlainKey,
+  isTreeKey,
+  isTreeMoveKey,
+  REVEAL_QUIET_MS,
+  REVEAL_TTL_MS,
+  revealRow,
+  treeKeyAction,
+  visibleRows,
+} from './treeNav';
+
+/** Llevar la fila a la vista: centrada con el colapso automático (treeNav.ts), si no, lo justo para que se vea. */
+const showRow = AUTO_COLLAPSE ? centerRow : revealRow;
+/** Un diálogo abierto (como `navHistory.ts`): ahí las flechas no son del árbol. */
+const MODAL = '[aria-modal="true"], .modal-backdrop, .carrete, dialog[open]';
 
 const EXPANDED_KEY = 'shotdocs-expanded';
 
@@ -142,6 +160,18 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const { expandSubpages } = usePrefs();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
+  // Colapso automático (treeNav.ts): al abrir otra página, lo desplegado de su proyecto pasa a ser solo su rama. Se
+  // calcula al dibujar, no en un efecto: el árbol no se pinta un cuadro con la rama vieja abierta, y la fila se centra
+  // con lo que queda (abajo, `tryReveal`). Espera a que la página esté en el árbol (al cargar puede no haber llegado).
+  const [branchOf, setBranchOf] = useState<string | null>(null);
+  if (AUTO_COLLAPSE && activeId && branchOf !== activeId && tree.get(activeId) && !tree.isTrashed(activeId)) {
+    setBranchOf(activeId);
+    const project = tree.get(activeId)?.workspace_id;
+    const branch = tree.ancestors(activeId).map((p) => p.id);
+    // Lo que no es de este proyecto, o no está en el árbol (otro workspace, algo que todavía no bajó), queda como estaba.
+    const outside = (id: string) => tree.get(id)?.workspace_id !== project;
+    setExpanded((prev) => collapseToBranch(prev, branch, activeId, outside));
+  }
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ id: string; position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [account, setAccount] = useState<MenuPosition | null>(null);
@@ -170,6 +200,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const [pagesFolded, setPagesFolded] = useState(readPagesFolded);
   const pagesClosed = pagesFolded[projectId] === true;
   const foldPages = (closed: boolean, project = projectId) => {
+    settle.current = null;
     const next = { ...readPagesFolded(), [project]: closed };
     if (!closed) delete next[project];
     setPagesFolded(next);
@@ -194,6 +225,11 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   // un desplazamiento es nuestro (su evento `scroll` no cuenta como de la persona).
   const lastManualScroll = useRef(0);
   const ownScrollUntil = useRef(0);
+  const ownTop = useRef(-1);
+  const markOwn = () => {
+    ownScrollUntil.current = Date.now() + 150;
+    ownTop.current = navEl.current?.scrollTop ?? -1;
+  };
   const scrollbar = useScrollbarReveal(navEl);
 
   // Abrir una página desde el árbol sin clic (flechas, plegar una madre de la abierta). Siempre la última
@@ -251,8 +287,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     return () => window.removeEventListener(TOUR_ANCHOR_EVENT, onAnchor);
   });
 
-  // Lo que no abrió el árbol mismo deja su fila a la vista en el árbol (pedido de Lega, "el árbol sigue a la página").
-  // Antes de pintar (`useLayoutEffect`), sin saltos: si la fila ya se ve, no se mueve nada (`revealRow`). Si todavía no
+  // Lo que no abrió el árbol mismo deja su fila a la vista en el árbol (pedido de Lega, "el árbol sigue a la página");
+  // con el colapso automático, también lo que abrió el árbol, y la fila va centrada (`showRow`). Antes de pintar
+  // (`useLayoutEffect`). Sin el colapso, si la fila ya se ve, no se mueve nada (`revealRow`). Si todavía no
   // está (sus madres se abren en el efecto de arriba, o el árbol no llegó), se espera a la pasada en que aparece. Y si
   // la persona está desplazando el árbol a mano, se espera a que frene (`REVEAL_QUIET_MS`): no se le roba el desplazamiento.
   const tryReveal = () => {
@@ -273,17 +310,53 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     }
     reveal.current = null;
     // Su evento `scroll` llega enseguida: no es de la persona.
-    if (revealRow(el, nav)) ownScrollUntil.current = Date.now() + 150;
+    if (showRow(el, nav)) markOwn();
+    settle.current = { id: req.id, at: Date.now() };
   };
+  // Al cargar, el *Overview* se arma después que el árbol y empuja la fila fuera de la vista: por `REVEAL_TTL_MS`,
+  // cada vez que cambia el alto de lo que está en la barra, la fila vuelve a su lugar, salvo que la persona ya haya
+  // desplazado a mano.
+  const settle = useRef<{ id: string; at: number } | null>(null);
+  useEffect(() => {
+    const nav = navEl.current;
+    if (!nav || typeof ResizeObserver === 'undefined' || typeof MutationObserver === 'undefined') return;
+    const resized = new ResizeObserver(() => {
+      const s = settle.current;
+      if (!s) return;
+      if (Date.now() - s.at > REVEAL_TTL_MS || lastManualScroll.current > s.at) {
+        settle.current = null;
+        return;
+      }
+      const el = rowEls.current.get(s.id);
+      if (el && showRow(el, nav)) markOwn();
+    });
+    const watch = () => {
+      resized.disconnect();
+      for (const child of nav.children) resized.observe(child);
+    };
+    watch();
+    const added = new MutationObserver(watch);
+    added.observe(nav, { childList: true });
+    return () => {
+      resized.disconnect();
+      added.disconnect();
+    };
+  }, []);
   useLayoutEffect(() => {
     if (revealTimer.current) clearTimeout(revealTimer.current);
-    reveal.current = activeId && activeId !== openedByTree.current ? { id: activeId, at: Date.now() } : null;
+    // Con el colapso automático, también la que abrió el árbol: el árbol cambió alrededor de su fila y va centrada.
+    const follow = activeId && (AUTO_COLLAPSE || activeId !== openedByTree.current);
+    reveal.current = follow ? { id: activeId, at: Date.now() } : null;
     openedByTree.current = null;
+    settle.current = null;
   }, [activeId]);
   useLayoutEffect(tryReveal);
   useEffect(() => () => (revealTimer.current ? clearTimeout(revealTimer.current) : undefined), []);
 
-  const expand = (id: string) => setExpanded((prev) => new Set(prev).add(id));
+  const expand = (id: string) => {
+    settle.current = null;
+    setExpanded((prev) => new Set(prev).add(id));
+  };
   /** Elegir explícitamente una página abre sólo su nivel; las flechas y plegar siguen siendo manuales. */
   const openPage = (id: string) => {
     opener.cancel();
@@ -293,6 +366,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   };
   /** Pliega `id`. Si la página abierta queda escondida adentro, la abierta pasa a ser `id` (pedido de Lega). */
   const collapse = (id: string) => {
+    settle.current = null;
     // Lo que las flechas iban a abrir no se pierde: se abre ya (o `id`, si quedaba escondido adentro).
     const pending = opener.pending();
     opener.cancel();
@@ -304,13 +378,13 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     if (activeId && tree.isDescendant(activeId, id)) browse.current(id);
     else if (pending) browse.current(tree.isDescendant(pending, id) ? id : pending);
   };
-  /** Pone el foco en la fila; si no, la trae a la vista con `revealRow` (que cuenta las madres pegadas arriba). */
+  /** Pone el foco en la fila; si no, la trae a la vista con `showRow` (que cuenta las madres pegadas arriba). */
   const focusRow = (id: string, preventScroll = false) => {
     const el = rowEls.current.get(id);
     if (!el) return;
     el.focus({ preventScroll: true });
     const nav = navEl.current;
-    if (!preventScroll && nav && revealRow(el, nav)) ownScrollUntil.current = Date.now() + 150;
+    if (!preventScroll && nav && showRow(el, nav)) markOwn();
   };
 
   async function newPage(parentId: string | null) {
@@ -588,6 +662,47 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     if (neighbor) focusRow(neighbor, true);
     else setFocusId(null);
   });
+
+  // ↑, ↓, Inicio y Fin siguen en el árbol aunque el foco no haya quedado en una fila (se fue al documento, o quedó en lo
+  // que se desplaza), si lo último que se tocó fue el árbol: el navegador, si no, desplaza la barra. Arranca en la fila
+  // del foco o en la de la página abierta (`tabStop`).
+  const lostKey = useRef<(e: globalThis.KeyboardEvent) => void>(() => undefined);
+  lostKey.current = (e) => {
+    if (!isTreeMoveKey(e.key) || !isPlainKey(e) || !tabStop) return;
+    e.preventDefault();
+    const action = treeKeyAction(rows, tabStop, e.key);
+    if (action.type !== 'go') return;
+    focusRow(action.id);
+    opener.request(action.id, e.repeat);
+  };
+  useEffect(() => {
+    let touchedTree = false;
+    const onDown = (e: Event) => {
+      const target = e.target instanceof Element ? e.target : null;
+      touchedTree = !!target && !!navEl.current?.contains(target) && !!target.closest('[role="tree"]');
+      if (target && navEl.current?.contains(target)) settle.current = null;
+    };
+    const onFocus = (e: FocusEvent) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (target && target !== document.body && target !== navEl.current && !target.closest('[role="tree"]')) touchedTree = false;
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (!touchedTree || e.defaultPrevented || document.querySelector(MODAL)) return;
+      const focus = document.activeElement;
+      if (focus && focus !== document.body && focus !== navEl.current) return;
+      lostKey.current(e);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('focusin', onFocus, true);
+    return () => {
+      document.removeEventListener('focusin', onFocus, true);
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
   // Con un link público: sin proyectos, papelera ni cuenta (Docs/Doc_Link_Publico.md, 3.5).
   const linkMode = useLinkMode();
   const canCreateRoot = perms.canCreateIn(null, projectId);
@@ -601,7 +716,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
         ref={navEl}
         className="sidebar-scroll"
         onScroll={() => {
-          if (Date.now() > ownScrollUntil.current) lastManualScroll.current = Date.now();
+          const nav = navEl.current;
+          const mine = Date.now() <= ownScrollUntil.current || (!!nav && Math.abs(nav.scrollTop - ownTop.current) < 1);
+          if (!mine) lastManualScroll.current = Date.now();
           scrollbar.scrolled();
         }}
         onMouseMove={scrollbar.moved}

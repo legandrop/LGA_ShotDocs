@@ -112,8 +112,8 @@ export const help = {
   },
   'help.pagesExpand.title': { en: "Expand subpages when selecting a page", es: "Expandir subpáginas al elegir una página" },
   'help.pagesExpand.text': {
-    en: "Clicking a page in the sidebar expands it and shows all its direct subpages. Deeper branches keep their open or closed state. In the account menu, Expand subpages offers On click (the default) or Manual. The arrow still expands or collapses a page; clicking the page again expands it again. This preference follows your account across devices and works offline.",
-    es: "Al hacer clic en una página de la barra lateral, se despliega y muestra todas sus subpáginas directas. Las ramas más profundas conservan su estado abierto o cerrado. En el menú de la cuenta, Expandir subpáginas ofrece Al hacer clic (de fábrica) o Manual. La flecha sigue desplegando o plegando una página; otro clic en la página vuelve a desplegarla. Esta preferencia sigue a tu cuenta entre dispositivos y funciona sin red.",
+    en: "Clicking a page in the sidebar expands it and shows all its direct subpages. The rest of the tree folds so that only the way to that page stays open. In the account menu, Expand subpages offers On click (the default) or Manual. The arrow still expands or collapses a page; clicking the page again expands it again. This preference follows your account across devices and works offline.",
+    es: "Al hacer clic en una página de la barra lateral, se despliega y muestra todas sus subpáginas directas. El resto del árbol se pliega y queda abierto solo el camino hasta esa página. En el menú de la cuenta, Expandir subpáginas ofrece Al hacer clic (de fábrica) o Manual. La flecha sigue desplegando o plegando una página; otro clic en la página vuelve a desplegarla. Esta preferencia sigue a tu cuenta entre dispositivos y funciona sin red.",
   },
   'help.pagesTree.title': { en: "Pages inside pages", es: "Páginas adentro de páginas" },
   'help.pagesTree.text': {

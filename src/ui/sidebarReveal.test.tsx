@@ -11,6 +11,10 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { Sidebar } from './Sidebar';
 import { Shell } from './Workspace';
 
+// Estas pruebas son del árbol con el colapso automático apagado (lo que va a ser el switch de Settings): lo desplegado
+// a mano se queda al cambiar de página. Prendido: sidebarAutoCollapse.test.tsx.
+vi.mock('./treeNav', async (original) => ({ ...(await original<typeof import('./treeNav')>()), AUTO_COLLAPSE: false }));
+
 // La fila de la página abierta queda a la vista en el árbol cuando la página se abre por otro camino que el árbol
 // (un link del editor, la búsqueda, el breadcrumb, atrás y adelante, la dirección). Un clic o el teclado en
 // el árbol no lo desplazan. JSDOM no mide: cada fila mide 32 px cada 33, a partir de 100 px desde arriba de la

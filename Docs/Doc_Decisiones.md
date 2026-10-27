@@ -2400,3 +2400,11 @@ con el valor entero de un campo de decorado (*Locación Guion*, *Decorado*, *Set
 de su campo *Locación*, con la regla de D424. Su cabecera (etiqueta SET violeta) muestra escenas, locaciones y días;
 *Overview › Sets* va después de *Locations*, ordenado por nombre. La escena y la locación leen el mismo índice, así las
 tres cabeceras dicen lo mismo.
+
+### D805 · Colapso automático del árbol y página centrada (2026-10-27)
+**Pedido de Lega:** al abrir una página, que quede abierto solo el camino hasta ella y se plieguen las demás ramas, y
+que su fila quede siempre centrada en la barra (en los extremos el desplazamiento se frena y la fila sigue). Más
+adelante, un switch en Settings; por ahora una constante en sí.
+**Quedó así:** `AUTO_COLLAPSE = true` en `treeNav.ts`. Vale para todo lo que abre una página: clic, flechas, link,
+búsqueda, atrás y adelante. Lo plegado o desplegado a mano se pisa al abrir otra página. Las ramas de otros proyectos no
+se tocan. El centro es el de la zona que se ve, debajo de los títulos pegados.

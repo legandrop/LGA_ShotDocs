@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.295 :
+
+Al abrir una página, el árbol solo abría sus madres y dejaba abierto todo lo demás, y la fila quedaba donde cayera. Ahora,
+con `AUTO_COLLAPSE` (fijo en sí hasta que haya un ajuste), quedan abiertas solo las madres de la página abierta y su
+fila se centra en la barra, contando los títulos pegados (`collapseToBranch`, `centerRow` en `treeNav.ts`, D805). Al
+cargar, el *Overview* se arma después que el árbol y empujaba la fila fuera de la vista: unos segundos, si cambia el alto
+de la barra y nadie desplazó a mano, la fila vuelve al centro. Además, si el foco se pierde después de tocar el árbol,
+↑ y ↓ siguen cambiando de página en vez de desplazar la barra.
+
+[Barra lateral - colapso automático, página centrada y flechas]
+
 v0.294 :
 
 El decorado (el lugar de la historia) no era una entidad: se leía suelto del campo *Locacion Guion* de cada ficha y no
