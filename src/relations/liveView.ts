@@ -417,7 +417,11 @@ function setsOf(src: LiveSource, list: FieldValue[], into: SetRef[]): void {
       }
       continue;
     }
-    for (const piece of f.text.split('\n')) add({ title: piece.trim(), pageId: null });
+    for (const piece of f.text.split('\n')) {
+      // El valor entero que nombra un decorado (su título o uno de sus otros nombres, D804) lleva a su página.
+      const id = setIndex(src).named(piece.trim());
+      add(id ? { title: src.title(id) || piece.trim(), pageId: id } : { title: piece.trim(), pageId: null });
+    }
   }
 }
 
@@ -639,6 +643,8 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
       if (v && !intExt.some((x) => normLabel(x) === normLabel(v))) intExt.push(v);
     }
   }
+  // Los decorados cuya página nombra la escena (o que la nombran desde otra ficha): también en su renglón (D804).
+  for (const id of setIndex(src).ofScene.get(code) ?? []) if (!sets.some((s) => s.pageId === id)) sets.push({ title: title(id), pageId: id });
 
   // Las fichas: un extracto cada una, con sus fotos (todas son de la escena) y su pregunta abierta.
   for (const c of cards) {
@@ -731,7 +737,8 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
     } else if (p.stage === 'breakdown') {
       for (const s of p.sections) breakdown.push(sectionEx(s, null, BREAKDOWN));
       for (const m of looseMentions(p)) breakdown.push(mentionEx(m, null));
-    } else {
+    } else if (!sets.some((s) => s.pageId === p.pageId || (roles.get(p.pageId)?.partOf?.kind === 'set' && roles.get(p.pageId)?.partOf?.pageId === s.pageId))) {
+      // Un decorado que la nombra (o una página suya) ya está en su renglón *Set* (D804).
       const first = p.sections[0]?.blockId ?? p.mentions.find((m) => !m.hidden)?.blockId ?? p.mentions[0]?.blockId;
       also.push({ pageId: p.pageId, title: pageTitle, blockId: first });
     }
@@ -824,13 +831,14 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
   const locPage = entry?.pageId ?? rel.pageId;
 
   // Sus decorados: el campo de la locación misma y las páginas sueltas (no escenas, fichas, días, locaciones ni
-  // scoutings) cuyo campo *Locacion Real* la nombra (la tabla «Decorados» de Coda).
+  // scoutings) cuyo campo *Locacion Real* la nombra (la tabla «Decorados» de Coda), y los decorados (D804) cuyo campo
+  // la nombra: la misma regla que `setIndex`.
   const sets: SetRef[] = [];
   setsOf(src, fieldValues(fieldsOf(src, locPage), 'set'), sets);
   const setPages = new Set<string>();
   for (const [pageId, pf] of snap.fields) {
     const role = roles.get(pageId);
-    if (pageId === locPage || role?.excluded || role?.entity || role?.partOf || role?.doc) continue;
+    if (pageId === locPage || role?.excluded || (role?.entity && role.entity.kind !== 'set') || role?.partOf || role?.doc) continue;
     if ((snap.pages.get(pageId)?.entities ?? 0) > INDEX_PAGE_MIN || src.title(pageId) === undefined) continue;
     const here = valued(fieldValues(pf, 'location')).some(
       (f) =>
@@ -844,6 +852,10 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
     if (!here) continue;
     setPages.add(pageId);
     if (!sets.some((x) => x.pageId === pageId)) sets.push({ title: title(pageId), pageId });
+  }
+  // Y lo que el decorado dice de sí (también lo de sus páginas de adentro): las dos cabeceras dicen lo mismo.
+  for (const row of setIndex(src).rows) {
+    if (row.locs.some((l) => l.name === name) && !sets.some((x) => x.pageId === row.pageId)) sets.push({ title: title(row.pageId), pageId: row.pageId });
   }
 
   // Escenas cuyo desglose (la escena o sus fichas) la nombra.
@@ -861,7 +873,8 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
       plannedCodes.set(scene, true);
       continue;
     }
-    if (p.own || setPages.has(p.pageId) || scoutLocations(src, p.pageId).includes(name)) continue;
+    const inSet = (id: string) => sets.some((x) => x.pageId === id);
+    if (p.own || setPages.has(p.pageId) || inSet(p.pageId) || (role?.partOf?.kind === 'set' && inSet(role.partOf.pageId)) || scoutLocations(src, p.pageId).includes(name)) continue;
     // Los días cuyo título la nombra se muestran aparte (columna Rodaje).
     if (p.stage === 'shoot' && dayRef(src, p.pageId).locs.includes(name)) continue;
     also.push({ pageId: p.pageId, title: title(p.pageId), blockId: p.mentions.find((m) => !m.hidden)?.blockId });
@@ -970,5 +983,210 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
     indexPages: indexPagesList,
     photos: uniquePhotos([...ownPhotos, ...scoutPhotos, ...days.flatMap((d) => d.photos)]),
     complete: rel.complete,
+  };
+}
+
+// --- Decorado ------------------------------------------------------------------------------------------------------
+
+/**
+ * Un decorado (el lugar de la historia; Plan_Estructura_Etapas.md, parte 4, D804) y lo que se sabe de él: sus locaciones
+ * (su campo *Locación*: un link a la locación o su nombre, con la regla de D424), sus escenas (las que lo nombran en su
+ * campo *Decorado* / *Locacion Guion*, ellas o sus fichas, y las que nombra su propia página) y las demás páginas que lo
+ * nombran en ese campo. Un decorado se nombra solo por campo o por link, con el valor entero igual a su título o a uno de
+ * sus otros nombres (decisión 6 del plan): «Comedor» o «Auto Rubio» sueltos en un texto no lo nombran.
+ */
+export interface SetRow {
+  pageId: string;
+  name: string;
+  /** Lo escrito en su campo «Otros nombres» (sin su nombre). */
+  aliases: string[];
+  /** Sus locaciones: con su página si es una locación del proyecto; si no, el texto del campo. */
+  locs: { name: string; pageId: string | null }[];
+  scenes: string[];
+  /** Las páginas que lo nombran en su campo y no son de una escena (un día, una nota). */
+  also: string[];
+}
+
+export interface SetIndex {
+  /** En el orden de la barra lateral. */
+  rows: SetRow[];
+  byPage: Map<string, SetRow>;
+  /** Los decorados de cada escena (por código): sus páginas. */
+  ofScene: Map<string, string[]>;
+  /** El decorado que nombra un valor entero (su título o uno de sus otros nombres, de un solo decorado), o `null`. */
+  named(text: string): string | null;
+}
+
+/** Cómo se separan los otros nombres escritos en un renglón: «Ambulancia, Ambu · La ambulancia». */
+const ALIAS_SPLIT = /\s*(?:\n|,|;|·)\s*/;
+
+/** Lo de `setIndex`, una vez por foto (la foto no cambia: cada revisión es otra). */
+const setMemo = new WeakMap<RelationSnapshot, SetIndex>();
+
+/** Los decorados del proyecto que la persona ve, con sus relaciones. */
+export function setIndex(src: LiveSource): SetIndex {
+  let memo = setMemo.get(src.snap);
+  if (!memo) setMemo.set(src.snap, (memo = readSetIndex(src)));
+  return memo;
+}
+
+/**
+ * Las locaciones que dice un valor de un campo de lugar, como en D424: sus links a una locación; si no, el valor entero
+ * (`locationOf`) o las locaciones que nombra enteras adentro («CENADE, Pista 2»). Lo que no es ninguna queda como texto.
+ */
+function placesIn(R: Registry, f: FieldValue, locByPage: Map<string, string>): { name: string; known: boolean }[] {
+  const linked = f.links.map((l) => locByPage.get(l.pageId)).filter((n): n is string => !!n);
+  if (linked.length) return linked.map((name) => ({ name, known: true }));
+  const out: { name: string; known: boolean }[] = [];
+  for (const line of f.text.split('\n')) {
+    const text = line.trim();
+    if (!text || emptyValue(text)) continue;
+    const whole = locationOf(R, text);
+    if (whole) {
+      out.push({ name: whole, known: true });
+      continue;
+    }
+    const inside = scan(R, text, { heading: true, dayTitle: true }).filter((h) => h.kind === 'loc' && locationOf(R, text.slice(h.s, h.e)) === h.ref);
+    if (inside.length) for (const h of inside) out.push({ name: h.ref, known: true });
+    else out.push({ name: text, known: false });
+  }
+  return out;
+}
+
+function readSetIndex(src: LiveSource): SetIndex {
+  const { snap } = src;
+  const roles = snap.registration.roles;
+  const R = snap.registry;
+  const rows: SetRow[] = [];
+  const byPage = new Map<string, SetRow>();
+  const byName = new Map<string, Set<string>>();
+  const note = (text: string, pageId: string) => {
+    const key = normLabel(text);
+    if (!key) return;
+    const ids = byName.get(key) ?? new Set<string>();
+    ids.add(pageId);
+    byName.set(key, ids);
+  };
+  for (const s of snap.registration.sets) {
+    if (byPage.has(s.pageId) || src.title(s.pageId) === undefined) continue;
+    const aliases = valued(fieldValues(fieldsOf(src, s.pageId), 'aliases'))
+      .flatMap((f) => f.text.split(ALIAS_SPLIT))
+      .map((a) => a.trim())
+      .filter((a) => a && !emptyValue(a) && normLabel(a) !== normLabel(s.name));
+    const row: SetRow = { pageId: s.pageId, name: s.name, aliases: [...new Set(aliases)], locs: [], scenes: [], also: [] };
+    rows.push(row);
+    byPage.set(s.pageId, row);
+    note(s.name, s.pageId);
+    for (const a of row.aliases) note(a, s.pageId);
+  }
+  // Un nombre que escribieron dos decorados no es de ninguno.
+  const named = (text: string): string | null => {
+    const ids = byName.get(normLabel(text));
+    return ids && ids.size === 1 ? [...ids][0] : null;
+  };
+  /** Los decorados que nombra un valor: sus links a un decorado o, sin links, cada renglón entero. */
+  const setsIn = (f: FieldValue): string[] =>
+    f.links.length
+      ? f.links.map((l) => l.pageId).filter((id) => byPage.has(id))
+      : f.text
+          .split('\n')
+          .map((t) => named(t.trim()))
+          .filter((id): id is string => !!id);
+  const addLoc = (row: SetRow, name: string, pageId: string | null) => {
+    if (!row.locs.some((l) => normLabel(l.name) === normLabel(name))) row.locs.push({ name, pageId });
+  };
+  const ofScene = new Map<string, string[]>();
+  const addScene = (row: SetRow, code: string) => {
+    if (!row.scenes.includes(code)) row.scenes.push(code);
+    const list = ofScene.get(code) ?? [];
+    if (!list.includes(row.pageId)) list.push(row.pageId);
+    ofScene.set(code, list);
+  };
+
+  // Lo que dicen los campos de las demás páginas: una escena o su ficha (es de esa escena), una locación (el decorado
+  // está ahí, D424) o cualquier otra (*Also named in*). Las páginas índice sueltas no cuentan; una escena o una locación
+  // que nombra muchas cosas sí (lo dice en su campo, como lo lee su cabecera).
+  for (const [pageId, pf] of snap.fields) {
+    const role = roles.get(pageId);
+    if (!role || role.excluded || byPage.has(pageId) || role.partOf?.kind === 'set') continue;
+    if (src.title(pageId) === undefined) continue;
+    const loose = !role.entity && role.partOf?.kind !== 'scene';
+    if (loose && (snap.pages.get(pageId)?.entities ?? 0) > INDEX_PAGE_MIN) continue;
+    const ids = new Set(valued(fieldValues(pf, 'set')).flatMap(setsIn));
+    if (!ids.size) continue;
+    const scene = role.entity?.kind === 'scene' ? role.entity.ref : role.partOf?.kind === 'scene' ? role.partOf.ref : null;
+    for (const id of ids) {
+      const row = byPage.get(id)!;
+      if (scene) addScene(row, scene);
+      else if (role.entity?.kind === 'location' && role.entity.ref) addLoc(row, role.entity.ref, pageId);
+      else if (!row.also.includes(pageId)) row.also.push(pageId);
+    }
+  }
+
+  // Lo de cada decorado y lo de adentro: su campo de lugar y las escenas que nombra.
+  const inside = new Map<string, string[]>();
+  for (const [id, r] of roles) {
+    if (r.excluded || r.partOf?.kind !== 'set' || !byPage.has(r.partOf.pageId)) continue;
+    const list = inside.get(r.partOf.pageId) ?? [];
+    list.push(id);
+    inside.set(r.partOf.pageId, list);
+  }
+  const locByPage = new Map<string, string>();
+  for (const l of R.locations.values()) if (l.pageId) locByPage.set(l.pageId, l.name);
+  for (const row of rows) {
+    for (const id of [row.pageId, ...(inside.get(row.pageId) ?? [])]) {
+      for (const f of valued(fieldValues(fieldsOf(src, id), 'location'))) {
+        for (const p of placesIn(R, f, locByPage)) addLoc(row, p.name, p.known ? (R.locations.get(p.name)?.pageId ?? null) : null);
+      }
+      const pr = snap.pages.get(id);
+      if (!pr || pr.entities > INDEX_PAGE_MIN) continue;
+      for (const m of pr.mentions) if (m.kind === 'scene') addScene(row, m.ref);
+    }
+  }
+  for (const row of rows) row.scenes.sort();
+  return { rows, byPage, ofScene, named };
+}
+
+export interface SetLive {
+  pageId: string;
+  name: string;
+  aliases: string[];
+  locs: { name: string; pageId: string | null }[];
+  /** Sus escenas, con los días en que tienen sección en un reporte. */
+  scenes: { code: string; pageId: string | null; title: string; days: DayRef[] }[];
+  /** Los días en que se filmó alguna de sus escenas, en orden, con cuáles. */
+  days: { day: DayRef; scenes: { code: string; pageId: string | null }[] }[];
+  also: PageChip[];
+  complete: boolean;
+}
+
+/** La cabecera de la página de un decorado (D804). */
+export function setLive(src: LiveSource, pageId: string): SetLive {
+  const { snap } = src;
+  const row = setIndex(src).byPage.get(pageId);
+  const order = pageOrder(snap);
+  const title = (id: string) => src.title(id) ?? '';
+  const shotDays = sceneDays(src);
+  const scenes = (row?.scenes ?? []).map((code) => {
+    const e = snap.registry.scenes.get(code);
+    return { code, pageId: e?.pageId ?? null, title: e?.pageId ? title(e.pageId) : '', days: (shotDays.get(code) ?? []).slice().sort((a, b) => byDay(a, b, order)) };
+  });
+  const days = new Map<string, SetLive['days'][number]>();
+  for (const s of scenes) {
+    for (const d of s.days) {
+      const entry = days.get(d.pageId) ?? { day: d, scenes: [] };
+      entry.scenes.push({ code: s.code, pageId: s.pageId });
+      days.set(d.pageId, entry);
+    }
+  }
+  return {
+    pageId,
+    name: row?.name ?? title(pageId),
+    aliases: row?.aliases ?? [],
+    locs: row?.locs ?? [],
+    scenes,
+    days: [...days.values()].sort((a, b) => byDay(a.day, b.day, order)),
+    also: [...(row?.also ?? [])].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0)).map((id) => ({ pageId: id, title: title(id) })),
+    complete: snap.complete,
   };
 }

@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.294 :
+
+El decorado (el lugar de la historia) no era una entidad: se leía suelto del campo *Locacion Guion* de cada ficha y no
+tenía cabecera ni lista propia. Ahora es el cuarto tipo (`set` en `kind.ts`, parte 4 de `Plan_Estructura_Etapas.md`,
+D804): *Type › Sets* en una carpeta vuelve decorado cada página de adentro. Se nombra solo por el valor entero de un
+campo de decorado o por un link, con su título o un *Otro nombre* (`setIndex` en `liveView.ts`). Su cabecera muestra
+sus escenas, dónde se filma (su campo *Locación*) y los días de esas escenas, y *Overview › Sets* los lista en la barra
+y en el mapa. Escena y locación leen el mismo índice. Ayuda al día.
+
+[Decorados - entidad propia con cabecera y Overview › Sets]
+
 v0.293 :
 
 Los decorados no tenían color (el chip de la cabecera y el renglón *Set* de la escena iban como texto común) y los días

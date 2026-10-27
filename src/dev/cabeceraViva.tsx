@@ -194,6 +194,8 @@ async function main() {
     d.docs.close(built.ids.d59);
     await d.docs.flush();
   }
+  // `?sets=1`: la carpeta de decorados marcada con Type › Sets (D804).
+  if (params.get('sets') === '1') await d.tree.setPatch(built.ids.decorados, { settings: { holds: 'set' } });
   const start = built.ids[params.get('page') ?? 's027'] ?? built.ids.s027;
   history.replaceState(null, '', `${pagePath(start)}${location.search}`);
   createRoot(document.getElementById('root')!).render(

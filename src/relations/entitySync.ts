@@ -32,7 +32,7 @@ export function wantedMark(tree: KindTree, id: string): { kind: EntityKind; code
   const mark = entityMark(row);
   if (mark === null) {
     const kind = reader.kindOf(id);
-    if (kind.kind !== 'scene' && kind.kind !== 'location' && kind.kind !== 'day') return undefined;
+    if (kind.kind !== 'scene' && kind.kind !== 'location' && kind.kind !== 'day' && kind.kind !== 'set') return undefined;
     if (kind.source !== 'folder') return undefined;
     return kind.code ? { kind: kind.kind, code: kind.code } : { kind: kind.kind };
   }
@@ -81,7 +81,7 @@ export async function placedEntity(tree: SyncTree, id: string, how: 'create' | '
   for (const child of inside) await syncEntityMark(tree, child);
 }
 
-/** Lo que contiene la carpeta, como lo ofrece el menú: escenas, locaciones, días o nada. */
+/** Lo que contiene la carpeta, como lo ofrece el menú: escenas, locaciones, decorados, días o nada. */
 export function folderHolds(tree: KindTree, id: string): EntityKind | null {
   return holdsOf(tree, id);
 }
@@ -106,18 +106,18 @@ export async function markFolderHolds(tree: SyncTree, id: string, holds: EntityK
   }
   // Un documento no se escribe en cada página: lo de adentro lo toma de la carpeta al leer (Plan_Estructura_Etapas.md,
   // decisión 3), y sacarlo de la carpeta le saca el tipo.
-  if (holds === 'scene' || holds === 'location') for (const child of typedInside(tree, id)) await syncEntityMark(tree, child);
+  if (holds === 'scene' || holds === 'location' || holds === 'set') for (const child of typedInside(tree, id)) await syncEntityMark(tree, child);
 }
 
 /**
  * *Type* → *This page is*: marca la página como escena (con el código de su título, o el que ya tenía guardado si el
- * título no da ninguno), locación, día, o nada (`false`).
+ * título no da ninguno), locación, decorado, día, o nada (`false`).
  */
 export async function setPageType(tree: SyncTree, id: string, kind: EntityKind | DocKind | null): Promise<void> {
   const row = tree.get(id);
   if (!row) return;
   if (kind === null) return tree.setSetting(id, 'entity', false);
-  if (kind !== 'scene' && kind !== 'location' && kind !== 'day') {
+  if (kind !== 'scene' && kind !== 'location' && kind !== 'day' && kind !== 'set') {
     // El mismo documento: no se toca (un plan conserva el puntero a su día).
     if (docMark(row) === kind) return;
     return tree.setSetting(id, 'entity', { kind });

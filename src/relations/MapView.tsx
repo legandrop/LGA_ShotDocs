@@ -23,7 +23,7 @@ import { FoldPendingRow } from './FoldShots';
 import { contentCounts } from './merge';
 import { twinLabels } from './twinNames';
 import { mapPathFrom, sceneLinks, sceneMentions, scenePageCount, type SceneLinks } from './sceneMentions';
-import { sceneLive, type LiveSource, type PageChip, type SceneLive } from './liveView';
+import { sceneLive, setIndex, type LiveSource, type PageChip, type SceneLive, type SetRow } from './liveView';
 import { sceneStageRows, stagePageIds } from './sceneStageRows';
 import { SceneStages } from './SceneStages';
 import type { SceneMentionList } from './sceneMentions';
@@ -52,6 +52,7 @@ export function MapView({ tab }: { tab: MapTab }) {
 
 const ICONS = {
   loc: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
+  set: 'M4 21V4a1 1 0 0 1 1-1h10l4 4v14M2 21h20M14 12h.01',
   scene: 'M3 7h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l3-4h4l-3 4M10 7l3-4h4l-3 4',
   day: 'M5.5 5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3.5 10h17M8 3v4M16 3v4',
   warn: 'M21.7 18l-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3M12 9v4M12 17h.01',
@@ -151,6 +152,8 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   );
   // Quién linkea cada escena (una ficha, otra página de la escena), una vez por foto: lo usan la columna *Pages* y la lista.
   const links = useMemo(() => (src ? sceneLinks(src) : null), [src, revision]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Los decorados (D804), por nombre como las locaciones.
+  const sets = useMemo(() => (src ? [...setIndex(src).rows].sort((a, b) => a.name.localeCompare(b.name, locale())) : []), [src, revision]); // eslint-disable-line react-hooks/exhaustive-deps
   // El número de la dirección leído con el mismo lector que la lupa (`105_055a`, `101-012`, `5055`): la escena exacta.
   const resolve = (q: string): string | null => {
     if (!snap) return null;
@@ -187,12 +190,13 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   }, [snap, filter, tree]);
   const tabs: { id: MapTab; icon: keyof typeof ICONS; label: string; n: number }[] = [
     { id: 'locations', icon: 'loc', label: tr('map.tabLocations'), n: counts.locations },
+    { id: 'sets', icon: 'set', label: tr('map.tabSets'), n: sets.length },
     { id: 'scenes', icon: 'scene', label: tr('map.tabScenes'), n: counts.scenes },
     { id: 'scouting', icon: 'scout', label: tr('map.tabScouting'), n: counts.scoutings },
     { id: 'days', icon: 'day', label: tr('map.tabDays'), n: counts.days },
     { id: 'pending', icon: 'warn', label: tr('map.tabPending'), n: counts.toResolve + merges },
   ];
-  const empty = !!data && complete && counts.scenes === 0 && counts.locations === 0 && counts.days === 0;
+  const empty = !!data && complete && counts.scenes === 0 && counts.locations === 0 && counts.days === 0 && sets.length === 0;
 
   return (
     <div className="mp">
@@ -259,6 +263,8 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
             <p className="mp-empty">{tr('live.reading')}</p>
           ) : tab === 'locations' ? (
             <Locations data={data} fq={fq} complete={complete} />
+          ) : tab === 'sets' ? (
+            <Sets rows={sets} data={data} fq={fq} complete={complete} />
           ) : tab === 'scenes' && sceneCode && src ? (
             <SceneDetail key={sceneCode} code={resolve(sceneCode) ?? sceneCode} data={data} src={src} links={links} complete={complete} partial={partial} />
           ) : tab === 'scenes' ? (
@@ -826,6 +832,59 @@ function Scoutings({ data, fq }: { data: ProjectMapData; fq: string }) {
           </span>
           <span className="mp-dd" role="cell">
             {s.doc === 'test' && <span className="mp-tag">{tr('map.test')}</span>}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Sets ----------------------------------------------------------------------------------------------------------
+
+/** Cada decorado con sus escenas y dónde se filma (D804). */
+function Sets({ rows, data, fq, complete }: { rows: SetRow[]; data: ProjectMapData; fq: string; complete: boolean }) {
+  const tr = useT();
+  const scenePage = useMemo(() => new Map(data.scenes.map((s) => [s.code, s.pageId])), [data]);
+  if (!rows.length) return <p className="mp-empty">{complete ? tr('map.noSets') : tr('live.reading')}</p>;
+  const shown = rows.filter((s) => !fq || fold(`${s.name} ${s.aliases.join(' ')} ${s.scenes.join(' ')} ${s.locs.map((l) => l.name).join(' ')}`).includes(fq));
+  if (!shown.length) return <p className="mp-empty">{tr('map.noMatch')}</p>;
+  return (
+    <div className="mp-grid mp-sets" role="table">
+      <div className="mp-drow head" role="row">
+        <span role="columnheader">{tr('map.colSet')}</span>
+        <span role="columnheader">{tr('map.colScenes')}</span>
+        <span role="columnheader">{tr('map.colShotAt')}</span>
+      </div>
+      {shown.map((s) => (
+        <div key={s.pageId} className="mp-drow" role="row">
+          <span className="mp-dt" role="cell">
+            <PageLink pageId={s.pageId} className="mp-link">
+              {s.name}
+            </PageLink>
+          </span>
+          <span className="mp-ls mono" role="cell">
+            {s.scenes.length ? (
+              s.scenes.map((code, i) => {
+                const pageId = scenePage.get(code);
+                return (
+                  <span key={code}>
+                    {i > 0 && ', '}
+                    {pageId ? (
+                      <PageLink pageId={pageId} className="mp-link mp-code">
+                        {code}
+                      </PageLink>
+                    ) : (
+                      code
+                    )}
+                  </span>
+                );
+              })
+            ) : (
+              <span className="mp-none">{tr('map.setNoScenes')}</span>
+            )}
+          </span>
+          <span className="mp-dd" role="cell">
+            {s.locs.length ? s.locs.map((l) => l.name).join(', ') : <span className="mp-none">{tr('map.noLocationNamed')}</span>}
           </span>
         </div>
       ))}

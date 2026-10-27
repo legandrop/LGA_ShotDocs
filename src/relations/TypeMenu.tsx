@@ -10,17 +10,19 @@ import { entityMark, holdsDoc, kindReader, type DocKind, type EntityKind } from 
 import { leftOutBy } from './register';
 
 // *Type* en el menú de la página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): qué es esta página (escena,
-// locación, día de rodaje, scouting, prueba, plan de jornada o nada) y qué es lo que se crea adentro (la carpeta da el tipo). Se abre en el mismo menú, en
+// locación, decorado, día de rodaje, scouting, prueba, plan de jornada o nada) y qué es lo que se crea adentro (la carpeta da el tipo). Se abre en el mismo menú, en
 // lugar de sus ítems; *Back* vuelve. Solo con permiso para cambiar la fila (`canEditRow`): lo mismo que el título.
 
 // Los documentos (Docs/Plan_Estructura_Etapas.md): un scouting, una prueba o un plan de jornada.
 type Choice = EntityKind | DocKind;
-const CHOICES: readonly Choice[] = ['scene', 'location', 'day', 'scouting', 'test', 'plan'];
-const PAGE_LABEL: Record<Choice, Key> = { scene: 'type.scene', location: 'type.location', day: 'type.day', scouting: 'type.scouting', test: 'type.test', plan: 'type.plan' };
-const HOLDS_LABEL: Record<Choice, Key> = { scene: 'type.scenes', location: 'type.locations', day: 'type.days', scouting: 'type.scoutings', test: 'type.tests', plan: 'type.plans' };
+// El decorado va al lado de la locación: los dos son lugares (D804).
+const CHOICES: readonly Choice[] = ['scene', 'location', 'set', 'day', 'scouting', 'test', 'plan'];
+const PAGE_LABEL: Record<Choice, Key> = { scene: 'type.scene', location: 'type.location', set: 'type.set', day: 'type.day', scouting: 'type.scouting', test: 'type.test', plan: 'type.plan' };
+const HOLDS_LABEL: Record<Choice, Key> = { scene: 'type.scenes', location: 'type.locations', set: 'type.sets', day: 'type.days', scouting: 'type.scoutings', test: 'type.tests', plan: 'type.plans' };
 const HOLDS_TIP: Record<Choice, Key> = {
   scene: 'sidebar.holdsScenes',
   location: 'sidebar.holdsLocations',
+  set: 'sidebar.holdsSets',
   day: 'sidebar.holdsDays',
   scouting: 'sidebar.holdsScoutings',
   test: 'sidebar.holdsTests',
@@ -37,7 +39,7 @@ export function TypeMenuItem({ pageId, onOpen }: { pageId: string; onOpen: () =>
   const holds = reader.holdsOf(pageId) ?? holdsDoc(tree.get(pageId));
   const doc = kind.kind === 'doc' && isChoice(kind.doc) ? kind.doc : null;
   const now =
-    kind.kind === 'scene' || kind.kind === 'location' || kind.kind === 'day'
+    kind.kind === 'scene' || kind.kind === 'location' || kind.kind === 'day' || kind.kind === 'set'
       ? tr(PAGE_LABEL[kind.kind])
       : holds && isChoice(holds)
         ? tr(HOLDS_LABEL[holds])
@@ -66,7 +68,7 @@ export function TypeSubmenu({ pageId, onBack, onClose }: { pageId: string; onBac
   const holds = reader.holdsOf(pageId) ?? holdsDoc(tree.get(pageId));
   const mark = entityMark(tree.get(pageId));
   const pageKind =
-    kind.kind === 'scene' || kind.kind === 'location' || kind.kind === 'day'
+    kind.kind === 'scene' || kind.kind === 'location' || kind.kind === 'day' || kind.kind === 'set'
       ? { kind: kind.kind, code: kind.code, source: kind.source }
       : kind.kind === 'doc' && isChoice(kind.doc)
         ? { kind: kind.doc, code: null, source: kind.source }
@@ -143,7 +145,7 @@ export function LeaveOutItem({ pageId, onClose }: { pageId: string; onClose: () 
   if (link) return null;
   const out = leftOutBy(tree, pageId);
   const snap = session?.relations.snapshot(projectId) ?? null;
-  const typed = !!snap && (snap.registry.scenes.size > 0 || snap.registry.locations.size > 0 || [...snap.registration.roles.values()].some((r) => r.entity?.kind === 'day'));
+  const typed = !!snap && (snap.registry.scenes.size > 0 || snap.registry.locations.size > 0 || snap.registration.sets.length > 0 || [...snap.registration.roles.values()].some((r) => r.entity?.kind === 'day'));
   if (!out && !typed) return null;
   const inherited = !!out && !out.own;
   const by = inherited ? tree.get(out.pageId)?.title || tr('common.untitled') : '';

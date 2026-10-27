@@ -9,7 +9,7 @@ import { goToPlace } from './goToPlace';
 import { DayHeader, deviceToday } from './DayHeader';
 import { dayLive } from './dayLive';
 import { useLiveOpen, type FoldKind } from './liveFold';
-import { locationLive, sceneLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
+import { locationLive, sceneLive, setLive, type SetLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
 import { dayGallery, locationGallery, sceneGallery, type Gallery } from './photoGallery';
 import { PhotoSources } from './PhotoSources';
 import { leftOutBy } from './register';
@@ -44,11 +44,11 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   const snap = session.relations.snapshot(projectId);
   const role = snap?.registration.roles.get(pageId);
   const entity = role && !role.excluded ? role.entity : null;
-  const kind = entity?.kind === 'scene' || entity?.kind === 'location' || entity?.kind === 'day' ? entity.kind : null;
+  const kind = entity?.kind === 'scene' || entity?.kind === 'location' || entity?.kind === 'day' || entity?.kind === 'set' ? entity.kind : null;
   const ref = kind ? entity!.ref : null;
 
   // Una escena, locación o día fuera de las relaciones (D541): en lugar de la cabecera, un renglón que lo dice.
-  const outKind = role?.excluded && role.entity && (role.entity.kind === 'scene' || role.entity.kind === 'location' || role.entity.kind === 'day');
+  const outKind = role?.excluded && role.entity && (role.entity.kind === 'scene' || role.entity.kind === 'location' || role.entity.kind === 'day' || role.entity.kind === 'set');
   const out = outKind ? leftOutBy(tree, pageId) : null;
 
   const view = useMemo(() => {
@@ -60,6 +60,7 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
       const data = dayLive(src, pageId, deviceToday());
       return { kind, data, src, gallery: dayGallery(src, data) } as const;
     }
+    if (kind === 'set') return { kind, data: setLive(src, pageId) } as const;
     if (kind === 'scene') {
       const data = sceneLive(src, ref);
       return { kind, data, gallery: sceneGallery(src, data) } as const;
@@ -85,6 +86,7 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta: las ausencias se dicen «you can
   // see» (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
+  if (view.kind === 'set') return <SetHeader v={view.data} pages={snap.pages.size} partial={partial} />;
   const photos = { gallery: view.gallery, unread: snap.unread, here: pageId };
   const stageOpts = { title: (id: string) => tree.get(id)?.title ?? '', locPage: (name: string) => snap.registry.locations.get(name)?.pageId ?? null };
   const header =
@@ -326,7 +328,7 @@ export function Tools({ kind, complete, onFold, foldRef }: { kind: FoldKind; com
   return (
     <span className="lh-tools">
       <LiveDot complete={complete} />
-      <button ref={foldRef} className="lh-tbtn" aria-expanded={true} onClick={onFold} data-tip={tr(kind === 'scene' ? 'live.foldSceneTip' : kind === 'day' ? 'live.foldDayTip' : 'live.foldLocationTip')}>
+      <button ref={foldRef} className="lh-tbtn" aria-expanded={true} onClick={onFold} data-tip={tr(kind === 'scene' ? 'live.foldSceneTip' : kind === 'day' ? 'live.foldDayTip' : kind === 'set' ? 'live.foldSetTip' : 'live.foldLocationTip')}>
         <Ic name="up" small />
         {tr('live.collapse')}
       </button>
@@ -336,6 +338,14 @@ export function Tools({ kind, complete, onFold, foldRef }: { kind: FoldKind; com
 
 export function Badge({ kind }: { kind: FoldKind }) {
   const tr = useT();
+  if (kind === 'set') {
+    return (
+      <span className="lh-badge set" data-tip={tr('live.setTip')}>
+        <Ic name="set" small />
+        {tr('live.set')}
+      </span>
+    );
+  }
   return (
     <span className={`lh-badge ${kind === 'scene' ? 'scene' : kind === 'day' ? 'day' : 'loc'}`} data-tip={tr(kind === 'scene' ? 'live.sceneTip' : kind === 'day' ? 'live.dayTip' : 'live.locationTip')}>
       <Ic name={kind === 'scene' ? 'scene' : kind === 'day' ? 'day' : 'loc'} small />
@@ -737,6 +747,112 @@ function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages:
       <Stages defs={defs} open={stage} onToggle={(k) => setStage(stage === k ? null : k)} />
       {panel}
       <PhotoSources gallery={photos.gallery} complete={v.complete} unread={photos.unread} here={photos.here} tr={tr} />
+      <div className="lh-foot">{tr('live.foot', { count: pages })}</div>
+    </section>
+  );
+}
+
+// --- Decorado ---------------------------------------------------------------------------------------------------
+
+/**
+ * El decorado (D804): sus escenas (las que lo nombran en su campo), dónde se filma (su campo *Locación*) y los días en que
+ * se filmaron sus escenas. Sin etapas ni fotos propias: lo de cada escena está en la página de la escena.
+ */
+function SetHeader({ v, pages, partial }: { v: SetLive; pages: number; partial: boolean }) {
+  const tr = useT();
+  const [open, setOpenRaw] = useLiveOpen('set');
+  const focus = useFoldFocus(open);
+  const setOpen = (next: boolean) => {
+    focus.mark();
+    setOpenRaw(next);
+  };
+  const reading = !v.complete;
+  const absent = (text: string) => (reading ? tr('live.reading') : text);
+  const sceneChip = (code: string, pageId: string | null) => (
+    <Chip key={code} kind="scene" mono onClick={() => (pageId ? navigate(pagePath(pageId)) : undefined)}>
+      {code}
+    </Chip>
+  );
+  const locChip = (l: SetLive['locs'][number]) =>
+    l.pageId ? (
+      <Chip key={l.name} kind="loc" onClick={() => navigate(pagePath(l.pageId!))}>
+        {l.name}
+      </Chip>
+    ) : (
+      <span key={l.name} className="lh-chip loc static">
+        <Ic name="loc" />
+        <span className="lh-chip-t">{l.name}</span>
+      </span>
+    );
+
+  if (!open) {
+    return (
+      <Line kind="set" onOpen={() => setOpen(true)} complete={v.complete} lineRef={focus.ref}>
+        {[
+          [v.scenes.length, tr('live.scenes', { count: v.scenes.length })],
+          [v.locs.length, tr('live.locations', { count: v.locs.length })],
+          [v.days.length, tr('live.shootDays', { count: v.days.length })],
+        ]
+          .filter(([n]) => !reading || (n as number) > 0)
+          .map(([, text]) => text)
+          .join(' · ')}
+      </Line>
+    );
+  }
+
+  return (
+    <section className="lh" aria-label={tr('live.aria')}>
+      <div className="lh-id">
+        <Badge kind="set" />
+        <span className="lh-meta">
+          {v.aliases.length > 0 && (
+            <>
+              {tr('live.alsoWrittenSet')} {v.aliases.join(' · ')}
+            </>
+          )}
+        </span>
+        <Tools kind="set" complete={v.complete} onFold={() => setOpen(false)} foldRef={focus.ref} />
+      </div>
+      <div className="lh-sum2">
+        <div className="lh-col">
+          <div className="lh-col-h">{tr('live.preproduction')}</div>
+          <div className="lh-kv">
+            <span>{tr('live.setScenes')}</span>
+            <div>
+              {v.scenes.length ? (
+                <>
+                  {v.scenes.map((s) => sceneChip(s.code, s.pageId))}
+                  <span className="lh-via">{tr('live.setScenesVia')}</span>
+                </>
+              ) : (
+                <span className="lh-none">{absent(tr(partial ? 'live.setNoScenesSeen' : 'live.setNoScenes'))}</span>
+              )}
+            </div>
+          </div>
+          <div className="lh-kv">
+            <span>{tr('live.setLocations')}</span>
+            <div>{v.locs.length ? v.locs.map(locChip) : <span className="lh-none">{absent(tr('live.setNoLocations'))}</span>}</div>
+          </div>
+        </div>
+        <div className="lh-col">
+          <div className="lh-col-h">{tr('live.shoot')}</div>
+          {v.days.length ? (
+            v.days.map((d) => (
+              <div className="lh-dayline" key={d.day.pageId}>
+                <span className="dl-main">
+                  <DayChip day={d.day} />
+                  {d.scenes.map((s) => sceneChip(s.code, s.pageId))}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="lh-dayline">
+              <span className="lh-none">{absent(tr('live.setNoDays'))}</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <AlsoRow also={v.also} index={[]} tr={tr} />
       <div className="lh-foot">{tr('live.foot', { count: pages })}</div>
     </section>
   );

@@ -122,7 +122,7 @@ export interface MapPending {
 export interface MapPage {
   title: string;
   stage: Stage;
-  kind: 'scene' | 'location' | 'day' | 'part' | 'page';
+  kind: 'scene' | 'location' | 'day' | 'set' | 'part' | 'page';
 }
 
 export interface ProjectMapData {

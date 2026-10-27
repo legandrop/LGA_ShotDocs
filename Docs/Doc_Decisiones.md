@@ -2389,3 +2389,14 @@ los días. Eligió con una prueba sobre la app (cinco paletas, oscuro y claro, e
 terracota (`--day-*`: `#a64b1b`, `#f0a274`). Queda la regla: los lugares en tonos fríos, el tiempo en uno cálido, las
 escenas en frambuesa. Hoy el violeta va en el chip del decorado de las cabeceras y en el renglón *Set* de la escena;
 cuando el decorado sea entidad (parte 4 de `Plan_Estructura_Etapas.md`), en todos lados.
+
+### D804 · El decorado, cuarto tipo de página (2026-10-27)
+**Pedido de Lega:** «los decorados deberían tener su propia entidad», con su página en *Overview* (parte 4 de
+`Plan_Estructura_Etapas.md`, que ya lo preveía).
+**Quedó así:** `set` se suma a escena, locación y día en `settings.entity` y `settings.holds` (una versión vieja lo
+lee como «otro tipo» y no lo pisa). Sin grupos adentro. El nombre es el título entero. Una página nombra un decorado solo
+con el valor entero de un campo de decorado (*Locación Guion*, *Decorado*, *Set*) igual a su título o a uno de sus
+*Otros nombres*, o con un link a su página; un nombre que escribieron dos decorados no es de ninguno. Dónde se filma sale
+de su campo *Locación*, con la regla de D424. Su cabecera (etiqueta SET violeta) muestra escenas, locaciones y días;
+*Overview › Sets* va después de *Locations*, ordenado por nombre. La escena y la locación leen el mismo índice, así las
+tres cabeceras dicen lo mismo.

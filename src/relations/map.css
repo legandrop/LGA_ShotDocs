@@ -419,6 +419,19 @@
   grid-template-columns: 92px minmax(0, 2fr) minmax(0, 1.2fr) 56px;
 }
 
+/* Sets (D804): el decorado en su violeta y sus escenas en frambuesa */
+.mp-sets .mp-drow {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 1fr);
+}
+
+.mp-sets .mp-dt .mp-link {
+  color: var(--set-fg);
+}
+
+.mp-sets .mp-code {
+  color: var(--scene-fg);
+}
+
 /* Un reporte de scouting no es un día: su título va en el color del texto (D774) */
 .mp-scouts .mp-dt .mp-link {
   color: var(--text);
@@ -744,10 +757,15 @@
 
   .mp-srow,
   .mp-drow,
-  .mp-scouts .mp-drow {
+  .mp-scouts .mp-drow,
+  .mp-sets .mp-drow {
     grid-template-columns: auto minmax(0, 1fr);
     gap: 3px 10px;
     padding: 9px 12px;
+  }
+
+  .mp-sets .mp-dt {
+    grid-column: 1 / -1;
   }
 
   .mp-srow .mp-ls,

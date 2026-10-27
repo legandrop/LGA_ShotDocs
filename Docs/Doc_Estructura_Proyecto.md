@@ -121,9 +121,9 @@ entero) y lo escribe `src/relations/entitySync.ts`. Nada de esto toca el documen
 
 **Las claves** (`PageSettings`, `src/sync/types.ts`; ninguna se hereda, se leen en la página misma):
 
-- `entity: { kind: 'scene' | 'location' | 'day', code?: string } | false` en la página: qué ES. `code`, solo en una
+- `entity: { kind: 'scene' | 'location' | 'day' | 'set', code?: string } | false` en la página: qué ES. `code`, solo en una
   escena: el número canónico (`101_074`, `101_069A`). `false`: «nada de esto», puesto a mano; gana sobre la carpeta.
-- `holds: 'scene' | 'location' | 'day' | false` en una carpeta: qué es lo que se crea adentro.
+- `holds: 'scene' | 'location' | 'day' | 'set' | false` en una carpeta: qué es lo que se crea adentro.
 - Los días usan la carpeta de reportes del día (`dayReports`, `Doc_Plantillas.md` 6.2) como única fuente: marcar una
   carpeta como de días escribe `dayReports` (no `holds`), y una carpeta de reportes, marcada o deducida por sus
   reportes, contiene días. `holds: 'day'` se lee igual, salvo con `dayReports: false`. Marcar escenas o locaciones en una

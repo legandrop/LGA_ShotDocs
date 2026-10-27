@@ -20,8 +20,14 @@ export interface KindSource {
 
 export type Stage = 'breakdown' | 'scouting' | 'shoot' | 'location' | 'other';
 
+/** Un decorado del proyecto (D804): su nombre (el título entero) y su página. */
+export interface SetInput {
+  name: string;
+  pageId: string;
+}
+
 export interface PageRole {
-  /** La página es una entidad: la escena (su código), la locación (su nombre) o el día (su id). */
+  /** La página es una entidad: la escena (su código), la locación o el decorado (su nombre) o el día (su id). */
   entity: { kind: EntityKind; ref: string | null } | null;
   /** La página está adentro de una entidad (la más cercana). */
   partOf: { kind: EntityKind; ref: string | null; pageId: string } | null;
@@ -48,6 +54,8 @@ export interface Registration {
    * (`resolveLocationNames`, D526) antes de armar el registro.
    */
   titleLocations: LocationInput[];
+  /** Los decorados (D804), en el orden de la barra lateral. Se relacionan solo por campo o link (`setIndex` en `liveView.ts`). */
+  sets: SetInput[];
   roles: Map<string, PageRole>;
   /** Escenas con el mismo código en dos páginas (gana la primera en el orden de la barra lateral). */
   duplicates: { code: string; pageIds: string[] }[];
@@ -76,6 +84,7 @@ export function locationFromTitle(title: string): { name: string; aliases: strin
 // El nombre sin el paréntesis (D416, D417) y lo que escribe la gente en «Otros nombres» (D526): `aliases.ts`.
 export { bareLocationName } from './aliases';
 
+// Un decorado y lo de adentro no son de ninguna etapa: lo que nombran va a *Also named in* (o a su renglón *Set*, D804).
 const stageOf = (kind: EntityKind | undefined, own: boolean): Stage =>
   kind === 'scene' ? 'breakdown' : kind === 'day' ? 'shoot' : kind === 'location' ? (own ? 'location' : 'scouting') : 'other';
 
@@ -83,11 +92,12 @@ const stageOf = (kind: EntityKind | undefined, own: boolean): Stage =>
 export function registerProject(tree: RegisterTree, projectId: string, kinds: KindSource = kindReader(tree)): Registration {
   const scenes: SceneInput[] = [];
   const locations: LocationInput[] = [];
+  const sets: SetInput[] = [];
   const roles = new Map<string, PageRole>();
   const byCode = new Map<string, string[]>();
   const refOf = (id: string, kind: EntityKind, code: string | null): string | null => {
     if (kind === 'scene') return code ? (canonicalCode(code) ?? code) : null;
-    if (kind === 'location') return locationFromTitle(tree.get(id)?.title ?? '').name || null;
+    if (kind === 'location' || kind === 'set') return locationFromTitle(tree.get(id)?.title ?? '').name || null;
     return id;
   };
   const seen = new Set<string>();
@@ -126,6 +136,7 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
       if (!excluded && ref && k.kind === 'location' && !locations.some((x) => x.name === ref)) {
         locations.push({ ...locationFromTitle(page.title ?? ''), pageId: page.id });
       }
+      if (!excluded && ref && k.kind === 'set') sets.push({ name: ref, pageId: page.id });
     }
     role.parent = page.parent_id ?? null;
     roles.set(page.id, role);
@@ -133,7 +144,7 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
   };
   for (const root of tree.roots(projectId)) visit(root, false);
   const duplicates = [...byCode].filter(([, ids]) => ids.length > 1).map(([code, pageIds]) => ({ code, pageIds }));
-  return { scenes, locations: withBareNames(locations), titleLocations: locations, roles, duplicates };
+  return { scenes, locations: withBareNames(locations), titleLocations: locations, sets, roles, duplicates };
 }
 
 const epOf = (code: string | null): string | null => (code && /^\d{3}_/.test(code) ? code.slice(0, 3) : null);

@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react';
 // locaciones ni en los días.
 // Mientras la persona no eligió, en el teléfono arranca plegada (el documento queda arriba) y en la computadora abierta.
 
-export type FoldKind = 'scene' | 'location' | 'day';
+export type FoldKind = 'scene' | 'location' | 'day' | 'set';
 
 const KEY = 'shotdocs.liveHeader.open';
 const EVENT = 'shotdocs:live-fold';
@@ -16,7 +16,7 @@ function read(): Partial<Record<FoldKind, boolean>> {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as unknown;
     if (!raw || typeof raw !== 'object') return {};
     const out: Partial<Record<FoldKind, boolean>> = {};
-    for (const k of ['scene', 'location', 'day'] as const) {
+    for (const k of ['scene', 'location', 'day', 'set'] as const) {
       const v = (raw as Record<string, unknown>)[k];
       if (typeof v === 'boolean') out[k] = v;
     }

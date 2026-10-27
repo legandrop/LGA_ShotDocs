@@ -10,6 +10,7 @@ export const sidebar = {
   'sidebar.map': { en: "Overview", es: "Panorama" },
   'sidebar.auto': { en: "Auto", es: "Auto" },
   'sidebar.locations': { en: "Locations", es: "Locaciones" },
+  'sidebar.sets': { en: "Sets", es: "Decorados" },
   'sidebar.days': { en: "Shoot days", es: "Días de rodaje" },
   'sidebar.scouting': { en: "Scouting", es: "Scouting" },
   'sidebar.pending': { en: "Pending", es: "Pendientes" },
@@ -29,6 +30,7 @@ export const sidebar = {
   // El rótulo de una carpeta con tipo (Doc_Estructura_Proyecto.md, «Tipo de página»).
   'sidebar.holdsScenes': { en: "Everything created inside is a scene", es: "Todo lo que se crea adentro es una escena" },
   'sidebar.holdsLocations': { en: "Everything created inside is a location", es: "Todo lo que se crea adentro es una locación" },
+  'sidebar.holdsSets': { en: "Everything created inside is a set", es: "Todo lo que se crea adentro es un decorado" },
   'sidebar.tagDays': { en: "Shoot days", es: "Días" },
   'sidebar.tagScoutings': { en: "Scouting", es: "Scouting" },
   'sidebar.tagTests': { en: "Tests", es: "Pruebas" },

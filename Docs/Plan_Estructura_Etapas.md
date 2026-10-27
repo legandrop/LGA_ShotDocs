@@ -165,6 +165,9 @@ sube `min_app_version`.
 3. **Planes**: *Type*, *Day plan*, plan → día, cabecera del día, *Tomorrow*, *Prepare*, el `/`, *Shoot days*,
    *Pending*, ayuda. Después se mueven los planes.
 4. **Decorados**: portar D423 y D424, *Type*, cabecera, *Overview › Sets*, ayuda. Después se marca `1.3 | Decorados`.
+   **Salió en v0.294 (D804).** La cabecera no tiene etapas ni fotos propias (lo de cada escena está en su página).
+   *Copy overview* y *Copy JSON* todavía no llevan los decorados. Antes de marcar `1.3 | Decorados` en ERSO y VLLF se
+   sube `min_app_version` a 0.294.
 5. `6 | Tablas y referencia` y lo que queda suelto en ERSO y VLLF.
 
 ## 9. Decisiones

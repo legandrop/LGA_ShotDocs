@@ -72,16 +72,17 @@ export interface PageSettings {
    * `src/relations/kind.ts`.
    * Desde v0.275 también un documento de una etapa (Docs/Plan_Estructura_Etapas.md): `'scouting'`, `'test'` o `'plan'`.
    * Una versión vieja lo lee como un tipo que no conoce y no lo pisa. `day`, solo en un plan: la página de su día
-   * (`src/relations/planDay.ts`; lo escribe el reacomodo de un plan que estaba adentro de su día).
+   * (`src/relations/planDay.ts`; lo escribe el reacomodo de un plan que estaba adentro de su día). Desde v0.294, `'set'`:
+   * un decorado (D804).
    */
-  entity?: { kind: 'scene' | 'location' | 'day' | 'scouting' | 'test' | 'plan'; code?: string; day?: string } | false;
+  entity?: { kind: 'scene' | 'location' | 'day' | 'set' | 'scouting' | 'test' | 'plan'; code?: string; day?: string } | false;
   /**
    * La carpeta da el tipo a lo que se crea adentro: escenas, locaciones o días de rodaje. No se hereda. Los días usan la
    * carpeta de reportes (`dayReports`): marcar una carpeta como de días escribe `dayReports` y no esta clave; `'day'` acá
    * se lee igual (cuenta como carpeta de reportes salvo que `dayReports` sea `false`). Se lee con `holdsOf` de
    * `src/relations/kind.ts`, nunca suelta.
    */
-  holds?: 'scene' | 'location' | 'day' | 'scouting' | 'test' | 'plan' | false;
+  holds?: 'scene' | 'location' | 'day' | 'set' | 'scouting' | 'test' | 'plan' | false;
   /**
    * La copia vacía de un reporte del día que este dispositivo mandó a la papelera porque otro creó el mismo día a la vez
    * (D580, D626): a qué página cedió (`to`) y la hora de esa papelera (`at`). Si alguien escribe en ella, cualquier

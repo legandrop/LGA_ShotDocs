@@ -3,7 +3,7 @@ import type { PageRow } from '../sync/types';
 import { dateAtStart, dayInTitle, dayReportsMark, isDayReportFolder, isReportPage } from '../templates/dayReport';
 import { isTemplatePage, isTemplatesFolder } from '../templates/own';
 
-// Qué ES cada página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): una escena, una locación, un día de rodaje,
+// Qué ES cada página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): una escena, una locación, un decorado, un día de rodaje,
 // «parte de» una de esas (las fichas adentro de una escena, el scouting adentro de su locación, el planning adentro de su
 // día) o nada. Solo lee el árbol: no escribe nada (lo que escribe las marcas está en `entitySync.ts`).
 //
@@ -26,8 +26,12 @@ import { isTemplatePage, isTemplatesFolder } from '../templates/own';
 //
 // Un visitante de un link público recibe solo `header` y `format` de los ajustes (`plink_tree`): para él todo es «nada».
 
-export type EntityKind = 'scene' | 'location' | 'day';
-export const ENTITY_KINDS: readonly EntityKind[] = ['scene', 'location', 'day'];
+/**
+ * Las entidades. El decorado (`set`, el lugar de la historia; Plan_Estructura_Etapas.md, parte 4, D804) se suma en las
+ * mismas claves: una versión vieja lo lee como «un tipo de una versión más nueva» (`'other'`) y no lo pisa.
+ */
+export type EntityKind = 'scene' | 'location' | 'day' | 'set';
+export const ENTITY_KINDS: readonly EntityKind[] = ['scene', 'location', 'day', 'set'];
 
 /**
  * Los documentos de una etapa (Docs/Plan_Estructura_Etapas.md): un scouting, una prueba o un plan. Van en las mismas
@@ -60,7 +64,7 @@ export type EntityMarkRead = { kind: EntityKind; code?: string } | false | 'othe
 // En un proyecto sin episodios, la escena sola de 3 cifras con su letra (`074`, `069A`; D383).
 export const SCENE_CODE = /^(?:\d{3}_)?\d{3}[A-Z]{0,2}$/;
 
-const isEntityKind = (v: unknown): v is EntityKind => v === 'scene' || v === 'location' || v === 'day';
+const isEntityKind = (v: unknown): v is EntityKind => v === 'scene' || v === 'location' || v === 'day' || v === 'set';
 const isDocKind = (v: unknown): v is DocKind => v === 'scouting' || v === 'test' || v === 'plan';
 
 /** `settings.entity` de la fila, con su forma comprobada (algo de otra versión no se toma por escena). */
@@ -106,7 +110,7 @@ export function holdsOf(tree: KindTree, id: string): EntityKind | null {
   const reports = dayReportsMark(row);
   if (reports === 'on') return 'day';
   const holds = holdsMark(row);
-  if (holds === 'scene' || holds === 'location') return holds;
+  if (holds === 'scene' || holds === 'location' || holds === 'set') return holds;
   if (holds === 'day') return reports === 'off' ? null : 'day';
   if (holds !== null) return null;
   return reports === null && isDayReportFolder(tree as PageTree, id) ? 'day' : null;

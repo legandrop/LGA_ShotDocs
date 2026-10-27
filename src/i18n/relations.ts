@@ -6,6 +6,11 @@ export const relations = {
   'live.aria': { en: "Built automatically from the whole project", es: "Armada sola con todo el proyecto" },
   'live.scene': { en: "Scene", es: "Escena" },
   'live.location': { en: "Location", es: "Locación" },
+  'live.set': { en: "Set", es: "Decorado" },
+  'live.setTip': {
+    en: "Built on this device from the pages you can see that name this set in their Set field or link to it, and from what this page says. Nothing here is saved in the page or printed.",
+    es: "Se arma en este dispositivo con las páginas que ves que nombran este decorado en su campo Decorado o tienen un link a él, y con lo que dice esta página. Nada de esto se guarda en la página ni sale impreso.",
+  },
   'live.sceneTip': {
     en: "Built on this device from what every page you can see says about this scene. Nothing here is saved in the page or printed.",
     es: "Se arma en este dispositivo con lo que dicen de esta escena todas las páginas que ves. Nada de esto se guarda en la página ni sale impreso.",
@@ -48,6 +53,7 @@ export const relations = {
   },
   'live.collapse': { en: "Collapse", es: "Plegar" },
   'live.foldSceneTip': { en: "Remembered for every scene on this device", es: "Se recuerda para todas las escenas en este dispositivo" },
+  'live.foldSetTip': { en: "Remembered for every set on this device", es: "Se recuerda para todos los decorados en este dispositivo" },
   'live.foldLocationTip': { en: "Remembered for every location on this device", es: "Se recuerda para todas las locaciones en este dispositivo" },
   'live.preproduction': { en: "Preproduction", es: "Preproducción" },
   'live.shoot': { en: "Shoot", es: "Rodaje" },
@@ -129,6 +135,19 @@ export const relations = {
   'live.shotAt': { en: "Shot at {locs}", es: "Filmada en {locs}" },
   // La locación
   'live.plannedHere': { en: "Planned here", es: "Planeadas acá" },
+  // El decorado (D804)
+  'live.setScenes': { en: "Scenes", es: "Escenas" },
+  'live.setScenesVia': { en: "name it in their Set field, or this page names them", es: "lo nombran en su campo Decorado, o esta página las nombra" },
+  'live.alsoWrittenSet': { en: "also written", es: "también escrito" },
+  'live.setLocations': { en: "Shot at", es: "Se filma en" },
+  'live.setNoScenes': { en: "No scene names it in its Set field", es: "Ninguna escena lo nombra en su campo Decorado" },
+  'live.setNoScenesSeen': { en: "No scene you can see names it in its Set field", es: "Ninguna escena que ves lo nombra en su campo Decorado" },
+  'live.setNoLocations': { en: "No location in its Location field", es: "Sin locación en su campo Locación" },
+  'live.setNoDays': { en: "None of its scenes has a report section yet", es: "Ninguna de sus escenas tiene sección en un reporte todavía" },
+  'live.locations': {
+    en: { one: "{count} location", other: "{count} locations" },
+    es: { one: "{count} locación", other: "{count} locaciones" },
+  },
   'live.plannedHereVia': { en: "named in their breakdown", es: "las nombra su desglose" },
   'live.noReportYet': { en: "No report section yet: {codes}", es: "Todavía sin sección en un reporte: {codes}" },
   'live.noShootDays': { en: "No shoot day names it in its title", es: "Ningún día de rodaje la nombra en el título" },

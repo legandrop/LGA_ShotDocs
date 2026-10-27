@@ -9,6 +9,7 @@ import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { revealRow } from '../ui/treeNav';
 import { dayList, dayShortLabel } from './dayLive';
+import { setIndex } from './liveView';
 import { mergeRows } from './merge';
 import { scoutList } from './scoutList';
 import { pendingSummary } from './projectMap';
@@ -29,8 +30,8 @@ const FOLD_KEY = 'shotdocs-overview-nav';
 /** Cuántas filas de una lista se dibujan antes de «Show N more» (ERSO tiene episodios de 40 a 60). */
 export const OVERVIEW_PAGE = 60;
 
-type Part = 'locations' | 'scenes' | 'scouting' | 'days';
-const PARTS: readonly Part[] = ['locations', 'scenes', 'scouting', 'days'];
+type Part = 'locations' | 'sets' | 'scenes' | 'scouting' | 'days';
+const PARTS: readonly Part[] = ['locations', 'sets', 'scenes', 'scouting', 'days'];
 
 /**
  * Lo plegado de un proyecto: el bloque entero, la parte abierta (una sola) y el episodio abierto de *Scenes* (uno solo,
@@ -112,7 +113,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     const locations = [...snap.registry.locations.values()].sort((a, b) => a.name.localeCompare(b.name, locale()));
     const days = dayList({ snap, title, content: () => undefined });
     const scoutings = scoutList({ snap, title, content: () => undefined });
-    return { scenes, locations, days, scoutings };
+    const sets = [...setIndex({ snap, title, content: () => undefined }).rows].sort((a, b) => a.name.localeCompare(b.name, locale()));
+    return { scenes, locations, sets, days, scoutings };
   }, [snap, revision, tree, treeRevision]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tab: MapTab | null = route.name === 'map' ? route.tab : null;
@@ -123,6 +125,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   /** Cuántas tiene cada parte: una parte vacía no se dibuja. */
   const sizes: Record<Part, number> = {
     locations: lists?.locations.length ?? 0,
+    sets: lists?.sets.length ?? 0,
     scenes: lists?.scenes.reduce((n, g) => n + g.scenes.length, 0) ?? 0,
     scouting: lists?.scoutings.length ?? 0,
     days: lists?.days.length ?? 0,
@@ -139,7 +142,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     const eps = activeEp !== null ? [activeEp] : f.eps;
     if (f.part !== tab || eps.join() !== f.eps.join() || f.closed) update({ closed: false, part: tab, eps });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, activeScene, activeEp, projectId, sizes.locations, sizes.scenes, sizes.scouting, sizes.days]);
+  }, [tab, activeScene, activeEp, projectId, sizes.locations, sizes.sets, sizes.scenes, sizes.scouting, sizes.days]);
 
   // La fila de la escena abierta se lleva a la vista al abrirla y al abrir el cajón del teléfono, debajo de lo que queda
   // pegado arriba (`revealRow`, D771). Si su parte o su episodio estaban plegados, la fila aparece un dibujo después (el
@@ -162,6 +165,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const typed =
     snap.registry.scenes.size > 0 ||
     snap.registry.locations.size > 0 ||
+    snap.registration.sets.length > 0 ||
     [...snap.registration.roles.values()].some((r) => r.entity?.kind === 'day' && !r.excluded);
   if (!typed) return null;
   // El mismo número que la pestaña *Pending*: números que no existen, duplicadas, secciones sin número y lo que llegó
@@ -288,6 +292,25 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     );
   };
 
+  const setsBody = () => {
+    const { n, button } = more('st', lists.sets.length, lists.sets.findIndex((s) => s.pageId === activePage));
+    return (
+      <ul className="scene-nav-list ov-list ov-sets">
+        {lists.sets.slice(0, n).map((s) => {
+          const on = s.pageId === activePage;
+          return (
+            <li key={s.pageId}>
+              <a className={`scene-nav-row${on ? ' active' : ''}`} href={pagePath(s.pageId)} aria-current={on ? 'page' : undefined} onClick={(e) => openPage(e, s.pageId)}>
+                <span className="title">{s.name}</span>
+              </a>
+            </li>
+          );
+        })}
+        {button}
+      </ul>
+    );
+  };
+
   const daysBody = () => {
     const { n, button } = more('d', lists.days.length, lists.days.findIndex((d) => d.pageId === activePage));
     const labels = lists.days.map((d) => dayShortLabel(d));
@@ -400,6 +423,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const codeWidth = Math.max(0, ...lists.scenes.flatMap((g) => g.scenes.map((s) => s.code.length)));
   const parts: ReactNode[] = [];
   if (counts.locations) parts.push(partRow('locations', tr('sidebar.locations'), <span className="scene-nav-n">{counts.locations}</span>, locationsBody));
+  if (counts.sets) parts.push(partRow('sets', tr('sidebar.sets'), <span className="scene-nav-n">{counts.sets}</span>, setsBody));
   if (counts.scenes) parts.push(partRow('scenes', tr('sidebar.scenes'), <span className="scene-nav-n">{counts.scenes}</span>, scenesBody, tr('sidebar.scenesTip')));
   if (counts.scouting) parts.push(partRow('scouting', tr('sidebar.scouting'), <span className="scene-nav-n">{counts.scouting}</span>, scoutingBody));
   if (counts.days) parts.push(partRow('days', tr('sidebar.days'), <span className="scene-nav-n">{counts.days}</span>, daysBody));

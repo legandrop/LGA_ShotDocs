@@ -336,9 +336,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'pages',
     title: 'help.pageTypes.title',
     text: 'help.pageTypes.text',
-    words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'test', 'prueba', 'episode', 'episodio', 'folder', 'carpeta'],
-    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los planes de jornada.
-    since: '0.277',
+    words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'set', 'decorado', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'test', 'prueba', 'episode', 'episodio', 'folder', 'carpeta'],
+    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los decorados (D804).
+    since: '0.294',
   },
   {
     id: 'projects',
@@ -395,9 +395,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.relationsMap.title',
     text: 'help.relationsMap.text',
-    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
-    // Subió con los planos que siguen siendo subpáginas en *Pending* (v0.279).
-    since: '0.279',
+    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'sets', 'decorados', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
+    // Subió con *Sets* (D804).
+    since: '0.294',
   },
   {
     id: 'scenesSection',

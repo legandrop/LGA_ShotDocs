@@ -108,6 +108,11 @@
   color: var(--lh-loc-fg);
 }
 
+.lh-badge.set {
+  background: var(--set-bg);
+  color: var(--set-fg);
+}
+
 .lh-meta {
   color: var(--muted-2);
   font-size: 12.5px;
