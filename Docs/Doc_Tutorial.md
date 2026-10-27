@@ -45,7 +45,7 @@ Relevado del código de `main`. Son los lugares a los que puede apuntar un globi
 | Selector de proyectos | Arriba de la barra lateral (`ProjectSwitcher.tsx`) | Cambia de proyecto, crea uno, cambia de workspace; muestra lo que pesa cada proyecto. Hoy se abre con Ctrl/⌘+K. |
 | Estado de sincronización | Debajo del selector (`SyncBadge.tsx`); en el teléfono, un ícono en la barra de arriba | "Todo sincronizado", "3 cambios sin subir", sin conexión, actualizá la app. |
 | Árbol de páginas | Barra lateral (`Sidebar.tsx`) | Abrir, "+" para una página nueva (arriba y en cada renglón), arrastrar para ordenar, menú de cada página; ancho con el tirador (`SidebarResizer.tsx`). En el teléfono, un cajón que se abre con el botón de menú. |
-| Pie de la barra lateral | `Sidebar.tsx` | La ayuda y el menú de la cuenta (desde v0.162 la papelera está en el selector de proyectos, con proyectos, páginas y archivos). |
+| Pie de la barra lateral | `Sidebar.tsx` | El menú de la cuenta, fijo abajo como el selector arriba (D802), y en el teléfono la ayuda a su derecha (D801; desde v0.162 la papelera está en el selector de proyectos, con proyectos, páginas y archivos). |
 | Menú de la cuenta | `AccountMenu` en `menus.tsx` | Apariencia (tema, letra, tamaño, ancho de la página), fotos en fila en el teléfono, idioma, miembros, Google Drive (el dueño), salir, textos legales. Las preferencias siguen a la persona ("Guardado en tu cuenta"). |
 | Barra de arriba de la página | `Workspace.tsx` | Migas, **lupa** (buscar en la página, Ctrl/⌘+F), **ícono de comentarios**, menú "⋯" de la página. |
 | Menú "⋯" de la página | `PageMenu` en `menus.tsx` | Compartir, página nueva adentro, renombrar, mover, tamaño de hoja, **Exportar PDF / Imprimir**, títulos cortos, mandar a la papelera. Desde P.11 (v0.053): colapsar todo / abrir todo. |
@@ -310,8 +310,10 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 
 ### Dónde está
 
-- **Un botón "?"** en el pie de la barra lateral, al lado de Papelera (en el teléfono, en el cajón). Su
-  `aria-label` es "Ayuda y atajos"; sin `data-tip` (no agregaría nada al ícono, D-15).
+- **Un botón "?"** en la barra de arriba, antes del menú de la página (`HelpButton.tsx`, también en la de la
+  práctica); en el teléfono (hasta 760 px), donde esa barra no tiene lugar, al pie del cajón, a la derecha de la cuenta,
+  con el punto repetido en el botón de menú (D801). Su `aria-label` es "Ayuda y atajos"; sin `data-tip` (no agregaría
+  nada al ícono, D-15).
 - **En el menú de la cuenta**, "Ayuda y atajos".
 - **Sin atajo de teclado** (Lega): la ayuda se abre solo con el botón o con la entrada del menú. Ni "?" ni
   Mod+/ (este último, además, chocaba con la lista numerada en los teclados en castellano).

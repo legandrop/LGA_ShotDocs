@@ -468,14 +468,17 @@ describe('la recorrida', () => {
     expect(getTourUi().mode).toBe('running');
   });
 
-  it('el punto de la recorrida también está en el botón de menú de la barra de arriba (teléfono), en la página y en la práctica', async () => {
+  it('el punto de la recorrida está en el "?" de arriba, en el del cajón y en el botón de menú (teléfono), en la página y en la práctica', async () => {
     const dot = (h: Harness) => h.host.querySelector('.topbar button.only-mobile')?.classList.contains('has-dot');
-    const help = (h: Harness) => h.host.querySelector('.help-button')?.classList.contains('has-dot');
+    const top = (h: Harness) => h.host.querySelector('.topbar .help-button.not-mobile')?.classList.contains('has-dot');
+    const drawer = (h: Harness) => h.host.querySelector('.sidebar-footer .help-button.only-mobile')?.classList.contains('has-dot');
     const h = await app({ firstLoad: true, accountSeen: true });
     await until(() => h.host.querySelector('.topbar button.only-mobile'), 'la barra de arriba');
     await wait(300);
-    // Misma regla que el "?" del cajón: los dos con punto, y la ayuda abierta los apaga a los dos.
-    expect(help(h)).toBe(true);
+    // Misma regla en los tres (D801: arriba en la computadora, al pie del cajón en el teléfono), y la ayuda abierta los
+    // apaga a todos.
+    expect(top(h)).toBe(true);
+    expect(drawer(h)).toBe(true);
     expect(dot(h)).toBe(true);
     // En la práctica (otra barra de arriba) también.
     act(() => {
@@ -483,10 +486,12 @@ describe('la recorrida', () => {
       window.dispatchEvent(new Event('shotdocs:navigate'));
     });
     await until(() => question(), 'la práctica');
+    expect(top(h)).toBe(true);
     expect(dot(h)).toBe(true);
-    click(h.host.querySelector('.help-button'));
+    click(h.host.querySelector('.topbar .help-button'));
     await until(() => document.querySelector('[data-help-id="tour"] .help-action'), 'la ayuda');
-    expect(help(h)).toBe(false);
+    expect(top(h)).toBe(false);
+    expect(drawer(h)).toBe(false);
     expect(dot(h)).toBe(false);
   });
 

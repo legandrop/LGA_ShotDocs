@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { helpNewsFrom } from './news';
 
 // Si la ayuda está abierta y en qué sección (Docs/Doc_Tutorial.md, sección 5). Va en la primera carga: el botón
-// "?" del pie de la barra lateral y la entrada del menú de la cuenta la abren; el diálogo se baja aparte. Ninguna
+// "?" de la barra de arriba y la entrada del menú de la cuenta la abren; el diálogo se baja aparte. Ninguna
 // tecla la abre (decisión de Lega): ni "?" ni Ctrl/⌘+/.
 
 export interface HelpUiState {

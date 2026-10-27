@@ -19,6 +19,7 @@ import { lazyPart, Part } from '../ui/lazyPart';
 import { menuBelow, useFloating, type MenuPosition } from '../ui/menus';
 import { NavButtons } from '../ui/NavButtons';
 import { NavMenuButton } from '../ui/NavMenuButton';
+import { HelpButton } from '../ui/HelpButton';
 import { setNavOpen } from '../ui/navStore';
 import { notify } from '../ui/notice';
 import { BlockEditor } from '../ui/PageEditor';
@@ -140,6 +141,7 @@ export function PracticeView() {
             <SearchIcon size={18} />
           </button>
           <CommentsToggle pageId={PRACTICE_ID} />
+          <HelpButton where="top" />
           <button
             className="icon-button"
             data-tour="page-menu"

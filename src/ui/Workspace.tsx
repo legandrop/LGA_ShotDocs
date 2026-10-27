@@ -28,6 +28,7 @@ import { MergeResumer } from '../relations/MergeAction';
 import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { NavButtons } from './NavButtons';
 import { NavMenuButton } from './NavMenuButton';
+import { HelpButton } from './HelpButton';
 import { menuBelow, PAGE_MENU_WIDTH, PageMenu, signOutHere, signOutQuestion, unsentCount, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
@@ -524,6 +525,7 @@ export function Shell() {
                   <MicIcon size={18} />
                 </button>
               )}
+              <HelpButton where="top" />
               {pageId && (
                 <button
                   className="icon-button"

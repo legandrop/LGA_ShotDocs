@@ -2364,3 +2364,18 @@ teléfono, seis páginas en una fila se ven chiquitas (unos 51 × 71 px cada una
 (más ancha que alta, como la segunda de la escena 37 de Pizzería Santa María, ancho/alto 1,42) cuenta como página y va
 en la fila con la anterior: el corte para separar capturas chicas pasa de 1,2 a 1,5 (las tablas del desglose de varias
 escenas están en 1,7 o más).
+
+### D801 · El "?" de la ayuda, en la barra de arriba (2026-10-27)
+**Pedido de Lega:** el "?" ocupaba un renglón propio de 36 px arriba de la cuenta, en el pie de la barra lateral. Se le
+mostraron cuatro lugares (al lado de la cuenta, al lado de *All synced*, adentro del menú de la cuenta, en la barra de
+arriba) y **eligió la barra de arriba**: va antes del menú de la página, después del micrófono, en todas las pantallas
+(también la práctica del tutorial). **En el teléfono (hasta 760 px) va al pie del cajón, a la derecha de la cuenta**
+(decisión propia): en 375 px, con la campana de menciones, el título de la página en la barra quedaba en unos 15 px
+(solo «…»). Ahí el botón de menú sigue llevando el punto de novedades. Para revertir: `HelpButton where` y
+`.not-mobile` en `styles.css`.
+
+### D802 · El selector de proyectos y la cuenta, siempre fijos en la barra lateral (2026-10-27)
+**Pedido de Lega:** al bajar por la barra, el selector de proyectos de arriba y la fila de la cuenta de abajo nunca se
+van. La barra se parte en tres: arriba (selector, *All synced* y la descarga sin red), el medio, que es lo único que se
+desplaza (`.sidebar-scroll`, donde siguen pegados los títulos de D771), y el pie con la cuenta. Así también se ve
+siempre cuánto falta sincronizar.

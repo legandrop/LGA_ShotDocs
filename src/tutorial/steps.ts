@@ -100,7 +100,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   // En el teléfono, el ícono de la barra de arriba (el de la barra lateral queda en el cajón cerrado).
   { id: 'sync', anchor: { tour: 'sync' }, layout: 'all', sides: SIDEBAR, title: 'tour.sync.title', text: 'tour.sync.text' },
-  { id: 'help', anchor: { tour: 'help' }, layout: 'all', drawer: true, sides: SIDEBAR, title: 'tour.help.title', text: 'tour.help.text' },
+  { id: 'help', anchor: { tour: 'help' }, layout: 'all', drawer: true, title: 'tour.help.title', text: 'tour.help.text' },
 ];
 
 /** Los pasos de este diseño (computadora o teléfono): con ellos se cuenta "3/10", así el número nunca salta. */

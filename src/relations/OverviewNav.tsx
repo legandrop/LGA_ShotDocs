@@ -152,7 +152,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   }, [activeScene, navOpen]);
   useEffect(() => {
     const row = activeRow.current;
-    const nav = row?.closest<HTMLElement>('.sidebar');
+    const nav = row?.closest<HTMLElement>('.sidebar-scroll');
     if (!toReveal.current || !row || !nav) return;
     toReveal.current = false;
     revealRow(row, nav);

@@ -5,9 +5,8 @@ import { usePrefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
-import { openHelp } from '../help/helpUi';
-import { TOUR_ANCHOR_EVENT, useHelpDot } from '../tutorial/tourState';
-import { AccountIcon, CollapseIcon, ExpandIcon, HelpIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
+import { TOUR_ANCHOR_EVENT } from '../tutorial/tourState';
+import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { AccountMenu, menuBelow, PAGE_MENU_WIDTH, PageMenu, type MenuPosition } from './menus';
 import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
@@ -15,6 +14,7 @@ import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { useCurrentProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { HelpButton } from './HelpButton';
 import { LinkHeader } from './LinkHeader';
 import { MentionTreeDot } from './mentionDots';
 import { OverviewNav } from '../relations/OverviewNav';
@@ -60,8 +60,8 @@ type DropZone = 'before' | 'inside' | 'after';
 /**
  * «Reading 340 of 921…» mientras el dispositivo lee muchas páginas del proyecto (la primera vez, o después de muchos
  * cambios): la búsqueda y las relaciones en vivo (Docs/Doc_Relaciones.md, sección 6). Un renglón chico después del
- * árbol, pegado al borde de abajo de la barra mientras el árbol es más largo que la pantalla (el pie queda al final del
- * árbol y en un proyecto grande no se ve): no salta, no se cierra y se va solo al terminar.
+ * árbol, pegado al borde de abajo de lo que se desplaza (justo arriba del pie) mientras el árbol es más largo que la
+ * pantalla: no salta, no se cierra y se va solo al terminar.
  */
 function IndexProgress() {
   const tr = useT();
@@ -72,7 +72,7 @@ function IndexProgress() {
   // después, el árbol que sigue a la página ya lo cuenta (`scroll-padding-bottom` mientras se muestra, `revealRow`).
   useLayoutEffect(() => {
     const label = el.current;
-    const nav = label?.closest<HTMLElement>('.sidebar');
+    const nav = label?.closest<HTMLElement>('.sidebar-scroll');
     const row = nav?.querySelector<HTMLElement>('.tree-row.active');
     if (!label || !nav || !row) return;
     const r = row.getBoundingClientRect();
@@ -103,7 +103,6 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const search = useSearchSession();
   const tr = useT();
   // Un punto en el "?" mientras haya una recorrida para ver y la ayuda nunca se haya abierto acá.
-  const help = useHelpDot();
   const { expandSubpages } = usePrefs();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
@@ -145,7 +144,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     }
   };
   const rowEls = useRef(new Map<string, HTMLDivElement>());
-  const navEl = useRef<HTMLElement>(null);
+  const navEl = useRef<HTMLDivElement>(null);
   // La página que el árbol mismo está por abrir (un clic en su fila, Enter, las flechas, plegar una madre): esa
   // fila ya está a la vista y el árbol no se desplaza. Se anota la página, no un sí o no, como `keepNav` en
   // Workspace.tsx: si esa navegación no llega a cambiar la página, la marca no vale para la siguiente.
@@ -557,17 +556,21 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const canCreateRoot = perms.canCreateIn(null, projectId);
 
   return (
-    <nav
-      ref={navEl}
-      className="sidebar"
-      aria-label={tr('sidebar.pages')}
-      onScroll={() => {
-        if (Date.now() > ownScrollUntil.current) lastManualScroll.current = Date.now();
-      }}
-    >
-      {linkMode ? <LinkHeader /> : <ProjectSwitcher />}
-      <SyncBadge />
-      <OfflineLine />
+    <nav className="sidebar" aria-label={tr('sidebar.pages')}>
+      {/* Arriba y abajo quedan fijos: el selector de proyectos (con lo que falta sincronizar) y la cuenta. Solo se
+          desplaza lo del medio, `.sidebar-scroll` (pedido de Lega, 2026-10-27, D802). */}
+      <div className="sidebar-top">
+        {linkMode ? <LinkHeader /> : <ProjectSwitcher />}
+        <SyncBadge />
+        <OfflineLine />
+      </div>
+      <div
+        ref={navEl}
+        className="sidebar-scroll"
+        onScroll={() => {
+          if (Date.now() > ownScrollUntil.current) lastManualScroll.current = Date.now();
+        }}
+      >
       {/* *Overview* (Docs/Doc_Relaciones.md, secciones 12 y 21; D772): locaciones, escenas, días y pendientes, armados con
           lo que dicen las páginas; solo en un proyecto con escenas, locaciones o días. */}
       {!linkMode && <OverviewNav />}
@@ -609,22 +612,11 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       </div>
 
       {!linkMode && <IndexProgress />}
-      <div className="sidebar-spacer" />
-      <div className="sidebar-footer">
-        <div className="footer-row">
-          {/* La papelera está en el selector de proyectos (una sola, con proyectos, páginas y archivos): acá queda
-              solo la ayuda, a la derecha. */}
-          <span className="footer-item" />
-          {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): sin tooltip, el ícono ya lo dice (D-15). */}
-          <button
-            className={`help-button${help.dot ? ' has-dot' : ''}`}
-            data-tour="help"
-            aria-label={help.news ? tr('help.openNews') : tr('help.open')}
-            onClick={(e) => openHelp(null, e.currentTarget)}
-          >
-            <HelpIcon size={18} />
-          </button>
-        </div>
+      </div>
+      {/* La cuenta y, solo en el teléfono, la ayuda a su derecha (en la computadora está en la barra de arriba, D801). La
+          papelera está en el selector de proyectos (una sola, con proyectos, páginas y archivos). Con un link público no
+          hay cuenta: el pie queda solo en el teléfono, con la ayuda. */}
+      <div className={`sidebar-footer${linkMode ? ' only-mobile' : ''}`}>
         {!linkMode && <button
           ref={accountButton}
           className="account-button"
@@ -640,6 +632,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           <span className="email">{user.email}</span>
           <AccountIcon size={16} />
         </button>}
+        <HelpButton where="drawer" />
       </div>
 
       {account && (

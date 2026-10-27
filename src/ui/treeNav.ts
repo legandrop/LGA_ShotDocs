@@ -226,7 +226,7 @@ export function revealRow(row: HTMLElement, container: HTMLElement): number {
   const below = bottomCover(container);
   let delta = revealDelta(r, { top: top + covered, bottom: top + container.clientHeight - below });
   // Hacia arriba, si la fila cabe en la primera pantalla del contenido, se vuelve al principio: así reaparece también
-  // el encabezado (el selector de proyectos) en vez de quedar la fila pegada al borde con el encabezado escondido.
+  // lo de arriba del árbol (*Overview*) en vez de quedar la fila pegada al borde con eso escondido.
   if (delta < 0) {
     const offset = container.scrollTop + (r.top - top);
     if (offset + r.height + REVEAL_MARGIN <= container.clientHeight) delta = -container.scrollTop;

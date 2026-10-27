@@ -41,7 +41,7 @@ export const sidebar = {
   'sidebar.pages': { en: "Pages", es: "Páginas" },
   'sidebar.tree': { en: "Page tree", es: "Árbol de páginas" },
   'sidebar.width': { en: "Sidebar width", es: "Ancho de la barra lateral" },
-  // El botón "?" del pie y la entrada del menú de la cuenta (la ayuda, Docs/Doc_Tutorial.md).
+  // El botón "?" (arriba; en el teléfono, al pie del cajón) y la entrada del menú de la cuenta (la ayuda, Docs/Doc_Tutorial.md).
   'help.open': { en: "Help and shortcuts", es: "Ayuda y atajos" },
   // Con novedades en la ayuda (el punto del "?", Docs/Doc_Tutorial.md, entrega 3).
   'help.openNews': { en: "Help and shortcuts: what's new", es: "Ayuda y atajos: novedades" },

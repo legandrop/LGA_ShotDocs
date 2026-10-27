@@ -264,6 +264,8 @@ describe('las novedades en la ayuda', () => {
     const button = host.querySelector<HTMLButtonElement>('.help-button')!;
     expect(button.classList.contains('has-dot')).toBe(true);
     expect(button.getAttribute('aria-label')).toBe("Help and shortcuts: what's new");
+    // El "?" de la barra de arriba (computadora) tiene el mismo punto (D801).
+    expect(host.querySelector('.topbar .help-button')?.classList.contains('has-dot')).toBe(true);
     // El mismo punto, con la misma regla, en el botón de menú de la barra de arriba (teléfono, P.13 O7).
     const menu = host.querySelector('.topbar button.only-mobile')!;
     expect(menu.classList.contains('has-dot')).toBe(true);

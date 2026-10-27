@@ -46,7 +46,7 @@ const ROW_H = 32;
 // El desplazamiento de la barra lateral y cada vez que alguien lo cambió.
 let scroll = 0;
 let writes: number[] = [];
-const isSidebar = (el: Element) => el.classList.contains('sidebar');
+const isSidebar = (el: Element) => el.classList.contains('sidebar-scroll');
 
 beforeEach(() => {
   scroll = 0;
@@ -244,7 +244,7 @@ describe('la fila de la página abierta queda a la vista', () => {
 });
 
 describe('la persona que desplaza el árbol a mano', () => {
-  const scrollByHand = () => act(() => void document.querySelector('.sidebar')!.dispatchEvent(new Event('scroll')));
+  const scrollByHand = () => act(() => void document.querySelector('.sidebar-scroll')!.dispatchEvent(new Event('scroll')));
 
   it('no pierde su desplazamiento: la fila se lleva a la vista cuando frena', async () => {
     const { far } = await app();

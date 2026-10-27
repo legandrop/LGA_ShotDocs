@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.291 :
+
+Al bajar por la barra lateral se iban el selector de proyectos y la cuenta: toda la barra era un solo bloque que se
+desplazaba, con la cuenta al final del árbol. Ahora se parte en tres: arriba el selector y *All synced*, abajo la cuenta,
+y solo se desplaza lo del medio (`.sidebar-scroll`, D802); los títulos pegados de D771 siguen igual. El "?" de la ayuda,
+que tenía un renglón propio de 36 px en el pie, pasa a la barra de arriba, antes del menú de la página
+(`HelpButton.tsx`); en el teléfono, donde esa barra no tiene lugar, al pie del cajón, a la derecha de la cuenta (D801).
+Ayuda y doc del tutorial al día.
+
+[Barra lateral - proyecto y cuenta fijos, y la ayuda en la barra de arriba]
+
 v0.290 :
 
 El encabezado 1 medía el doble del texto desde v0.272 (32 px con el cuerpo de 16) y a Lega le quedaba grande; con 1,75
