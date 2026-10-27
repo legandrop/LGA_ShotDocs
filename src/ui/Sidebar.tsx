@@ -30,7 +30,7 @@ import { tipRows } from './tipRows';
 import { SyncBadge } from './SyncBadge';
 import { OfflineBadge, OfflineLine } from './SpaceHost';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
-import { datedTip, datedTitle, useLocMatcher, type DatedTitle } from './datedTitle';
+import { datedTitle, useLocMatcher, type DatedTitle } from './datedTitle';
 import { createOpenScheduler, isPlainKey, isTreeKey, REVEAL_QUIET_MS, REVEAL_TTL_MS, revealRow, treeKeyAction, visibleRows } from './treeNav';
 
 const EXPANDED_KEY = 'shotdocs-expanded';
@@ -420,8 +420,6 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           aria-label={page.title || tr('common.untitled')}
           className={`tree-row${children.length ? ' parent' : ''}${children.length && open ? ' sticky-head' : ''}${page.id === activeId ? ' active' : ''}${menu?.id === page.id ? ' menu-open' : ''}${renaming === page.id ? ' renaming' : ''}${dropClass}`}
           style={{ paddingLeft: 4 + depth * 18, '--depth': depth } as CSSProperties}
-          data-tip={dated ? datedTip(page.title, dated) : split ? page.title : undefined}
-          data-tip-plain
           draggable={renaming !== page.id && perms.canManagePage(page.id)}
           onDragStart={(e) => {
             e.dataTransfer.effectAllowed = 'move';
@@ -489,14 +487,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             </span>
           ) : (
             <span className="label">
-              <span
-                className={`title${page.title ? '' : ' untitled'}`}
-                data-tip={page.title || undefined}
-                data-tip-plain
-                data-tip-overflow
-              >
-                {page.title || tr('common.untitled')}
-              </span>
+              {/* Sin tooltip: el nombre ya se ve en la fila (D794). */}
+              <span className={`title${page.title ? '' : ' untitled'}`}>{page.title || tr('common.untitled')}</span>
             </span>
           )}
           <HoldsTag pageId={page.id} />

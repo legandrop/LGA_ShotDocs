@@ -2263,7 +2263,7 @@ fecha del dispositivo o el reporte de mañana ya con algo filmado): un renglón 
 crudos (su código pasa de 7 letras y apagaba la división de toda la lista) y la fecha solo se pintaba en la fila
 elegida. **Eligió la opción A:** una página de día, scouting, prueba o plan con una sola fecha clara en el título se ve
 como en el *Overview*: fecha corta `DD/MM` en violeta, jornada (`D05`) al lado, el lugar en azul si la app lo reconoce
-como locación (gris si no) y el resto del título apagado; el tooltip da el título entero con el año. La fila elegida no
+como locación (gris si no) y el resto del título apagado; el tooltip da el título entero con el año (D794 lo saca). La fila elegida no
 cambia esos colores. Lo que no tiene una fecha clara (ninguna, dos, `05.11` que se lee de dos formas) se ve como antes. Como los títulos
 cortos, sigue el ajuste *Short titles* de la rama: apagado, los títulos se ven enteros.
 
@@ -2294,3 +2294,15 @@ Ahora no se pone si no agrega nada (`subtitleRepeats`: todas sus palabras están
 jornadas en cualquier forma). Sacados de ERSO y VLLF los 93 que ya estaban. Quedan 180 que suman algo (`Reporte`, el
 día de la semana, otra fecha u otra jornada, como `D43 26.01.27 | COFA | Lunes` bajo `D44 26.01.27 | COFA`): Lega
 decidió dejarlos como están (2026-10-27).
+
+### D794 · En la barra, el foco del teclado se ve como el clic, y sin tooltip del nombre (2026-10-27)
+**Pedido de Lega:** al navegar la barra con el teclado, la fila con el foco tenía un borde turquesa alrededor; con un clic
+se ve con el fondo y la raya turquesa a la izquierda, y así tiene que verse siempre. Ahora `.tree-row:focus-visible` usa
+el fondo y la raya de la fila elegida, sin borde, también en las filas del *Overview* de la barra; en alto contraste
+(`forced-colors`) vuelve el borde, porque ahí el sistema descarta la sombra y el fondo. La raya de la elegida y del foco
+pasa a `--accent-text`: `--accent` daba 2,3:1 sobre `--active` en claro (un control pide 3:1, como D787). Los botones ⋯ y
++ siguen apareciendo con el foco del teclado (como con el mouse encima), para llegar a ellos sin mouse. Además, pasar el
+mouse por una fila mostraba un tooltip con el nombre de la página, que ya se ve: no va más, en ninguna fila de *Pages*
+(tampoco el del título cortado ni el que sumaba el año) ni del *Overview*. Queda uno solo: el de un scouting del
+*Overview* que muestra sus locaciones, que da el título del scouting (no se ve en la fila). El + conserva el suyo. El
+título entero de una fila cortada con «…» se ve abriendo la página.

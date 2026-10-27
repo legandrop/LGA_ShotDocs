@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.284 :
+
+Al navegar la barra lateral con el teclado, la fila con el foco tenía un borde turquesa alrededor, distinto de la fila
+elegida con un clic (fondo y raya a la izquierda); y pasar el mouse por una fila mostraba un tooltip con el nombre de la
+página, que ya se lee. Ahora el foco del teclado se ve como el clic, también en el *Overview* de la barra, la raya pasa
+al turquesa de texto (en claro no llegaba a 3:1) y las filas no tienen tooltip (D794; se saca `datedTip`). Además, en ERSO y VLLF había 798 renglones vacíos con formato de título en 157 páginas, que la app mostraba
+como «Heading» en gris: cada uno quedó como dos renglones vacíos de párrafo (por la app, sincronizado).
+
+[Barra lateral - el foco del teclado como el clic y sin tooltip del nombre]
+
 v0.283 :
 
 En Planeamiento, la barra mostraba la fecha antes de la jornada (`24/03 D02`) y los planes de VLLF salían crudos: sus

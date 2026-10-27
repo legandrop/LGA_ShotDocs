@@ -14,7 +14,7 @@ import { existingRelationsSession } from './relationsUi';
 export interface DatedTitle {
   /** `05/11`. */
   date: string;
-  /** El año, si la fecha lo tiene (va al tooltip); `null` en una fecha sin año. */
+  /** El año, si la fecha lo tiene; `null` en una fecha sin año. */
   year: number | null;
   /** `D05`, o `null` sin jornada. */
   jornada: string | null;
@@ -77,11 +77,6 @@ export function datedTitle(title: string, isLoc: (text: string) => boolean = () 
     place: at >= 0 ? rest[at] : null,
     note: rest.some((_, i) => i !== at) ? rest.filter((_, i) => i !== at).join(' · ') : null,
   };
-}
-
-/** El tooltip de la fila: el título entero y, si su fecha no trae el año escrito en cuatro cifras, el año. */
-export function datedTip(title: string, dated: DatedTitle): string {
-  return dated.year !== null && !title.includes(String(dated.year)) ? `${title} · ${dated.year}` : title;
 }
 
 const noSubscribe = () => () => {};

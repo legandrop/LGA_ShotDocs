@@ -892,7 +892,8 @@ code {
   z-index: calc(29 - var(--depth, 0));
 }
 
-.sidebar .tree-row.sticky-head.active {
+.sidebar .tree-row.sticky-head.active,
+.sidebar .tree-row.sticky-head:focus-visible {
   background: var(--active);
 }
 
@@ -1014,16 +1015,28 @@ code {
   background: var(--hover);
 }
 
+/* Con el teclado, la fila con el foco se ve como la elegida con un clic: el fondo y la raya turquesa a la izquierda, sin
+   el borde alrededor (D794). Las flechas abren la página al pasar: casi siempre es la misma fila. */
 .tree-row:focus-visible {
-  outline: 2px solid var(--accent-text);
-  outline-offset: -2px;
+  outline: none;
+  background: var(--active);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--accent-text);
 }
 
+/* En alto contraste el sistema descarta la sombra y el fondo: ahí el foco vuelve a ser un borde. */
+@media (forced-colors: active) {
+  .tree-row:focus-visible {
+    outline: 2px solid CanvasText;
+  }
+}
+
+/* La raya en el turquesa de texto: `--accent` no llega a 3:1 sobre `--active` en claro (D794, como D787). */
 .tree-row.active {
   background: var(--active);
   color: var(--text);
   font-weight: 500;
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent-text);
 }
 
 .tree-row .toggle {

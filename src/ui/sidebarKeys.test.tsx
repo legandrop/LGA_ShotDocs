@@ -704,6 +704,42 @@ describe('ancho del nombre de la fila', () => {
     }
   });
 
+  it('con el teclado, la fila con el foco se ve como la elegida: fondo y raya a la izquierda, sin borde (D794)', () => {
+    const css = rowCss();
+    const rule = (sel: string) => {
+      const at = css.indexOf(`\n${sel} {`);
+      expect(at).toBeGreaterThan(0);
+      return css.slice(at, css.indexOf('}', at));
+    };
+    const focus = rule('.tree-row:focus-visible');
+    const active = rule('.tree-row.active');
+    expect(focus).toContain('outline: none');
+    expect(focus).not.toMatch(/outline: \d/);
+    for (const prop of ['background: var(--active)', 'box-shadow: inset 2px 0 0 var(--accent-text)']) {
+      expect(active).toContain(prop);
+      expect(focus).toContain(prop);
+    }
+  });
+
+  it('ninguna fila tiene tooltip con su nombre: ya se ve (D794)', async () => {
+    const { d } = await app();
+    // Títulos divididos (código y nombre) y un título largo, además de los comunes del armado.
+    await act(async () => {
+      await d.tree.create(null, '001 | Primera escena');
+      await d.tree.create(null, '002 | Segunda escena');
+      await d.tree.create(null, 'Un título bastante largo para que se corte con puntos suspensivos en la barra');
+    });
+    expect(rows().length).toBeGreaterThan(5);
+    expect(document.querySelector('.tree-row .label .code')).not.toBeNull();
+    // El + conserva el suyo: dice lo que hace.
+    expect(document.querySelector('.tree-row .row-actions [data-tip]')).not.toBeNull();
+    for (const r of rows()) {
+      expect(r.hasAttribute('data-tip')).toBe(false);
+      // Los botones de la fila (⋯, +) sí tienen el suyo: dicen lo que hacen.
+      expect(r.querySelector('.label [data-tip], .label[data-tip]')).toBeNull();
+    }
+  });
+
   it('el CSS muestra los botones con hover, foco o menú abierto (jsdom no calcula :hover) y en la compu no por ser la abierta', () => {
     const css = rowCss();
     const shown = css.match(/\n(\.tree-row:hover[^{]*)\{\s*opacity: 1;/)![1];

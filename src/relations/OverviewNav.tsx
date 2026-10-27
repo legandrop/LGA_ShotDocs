@@ -228,9 +228,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
               onClick={(e) => openScene(e, s.code)}
             >
               <span className="code">{s.code}</span>
-              <span className="title" data-tip={s.title || undefined} data-tip-plain data-tip-overflow>
-                {s.title}
-              </span>
+              {/* Sin tooltip: el nombre ya se ve (D794). */}
+              <span className="title">{s.title}</span>
             </a>
           </li>
         ))}
@@ -279,9 +278,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
                 aria-current={on ? 'page' : undefined}
                 onClick={(e) => (l.pageId ? openPage(e, l.pageId) : plainClick(e) && (e.preventDefault(), go('locations')))}
               >
-                <span className="title" data-tip={l.name} data-tip-plain data-tip-overflow>
-                  {l.name}
-                </span>
+                <span className="title">{l.name}</span>
               </a>
             </li>
           );
@@ -309,14 +306,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
                 onClick={(e) => openPage(e, d.pageId)}
               >
                 <span className="code">{labels[i]}</span>
-                <span
-                  className={d.locs.length ? 'title locs' : 'title'}
-                  data-tip={d.locs.join(' + ') || title || undefined}
-                  data-tip-plain
-                  data-tip-overflow
-                >
-                  {d.locs.join(' + ') || title}
-                </span>
+                <span className={d.locs.length ? 'title locs' : 'title'}>{d.locs.join(' + ') || title}</span>
               </a>
             </li>
           );
@@ -340,7 +330,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
             <li key={s.pageId}>
               <a className={`scene-nav-row${on ? ' active' : ''}`} href={pagePath(s.pageId)} aria-current={on ? 'page' : undefined} onClick={(e) => openPage(e, s.pageId)}>
                 <span className="code">{labels[i]}</span>
-                <span className={s.locs.length ? 'title locs' : 'title'} data-tip={s.title || undefined} data-tip-plain data-tip-overflow={s.locs.length ? undefined : true}>
+                {/* El título del scouting solo cuando la fila muestra sus locaciones: ahí es un dato que no se ve (D794). */}
+                <span className={s.locs.length ? 'title locs' : 'title'} data-tip={s.locs.length ? s.title || undefined : undefined} data-tip-plain>
                   {name}
                 </span>
               </a>

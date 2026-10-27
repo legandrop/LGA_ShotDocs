@@ -297,8 +297,8 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(part('Shoot days').classList.contains('on')).toBe(true);
     const day = host.querySelector<HTMLAnchorElement>(`.ov-list a[href="${pagePath(built.ids.d59)}"]`)!;
     expect(day.querySelector('.code')!.textContent).toBe('Día 59');
-    // El tooltip (solo si está cortado) es lo mismo que la fila muestra: las locaciones del día.
-    expect(day.querySelector<HTMLElement>('.title')!.dataset.tip).toBe(day.querySelector('.title')!.textContent);
+    // Sin tooltip: la fila ya muestra las locaciones del día (D794).
+    expect(day.querySelector<HTMLElement>('.title')!.hasAttribute('data-tip')).toBe(false);
     // Las locaciones del día, en su color (D774).
     expect(day.querySelector('.title')!.classList.contains('locs')).toBe(true);
     click(day);

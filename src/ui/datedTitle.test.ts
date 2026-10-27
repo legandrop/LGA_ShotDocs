@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { datedTip, datedTitle } from './datedTitle';
+import { datedTitle } from './datedTitle';
 
 // La fila con fecha de la barra lateral (D789): las tres familias de títulos de Lega dan la misma forma.
 describe('datedTitle', () => {
@@ -90,12 +90,5 @@ describe('datedTitle', () => {
   it('títulos vacíos y con «|» repetidos', () => {
     expect(datedTitle('')).toBeNull();
     expect(datedTitle('2025-11-05 || Día 05 ||| Casa')).toMatchObject({ jornada: 'D05', place: 'Casa', note: null });
-  });
-
-  it('el tooltip suma el año cuando el título no lo escribe entero', () => {
-    const t = 'D37 26.01.18 | CENADE';
-    expect(datedTip(t, datedTitle(t)!)).toBe('D37 26.01.18 | CENADE · 2026');
-    const u = '2025-11-05 | Día 05 | Casa';
-    expect(datedTip(u, datedTitle(u)!)).toBe(u);
   });
 });
