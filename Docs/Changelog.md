@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.283 :
+
+En Planeamiento, la barra mostraba la fecha antes de la jornada (`24/03 D02`) y los planes de VLLF salían crudos: sus
+títulos venían de Coda con `_` (`D02_26.03.24_Autos Juan de Garay | Mar`) y no se leían como fecha. Ahora la jornada va
+primero (D792), un día de la semana o una unidad (`U2`) nunca se toma como lugar, y los 65 planes se renombraron a
+`D02 | 26.03.24 | Autos Juan de Garay | Mar`. Además, las páginas importadas de Coda empezaban con su título otra vez: el
+subtítulo de Coda, en cursiva, lo repetía. La importación ya no lo pone si no agrega nada (D793), y se sacaron los 93 que
+había en ERSO y VLLF.
+
+[Barra lateral - jornada primero y planes con «|»; Coda - el subtítulo que repite el título no entra]
+
 v0.282 :
 
 Después de traer los planos de VLLF a sus escenas en la PC, la Mac mostró «Uploading 688 changes…» sin que faltara nada.

@@ -23,6 +23,7 @@ import {
   importCoda,
   importSize,
   metaJournal,
+  subtitleRepeats,
   treeOrder,
   treePlan,
   type CodaFolder,
@@ -687,6 +688,47 @@ describe('importar la carpeta', () => {
     const doc = await a.docs.open(id);
     expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('https://www.youtube.com/watch?v=1');
     a.docs.close(id);
+  });
+
+  it('el subtítulo de Coda va en cursiva arriba, salvo que repita el título (D793)', async () => {
+    const { a } = await mediaDevice();
+    const pages = [
+      { ...page('p1', 'D02_26.03.24_Autos Juan de Garay | Mar', null, 0), subtitle: 'D02_26.03.24_Autos Juan de Garay | Mar' },
+      { ...page('p2', 'D02 | 26.03.24 | Autos Juan de Garay | Mar', null, 1), subtitle: 'd02_26.03.24 Autos Juan de Garay | Mar' },
+      { ...page('p3', '2025-12-06 | Día 27 | Basavilbaso', null, 2), subtitle: 'D27 25.12.06 | Basavilbaso | Reporte' },
+      { ...page('p4', '2026-02-25 | Scouting | Florida', null, 3), subtitle: '26.02.25 | Scouting | Florida' },
+    ];
+    const result = await importCoda(smallFolder(pages, { p1: '<p>uno</p>', p2: '<p>dos</p>', p3: '<p>tres</p>', p4: '<p>cuatro</p>' }), withJournal(a));
+    expect(result.problems).toEqual([]);
+    const first = async (id: string) => {
+      const doc = await a.docs.open(id);
+      const xml = doc.getXmlFragment(CONTENT_FRAGMENT).toString();
+      a.docs.close(id);
+      return xml;
+    };
+    const [p1, p2, p3, p4] = a.tree.roots(result.projectId).map((r) => r.id);
+    expect(await first(p1)).not.toContain('Garay');
+    expect(await first(p2)).not.toContain('Garay');
+    expect(await first(p4)).not.toContain('Florida');
+    // Un subtítulo con otra cosa (el reporte, el día de la semana) se queda.
+    expect(await first(p3)).toContain('<italic>D27 25.12.06 | Basavilbaso | Reporte</italic>');
+  });
+
+  it('subtitleRepeats: repite si no agrega ninguna palabra; las fechas y las jornadas en cualquier forma (D793)', () => {
+    expect(subtitleRepeats('7 Puentes Auto Rubio', 'D51 | 26.05.26 | 7 Puentes Auto Rubio')).toBe(true);
+    expect(subtitleRepeats('D00_26.03.11_Av Castanares', 'D00 | 26.03.11 | Av Castanares')).toBe(true);
+    expect(subtitleRepeats('D27 25.12.06 | Basavilbaso', '2025-12-06 | Día 27 | Basavilbaso')).toBe(true);
+    expect(subtitleRepeats('D49 26.02.03 | Mansión San Isidro | Martes', 'D49 26.02.03 | Mansión San Isidro')).toBe(false);
+    expect(subtitleRepeats('D09_26.04.02_Plaza de Mayo | Vie', 'D09 | 26.04.03 | Plaza de Mayo | Vie')).toBe(false);
+    expect(subtitleRepeats('D43 26.01.27 | COFA', 'D44 26.01.27 | COFA')).toBe(false);
+    expect(subtitleRepeats('D20_U1_26.04.16_ESMA', 'D20 | 26.04.16 | ESMA')).toBe(false);
+    expect(subtitleRepeats('', 'Algo')).toBe(false);
+    // Auditoría: una jornada que es parte del lugar no es la jornada del título; un signo de estado es contenido.
+    expect(subtitleRepeats('Día 3', '26.03.24 | Galpón D3')).toBe(false);
+    expect(subtitleRepeats('COFA ✅', 'D44 26.01.27 | COFA')).toBe(false);
+    expect(subtitleRepeats('COFA ?', 'D44 26.01.27 | COFA')).toBe(false);
+    expect(subtitleRepeats('Calle Iglesia? Imprenta', 'D21 | 26.04.17 | Calle Iglesia? Imprenta | Vie')).toBe(true);
+    expect(subtitleRepeats('D37 26.01.18 |  |', 'D37 26.01.18 | sin lugar (2)')).toBe(true);
   });
 
   it('el mismo archivo en varias páginas se guarda y se sube una vez; cada página lo usa (page_files)', async () => {

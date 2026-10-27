@@ -2279,3 +2279,18 @@ manda lo que falta. Detalle en `Doc_Sincronizacion.md`, "Papelera de archivos".
 contaba lo que el dispositivo iba a mandar. Ahora, si la bajada del contenido pasa de 0,8 s, dice «Downloading N
 pages…» («Bajando N páginas…») con una flecha para abajo y cuenta las que faltan. Lo propio por subir sigue ganando.
 Detalle en `Doc_Sincronizacion.md`, "Estado visible".
+
+### D792 · En la barra, la jornada antes que la fecha; los planes con «|» (2026-10-27)
+**Pedido de Lega:** en Planeamiento la barra mostraba `24/03 D02`; tiene que ser `D02 24/03`. Cambia el orden de D789
+(el resto queda igual: fecha violeta, lugar azul si es una locación, lo demás apagado). Además, un día de la semana
+(`Lun`, `Mier`, `Sab`) o una unidad (`U2`) nunca es el lugar: va a la nota. Los títulos de los planes de VLLF pasan de
+`D02_26.03.24_Autos Juan de Garay | Mar` a `D02 | 26.03.24 | Autos Juan de Garay | Mar` (con unidad,
+`D20 | U2 | 26.04.16 | Aeroparque | Jue`): con `_` la barra no los leía como fecha. Renombrados los 65 desde la app.
+
+### D793 · La importación de Coda no repite el título (2026-10-27)
+**Pedido de Lega:** las páginas importadas empezaban con su título otra vez. Era el subtítulo de Coda, que entraba en
+cursiva como primer renglón y casi siempre repetía el título (a veces con la fecha en otra forma, o solo el lugar).
+Ahora no se pone si no agrega nada (`subtitleRepeats`: todas sus palabras están en el título, con las fechas y las
+jornadas en cualquier forma). Sacados de ERSO y VLLF los 93 que ya estaban. Quedan 180 que suman algo (`Reporte`, el
+día de la semana, otra fecha u otra jornada, como `D43 26.01.27 | COFA | Lunes` bajo `D44 26.01.27 | COFA`): a decidir
+con Lega.

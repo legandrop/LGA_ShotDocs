@@ -7,7 +7,7 @@ import { useCurrentProject } from './project';
 import { existingRelationsSession } from './relationsUi';
 
 // La fila de la barra lateral de un día de rodaje, un scouting, una prueba o un plan (D789): las tres familias con fecha
-// se ven igual, como en el *Overview*. A la izquierda, la fecha corta (DD/MM, violeta) y la jornada (`D05`); después el
+// se ven igual, como en el *Overview*. A la izquierda, la jornada (`D05`, primero: D792) y la fecha corta (DD/MM, violeta); después el
 // lugar (azul si la app lo reconoce como locación) y lo que quede del título, apagado. Solo lee el título: un título sin
 // una fecha clara (dos fechas, ninguna, una que se lee de dos formas) se ve como siempre.
 
@@ -18,7 +18,10 @@ export interface DatedTitle {
   year: number | null;
   /** `D05`, o `null` sin jornada. */
   jornada: string | null;
-  /** El lugar: la última parte que la app reconoce como locación o, si ninguna, la última; `null` si no queda nada. */
+  /**
+   * El lugar: la última parte que la app reconoce como locación o, si ninguna, la última que no es un día de la semana ni
+   * una unidad (D792); `null` si no queda ninguna.
+   */
   place: string | null;
   /** Lo demás del título (`Scouting técnico VFX`, `Sin reporte`), o `null`. */
   note: string | null;
@@ -31,6 +34,11 @@ const JORNADA = /(?:^|[\s_])(?:d[ií]a|day|d)\s*0*(\d{1,3})(?![\d.])/gi;
 const ONLY_JORNADA = /^(?:d[ií]a|day|d)\s*0*(\d{1,3})$/i;
 // Las fechas como las escribe Lega: `2025-11-05`, `26.01.18`, `260106`, `05.11`.
 const DATES = /\d{4}-\d{2}-\d{2}|\d{2}[._ ]\d{2}[._ ]\d{2}|\d{6}|\d{1,2}\.\d{1,2}/g;
+// Una parte que es solo el día de la semana (`Lun`, `Mier`, `Sábado`) o la unidad (`U2`): va a la nota, nunca es el lugar
+// (`D02 | 26.03.24 | Autos Juan de Garay | Mar` → el lugar es «Autos Juan de Garay», D792).
+const WEEKDAY =
+  /^(?:lu(?:n(?:es)?)?|ma(?:r(?:t(?:es)?)?)?|mi(?:e(?:r(?:c(?:oles)?)?)?)?|ju(?:e(?:v(?:es)?)?)?|vi(?:e(?:r(?:nes)?)?)?|s[aá](?:b(?:ado)?)?|do(?:m(?:ingo)?)?|mon|tue|wed|thu|fri|sat|sun|u\d{1,2})\.?$/i;
+const isWeekday = (part: string) => WEEKDAY.test(part.normalize('NFD').replace(/\p{M}/gu, ''));
 /** Una parte que solo tiene la fecha y, a lo sumo, la jornada (`2025-11-05`, `D37 26.01.18`, `D03_26.03.25`). */
 const onlyDate = (part: string) => /^[\s_]*$/.test(part.replace(JORNADA, ' ').replace(DATES, ' '));
 
@@ -59,14 +67,15 @@ export function datedTitle(title: string, isLoc: (text: string) => boolean = () 
     rest.push(p);
   });
   let at = -1;
-  for (let i = rest.length - 1; i >= 0 && at < 0; i--) if (isLoc(rest[i])) at = i;
-  if (at < 0) at = rest.length - 1;
+  // Un día de la semana nunca es el lugar, aunque una locación se llame así.
+  for (let i = rest.length - 1; i >= 0 && at < 0; i--) if (!isWeekday(rest[i]) && isLoc(rest[i])) at = i;
+  for (let i = rest.length - 1; i >= 0 && at < 0; i--) if (!isWeekday(rest[i])) at = i;
   return {
     date: `${pad(d)}/${pad(m)}`,
     year: y,
     jornada: jornada !== null ? `D${pad(jornada)}` : null,
     place: at >= 0 ? rest[at] : null,
-    note: rest.length > 1 ? rest.filter((_, i) => i !== at).join(' · ') : null,
+    note: rest.some((_, i) => i !== at) ? rest.filter((_, i) => i !== at).join(' · ') : null,
   };
 }
 

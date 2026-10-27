@@ -370,10 +370,12 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       }
     }
     const split = splitOn ? splitSiblings(pages.filter((p) => !dated.has(p.id))) : null;
-    const jornadas = [...dated.values()].some((d) => d.jornada);
+    // La columna de la jornada mide lo que la más larga de la lista (`D05`, `D100`), así la fecha queda alineada.
+    const jornadaWidth = Math.max(0, ...[...dated.values()].map((d) => d.jornada?.length ?? 0));
+    const jornadas = jornadaWidth > 0;
     const style = {
       ...(split ? { '--code-w': `${split.width}ch` } : {}),
-      ...(jornadas ? { '--jor-w': '3ch' } : {}),
+      ...(jornadas ? { '--jor-w': `${jornadaWidth}ch` } : {}),
     } as CSSProperties;
     return (
       <ul
@@ -474,8 +476,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             <span className="label dated">
               {/* La fecha y la jornada en el violeta de los días; el lugar en el azul de las locaciones solo si la app
                   lo reconoce (D774); la fila elegida no cambia esos colores (D789). */}
-              <span className="code date">{dated.date}</span>
               {jornadas && <span className="code jornada">{dated.jornada ?? ''}</span>}
+              <span className="code date">{dated.date}</span>
               {dated.place && <span className={`title place${isLoc(dated.place) ? ' loc' : ''}`}>{dated.place}</span>}
               {dated.note && <span className="note">{dated.note}</span>}
             </span>

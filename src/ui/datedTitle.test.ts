@@ -32,6 +32,26 @@ describe('datedTitle', () => {
     expect(datedTitle('D03_26.03.25 | Estudio')).toMatchObject({ date: '25/03', jornada: 'D03', place: 'Estudio' });
   });
 
+  it('plan de VLLF con «|»: el día de la semana y la unidad van a la nota, nunca son el lugar (D792)', () => {
+    expect(datedTitle('D02 | 26.03.24 | Autos Juan de Garay | Mar')).toEqual({
+      date: '24/03',
+      year: 2026,
+      jornada: 'D02',
+      place: 'Autos Juan de Garay',
+      note: 'Mar',
+    });
+    expect(datedTitle('D20 | U2 | 26.04.16 | Aeroparque | Jue')).toMatchObject({ jornada: 'D20', place: 'Aeroparque', note: 'U2 · Jue' });
+    expect(datedTitle('D05 | 26.03.27 | Vier')).toMatchObject({ jornada: 'D05', place: null, note: 'Vier' });
+    // «Mar del Plata» no es un martes; y un día de la semana no es el lugar aunque la app lo reconozca como locación.
+    expect(datedTitle('D09 | 26.04.03 | Mar del Plata | Vie')).toMatchObject({ place: 'Mar del Plata', note: 'Vie' });
+    const isLoc = (t: string) => t === 'Mar' || t === 'Galpón';
+    expect(datedTitle('D09 | 26.04.03 | Galpón | Mar', isLoc)).toMatchObject({ place: 'Galpón', note: 'Mar' });
+    expect(datedTitle('D09 | 26.04.03 | Otro | Mar', isLoc)).toMatchObject({ place: 'Otro', note: 'Mar' });
+    expect(datedTitle('D09 | 26.04.03 | Taller | Mi')).toMatchObject({ place: 'Taller', note: 'Mi' });
+    expect(datedTitle('D09 | 26.04.03 | Taller | Mie\u0301rcoles')).toMatchObject({ place: 'Taller' });
+    expect(datedTitle('D09 | 26.04.03 | Taller | Wed')).toMatchObject({ place: 'Taller', note: 'Wed' });
+  });
+
   it('solo la fecha: sin lugar', () => {
     expect(datedTitle('2026-02-19 | Day 59')).toMatchObject({ date: '19/02', jornada: 'D59', place: null, note: null });
   });

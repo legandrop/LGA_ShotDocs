@@ -789,7 +789,9 @@ async function importPage(
   blocks = checkForeignImages(blocks, (url, kept) => {
     note(kept ? 'import.linked' : 'import.dropped', { url: shortUrl(url) });
   });
-  if (page.subtitle?.trim()) {
+  // El subtítulo de Coda, en cursiva arriba. Si repite el título (en Coda los planes y los scoutings de VLLF tenían los dos
+  // iguales, o con la fecha escrita de otra forma), no: la página empezaba con su título dos veces (D793).
+  if (page.subtitle?.trim() && !subtitleRepeats(page.subtitle, page.name)) {
     blocks.unshift({ type: 'paragraph', content: [{ type: 'text', text: page.subtitle.trim(), styles: { italic: true } }], children: [] });
   }
   // Un archivo que no se pudo guardar ahora (ya anotado) deja la página sin escribir: no se escribe a medias, al
@@ -807,6 +809,43 @@ function findStored(folder: CodaFolder, page: CodaManifestPage, m: CodaMedia): s
   if (listed && folder.has(`media/${listed.file}`)) return listed.file;
   const found = folder.paths().find((p) => p.startsWith('media/') && byBlob(p.slice('media/'.length)));
   return found ? found.slice('media/'.length) : null;
+}
+
+// Las fechas como las escribe Lega, siempre igual (`2026-02-25` = `26.02.25` = `260225`), y la jornada (`Día 27` = `D27`).
+const ISO_DATE = /(?<!\d)\d{2}(\d{2})-(\d{2})-(\d{2})(?!\d)/g;
+const DOT_DATE = /(?<![\d.])(\d{2})\.(\d{2})\.(\d{2})(?![\d.])/g;
+const JORNADA = /(?<![\p{L}\d])(?:d[ií]a|day|d)\s*0*(\d{1,3})(?!\d)/gu;
+const UNIT = /(?<![\p{L}\d])u\s?\d(?!\d)/gu;
+/** Lo que separa partes y palabras de un título: no cuenta como contenido. */
+const SEPARATORS = /[\s|_.\-/,()·:]+/gu;
+
+/**
+ * Las palabras de un título, con las fechas en una sola forma. La jornada se normaliza (`#j27`) solo en una parte que es
+ * nada más jornada, fecha y unidad (`D27 25.12.06`, `Día 27`); en otra parte es una palabra más (`Galpón D3`): así un
+ * subtítulo que da la jornada no se toma por repetido de un lugar que la nombra.
+ */
+function titleWords(text: string): string[] {
+  const plain = text.normalize('NFD').toLowerCase().replace(/\p{M}/gu, '').replace(ISO_DATE, '$1$2$3').replace(DOT_DATE, '$1$2$3');
+  return plain.split(/[|_]/).flatMap((part) => {
+    const onlyDay = part.replace(JORNADA, ' ').replace(UNIT, ' ').replace(/\d{6}/g, ' ').trim() === '';
+    const marked = onlyDay ? part.replace(JORNADA, ' #j$1 ') : part;
+    return marked.split(/[^\p{L}\p{N}#]+/u).filter(Boolean);
+  });
+}
+
+/** Los signos de un título que no son letras, números ni separadores (`✅`, `?`): también son contenido. */
+const marks = (text: string) => new Set(text.normalize('NFC').replace(SEPARATORS, '').replace(/[\p{L}\p{N}\p{M}]/gu, ''));
+
+/**
+ * El subtítulo de Coda no agrega nada al título: todas sus palabras y sus signos están en él (`D02_26.03.24_Autos | Mar`
+ * bajo `D02 | 26.03.24 | Autos | Mar`, `26.02.25 | Scouting | Florida` bajo `2026-02-25 | Scouting | Florida`, o solo
+ * el lugar). Uno que suma algo (`Reporte`, el día de la semana, otra fecha u otra jornada, `✅`) no lo repite (D793).
+ */
+export function subtitleRepeats(subtitle: string, title: string): boolean {
+  const words = titleWords(subtitle);
+  const inTitle = new Set(titleWords(title));
+  const titleMarks = marks(title);
+  return words.length > 0 && words.every((w) => inTitle.has(w)) && [...marks(subtitle)].every((m) => titleMarks.has(m));
 }
 
 /**

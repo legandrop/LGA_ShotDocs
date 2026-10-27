@@ -353,7 +353,10 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   "Dos<br>" es "Dos" y con dos saltos queda uno, como se veía. Los párrafos vacíos seguidos quedan **hasta dos**
   (antes se juntaban en uno; en ERSO, el 99 % de los huecos son de uno o dos renglones), y los de las puntas se
   sacan como antes. Solo se sacan saltos: ninguna letra.
-- **Subtítulo** de la página de Coda: un párrafo en cursiva arriba de todo.
+- **Subtítulo** de la página de Coda: un párrafo en cursiva arriba de todo. Salvo que repita el título (D793, v0.283): si todas sus
+  palabras están en el título (con las fechas y las jornadas en cualquier forma: `26.02.25` = `2026-02-25`, `Día 27` =
+  `D27`), no se pone, porque la página empezaba con su título dos veces (`subtitleRepeats`). Uno que suma algo
+  (`Reporte`, el día de la semana, otra fecha u otra jornada) queda.
 
 ### Correcciones de la auditoría (v0.087, direcciones sueltas)
 
