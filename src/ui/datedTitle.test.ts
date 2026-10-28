@@ -97,6 +97,15 @@ describe('datedTitle', () => {
     expect(datedTitle('2025-11-05 | D05 | Casa | Noche')).toMatchObject({ place: 'Noche', note: 'Casa' });
   });
 
+  it('lo que sigue a «Plan ·» es la nota del plan, sea o no una locación (D815)', () => {
+    const isLoc = (t: string) => t === 'ESMA' || t === 'ESMA Salon Dorado';
+    expect(datedTitle('2026-05-15 | Día 43 | ESMA | Plan · ESMA Salon Dorado', isLoc)).toMatchObject({ plan: true, planNote: 'ESMA Salon Dorado' });
+    expect(datedTitle('2026-05-12 | Día 40 | 7 Puentes | Plan · Casa Rosada')).toMatchObject({ plan: true, planNote: 'Casa Rosada' });
+    // Sin nada después de «Plan», o con el número de *Create another*: sin nota.
+    expect(datedTitle('D02 | 26.03.24 | Autos Juan de Garay | Mar | Plan')).not.toHaveProperty('planNote');
+    expect(datedTitle('2026-05-12 | Día 40 | 7 Puentes | Plan · 2')).not.toHaveProperty('planNote');
+  });
+
   it('títulos vacíos y con «|» repetidos', () => {
     expect(datedTitle('')).toBeNull();
     expect(datedTitle('2025-11-05 || Día 05 ||| Casa')).toMatchObject({ jornada: 'D05', place: 'Casa', note: null });

@@ -14,12 +14,10 @@ import { searchSession } from '../ui/projectSearchUi';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, type Built } from './fixtures/proyectoSintetico';
-import { kindReader } from './kind';
 import { SceneStages } from './SceneStages';
 import { sceneStageRows } from './sceneStageRows';
 import type { SceneLive } from './liveView';
 import { OVERVIEW_PAGE as SCENES_PAGE } from './OverviewNav';
-import { sceneMapPath } from './sceneMentions';
 
 // Lo de acá es el Overview sin el colapso automático (lo desplegado se recuerda); con el colapso: sidebarRows.test.ts.
 vi.mock('../ui/treeNav', async (original) => ({ ...(await original<typeof import('../ui/treeNav')>()), AUTO_COLLAPSE: false }));
@@ -114,8 +112,7 @@ function mount(d: Device, start: string): { host: HTMLElement; root: Root } {
 
 const click = (el: Element | null | undefined) => act(() => (el as HTMLElement).click());
 const eps = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('.scene-nav-ep')];
-// Las escenas son fichas (D813): las filas del árbol de *Pages*, en el *Overview*.
-const sceneRows = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.ov-scenes .tree-row')];
+const sceneRows = (host: HTMLElement) => [...host.querySelectorAll<HTMLAnchorElement>('.scene-nav-row')];
 const complete = (host: HTMLElement) => !!host.querySelector('.mp-title') && !host.querySelector('.mp-reading');
 const scenesPart = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.ov-part')].find((p) => p.querySelector('.ov-part-name')?.textContent === 'Scenes');
 
@@ -135,18 +132,12 @@ describe('Overview y Scenes en la barra lateral', () => {
     // Adentro de Overview, arriba de Pages (D772); sin tooltip (Lega, D808: no agregaba nada), con el total y los
     // episodios cerrados. De fábrica, Scenes es la parte desplegada.
     expect(head.textContent).toBe('Scenes24');
-    // Solo los íconos tienen tooltip (D813): el «+» dice qué crea y el ⋯, de qué carpeta es (ya no está en Pages).
-    expect([...head.querySelectorAll('[data-tip]')].map((e) => e.className)).toEqual(['ov-more', 'ov-add']);
+    expect(head.querySelector('[data-tip]')).toBeNull();
     expect(host.querySelectorAll('.sidebar [title]').length).toBe(0);
     const nav = host.querySelector('.sidebar')!;
     const order = [...nav.querySelectorAll('.ov-nav, .section-title')].map((x) => (x.classList.contains('ov-nav') ? 'overview' : 'pages'));
     expect(order).toEqual(['overview', 'pages']);
-    // *Sets* sin decorados aparece igual, sin número ni flecha, para quien puede crear el primero con su «+» (D813).
-    // *Shots* (D813, parte 3) es solo la vista de los planos, sin lista, como *Pending*: aparece con escenas.
-    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Sets', 'Scenes', 'Shoot days', 'Shots']);
-    const sets = [...nav.querySelectorAll('.ov-part')].find((p) => p.querySelector('.ov-part-name')?.textContent === 'Sets')!;
-    expect(sets.querySelector('.toggle, .scene-nav-n')).toBeNull();
-    expect(sets.querySelector('.ov-add')).toBeTruthy();
+    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Scenes', 'Shoot days', 'Shots']);
     expect(eps(host).map((b) => [b.textContent, b.getAttribute('aria-expanded')])).toEqual([
       ['Episode 10118', 'false'],
       ['Episode 1042', 'false'],
@@ -165,14 +156,13 @@ describe('Overview y Scenes en la barra lateral', () => {
     await act(() => d.tree.rename(built.ids.s026, '026 | El fugitivo cruza la autopista'));
     await shown(() => expect(sceneRows(host)[1].querySelector('.title')!.textContent).toBe('El fugitivo cruza la autopista'));
 
-    // La fila de una escena es su ficha (D813): abre su página y queda marcada.
-    click(sceneRows(host)[2]);
-    await shown(() => expect(location.pathname).toBe(pagePath(built.ids.s027)));
-    expect(sceneRows(host)[2].classList.contains('active')).toBe(true);
-    // La escena en el mapa: dónde está cada cosa, por etapa (D783).
-    act(() => navigate(sceneMapPath('105_027')));
+    // La escena: dónde está cada cosa, por etapa (D783).
+    const r027 = sceneRows(host)[2];
+    expect(r027.getAttribute('href')).toBe('/map/scenes?scene=105_027');
+    click(r027);
     await shown(() => expect(complete(host) && host.querySelector('.mp-scene .ss')).toBeTruthy());
     expect(location.pathname + location.search).toBe('/map/scenes?scene=105_027');
+    expect(sceneRows(host)[2].classList.contains('active')).toBe(true);
     const view = host.querySelector<HTMLElement>('.mp-scene')!;
     expect(view.querySelector('.mp-sh')!.textContent).toBe('105_027La ambulancia empieza a zigzaguear');
     expect(view.querySelector('.mp-smeta')!.textContent).toBe('Episode 105 · INT-EXT/NOCHE · 3 shots · shot on 3 days');
@@ -260,16 +250,16 @@ describe('Overview y Scenes en la barra lateral', () => {
     // Pages, plegada: sin filas del árbol, y lo recuerda al volver a montar.
     const pages = () => host.querySelector<HTMLButtonElement>('.pages-head')!;
     expect(pages().getAttribute('aria-expanded')).toBe('true');
-    expect(host.querySelectorAll('.pages-section .tree-row').length).toBeGreaterThan(0);
+    expect(host.querySelectorAll('.sidebar .tree-row').length).toBeGreaterThan(0);
     click(pages());
     expect(pages().getAttribute('aria-expanded')).toBe('false');
-    expect(host.querySelectorAll('.pages-section .tree-row')).toHaveLength(0);
+    expect(host.querySelectorAll('.sidebar .tree-row')).toHaveLength(0);
     expect(JSON.parse(localStorage.getItem('shotdocs-pages-nav')!)).toEqual({ [built.projectId]: true });
     for (const r of roots.splice(0)) act(() => r.unmount());
     const again = mount(d, mapPath()).host;
     await shown(() => expect(again.querySelector('.pages-head')).toBeTruthy());
     expect(again.querySelector('.pages-head')!.getAttribute('aria-expanded')).toBe('false');
-    expect(again.querySelectorAll('.pages-section .tree-row')).toHaveLength(0);
+    expect(again.querySelectorAll('.sidebar .tree-row')).toHaveLength(0);
     // Abrir una página (acá, por la dirección, como un link) despliega Pages con su fila elegida.
     act(() => navigate(pagePath(built.ids.notas)));
     await wait();
@@ -340,19 +330,15 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(location.pathname).toBe('/map');
   });
 
-  it('el número de una escena lleva su color (D773); el de una carpeta que se ve en Pages, no', async () => {
+  it('el número de una escena en el árbol lleva su color (D773); el de su episodio, no', async () => {
     const { d, built } = await owner();
-    // Una escena sin número reconocible para el registro sigue en Pages con su carpeta (D813).
-    const loose = await d.tree.create(built.ids.ep5, '105 bis | Notas del episodio', built.projectId);
     const { host } = mount(d, pagePath(built.ids.s027));
-    await shown(() => expect(host.querySelector('.ov-scenes .tree-row.active .code')).toBeTruthy());
+    await shown(() => expect(host.querySelector('.sidebar .tree-row.active .code')).toBeTruthy());
     const code = (row: Element) => row.querySelector('.code')!;
-    const active = host.querySelector('.ov-scenes .tree-row.active')!;
-    expect(code(active).textContent).toBe('105_027');
+    const active = host.querySelector('.sidebar .tree-row.active')!;
+    expect(code(active).textContent).toBe('027');
     expect(code(active).classList.contains('scene')).toBe(true);
-    act(() => navigate(pagePath(loose)));
-    await shown(() => expect(host.querySelector('.pages-section .tree-row.active')).toBeTruthy());
-    const rows = [...host.querySelectorAll('.pages-section .tree-row')];
+    const rows = [...host.querySelectorAll('.sidebar .tree-row')];
     const episode = rows.find((r) => r.querySelector('.code')?.textContent === '105')!;
     expect(code(episode).classList.contains('scene')).toBe(false);
   });
@@ -367,8 +353,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     await d.engine.syncNow();
     const { host } = mount(d, pagePath(folder));
     await shown(() => expect(scenesPart(host)).toBeTruthy());
-    // Las partes vacías, solo con su «+»; el título igual abre la primera con algo.
-    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Sets', 'Scenes', 'Shots']);
+    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Scenes', 'Shots']);
     act(() => navigate(mapPath()));
     await wait();
     expect(scenesPart(host)!.querySelector('.toggle')!.getAttribute('aria-expanded')).toBe('true');
@@ -456,7 +441,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     // Una sola escena: va directo, sin renglón de episodio.
     await shown(() => expect(sceneRows(host).map((r) => r.querySelector('.code')!.textContent)).toEqual(['105_027']));
     expect(eps(host)).toEqual([]);
-    act(() => navigate(sceneMapPath('105_027')));
+    click(sceneRows(host)[0]);
     await shown(() => expect(complete(host) && host.querySelector('.mp-scene .ss')).toBeTruthy());
     const view = host.querySelector<HTMLElement>('.mp-scene')!;
     // Las páginas que no ve no aparecen (la ficha dice «CENADE» en su texto: se busca por el título de cada página).
@@ -504,9 +489,8 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(sceneRows(host).length).toBe(2 * SCENES_PAGE);
     expect(ms).toBeLessThan(500);
     // Abrir la 200 (desde una dirección): su fila se dibuja aunque esté más allá del límite, y queda marcada.
-    const s200 = d.tree.children(folder).find((p) => p.title.startsWith('200 |'))!.id;
-    act(() => navigate(pagePath(s200)));
-    await shown(() => expect(host.querySelector('.ov-scenes .tree-row.active .code')?.textContent).toBe('200'));
+    act(() => navigate('/map/scenes?scene=200'));
+    await shown(() => expect(host.querySelector('.scene-nav-row.active .code')?.textContent).toBe('200'));
     expect(sceneRows(host).length).toBe(200);
     expect(host.querySelector('.scene-nav-more')!.textContent).toBe('Show 26 more');
   }, 120_000);
@@ -538,189 +522,6 @@ describe('Overview y Scenes en la barra lateral', () => {
   });
 });
 
-describe('las fichas en el Overview (D813)', () => {
-  /** Escribe en el campo de la ficha nueva y aprieta Enter. */
-  const typeNew = (host: HTMLElement, text: string) =>
-    act(() => {
-      const input = host.querySelector<HTMLInputElement>('.ov-new input')!;
-      input.value = text;
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    });
-
-  it('Pages no dibuja las fichas ni su carpeta; lo de adentro de una escena se despliega en el Overview', async () => {
-    const { d, built } = await owner();
-    const sub = await d.tree.create(built.ids.s027, 'Anexo de la 027', built.projectId);
-    const { host } = mount(d, pagePath(sub));
-    await shown(() => expect(host.querySelector('.ov-scenes .tree-row.active')).toBeTruthy());
-    const pagesRows = () => [...host.querySelectorAll('.pages-section .tree-row')].map((r) => r.getAttribute('aria-label'));
-    // Ni una escena, ni una locación, ni sus carpetas en Pages; las notas, los días y el Archivo, sí.
-    expect(pagesRows()).not.toContain(d.tree.get(built.ids.s027)!.title);
-    expect(pagesRows()).not.toContain('CENADE');
-    expect(pagesRows()).toContain('Notas de dirección');
-    // La subpágina se ve debajo de su escena, en el Overview, y es la fila marcada.
-    const active = host.querySelector('.ov-scenes .tree-row.active')!;
-    expect(active.getAttribute('aria-label')).toBe('Anexo de la 027');
-    const parent = active.closest('li')!.parentElement!.closest('li')!.querySelector('.tree-row')!;
-    expect(parent.getAttribute('data-page')).toBe(built.ids.s027);
-    // La ruta dice dónde vive: el Overview y su escena, no las carpetas de Pages.
-    expect(host.querySelector('.page-header')!.textContent).toContain('Scenes');
-    expect(host.querySelector('.page-header')!.textContent).not.toContain('Desglose');
-    expect([...host.querySelectorAll('.breadcrumbs .crumb')].map((c) => c.textContent)).toEqual([
-      'Overview',
-      'Scenes',
-      d.tree.get(built.ids.s027)!.title,
-      'Anexo de la 027',
-    ]);
-    // *Move to…*: las fichas con su grupo («Overview › Scenes › Episode 105»), nunca la carpeta del desglose ni un
-    // episodio (lo que entra ahí recibe la marca de escena y, sin número, quedaría rota).
-    const notas = [...host.querySelectorAll('.pages-section .tree-row')].find((r) => r.getAttribute('aria-label') === 'Notas de dirección')!;
-    click(notas.querySelector('button[aria-label="More actions"]'));
-    click([...document.querySelectorAll('button')].find((b) => b.textContent === 'Move to…'));
-    await wait();
-    const list = document.querySelector('.move-list')!;
-    const targets = [...list.querySelectorAll('li > button')].map((b) => b.textContent);
-    expect(targets).toContain(d.tree.get(built.ids.s027)!.title);
-    expect(targets).toContain('Anexo de la 027');
-    expect(targets).not.toContain('1.1 | Desglose');
-    expect(targets).not.toContain('105 | Episodio 5');
-    const heads = [...list.querySelectorAll('.move-group')].map((g) => g.textContent);
-    expect(heads[0]).toBe('Pages');
-    expect(heads).toContain('Overview › Scenes › Episode 105');
-    expect(heads).toContain('Overview › Scenes › Episode 104');
-  });
-
-  it('auditoría de D813: Move to… de una escena ofrece su carpeta y los episodios, nunca lo de adentro; el ⋯ de una parte, solo lo de su carpeta; plegar en Pages la carpeta que la guarda no cambia de página', async () => {
-    const { d, built } = await owner();
-    // Como VLLF: el desglose adentro de «1 | Preproducción», con una nota.
-    const pre = await d.tree.create(null, '1 | Preproducción', built.projectId);
-    await d.tree.create(pre, 'Reunión con dirección', built.projectId);
-    await d.tree.move(built.ids.desglose, pre);
-    await d.tree.create(built.ids.s027, 'Anexo de la 027', built.projectId);
-    const { host } = mount(d, pagePath(built.ids.s027));
-    await shown(() => expect(host.querySelector('.ov-scenes .tree-row.active')).toBeTruthy());
-    // El ⋯ de Scenes: el menú de la carpeta escondida, sin renombrar ni crear adentro (no tendrían dónde verse).
-    click(scenesPart(host)!.querySelector('.ov-more'));
-    const items = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((b) => b.textContent);
-    expect(items).toContain('Move to…');
-    expect(items).toContain('Move to trash');
-    expect(items).not.toContain('Rename');
-    expect(items).not.toContain('New page inside');
-    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-    await wait();
-    // Move to… de la 027: su carpeta y los episodios, bajo Overview › Scenes; nunca su anexo.
-    const row = host.querySelector('.ov-scenes .tree-row.active')!;
-    click(row.querySelector('button[aria-label="More actions"]'));
-    click([...document.querySelectorAll('button')].find((b) => b.textContent === 'Move to…'));
-    await wait();
-    const buttons = () => [...document.querySelectorAll<HTMLButtonElement>('.move-list li > button')];
-    const targets = buttons().map((b) => b.textContent);
-    expect(targets).toContain('104 | Episodio 4');
-    expect(targets).toContain('1.1 | Desglose');
-    expect(targets).not.toContain('Anexo de la 027');
-    expect([...document.querySelectorAll('.move-list .move-group')].map((g) => g.textContent)).toContain('Overview › Scenes');
-    click(buttons().find((b) => b.textContent === '104 | Episodio 4'));
-    await wait();
-    expect(d.tree.get(built.ids.s027)!.parent_id).toBe(built.ids.ep4);
-    // Plegar en Pages «1 | Preproducción», que guarda la escena abierta: la página no cambia (la escena vive en el Overview).
-    const preRow = () => [...host.querySelectorAll('.pages-section .tree-row')].find((r) => r.getAttribute('aria-label') === '1 | Preproducción')!;
-    click(preRow().querySelector('.toggle'));
-    await wait();
-    click(preRow().querySelector('.toggle'));
-    await wait();
-    expect(location.pathname).toBe(pagePath(built.ids.s027));
-  });
-
-  it('auditoría final de D813: con un solo episodio, su renglón se ve con su ⋯, que abre la carpeta escondida', async () => {
-    const { d, built } = await owner();
-    // Sin el 101 ni el 104, queda un solo grupo de escenas: el 105, cuya carpeta no está en Pages.
-    await d.tree.trash(built.ids.ep4);
-    await d.tree.trash(built.ids.ep1);
-    const { host } = mount(d, pagePath(built.ids.s027));
-    await shown(() => expect(host.querySelector('.ov-scenes .tree-row.active')).toBeTruthy());
-    expect(eps(host).map((b) => b.textContent)).toEqual([expect.stringContaining('105')]);
-    const more = host.querySelector<HTMLElement>('.ov-ep-more');
-    expect(more).toBeTruthy();
-    click(more);
-    const items = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
-    expect(items.map((b) => b.textContent)).toContain('Open');
-    expect(items.map((b) => b.textContent)).toContain('Move to…');
-    click(items.find((b) => b.textContent === 'Open'));
-    await wait();
-    expect(location.pathname).toBe(pagePath(built.ids.ep5));
-  });
-
-  it('simulación de D813: una página suelta con número de escena puede ir a la carpeta de escenas con Move to…; una nota, no', async () => {
-    const { d, built } = await owner();
-    const loose = await d.tree.create(null, '105_040 | Persecución en la rambla', built.projectId);
-    const note = await d.tree.create(null, 'Notas sueltas', built.projectId);
-    const { host } = mount(d, pagePath(loose));
-    await shown(() => expect(host.querySelector('.pages-section .tree-row.active')).toBeTruthy());
-    const moveTargets = async (id: string) => {
-      const row = [...host.querySelectorAll('.pages-section .tree-row')].find((r) => r.getAttribute('data-page') === id)!;
-      click(row.querySelector('button[aria-label="More actions"]'));
-      click([...document.querySelectorAll('button')].find((b) => b.textContent === 'Move to…'));
-      await wait();
-      return [...document.querySelectorAll<HTMLButtonElement>('.move-list li > button')];
-    };
-    // La nota sin número: nunca la carpeta de escenas.
-    expect((await moveTargets(note)).map((b) => b.textContent)).not.toContain('1.1 | Desglose');
-    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-    await wait();
-    // Un número sin episodio («040 | …») en una serie: solo los episodios, nunca la carpeta (ahí quedaría sin número),
-    // aunque la carpeta se vea en Pages por una nota de adentro.
-    await d.tree.create(built.ids.desglose, 'Notas del desglose', built.projectId);
-    const flat = await d.tree.create(null, '040 | Otra persecución', built.projectId);
-    await wait();
-    const flatTargets = (await moveTargets(flat)).map((b) => b.textContent);
-    expect(flatTargets).not.toContain('1.1 | Desglose');
-    expect(flatTargets).toContain('105 | Episodio 5');
-    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-    await wait();
-    // La página con número: la carpeta y los episodios; al moverla al episodio, es la escena 105_040.
-    const buttons = await moveTargets(loose);
-    expect(buttons.map((b) => b.textContent)).toContain('1.1 | Desglose');
-    click(buttons.find((b) => b.textContent === '105 | Episodio 5'));
-    await wait();
-    expect(d.tree.get(loose)!.parent_id).toBe(built.ids.ep5);
-    expect(kindReader(d.tree).kindOf(loose)).toMatchObject({ kind: 'scene' });
-  });
-
-  it('el «+» de Scenes pide el número, crea la escena y la abre; sin carpeta de escenas, la crea con su tipo', async () => {
-    const server = new FakeServer();
-    server.enableTeam();
-    const d = await makeDevice(server);
-    devices.push(d);
-    const projectId = await d.tree.createProject('Corto');
-    const first = await d.tree.create(null, '001 | Primera', projectId);
-    await d.tree.setPatch(first, { settings: { entity: { kind: 'scene', code: '001' } } as unknown as PageSettings });
-    await d.engine.syncNow();
-    const { host } = mount(d, pagePath(first));
-    // Las guardas piden el índice entero: se espera a que la vista lo diga.
-    act(() => navigate(mapPath('scenes')));
-    await shown(() => expect(complete(host)).toBe(true));
-    click(scenesPart(host)!.querySelector('.ov-add'));
-    expect(host.querySelector<HTMLInputElement>('.ov-new input')!.placeholder).toBe('Scene number');
-    typeNew(host, '2');
-    await shown(() => expect(d.tree.children(null).filter((p) => p.workspace_id === projectId).map((p) => p.title)).toContain('Scenes'));
-    const folder = d.tree.roots(projectId).find((p) => p.title === 'Scenes')!;
-    expect(folder.settings?.holds).toBe('scene');
-    await shown(() => expect([host.querySelector('.ov-new-why')?.textContent ?? '', d.tree.children(folder.id).length]).toEqual(['', 1]), 5000);
-    const created = d.tree.children(folder.id)[0];
-    expect(created.title).toBe('002');
-    expect(created.settings?.entity).toEqual({ kind: 'scene', code: '002' });
-    await shown(() => expect(location.pathname).toBe(pagePath(created.id)));
-    // Vive en el Overview: su fila, marcada; en Pages no está (ni su carpeta, que tiene solo fichas).
-    await shown(() => expect(host.querySelector('.ov-scenes .tree-row.active')?.getAttribute('data-page')).toBe(created.id));
-    expect(host.querySelector(`.pages-section [data-page="${created.id}"]`)).toBeNull();
-    expect(host.querySelector(`.pages-section [data-page="${folder.id}"]`)).toBeNull();
-    // Un número que ya existe no crea nada y lo dice.
-    click(scenesPart(host)!.querySelector('.ov-add'));
-    typeNew(host, '001');
-    await shown(() => expect(host.querySelector('.ov-new-why')?.textContent).toContain('already'));
-    expect(d.tree.children(folder.id)).toHaveLength(1);
-  });
-});
-
 describe('los renglones mientras el índice lee', () => {
   it('dicen «Reading…» y nunca que no hay nada; ya leído, que no hay', async () => {
     const v = { pageId: 'a', complete: false, shots: [], cards: [], sets: [], plannedAt: [], questions: [], scoutPages: [], scoutsVia: [], testPages: [], plans: [], days: [] } as unknown as SceneLive;
@@ -735,5 +536,90 @@ describe('los renglones mientras el índice lee', () => {
     act(() => root.render(<ServicesContext.Provider value={{} as Services}><SceneStages rows={sceneStageRows({ ...v, complete: true }, o)} partial /></ServicesContext.Provider>));
     expect(host.textContent).toContain('No scouting you can see names it');
     expect(host.textContent).not.toContain('Reading…');
+  });
+});
+
+describe('el Overview de solo lectura (D815)', () => {
+  const part = (host: HTMLElement, name: string) => [...host.querySelectorAll<HTMLElement>('.ov-part')].find((p) => p.querySelector('.ov-part-name')?.textContent === name);
+  const pagesRows = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.pages-section .tree-row')];
+
+  it('Pages muestra todo lo escrito; una locación o un decorado del Overview abre su resumen, sin editor, y su nombre abre la página en Pages', async () => {
+    const { d, built } = await owner();
+    await d.tree.setSetting(built.ids.decorados, 'holds', 'set');
+    const { host } = mount(d, pagePath(built.ids.notas));
+    await shown(() => expect(part(host, 'Locations')).toBeTruthy());
+    // Las carpetas de escenas, locaciones y decorados siguen en Pages: es donde se escribe.
+    const titles = pagesRows(host).map((r) => r.getAttribute('aria-label'));
+    expect(titles).toEqual(expect.arrayContaining(['1.1 | Desglose', '1.2 | Locaciones y scoutings', '1.3 | Decorados']));
+    // Ninguna escena, locación ni decorado tiene un «+» ni un ⋯ en el Overview: se crean y se ordenan en Pages.
+    expect(host.querySelectorAll('.ov-nav .tree-row, .ov-nav .ov-add, .ov-nav .ov-more')).toHaveLength(0);
+
+    click(part(host, 'Locations')!.querySelector('.toggle'));
+    const cenade = () => [...host.querySelectorAll<HTMLAnchorElement>('.ov-locs .scene-nav-row')].find((a) => a.textContent === 'CENADE')!;
+    await shown(() => expect(cenade()).toBeTruthy());
+    expect(cenade().getAttribute('href')).toBe(`${mapPath('locations')}?page=${built.ids.cenade}`);
+    click(cenade());
+    await shown(() => expect(host.querySelector('.mp-scene .lh')).toBeTruthy());
+    expect(location.pathname + location.search).toBe(`${mapPath('locations')}?page=${built.ids.cenade}`);
+    expect(cenade().classList.contains('active')).toBe(true);
+    const view = host.querySelector<HTMLElement>('.mp-scene')!;
+    expect(view.querySelector('.mp-sh')!.textContent).toBe('LocationCENADE');
+    // Siempre abierta, sin «Collapse», y sin nada para escribir: el resumen se arma solo.
+    expect(view.querySelector('.lh-tools .lh-tbtn')).toBeNull();
+    expect(view.querySelector('[contenteditable="true"]')).toBeNull();
+    expect(view.textContent).toContain('Tech scout 06/01');
+    // El nombre abre la página, que se ve en Pages, en su carpeta.
+    click(view.querySelector('.mp-sh .mp-link'));
+    await shown(() => expect(location.pathname).toBe(pagePath(built.ids.cenade)));
+    await shown(() => expect(host.querySelector('.pages-section .tree-row.active')?.getAttribute('data-page')).toBe(built.ids.cenade));
+
+    // Un decorado, lo mismo.
+    // Abrir la vista de la parte la despliega.
+    act(() => navigate(mapPath('sets')));
+    const set = () => [...host.querySelectorAll<HTMLAnchorElement>('.ov-sets .scene-nav-row')].find((a) => a.textContent === 'Ambulancia | Ruta INT')!;
+    await shown(() => expect(set()).toBeTruthy());
+    click(set());
+    await shown(() => expect(host.querySelector('.mp-scene .lh')).toBeTruthy());
+    expect(location.search).toBe(`?page=${built.ids.set_int}`);
+    expect(host.querySelector('.mp-scene .mp-sh')!.textContent).toBe('SetAmbulancia | Ruta INT');
+    expect(host.querySelector('.mp-scene .lh-tools .lh-tbtn')).toBeNull();
+  });
+
+  it('un día abierto desde Shoot days se ve en Pages; el plan y el reporte del mismo día llevan su etiqueta', async () => {
+    const { d, built } = await owner();
+    // El plan del día 59, arriba de su reporte (D813).
+    const plan = await d.tree.create(built.ids.rodaje, '2026-02-19 | Día 59 | CENADE | Plan', built.projectId, { before: built.ids.d59 });
+    const { host } = mount(d, pagePath(built.ids.notas));
+    await shown(() => expect(part(host, 'Shoot days')).toBeTruthy());
+    click(part(host, 'Shoot days')!.querySelector('.toggle'));
+    const day = () => [...host.querySelectorAll<HTMLAnchorElement>('.ov-days .scene-nav-row')].find((a) => a.getAttribute('href') === pagePath(built.ids.d59))!;
+    await shown(() => expect(day()).toBeTruthy());
+    click(day());
+    await shown(() => expect(location.pathname).toBe(pagePath(built.ids.d59)));
+    // La página del día vive en Pages: ahí queda marcada, en su carpeta, y Shoot days sigue abierta.
+    await shown(() => expect(host.querySelector('.pages-section .tree-row.active')?.getAttribute('data-page')).toBe(built.ids.d59));
+    expect(day().classList.contains('active')).toBe(true);
+    // PLAN y REPORT, primero en la fila: el mismo nombre ya no confunde.
+    const stage = (id: string) => host.querySelector(`.pages-section .tree-row[data-page="${id}"] .tree-stage`);
+    await shown(() => expect(stage(plan)?.textContent).toBe('Plan'));
+    expect(stage(plan)!.getAttribute('data-stage')).toBe('plan');
+    expect(stage(built.ids.d59)!.textContent).toBe('Report');
+    expect(stage(built.ids.d58)!.getAttribute('data-stage')).toBe('report');
+    const order = pagesRows(host).map((r) => r.getAttribute('data-page'));
+    expect(order.indexOf(plan)).toBe(order.indexOf(built.ids.d59) - 1);
+    // Dos planes del mismo día se distinguen por su nota, que va en lugar del lugar (el reporte ya lo dice).
+    const other = await act(() => d.tree.create(built.ids.rodaje, '2026-02-19 | Día 59 | CENADE | Plan · Casa Rosada', built.projectId, { before: built.ids.d59 }));
+    const row = (id: string) => host.querySelector(`.pages-section .tree-row[data-page="${id}"] .label.dated`);
+    await shown(() => expect(row(other)?.querySelector('.plan-note')?.textContent).toBe('Casa Rosada'));
+    expect(row(other)!.querySelector('.place')).toBeNull();
+    expect(row(plan)!.querySelector('.place')?.textContent).toBe('CENADE');
+    expect(row(built.ids.d59)!.querySelector('.place')?.textContent).toBe('CENADE');
+  });
+
+  it('una semana sin planes no lleva etiquetas', async () => {
+    const { d, built } = await owner();
+    const { host } = mount(d, pagePath(built.ids.d58));
+    await shown(() => expect(host.querySelector('.pages-section .tree-row.active')).toBeTruthy());
+    expect(host.querySelectorAll('.pages-section .tree-stage')).toHaveLength(0);
   });
 });

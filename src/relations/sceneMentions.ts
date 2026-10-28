@@ -358,3 +358,8 @@ export function mapPathFrom(path: string, here: { pathname: string; search: stri
 export function sceneMapPath(code: string): string {
   return `${mapPath('scenes')}?scene=${encodeURIComponent(code)}`;
 }
+
+/** El resumen de una locación o un decorado en el mapa (`/map/locations?page=…`, D815), armado con lo que dicen las páginas. */
+export function entityMapPath(tab: 'locations' | 'sets', pageId: string): string {
+  return `${mapPath(tab)}?page=${encodeURIComponent(pageId)}`;
+}

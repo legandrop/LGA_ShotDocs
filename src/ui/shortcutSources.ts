@@ -70,8 +70,8 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   treeExpand: ['Sidebar.tsx', 'treeNav.ts', 'OverviewNav.tsx'],
   treeCollapse: ['Sidebar.tsx', 'treeNav.ts', 'OverviewNav.tsx'],
   treeOpen: ['Sidebar.tsx', 'treeNav.ts', 'OverviewNav.tsx'],
-  // Renombrar en el árbol y nombrar una ficha nueva con el «+» del *Overview* (D813).
-  treeRename: ['Sidebar.tsx', 'OverviewNew.tsx'],
+  // Renombrar en el árbol.
+  treeRename: ['Sidebar.tsx'],
   sidebarResize: ['SidebarResizer.tsx'],
   menusMove: ['menus.tsx'],
   menusClose: [

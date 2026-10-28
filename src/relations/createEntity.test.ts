@@ -142,7 +142,7 @@ describe('las guardas (G1–G5)', () => {
     const four = await d.tree.create(a, '004 | Cuatro', projectId);
     expect(createGuard(await c(), { kind: 'scene', code: '003' })).toEqual({ ok: true, parentId: a, before: four, title: '003' });
     expect(createGuard({ ...(await c()), perms: { ...owner, canCreateIn: () => false } }, { kind: 'scene', code: '003' })).toEqual({ ok: false, reason: 'cantCreate', pageId: a });
-    // La carpeta elegida (el «+» del *Overview* pregunta en cuál cuando hay dos, D813): va ahí.
+    // La carpeta elegida (con dos posibles, G5): va ahí.
     expect(createGuard(await c(), { kind: 'scene', code: '005', in: b })).toEqual({ ok: true, parentId: b, title: '005' });
     // Las escenas de un episodio repartidas entre su grupo y la carpeta Scenes misma (empatan): no se elige (O9).
     const p3 = await d.tree.createProject('Serie repartida');

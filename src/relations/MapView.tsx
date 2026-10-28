@@ -30,6 +30,8 @@ import { ShotsView } from './ShotsView';
 import { sceneStageRows, stagePageIds } from './sceneStageRows';
 import { SceneStages } from './SceneStages';
 import type { SceneMentionList } from './sceneMentions';
+import { kindReader } from './kind';
+import { LiveFixed, LiveHeader } from './LiveHeader';
 import './liveHeader.css';
 import './map.css';
 
@@ -155,6 +157,9 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   // de las páginas que hablan de ella (Docs/Doc_Relaciones.md, sección 21).
   const sceneQuery = useSearchParam('scene');
   const sceneCode = tab === 'scenes' && sceneQuery ? sceneQuery : null;
+  // El resumen de una locación o un decorado (`/map/locations?page=…`, D815), desde el *Overview* de la barra.
+  const pageQuery = useSearchParam('page');
+  const entityId = (tab === 'locations' || tab === 'sets') && pageQuery ? pageQuery : null;
 
   // La consulta abierta del `/` no cuenta como pendiente (D568): al abrirse o cerrarse, se vuelve a armar.
   const draft = useSlashDraft();
@@ -273,7 +278,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
                 {tr('map.copyJson')}
               </button>
             </span>
-            {tab !== 'pending' && !sceneCode && (
+            {tab !== 'pending' && !sceneCode && !entityId && (
               <label className="mp-filter">
                 <Ic name="filter" small />
                 <input type="text" value={filter} placeholder={tr('map.filter')} aria-label={tr('map.filter')} spellCheck={false} onChange={(e) => setFilter(e.target.value)} />
@@ -282,6 +287,8 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
           </div>
           {!data ? (
             <p className="mp-empty">{tr('live.reading')}</p>
+          ) : entityId && (tab === 'locations' || tab === 'sets') ? (
+            <EntityDetail key={entityId} part={tab} pageId={entityId} complete={complete} />
           ) : tab === 'locations' ? (
             <Locations data={data} fq={fq} complete={complete} />
           ) : tab === 'sets' ? (
@@ -675,6 +682,63 @@ function SceneDetail({
             </p>
           )}
           <SceneStagesFor code={scene.code} src={src} list={list} partial={partial} live={live} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * El resumen de una locación o un decorado (D815): lo mismo que dice su cabecera, siempre abierto y de solo lectura. Se
+ * escribe en la página, que vive en *Pages*: el título la abre.
+ */
+function EntityDetail({ part, pageId, complete }: { part: 'locations' | 'sets'; pageId: string; complete: boolean }) {
+  const tr = useT();
+  const tree = useTree();
+  const top = useRef<HTMLDivElement>(null);
+  // Como en una escena: al abrir otra desde la barra, la vista vuelve arriba (con llaves, ver `SceneDetail`).
+  useEffect(() => {
+    const main = top.current?.closest<HTMLElement>('.main');
+    if (main) main.scrollTop = 0;
+  }, [pageId]);
+  const page = tree.get(pageId);
+  // Una dirección escrita a mano con otra página (una escena, un día) no se muestra como locación.
+  const kind = page ? kindReader(tree).kindOf(pageId).kind : null;
+  const fits = kind === (part === 'locations' ? 'location' : 'set');
+  const back = mapPath(part);
+  return (
+    <div className="mp-scene" ref={top}>
+      <a
+        className="mp-back"
+        href={back}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          navigate(mapPathFrom(back, location));
+        }}
+      >
+        <svg className="mp-i s" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 12H5M11 6l-6 6 6 6" />
+        </svg>
+        {tr(part === 'locations' ? 'map.allLocations' : 'map.allSets')}
+      </a>
+      {!page || tree.isTrashed(pageId) || !fits ? (
+        <p className="mp-empty">{complete ? tr('map.entityUnknown') : tr('live.reading')}</p>
+      ) : (
+        <>
+          <h2 className="mp-sh">
+            <span className="mp-chip">
+              <Ic name={part === 'locations' ? 'loc' : 'set'} small />
+              {tr(part === 'locations' ? 'map.chipLocation' : 'map.chipSet')}
+            </span>
+            <PageLink pageId={pageId} className="mp-link">
+              {page.title || tr('common.untitled')}
+            </PageLink>
+          </h2>
+          <p className="mp-smeta">{tr('map.entityLede')}</p>
+          <LiveFixed.Provider value={true}>
+            <LiveHeader pageId={pageId} />
+          </LiveFixed.Provider>
         </>
       )}
     </div>

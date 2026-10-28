@@ -8,7 +8,7 @@ import { notify } from '../ui/notice';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { pickerOptions, reasonText, runCreate, createEnv } from './EntityActions';
 import type { CreateWant } from './createEntity';
-import { createTypedFolder, FOLDER, typedSceneCode } from './OverviewNew';
+import { createTypedFolder, FOLDER, typedSceneCode } from './typedFolder';
 import { planOf } from './dayLive';
 import { dayIdOf, dayRef } from './liveView';
 import { fold, scan, type Registry } from './reader';
@@ -177,10 +177,9 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
     const env2 = createEnv(services, p.projectId, tr.lang);
     const guard = env2.guard(want);
     const group = tr(want.kind === 'scene' ? 'slash.scenes' : 'slash.locations');
-    // Sin carpeta de ese tipo (un proyecto que recién empieza): se crea en la raíz con su tipo, como el «+» del *Overview*,
-    // y adentro la escena o la locación. Antes decía «No items found» y había que descubrir ⋯ › Type (simulación de D813).
-    // Pide poder crear en la raíz del proyecto, como el «+» del *Overview*: si no, la carpeta se armaría en el dispositivo y
-    // el servidor la rechazaría (auditoría de v0.305).
+    // Sin carpeta de ese tipo (un proyecto que recién empieza): se crea en la raíz con su tipo, y adentro la escena o la
+    // locación. Antes decía «No items found» y había que descubrir ⋯ › Type (simulación de D813). Pide poder crear en la
+    // raíz del proyecto: si no, la carpeta se armaría en el dispositivo y el servidor la rechazaría (auditoría de v0.305).
     const canRoot = () => new Permissions(services.tree, services.access.get(), services.user.id).canCreateIn(null, p.projectId);
     if (!guard.ok && guard.reason === 'noFolder' && want.kind !== 'set' && canRoot()) {
       const part = want.kind === 'scene' ? 'scenes' : 'locations';

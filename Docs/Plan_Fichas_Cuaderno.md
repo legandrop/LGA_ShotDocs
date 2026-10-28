@@ -5,8 +5,12 @@ Panorama que nunca se edita y todo lo escrito como documentos). Sigue a `Plan_Es
 por etapas (partes 1 a 4 hechas, v0.275 a v0.295); su parte 5 (`6 | Tablas y referencia` y lo suelto) queda adentro de
 este plan. Auditado contra el código el mismo día (tres bloqueantes y once cambios, ya corregidos acá). **Estado
 (2026-10-28):** Lega lo aprobó («Sí, arrancá») y salieron las partes 1 (v0.302), 2 (v0.303), 3 (v0.304) y la 4 en la
-base; la simulación de punta a punta dio v0.305 y la auditoría final del plan, v0.306. Queda la pregunta 1 (sección 10)
-y las propuestas de la sección 12.
+base; la simulación de punta a punta dio v0.305 y la auditoría final del plan, v0.306. **La parte 1 se deshizo en
+v0.307 (D815):** al verla con VLLF, Lega no encontraba su preproducción y planteó lo correcto: se escribe en las
+páginas y el Panorama se arma solo. Todas las páginas volvieron a *Pages* y el *Overview* es de solo lectura (una
+locación o un decorado abre un resumen; su nombre, la página). Lo que sigue en las secciones 2 a 4 sobre «fichas en el
+Panorama» queda como historia. Siguen valiendo las partes 2, 3 y 4. Queda la pregunta 1 (sección 10) y las propuestas
+de la sección 12.
 
 ## 1. Por qué
 
@@ -59,6 +63,9 @@ PANORAMA (Overview)                       PÁGINAS (Pages)
 ```
 
 ## 4. Parte 1 — La barra: cada página en un solo lugar
+
+> **Deshecha en v0.307 (D815).** Todas las páginas viven en *Pages*; el *Overview* es de solo lectura. Queda como
+> historia de lo que se probó.
 
 Hoy *Pages* solo esconde la papelera: las filas salen de `tree.roots` y `visibleRows` (`src/ui/Sidebar.tsx`;
 `src/ui/treeNav.ts`), y *Templates* es una raíz más. Lo abierto desde el Overview pliega todas las carpetas, no abre las

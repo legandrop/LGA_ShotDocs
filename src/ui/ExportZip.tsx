@@ -5,7 +5,6 @@ import '../i18n/lazy/exportZip';
 import { appComments } from '../export/exportComments';
 import { ExportCancelled, ExportEditor } from '../export/exportEditor';
 import { exportPlan, type ExportPlanPage } from '../export/exportPages';
-import { useExportRoute } from '../relations/overviewPlaces';
 import type { PageTree } from '../sync/tree';
 import {
   appArchiveMedia,
@@ -92,10 +91,8 @@ export function ExportZipPanel(props: ExportZipProps) {
   const ready = useRef<(() => boolean) | null>(null);
   const contextOf = (owner = services, chosen = props) => `${owner.user.id}|${owner.workspace.config.url}|${owner.workspace.config.localKey}|${location.pathname}|${location.search}|${chosen.kind}:${chosen.project?.id ?? chosen.plan[0]?.id ?? ''}`;
   const context = contextOf();
-  // La ruta de cada página en su encabezado, como en la pantalla y el PDF (D813).
-  const route = useExportRoute();
-  const live = useRef({ services, tree, props, include, context, route });
-  live.current = { services, tree, props, include, context, route };
+  const live = useRef({ services, tree, props, include, context });
+  live.current = { services, tree, props, include, context };
   const selection = (plan: ExportPlanPage[], kind: string, project: string | undefined) => JSON.stringify([kind, project, plan.map((p) => [p.id, p.parent, p.depth, p.format.size, p.format.landscape])]);
   const { showSaveFilePicker, showDirectoryPicker } = pickers();
   const cap = memoryCap();
@@ -193,7 +190,7 @@ export function ExportZipPanel(props: ExportZipProps) {
       if (now.props.replan) return now.props.replan(now.tree).filter((p) => ids.has(p.id));
       const kind = now.props.kind === 'project' ? 'project' : 'page';
       const target = kind === 'project' ? now.props.project?.id : now.props.plan[0]?.id;
-      return target ? exportPlan(now.tree, kind, target, now.route).filter((p) => ids.has(p.id)) : [];
+      return target ? exportPlan(now.tree, kind, target).filter((p) => ids.has(p.id)) : [];
     };
     const metadata = () => JSON.stringify([live.current.props.project ? live.current.tree.project(live.current.props.project.id)?.name : null, pages().map((page) => [page.title, page.header])]);
     const titleReady = () => !initial.tree.titleRests().some((rest) => pages().some((page) => page.id === rest.pageId));

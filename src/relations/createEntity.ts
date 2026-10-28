@@ -25,7 +25,7 @@ import { bareLocationName, locationFromTitle } from './register';
 
 /** Lo que se crea. `in`: la carpeta que eligió la persona (con dos posibles, G5); si no, la que dicen las guardas. */
 export type CreateWant =
-  /** `letters`: el «+» del *Overview* crea también una escena con letra al lado de su base (D813); el `/` no. */
+  /** `letters`: también una escena con letra al lado de su base (lo usaba el «+» del *Overview*, D813); el `/` no. */
   | { kind: 'scene'; code: string; in?: string; letters?: true }
   | { kind: 'location'; name: string; in?: string }
   | { kind: 'set'; name: string; in?: string };

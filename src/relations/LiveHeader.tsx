@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { language, useT, type Translate } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { navigate, pagePath } from '../router';
@@ -27,6 +27,12 @@ import './liveHeader.css';
 // público no aparece (el visitante no tiene tipos de página, D381).
 
 type Stage = 'breakdown' | 'scouting' | 'shoot';
+
+/**
+ * La cabecera dentro del resumen de una locación o un decorado en el *Overview* (D815): siempre abierta y sin el botón de
+ * plegar (ahí es todo lo que hay para ver).
+ */
+export const LiveFixed = createContext(false);
 
 export function LiveHeader({ pageId }: { pageId: string }) {
   const link = useLinkMode();
@@ -325,13 +331,16 @@ export function useFoldFocus(open: boolean) {
 
 export function Tools({ kind, complete, onFold, foldRef }: { kind: FoldKind; complete: boolean; onFold: () => void; foldRef: RefObject<HTMLButtonElement | null> }) {
   const tr = useT();
+  const fixed = useContext(LiveFixed);
   return (
     <span className="lh-tools">
       <LiveDot complete={complete} />
-      <button ref={foldRef} className="lh-tbtn" aria-expanded={true} onClick={onFold} data-tip={tr(kind === 'scene' ? 'live.foldSceneTip' : kind === 'day' ? 'live.foldDayTip' : kind === 'set' ? 'live.foldSetTip' : 'live.foldLocationTip')}>
-        <Ic name="up" small />
-        {tr('live.collapse')}
-      </button>
+      {!fixed && (
+        <button ref={foldRef} className="lh-tbtn" aria-expanded={true} onClick={onFold} data-tip={tr(kind === 'scene' ? 'live.foldSceneTip' : kind === 'day' ? 'live.foldDayTip' : kind === 'set' ? 'live.foldSetTip' : 'live.foldLocationTip')}>
+          <Ic name="up" small />
+          {tr('live.collapse')}
+        </button>
+      )}
     </span>
   );
 }
@@ -571,7 +580,8 @@ function SceneHeader({ v, pages, partial, photos, opts }: { v: SceneLive; pages:
 function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages: number; partial: boolean; photos: HeaderPhotos }) {
   const tr = useT();
   const go = useGo();
-  const [open, setOpenRaw] = useLiveOpen('location');
+  const [openPref, setOpenRaw] = useLiveOpen('location');
+  const open = useContext(LiveFixed) || openPref;
   const focus = useFoldFocus(open);
   const setOpen = (next: boolean) => {
     focus.mark();
@@ -760,7 +770,8 @@ function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages:
  */
 function SetHeader({ v, pages, partial }: { v: SetLive; pages: number; partial: boolean }) {
   const tr = useT();
-  const [open, setOpenRaw] = useLiveOpen('set');
+  const [openPref, setOpenRaw] = useLiveOpen('set');
+  const open = useContext(LiveFixed) || openPref;
   const focus = useFoldFocus(open);
   const setOpen = (next: boolean) => {
     focus.mark();

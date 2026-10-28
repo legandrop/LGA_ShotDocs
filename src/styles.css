@@ -1306,9 +1306,30 @@ code {
   flex: 0 1 auto;
 }
 
-/* La etiqueta PLAN del plan al lado de su reporte (D813), al final de la fila. */
-.tree-row .label.dated .tree-holds {
-  margin-left: auto;
+/* Plan o reporte (D815): primero en la fila y en su color, con el mismo ancho para que las fechas queden alineadas. En la
+   semana de rodaje el plan y el reporte del mismo día van uno arriba del otro con el mismo nombre. */
+.tree-row .label.dated .tree-stage {
+  flex: none;
+  align-self: center;
+  /* REPORTE, el más largo (7 letras), con su espaciado y el relleno. */
+  min-width: calc(7ch + 0.14em + 6px);
+  box-sizing: border-box;
+  text-align: center;
+  font: 600 9px/15px var(--mono);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.tree-row .label.dated .tree-stage[data-stage='plan'] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.tree-row .label.dated .tree-stage[data-stage='report'] {
+  color: var(--day-fg);
+  background: color-mix(in srgb, var(--day-fg) 15%, transparent);
 }
 
 .tree-row .label.dated .place.loc {
@@ -1757,15 +1778,6 @@ code {
   border: none;
   justify-content: flex-start;
   padding: 8px 10px;
-}
-
-/* Los dos grupos de destinos, como en la barra: *Pages* y las fichas del *Overview* (D813). */
-.move-group {
-  padding: 10px 10px 4px;
-  font: 600 11px var(--mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 .modal-actions {

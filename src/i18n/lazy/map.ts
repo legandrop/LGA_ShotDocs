@@ -165,6 +165,12 @@ export const map = {
   },
   'map.pagesN': { en: { one: "{count} page", other: "{count} pages" }, es: { one: "{count} página", other: "{count} páginas" } },
   'map.allScenes': { en: "All scenes", es: "Todas las escenas" },
+  'map.allLocations': { en: "All locations", es: "Todas las locaciones" },
+  'map.allSets': { en: "All sets", es: "Todos los decorados" },
+  'map.chipLocation': { en: "Location", es: "Locación" },
+  'map.chipSet': { en: "Set", es: "Decorado" },
+  'map.entityLede': { en: "Built from what your pages say; it updates itself. To write, open the page with its name.", es: "Armado con lo que dicen tus páginas; se actualiza solo. Para escribir, abrí la página con su nombre." },
+  'map.entityUnknown': { en: "This page isn't in the project anymore.", es: "Esta página ya no está en el proyecto." },
   'map.sceneExport': { en: "Export…", es: "Exportar…" },
   'map.sceneExportTip': {
     en: "All the pages that talk about the scene in one PDF or zip, without the index pages",

@@ -38,7 +38,7 @@ import {
   VideoIcon,
   OpenIcon,
 } from './icons';
-import { navigate, pagePath } from '../router';
+import { pagePath } from '../router';
 import { openInNewTab, tabsOn } from './tabs';
 import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
 import { isDayReportFolder, isReportPage } from '../templates/dayReport';
@@ -196,11 +196,6 @@ export function PageMenu(props: {
   onAssistant?: () => void;
   /** *Dictate to report* (Doc_Dictado.md, V1): con la página abierta en el editor. */
   onDictate?: () => void;
-  /**
-   * La carpeta escondida de una parte o un episodio del *Overview* (D813), que no tiene fila: solo *Open*, *Share*,
-   * *Move to…*, *Type*, *Leave out of relations* y la papelera (renombrarla o crear adentro no tendría dónde verse).
-   */
-  folderOnly?: boolean;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -259,22 +254,6 @@ export function PageMenu(props: {
     return (
       <div ref={ref} className="menu" role="menu" aria-label={tr('type.menu')} style={{ ...props.position, maxWidth: PAGE_MENU_MAX }}>
         <TypeSubmenu pageId={props.pageId} onBack={() => setTypeOpen(false)} onClose={props.onClose} />
-      </div>
-    );
-  }
-
-  if (props.folderOnly) {
-    return (
-      <div ref={ref} className="menu" role="menu" aria-label={tr('pageMenu.label')} style={{ ...props.position, maxWidth: PAGE_MENU_MAX }}>
-        {/* La carpeta escondida de *Pages* (D813) puede tener texto o fotos propias, o hacer falta para exportar todo junto:
-            se abre como cualquier página (auditoría final de D813). */}
-        {item(tr('pageMenu.openFolder'), <OpenIcon />, () => navigate(pagePath(props.pageId)))}
-        {props.onShare && item(tr('pageMenu.share'), <ShareIcon />, props.onShare)}
-        {item(tr('pageMenu.move'), <MoveIcon />, props.onMove, false, canManage)}
-        {canEditRow && <TypeMenuItem pageId={props.pageId} onOpen={() => setTypeOpen(true)} />}
-        {canEditRow && <LeaveOutItem pageId={props.pageId} onClose={props.onClose} />}
-        <hr />
-        {item(tr('pageMenu.trash'), <TrashIcon />, props.onTrash, true, canManage)}
       </div>
     );
   }

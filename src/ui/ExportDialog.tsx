@@ -26,7 +26,6 @@ import { mediaLinkSource } from './mediaLinks';
 import { FileLinksNotice, fileLinksTickedByDefault } from './FileLinksNotice';
 import { saveBeforeExit } from './lazyPart';
 import { Permissions } from '../sync/access';
-import { useExportRoute, type ExportRoute } from '../relations/overviewPlaces';
 
 // La ventana *Export* (P.22, Docs/Doc_Exportar.md, sección 7; entrega 1: el PDF; entrega 2: el zip, en ExportZip.tsx).
 // Desde el menú de una página (esta página, o con las de adentro) o desde el de un proyecto (el proyecto entero). Arma la vista del PDF
@@ -74,10 +73,10 @@ type Phase =
 type Failure = { id: string; title: string; reason: 'error' | 'photos' | 'timeout' };
 
 /** Las páginas de una elección (la raíz sola, la rama o el proyecto). */
-function planFor(tree: PageTree, target: ExportTarget, scope: Scope, route?: ExportRoute): ExportPlanPage[] {
+function planFor(tree: PageTree, target: ExportTarget, scope: Scope): ExportPlanPage[] {
   if (target.kind === 'pages') return pagesPlan(tree, target.ids);
-  if (target.kind === 'project') return exportPlan(tree, 'project', target.id, route);
-  const branch = exportPlan(tree, 'page', target.id, route);
+  if (target.kind === 'project') return exportPlan(tree, 'project', target.id);
+  const branch = exportPlan(tree, 'page', target.id);
   return scope === 'page' ? branch.slice(0, 1) : branch;
 }
 
@@ -91,8 +90,6 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const linkMode = useLinkMode();
   const status = useSyncStatus();
   const tr = useT();
-  // La ruta de cada página en su encabezado, como en la pantalla: en una ficha, «Overview · Scenes» (D813).
-  const route = useExportRoute();
   const target = props.target;
   const inside = target.kind === 'page' ? Math.max(0, exportPlan(tree, 'page', target.id).length - 1) : 0;
   const [scope, setScope] = useState<Scope>(target.kind === 'project' ? 'project' : inside > 0 ? 'branch' : 'page');
@@ -124,7 +121,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const limits = useMemo(() => deviceLimits(touch), [touch]);
 
   const revision = tree.getRevision();
-  const plan = useMemo(() => planFor(tree, target, scope, route), [tree, target, scope, revision, route]);
+  const plan = useMemo(() => planFor(tree, target, scope), [tree, target, scope, revision]);
   // Los links públicos que pueden usar los links a los archivos (P.30, LF17 y LF18): solo con una cuenta y con red.
   const [fileLinks, setFileLinks] = useState<FileLinkPlan | null>(null);
   /** La casilla: tildada si todos los links son *Can view*, destildada si alguno es *Can edit*. */
@@ -162,8 +159,8 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
   const online = status.online && (typeof navigator === 'undefined' || navigator.onLine !== false);
   const working = phase.name === 'working' || zipBusy || preparing;
   const context = `${user.id}|${workspace.config.url}|${workspace.config.localKey}|${location.pathname}|${location.search}|${target.kind}:${target.id}`;
-  const live = useRef({ services, tree, target, scope, smaller, withComments, useFileLinks, fileLinks, linkMode, context, lang: tr.lang, route });
-  live.current = { services, tree, target, scope, smaller, withComments, useFileLinks, fileLinks, linkMode, context, lang: tr.lang, route };
+  const live = useRef({ services, tree, target, scope, smaller, withComments, useFileLinks, fileLinks, linkMode, context, lang: tr.lang });
+  live.current = { services, tree, target, scope, smaller, withComments, useFileLinks, fileLinks, linkMode, context, lang: tr.lang };
   const currentContext = () => `${live.current.services.user.id}|${live.current.services.workspace.config.url}|${live.current.services.workspace.config.localKey}|${location.pathname}|${location.search}|${live.current.target.kind}:${live.current.target.id}`;
   const signature = (pages: ExportPlanPage[], now: typeof live.current) => JSON.stringify([
     now.context, now.scope, pages.map(({ id, parent, depth, format }) => [id, parent, depth, format.size, format.landscape]),
@@ -251,7 +248,7 @@ export function ExportDialog(props: { target: ExportTarget; onClose: () => void 
     const previous = book.current;
     const proof = continuity.current;
     const current = () => mounted.current && generation.current === token && live.current.services === initial.services && currentContext() === initial.context && live.current.scope === initial.scope;
-    const pages = () => onlyId ? exportPlan(initial.tree, 'page', onlyId, initial.route).slice(0, 1) : planFor(initial.tree, initial.target, initial.scope, initial.route);
+    const pages = () => onlyId ? exportPlan(initial.tree, 'page', onlyId).slice(0, 1) : planFor(initial.tree, initial.target, initial.scope);
     setPreparing(true);
     await saveBeforeExit(initial.services, current, () => {
       const now = live.current;

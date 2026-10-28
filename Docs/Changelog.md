@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.307 :
+
+Lega vio VLLF después de D813 y la barra no tenía lógica: `1 | Preproducción` quedaba vacía porque sus carpetas de
+desglose, locaciones y decorados se escondían de *Pages* para vivir en el *Overview*, y en cada semana de Rodaje el plan
+y el reporte del mismo día se veían iguales (la etiqueta PLAN iba al final y se cortaba). Se deshace la parte 1 de D813
+(D815): todo lo escrito vuelve a *Pages*, el *Overview* no edita (sin «+» ni ⋯; una locación o un decorado abre un
+resumen de solo lectura, con links, y su nombre abre la página) y un día abierto desde *Shoot days* se ve en su semana.
+Cada fila de la semana empieza con PLAN o REPORT, y un plan con nota muestra la nota. Ruta, búsqueda, PDF y *Move to…*
+vuelven a las carpetas reales. Ayuda, tutorial y docs al día.
+
+[Overview de solo lectura: todas las páginas en Pages, y PLAN o REPORT en cada día de rodaje]
+
 v0.306 :
 
 Lo que encontró la auditoría final de D813. Con un solo episodio, su carpeta, escondida de *Pages*, quedaba sin ⋯

@@ -2,7 +2,8 @@ import { createOpenScheduler, revealRow } from './treeNav';
 
 // La barra lateral como un solo recorrido (pedido de Lega, D806): las partes, los episodios y las filas del *Overview* y
 // las filas del árbol de *Pages*, en el orden en que se ven. ↑/↓ pasan de uno al otro sin cortes, y lo que se abre en
-// uno pliega el otro (el colapso automático de `treeNav.ts` vale para los dos).
+// uno pliega el otro (el colapso automático de `treeNav.ts` vale para los dos), salvo un día abierto desde *Shoot days*,
+// que se ve en las dos partes: es una página de *Pages* (D815).
 
 /** Lo que se recorre del *Overview*: el nombre de cada parte, cada episodio y cada fila de sus listas. */
 export const OVERVIEW_ROW = 'a.ov-part-name, button.scene-nav-ep, a.scene-nav-row, button.scene-nav-more';
@@ -58,8 +59,9 @@ export function sidebarStepAround(from: Element, dir: 1 | -1): HTMLElement | nul
   return dir === 1 ? (rows.find(after) ?? null) : (rows.filter((r) => !after(r) && !from.contains(r)).pop() ?? null);
 }
 
-// Qué se abrió desde el *Overview* (una página o `'map'`, una vista del mapa): eso pliega *Pages* y no centra su árbol;
-// lo demás (el árbol, un link, la búsqueda, atrás) pliega el *Overview*. Se anota el destino, no el momento: lo que se
+// Qué se abrió desde el *Overview* (un día de *Shoot days* o `'map'`, una vista del mapa): eso no pliega el *Overview*;
+// lo demás (el árbol, un link, la búsqueda, atrás) sí. *Pages* se pliega solo con una vista del mapa (`Sidebar.tsx`,
+// D815): un día abierto desde acá se ve en su semana. Se anota el destino, no el momento: lo que se
 // abre después por otro camino no cuenta. Vence igual (atrás a esa misma página, mucho después, ya no es del Overview).
 const FROM_TTL_MS = 5000;
 let from: { target: string; at: number } | null = null;
@@ -91,7 +93,7 @@ function unmark(): void {
  */
 function holder(row: HTMLElement): [Element, string] | null {
   const href = row.getAttribute('href') ?? '';
-  if (row.classList.contains('scene-nav-row')) return href.startsWith('/p/') || href.includes('scene=') ? [row, 'active'] : null;
+  if (row.classList.contains('scene-nav-row')) return href.startsWith('/p/') || href.includes('scene=') || href.includes('page=') ? [row, 'active'] : null;
   if (row.classList.contains('ov-part-name')) {
     const part = row.closest('.ov-part');
     return part ? [part, 'on'] : null;
@@ -160,15 +162,14 @@ export function goToRow(row: HTMLElement, repeat: boolean): void {
     return;
   }
   row.focus({ preventScroll: true });
+  window.dispatchEvent(new Event(TREE_AWAY_EVENT));
   const nav = row.closest<HTMLElement>('.sidebar-scroll');
   if (nav) revealRow(row, nav);
   if (!(row instanceof HTMLAnchorElement)) {
-    // Un episodio no abre nada: lo abierto (una ficha, con las filas del árbol) sigue marcado.
     opener.cancel();
     unmark();
     return;
   }
-  window.dispatchEvent(new Event(TREE_AWAY_EVENT));
   mark(row);
   target = row;
   opener.request(row.getAttribute('href') ?? '', repeat);

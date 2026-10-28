@@ -1383,46 +1383,37 @@ siendo `shotdocs.map`.
 
 **El bloque.** Un título `OVERVIEW` con la marca `AUTO` (se arma solo, no se edita; lo dice su tooltip), la flecha que
 lo pliega entero y, si hay, `N pending`. Adentro, las partes de la vista del centro, cada una con su número:
-*Locations* (por nombre; cada fila a la página de la locación), *Scenes* (por episodio, como la sección 21), *Shoot
+*Locations* (por nombre; cada fila a su resumen, D815), *Scenes* (por episodio, como la sección 21), *Shoot
 days* (la etiqueta corta del día y sus locaciones; cada fila a su página), *Shots* (v0.304, D813: sin lista, solo abre
 su pestaña; aparece en un proyecto con escenas) y *Pending* (sin lista: solo abre su pestaña). Desde v0.302 también
-*Sets*, y *Scouting* ya no está en la barra (sigue como pestaña del centro). Una parte vacía no aparece; el bloque
+*Sets*, y *Scouting* ya no está en la barra (sigue como pestaña del centro); desde v0.307 (D815), de solo lectura. Una parte vacía no aparece; el bloque
 entero, solo en un proyecto con escenas, locaciones o días.
 
 **Cómo se toca, como una página del árbol.** Clic en el nombre de una parte abre su pestaña en el centro y despliega su
 lista; la flecha solo pliega o despliega, sin cambiar de vista. Clic en el título abre el mapa en la parte desplegada
 (o en *Locations*). **Una sola parte desplegada a la vez:** abrir una pliega las otras, así *Pages* no queda cientos de
 filas más abajo. La vista del centro manda: abrir una pestaña (desde la barra, desde la vista, por la dirección) o una
-escena despliega su parte (y el episodio de la escena). La fila de la página abierta (una locación, un día) se marca
-como en el árbol. Lo plegado (el bloque, la parte y el episodio) se recuerda por proyecto en el dispositivo
+escena despliega su parte (y el episodio de la escena). La fila de lo abierto (una escena, el resumen de una locación o
+un decorado, un día) se marca como en el árbol. Lo plegado (el bloque, la parte y el episodio) se recuerda por proyecto en el dispositivo
 (`localStorage` `shotdocs-overview-nav`; reemplaza a `shotdocs-scenes-nav`, que se ignora). De fábrica, el bloque
 abierto con *Scenes* desplegada. Al bajar, el título y la parte desplegada quedan pegados arriba (D771). Cada lista
 dibuja 60 filas y «Show 60 more», y la fila abierta siempre se ve.
 **Un solo árbol con *Pages* (D806):** ↑/↓ recorren las partes, los episodios y las filas y siguen en *Pages* sin cortes;
-una parte o una fila se abre como un clic y un episodio solo recibe el foco. Con el colapso automático (D805), lo
-abierto desde acá pliega *Pages*, y una página abierta por otro camino pliega la parte desplegada: lo recordado vale
-hasta la próxima página.
+una parte o una fila se abre como un clic y un episodio solo recibe el foco. Con el colapso automático (D805), una
+vista abierta desde acá pliega *Pages* (un día no: se ve en su semana, D815), y una página abierta por otro camino pliega
+la parte desplegada: lo recordado vale hasta la próxima página.
 
-**Las fichas viven acá (v0.302, D813; `Docs/Plan_Fichas_Cuaderno.md`, parte 1).** *Scenes*, *Locations* y *Sets* listan
-cada escena, locación y decorado **como su página**, dibujada con las mismas filas del árbol de *Pages* (`Sidebar.tsx`
-le pasa `fichaRows` a `OverviewNav`): un clic abre la página (la de una escena también; antes abría el mapa), la flecha
-muestra lo de adentro, y tienen el menú ⋯, el «+», renombrar, soltar páginas adentro, ⌘/Ctrl+clic, los puntos de
-menciones y el mismo teclado (← en una escena cerrada sube a su episodio o a su parte). No se arrastran: el *Overview*
-las ordena por número o por nombre, y se mueven con *Move to…*, que suma un grupo «Overview» con las fichas agrupadas
-por parte y episodio; para una página que ya es escena, locación o decorado también ofrece la carpeta de su tipo y los
-episodios (cambiar una escena de episodio), y nunca lo que está adentro de la página que se mueve. *Pages* esconde lo
-que el *Overview* muestra (`overviewPlaces.ts`: las fichas con lo de adentro, y una sola carpeta por parte y por número
-de episodio, si ya no tiene otra cosa adentro); lo demás sigue en *Pages*. Se llega a la carpeta escondida con el ⋯ de
-su parte o de su episodio, un menú reducido (*Share*, *Move to…*, *Type*, *Leave out of relations* y la papelera); si
-se abre por la búsqueda o un link, marca su parte o su episodio. El «+» de cada parte (`OverviewNew.tsx`) pide el
-número o el nombre y crea con `createEntity.ts` (que ahora también crea decorados y escenas con letra, `027A`, junto a
-su escena base); el «+» de cada episodio completa el episodio solo (`27` crea `105_027`). Sin carpeta de ese tipo la
-crea en la raíz, y con dos posibles pregunta en cuál. Una ficha abierta por cualquier camino (link, búsqueda, Atrás, un
-tab) despliega su parte y su episodio y marca su fila; un día abierto desde *Shoot days* se abre en su semana en
-*Pages*, centrado y sin plegar el *Overview*. *Scouting* ya no está en la barra (repetía `2 | Scouting Reports`; sigue en la vista del centro). La ruta de
-una ficha dice «Overview › Scenes» en el encabezado de la página, las migas, la búsqueda, el PDF y el zip, y en los
-diálogos de formato y encabezado la carpeta escondida se nombra como su parte. Al arrancar, hasta la primera foto de las
-relaciones, y con un link público, *Pages* muestra todo como antes.
+**De solo lectura (v0.307, D815; deshace la parte 1 de `Docs/Plan_Fichas_Cuaderno.md`, que salió en v0.302).** Las
+páginas viven todas en *Pages*, donde se escriben por etapa; el *Overview* no tiene páginas propias. Una escena abre su
+vista del mapa (`/map/scenes?scene=…`); una locación o un decorado, su resumen (`/map/locations?page=…`,
+`/map/sets?page=…`, `entityMapPath`): la cabecera viva de su página (`LiveHeader`, siempre abierta y sin *Collapse*, por
+`LiveFixed`), con links a cada página que habla de eso, y su nombre arriba, que abre la página en *Pages*. Un día de
+*Shoot days* abre su página, que se ve en *Pages* en su semana (el colapso automático solo pliega *Pages* para una
+vista del mapa), sin plegar el *Overview*. No hay «+» ni ⋯ en el *Overview*: se crea con el «+» de la carpeta en
+*Pages* o con `/e` y `/l` (`typedFolder.ts` crea la carpeta con su tipo si el proyecto no tiene). *Scouting* ya no está
+en la barra (repetía `2 | Scouting Reports`; sigue como pestaña del centro). En la semana de Rodaje, donde un plan vive
+arriba de su reporte, cada fila empieza con una etiqueta PLAN o REPORT (`tree-stage`, solo si en la lista hay de los
+dos); un plan con nota muestra la nota en lugar del lugar, que ya dice su reporte.
 
 ## 23. Una escena: dónde está cada cosa, y sus planos adentro (v0.279, D783–D786)
 

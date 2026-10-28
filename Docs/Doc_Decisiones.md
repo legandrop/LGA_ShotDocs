@@ -2502,3 +2502,17 @@ de ese plan.
 **Si preferís otra:** A) poner siempre la locación del globito en el título (más días con lugar, con el riesgo de D574);
 B) nunca ponerla (como antes: hay que escribirla a mano en el título). Se cambia en `titlePlace`
 (`src/templates/dayReportCreate.ts`).
+
+### D815 · El Panorama de solo lectura: todas las páginas en Páginas (2026-10-28)
+**Qué pasó:** Lega miró VLLF después de D813 y no entendió la barra: `1 | Preproducción` quedaba vacía (sus carpetas
+de desglose, locaciones y decorados se escondían de *Pages* y vivían en el *Overview*), no sabía dónde estaba lo que
+anota en preproducción, y en cada semana de Rodaje el plan y el reporte del mismo día se veían iguales (la etiqueta
+PLAN iba al final y se cortaba). Su idea, que es la buena: **se escribe en las páginas, y el Panorama se arma solo a
+partir de ellas.** La parte 1 de D813 hacía lo contrario.
+**Elegimos (Lega: «Sí, corregilo»):** todas las páginas viven en *Pages*, por etapa, y el *Overview* no tiene páginas
+propias ni se edita. Una escena abre su vista del mapa; una locación o un decorado, un resumen (la cabecera de su
+página, siempre abierta, con links), y su nombre abre la página en *Pages*; un día de *Shoot days* abre su página, que se
+ve en su semana. Sin «+» ni ⋯ en el *Overview*: se crea en *Pages* o con `/e` y `/l`. En la semana de Rodaje cada fila
+empieza con PLAN o REPORT, y un plan con nota muestra la nota. Se queda lo demás de D813: el plan al lado de su
+reporte (parte 2), *Overview › Shots* en lugar de `BD Main` (parte 3), la mudanza de VLLF y ERSO (parte 4) y sin
+*Overview › Scouting* en la barra. En la base no cambió nada: la parte 1 nunca movió páginas.

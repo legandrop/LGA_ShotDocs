@@ -176,8 +176,6 @@ const LIVE_MAP = '0.269';
  * renglones por etapa (D783).
  */
 const SCENES_SECTION = '0.279';
-/** *Pages* se pliega entera desde su título (D770, v0.267) y, al bajar, lo de arriba queda fijo (D771). */
-const PAGES_FOLD = '0.268';
 /**
  * El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6): llegó en
  * v0.244, sube con el texto en el color de cada cosa (D774) y con «Escena» dibujada junto a su número (D776).
@@ -293,7 +291,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.pagesTree.text',
     showMe: 'pages',
     words: ['fold', 'plegar', 'collapse', 'colapsar', 'sidebar', 'barra lateral', 'scroll', 'sticky', 'fijo', 'dónde estoy'],
-    since: PAGES_FOLD,
+    // *Pages* se pliega entera desde su título (D770, v0.267) y lo de arriba queda fijo (D771, v0.268); subió con el día
+    // de rodaje que se abre en *Pages* desde el *Overview* (D815).
+    since: '0.307',
   },
   { id: 'pagesExpand', section: 'pages', title: 'help.pagesExpand.title', text: 'help.pagesExpand.text', words: ['expand', 'subpages', 'click', 'manual', 'account', 'expandir', 'subpáginas', 'clic', 'cuenta'], since: '0.258' },
   { id: 'pagesArrange', section: 'pages', title: 'help.pagesArrange.title', text: 'help.pagesArrange.text', showMe: 'pages', since: BEFORE_HELP },
@@ -357,15 +357,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
   { id: 'workspaces', section: 'pages', title: 'help.workspaces.title', text: 'help.workspaces.text', since: BEFORE_HELP },
 
-  // --- Overview, escenas y rodaje (las fichas, las cabeceras y el día de rodaje, D813) ---
+  // --- Overview, escenas y rodaje (el panorama de solo lectura, las cabeceras y el día de rodaje, D813 y D815) ---
   {
     id: 'relationsMap',
     section: 'overview',
     title: 'help.relationsMap.title',
     text: 'help.relationsMap.text',
     words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'sets', 'decorados', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'shots', 'planos', 'bd main', 'breakdown table', 'tabla', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
-    // Subió con *Sets* (D804) y con *Shots*, la tabla de planos (D813).
-    since: '0.304',
+    // Subió con *Sets* (D804), con *Shots*, la tabla de planos (D813), y con el Overview de solo lectura (D815).
+    since: '0.307',
   },
   {
     id: 'scenesSection',
@@ -381,8 +381,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.pageTypes.title',
     text: 'help.pageTypes.text',
     words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'set', 'decorado', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'test', 'prueba', 'episode', 'episodio', 'folder', 'carpeta'],
-    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los decorados (D804).
-    since: '0.294',
+    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los decorados (D804) y con
+    // las etiquetas PLAN y REPORTE de la semana de rodaje (D815).
+    since: '0.307',
   },
   {
     id: 'liveHeader',

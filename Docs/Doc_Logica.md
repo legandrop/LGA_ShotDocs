@@ -1,6 +1,6 @@
 # La lógica de LGA Shot Docs, de una sola lectura
 
-Cómo piensa la app (v0.306): qué es cada página, cómo se da cuenta sola de qué escena, locación, decorado o día nombra
+Cómo piensa la app (v0.307): qué es cada página, cómo se da cuenta sola de qué escena, locación, decorado o día nombra
 cada una y qué muestra con eso. El detalle técnico está en los documentos de la sección 8. Ante una duda, manda el
 código (`src/relations/`).
 
@@ -14,13 +14,13 @@ Lo que la app sabe de una página no se escribe en su texto: hay dos marcas en s
 `settings.holds`, qué se crea adentro) y lo demás, quién nombra a quién, **se arma en el dispositivo con las páginas que
 la persona ve** y se rearma al escribir. *Leave out of relations*, en el menú ⋯, saca una rama del cálculo (D540).
 
-**Dónde se ve cada página (D813).** La barra tiene dos partes: el *Overview* (*Panorama*), con **las fichas** (cada
-escena, locación y decorado es su página, con lo de adentro) y las vistas que arma la app; y *Pages* (*Páginas*), **el
-cuaderno**: lo que se escribe en cada etapa (notas, scoutings, pruebas, planes y reportes, referencia). Cada página se
-ve en un solo lugar: *Pages* no dibuja las fichas ni la carpeta de un tipo que solo tiene fichas. En la base no cambia
-nada: las fichas siguen guardadas en sus carpetas (`1 | Preproducción › 1.1 | Desglose`), y lo que el *Overview* no
-puede listar (una escena sin número, la segunda con el mismo número, lo que está fuera de las relaciones) sigue en
-*Pages* con su carpeta (`overviewPlaces.ts`).
+**Dónde se ve cada página (D815).** La barra tiene dos partes. *Pages* (*Páginas*) es **todo lo que se escribe**, por
+etapa: la preproducción (el desglose con una página por escena, las locaciones, los decorados, notas y reuniones), los
+scoutings, las pruebas, cada semana de rodaje con el plan y el reporte de cada día, la referencia. El *Overview*
+(*Panorama*) **no tiene páginas propias y no se edita**: junta lo que dicen esas páginas, y cada escena, locación o
+decorado abre un resumen con links a cada página que habla de eso. Cada página vive en un solo lugar: *Pages*. (La v0.302
+había pasado las escenas, locaciones y decorados al *Overview*, D813 parte 1; Lega lo vio con VLLF y no tenía sentido:
+el Panorama tiene que armarse solo, D815.)
 
 **En términos simples:** no es una base de datos con columnas. Es un cuaderno que la app lee como una persona atenta, y
 con lo que lee arma índices que se actualizan solos.
@@ -165,32 +165,28 @@ el teléfono arranca así). Los documentos no tienen cabecera: aparecen en las d
 
 ## 5. El Overview (Panorama)
 
-El *Overview* (*Panorama*) tiene **las fichas** y **las vistas**. Está en la barra lateral, arriba de *Pages*
-(*Páginas*), y en una vista grande en el centro.
+El *Overview* (*Panorama*) es el mapa del proyecto, armado con lo que la persona ve; **no se edita** (D815). Está en la
+barra lateral, arriba de *Pages* (*Páginas*), y en una vista grande en el centro. Sus partes:
 
-- **Las fichas** (D813): en la barra, ***Locations***, ***Sets*** y ***Scenes*** (por episodio) listan cada locación,
-  decorado y escena **como su página**, con las mismas filas del árbol de *Pages*: un clic la abre, la flecha muestra lo
-  de adentro, y tienen su ⋯ y su «+». La cabecera de la página (lo que arma la app) no se edita; lo de abajo (el
-  desglose, la dirección, los otros nombres), sí. El «+» de cada parte pide el número o el nombre y la crea con las
-  guardas de siempre; sin carpeta de ese tipo, la crea en la raíz con su tipo, y con dos posibles pregunta en cuál. La
-  ruta de una ficha dice «Overview › Scenes», no las carpetas de *Pages* donde está guardada.
-- **Las vistas** (no tienen páginas propias, llevan a donde vive cada cosa): en el centro, *Locations* en el tiempo (un
-  punto por día cuyo título la nombra), *Sets* con sus escenas y dónde se filman, *Scenes* con todas las páginas que
-  hablan de cada una, *Scouting* (cada scouting y prueba por fecha; en la barra ya no está: repetía `2 | Scouting
-  Reports`), *Shoot days* (en la barra, cada día abre su página en *Pages*, donde vive), *Shots* (D813, v0.304: una
-  fila por plano de todas las escenas con los campos de su desglose, ordenable y para copiar a una planilla; reemplaza a
-  `BD Main`, que se mantenía a mano: se escribe en la escena, la tabla solo lee) y *Pending*, lo ambiguo de la sección
-  3, con *Create*, *Assign*, *Merge* o *Bring them all in*.
+- ***Locations***: cada locación en el tiempo, un punto por día cuyo título la nombra (lleno si el reporte tiene algo).
+  En la barra, cada una abre su resumen: la cabecera de su página (planeada acá, scoutings, días de rodaje), con links,
+  y su nombre arriba abre la página en *Pages*.
+- ***Sets***: los decorados por nombre, con sus escenas y dónde se filman; cada uno abre su resumen, igual.
+- ***Scenes***: por episodio, con sus locaciones y sus días; abrir una muestra todas las páginas que hablan de ella, con
+  los renglones por etapa de la cabecera (desglose, scouting, plan, rodaje, otras).
+- ***Shoot days***: cada día con su locación, sus escenas y su plan; una fecha con solo plan figura como planeada. En la
+  barra, cada día abre su página, que se ve en *Pages*, en su semana.
+- ***Shots*** (D813, v0.304): una fila por plano de todas las escenas con los campos de su desglose, ordenable y para
+  copiar a una planilla. Reemplaza a `BD Main`, que se mantenía a mano: se escribe en la escena, la tabla solo lee.
+- ***Pending***: lo ambiguo de la sección 3, con *Create*, *Assign*, *Merge* o *Bring them all in*.
+- *Scouting* (cada scouting y prueba por fecha) sigue como pestaña del centro; en la barra ya no está, porque repetía
+  `2 | Scouting Reports`.
 
-En la barra se despliega una parte a la vez; una parte vacía aparece solo para quien puede crear (con su «+»). La
-carpeta de un tipo y la de cada episodio, que *Pages* ya no muestra, se alcanzan con el ⋯ de su parte o de su episodio
-(*Open*, para su texto propio o exportar todo junto; *Share*, *Move to…*, *Type*, *Leave out of relations*, papelera;
-con un solo episodio, su renglón también se ve); si hay dos de la misma parte o del mismo episodio,
-quedan en *Pages*. La barra es **un solo árbol** (D805 a D807): ↑ y ↓ recorren el *Overview* y siguen en *Pages*, con
-partes y episodios como carpetas y filas como páginas. Al abrir una página queda abierto solo el camino hasta ella, con
-su fila centrada. Una ficha (o la carpeta de su parte), se abra como se abra, despliega su parte y su episodio y pliega
-*Pages*; algo de *Pages* (un día) abierto desde el *Overview* se abre en su semana, con su fila a la vista. Para cambiar
-una escena de episodio o de carpeta, *Move to…* ofrece, solo para una página de ese tipo, la carpeta y los episodios.
+En la barra, una parte vacía no aparece y se despliega una a la vez. La barra es **un solo árbol** (D805 a D807): ↑ y
+↓ recorren el *Overview* y siguen en *Pages*, con partes y episodios como carpetas y filas como páginas. Al abrir una
+página queda abierto solo el camino hasta ella, con su fila centrada; una vista del *Overview* pliega *Pages*, y un día
+abierto desde *Shoot days* se ve en su semana. Las escenas, locaciones y decorados se crean en *Pages* (el «+» de su
+carpeta) o con `/e` y `/l`.
 
 ## 6. Cómo se cargan las cosas, por etapa
 
@@ -198,7 +194,7 @@ El árbol que se sugiere (`Plan_Estructura_Etapas.md`, sección 3). Nombres y or
 carpeta.
 
 ```
-1 | Preproducción          notas y reuniones (lo de abajo se ve en el Overview, D813)
+1 | Preproducción          el desglose, las locaciones, los decorados, notas y reuniones
    1.1 | Desglose          Type › Scenes             una página por escena, sus fichas adentro
    1.2 | Locaciones        Type › Locations          una página por lugar físico
    1.3 | Decorados         Type › Sets               una página por decorado de guion
@@ -239,7 +235,8 @@ con `Escena 105_027` y lo filmado debajo; la primera sección sin número (*Info
 **El plan al lado del reporte (v0.303, D813).** En la misma semana, *New day plan* (la pestaña de al lado en el globito
 de *New day report*, o el menú ⋯) o *Plan tomorrow* (la tarjeta *Tomorrow*) crean el plan del día justo arriba de su
 reporte, con su mismo nombre y « | Plan», y la plantilla *Day plan* (*Fecha*, *Día*, *Locación*); las escenas, por
-número. En la barra quedan uno arriba del otro: ↑/↓ pasan del plan al reporte. Los planes de una locación para varias
+número. En la barra quedan uno arriba del otro, cada fila con su etiqueta PLAN o REPORT al principio (D815; un plan con
+nota muestra la nota, «Casa Rosada», en lugar del lugar, que ya dice su reporte): ↑/↓ pasan del plan al reporte. Los planes de una locación para varias
 fechas van en una carpeta de planes aparte (Type › Day plans), al principio de Rodaje. VLLF y ERSO se reacomodaron así
 el 2026-10-28 (parte 4): `4 | Planeamiento` ya no existe (está en la papelera, vacía), y cada plan tomó el nombre de su
 día con « | Plan» y, como nota, lo que su título viejo decía y el del día no (`… | ESMA | Plan · ESMA Salon Dorado`).

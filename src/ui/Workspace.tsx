@@ -5,7 +5,7 @@ import { useCodaOwner } from '../import/codaOwner';
 import { importingElsewhere, importJobFor, useImportJob } from '../import/importJob';
 import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
-import { mapPath, navigate, pagePath, useRoute } from '../router';
+import { navigate, pagePath, useRoute } from '../router';
 import { useLinkMode } from '../linkMode';
 import {
   ServicesContext,
@@ -26,7 +26,6 @@ import { asAction, tipRows } from './tipRows';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { disposeRelationsSession, RelationsRunner } from './relationsUi';
 import { MergeResumer } from '../relations/MergeAction';
-import { routeLabel, routeOf, useOverviewPlaces } from '../relations/overviewPlaces';
 import { ArchiveIcon, DownloadIcon, MicIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { NavButtons } from './NavButtons';
 import { NavMenuButton } from './NavMenuButton';
@@ -266,7 +265,6 @@ function useInviteTarget(): void {
 export function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const places = useOverviewPlaces();
   const services = useServices();
   const { comments, docs, media, folders, user, workspace, engine } = services;
   const titlePreparation = useRef<TitlePreparation | null>(null);
@@ -480,8 +478,7 @@ export function Shell() {
   useEffect(() => setMediaLinkSource(appLinkSource(media, workspace.config, linkMode?.entry ?? null, location.origin)), [media, workspace, linkMode]);
 
   const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
-  // La ruta: en una ficha, «Overview / Scenes» y lo de adentro de la ficha (D813).
-  const crumbs = pageId ? routeOf(tree, places, pageId) : [];
+  const crumbs = pageId ? tree.ancestors(pageId) : [];
   const current = pageId ? tree.get(pageId) : undefined;
 
   return (
@@ -509,9 +506,9 @@ export function Shell() {
               <NavButtons />
               <nav className="breadcrumbs" aria-label={tr('shell.location')}>
                 {crumbs.map((p) => (
-                  <span key={'page' in p ? p.page.id : `ov:${p.part ?? ''}`}>
-                    <button className="crumb" onClick={() => navigate('page' in p ? pagePath(p.page.id) : mapPath(p.part ?? undefined))}>
-                      {routeLabel(p, tr)}
+                  <span key={p.id}>
+                    <button className="crumb" onClick={() => navigate(pagePath(p.id))}>
+                      {p.title || tr('common.untitled')}
                     </button>
                     <span className="sep" aria-hidden="true">
                       /

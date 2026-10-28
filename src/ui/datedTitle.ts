@@ -30,6 +30,11 @@ export interface DatedTitle {
    * ni va a la nota (la fila lleva la etiqueta PLAN); de «Plan · Casa Rosada» queda «Casa Rosada», y de «Plan · 2», nada.
    */
   plan?: true;
+  /**
+   * Lo que sigue a «Plan ·» (`Casa Rosada`, `Driving plates`): lo que distingue a un plan de los otros del mismo día. La
+   * fila de un plan al lado de su reporte lo muestra en lugar del lugar (D815). Nunca el número de *Create another*.
+   */
+  planNote?: string;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -64,6 +69,7 @@ export function datedTitle(title: string, isLoc: (text: string) => boolean = () 
   let jornada = own(parts[first]);
   const rest: string[] = [];
   let plan = false;
+  let planNote: string | null = null;
   parts.forEach((p, i) => {
     if (i === first) return;
     if (ONLY_JORNADA.test(p)) {
@@ -74,7 +80,10 @@ export function datedTitle(title: string, isLoc: (text: string) => boolean = () 
     if (planPart) {
       plan = true;
       // «Plan · 2», «· 3»: el número del segundo plan del mismo día (*Create another*), no un lugar.
-      if (planPart[1]?.trim() && !/^\d+$/.test(planPart[1].trim())) rest.push(planPart[1].trim());
+      if (planPart[1]?.trim() && !/^\d+$/.test(planPart[1].trim())) {
+        planNote = planPart[1].trim();
+        rest.push(planNote);
+      }
       return;
     }
     rest.push(p);
@@ -90,6 +99,7 @@ export function datedTitle(title: string, isLoc: (text: string) => boolean = () 
     place: at >= 0 ? rest[at] : null,
     note: rest.some((_, i) => i !== at) ? rest.filter((_, i) => i !== at).join(' · ') : null,
     ...(plan ? { plan: true as const } : {}),
+    ...(planNote ? { planNote } : {}),
   };
 }
 
