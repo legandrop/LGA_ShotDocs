@@ -1,6 +1,6 @@
 import type { PageTree } from '../sync/tree';
 import type { PageRow } from '../sync/types';
-import { dateAtStart, dayInTitle, dayReportsMark, isDayReportFolder, isReportPage } from '../templates/dayReport';
+import { dateAtStart, datedPlanTitle, dayInTitle, dayReportsMark, isDayReportFolder, isReportPage } from '../templates/dayReport';
 import { isTemplatePage, isTemplatesFolder } from '../templates/own';
 
 // Qué ES cada página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): una escena, una locación, un decorado, un día de rodaje,
@@ -83,6 +83,18 @@ export function docMark(row: PageRow | undefined): DocKind | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const { kind } = value as { kind?: unknown };
   return isDocKind(kind) ? kind : null;
+}
+
+/**
+ * La página es un plan de jornada (D813): su marca, o un título de plan sin marca (`… | Plan`, la red para el plan escrito
+ * a mano al lado de su reporte). Lo que busca reportes por la fecha del título (*New day report*, *Tomorrow*) la saltea.
+ * «None of these» (`entity: false`) o una marca de entidad ganan: no es un plan.
+ */
+export function isDayPlanRow(row: PageRow | undefined): boolean {
+  if (!row) return false;
+  const doc = docMark(row);
+  if (doc) return doc === 'plan';
+  return entityMark(row) === null && datedPlanTitle(row.title);
 }
 
 /** El documento que guarda la carpeta (`settings.holds`: todo lo de adentro, a cualquier profundidad), o `null`. */
@@ -241,8 +253,10 @@ export function kindReader(tree: KindTree) {
     if (!parent) return null;
     const direct = holds(parent.id);
     if (direct) {
-      // Una subcarpeta con su propio tipo, o un grupo (episodio, bloque), no es una entidad.
+      // Una subcarpeta con su propio tipo, o un grupo (episodio, bloque), no es una entidad. Tampoco un plan escrito a mano
+      // al lado de su reporte (`… | Plan`, D813): si no, al confirmar el título recibiría la marca de día.
       if (holds(row.id) || holdsDoc(row) || shapeGroup(row, direct)) return null;
+      if (direct === 'day' && datedPlanTitle(row.title)) return null;
       return { holds: direct, folder: parent.id, episode: direct === 'scene' ? episodeOf(parent.title) : null, series: direct === 'scene' && series(parent.id) };
     }
     const grand = parentOf(parent);
@@ -252,8 +266,18 @@ export function kindReader(tree: KindTree) {
     // Adentro de un grupo: sin grupos dentro de grupos; y un día es un reporte, o tiene fecha Y número de día
     // (`2026-02-19 | Día 59`): «Call sheets › 2026-02-19 | Call sheet» no es un día (auditoría de E2, O2).
     if (holds(row.id) || holdsDoc(row) || shapeGroup(row, above)) return null;
-    if (above === 'day' && !isGroupedDay(row)) return null;
+    if (above === 'day' && (!isGroupedDay(row) || datedPlanTitle(row.title))) return null;
     return { holds: above, folder: grand.id, episode: above === 'scene' ? (episodeOf(parent.title) ?? episodeOf(grand.title)) : null, series: true };
+  };
+
+  /** Un plan escrito a mano en una carpeta de días (o en un grupo de una, `Semana 03`): sin marca y con título de plan. */
+  const titlePlanInDays = (row: PageRow): boolean => {
+    if (entityMark(row) !== null || !datedPlanTitle(row.title)) return false;
+    const parent = parentOf(row);
+    if (!parent) return false;
+    if (holds(parent.id) === 'day') return true;
+    const grand = parentOf(parent);
+    return !!grand && holds(grand.id) === 'day' && entityMark(parent) === null && !holdsDoc(parent) && shapeGroup(parent, 'day');
   };
 
   /** El código del título de una escena, con el episodio de su carpeta si la ve. */
@@ -301,7 +325,8 @@ export function kindReader(tree: KindTree) {
     let value: PageKind = { kind: 'none' };
     if (row) {
       const mine = own(row);
-      const doc = mine || excluded(row) ? null : docMark(row);
+      // Sin marca, un título de plan en una carpeta de días es un plan (la red de D813; `syncEntityMark` le escribe la marca).
+      const doc = mine || excluded(row) ? null : (docMark(row) ?? (titlePlanInDays(row) ? 'plan' : null));
       if (mine) value = { ...mine };
       else if (doc) value = { kind: 'doc', doc, source: 'page', folder: null, within: entityAbove(row) };
       else if (!excluded(row)) {

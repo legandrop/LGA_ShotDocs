@@ -320,10 +320,34 @@ Al tocar el botón, un globito con los datos ya puestos y editables; Enter crea:
 
 - **Título** (PL7): `2026-10-02 | Day 06` (`Día 06` en castellano): la fecha como código del "|" (D-10), que ordena y
   se busca igual en todos lados.
-- **Lugar en el árbol:** al final de la carpeta; si la fecha elegida es anterior a la del último reporte, antes del
-  primer reporte con fecha mayor (`keyBetween`), así la carpeta queda en orden.
+- **Lugar en el árbol:** antes del primer reporte o plan de jornada (en el orden de la carpeta) con fecha mayor
+  (`keyBetween`), así la carpeta queda en orden; si no hay, al final. Un reporte queda justo abajo del plan de su fecha
+  (D813).
 - **Lo que pasa:** `tree.create` con `template_id`, el contenido (4.2) y, si cambió la plantilla, `dayReports.template`
   en la carpeta. Se abre la página nueva con el foco en *Summary*.
+
+### 6.5b El plan del día al lado del reporte (v0.303, D813)
+
+- **El globito tiene dos pestañas arriba:** *New day report* y *New day plan* (también en el menú de la página). El
+  plan propone hoy si hoy todavía no tiene reporte y, si no, mañana (y la primera fecha de ahí que no tenga plan), el
+  día de rodaje del reporte o del plan de esa fecha o el siguiente al más alto de los reportes y planes anteriores (dos
+  planes por adelantado: Día 03 y Día 04), y la locación vacía (la de ayer no sirve para mañana). Sin selector de
+  plantilla: siempre *Day plan*. Las pestañas cambian con ←/→.
+- **Título:** el del reporte de esa fecha con « | Plan» (`2026-10-02 | Day 06 | Plan`); sin reporte, el que le va a
+  poner *New day report* (fecha y día; la locación escrita va al campo del plan, no al nombre) con « | Plan». *Create
+  another* suma « · 2», « · 3». *Plan tomorrow*, en la tarjeta *Tomorrow*, usa la forma de los días de la carpeta
+  (`nextDayTitle`). Si falla escribir el contenido, el reintento usa la página que quedó (como el reporte, O4).
+- **Lugar:** justo arriba del reporte de su fecha o antes del primer reporte o plan de una fecha mayor
+  (`placeBefore(…, forPlan)`). Marca `entity = { kind: 'plan' }` y, si la fecha tiene un solo reporte, el puntero
+  `day`. Nada se copia de ayer. Si ya hay un plan con esa fecha: *The plan for … already exists* con *Open* y *Create
+  another*.
+- **Lo que no es un reporte:** `planDayReport` aparta los planes (`isDayPlanRow`: la marca, o una parte del título que
+  es «Plan» o «Plan · …» sin marca de entidad). No son lo de ayer, no cuentan para el número de día ni para «ya
+  existe», y *Tomorrow* (`reportsOnDate`) no prepara adentro de un plan ni le cede el lugar.
+- **La tira de plantillas** de una página nueva en una carpeta de días ofrece *On-Set Report* y *Day plan*.
+- ***Save as template…* de un plan** propone el nombre *Day plan* y no tilda *Use for day reports*.
+- **La red sin marca** pide, además de la parte «Plan», una fecha o una jornada en el título (`datedPlanTitle`): una
+  página que se llama solo «Plan» o «Plan · Semana 3» en una carpeta de días sigue siendo un grupo.
 
 ### 6.6 Sin red y con dos dispositivos
 

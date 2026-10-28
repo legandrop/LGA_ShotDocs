@@ -229,7 +229,7 @@ Cada parte sale entera (código, ayuda, pruebas), auditada por alguien que no la
    45 y 66. En las dos, ninguna página sin lugar, y *Pages* esconde `1.1 | Desglose`, `1.2 | Locaciones y scoutings` y
    `1.3 | Decorados` (en ERSO también los cinco episodios), a los que se llega con el ⋯ de su parte o episodio.
 2. El código del plan y el reporte juntos (parte 2): las tres funciones que ignoran planes, la red, *New day plan*,
-   el orden. Publicar y subir `min_app_version`.
+   el orden. Publicar y subir `min_app_version`. **Hecha (v0.303).**
 3. El reacomodo de VLLF y ERSO (parte 4, puntos 1 a 3).
 4. *Shots* (parte 3).
 5. Los títulos de las escenas de VLLF (parte 4, punto 4).

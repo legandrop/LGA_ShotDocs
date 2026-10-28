@@ -25,6 +25,11 @@ export interface DatedTitle {
   place: string | null;
   /** Lo demás del título (`Scouting técnico VFX`, `Sin reporte`), o `null`. */
   note: string | null;
+  /**
+   * El plan de una jornada al lado de su reporte (D813): el título tiene una parte «Plan» o «Plan · …», que no es el lugar
+   * ni va a la nota (la fila lleva la etiqueta PLAN); de «Plan · Casa Rosada» queda «Casa Rosada», y de «Plan · 2», nada.
+   */
+  plan?: true;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -58,10 +63,18 @@ export function datedTitle(title: string, isLoc: (text: string) => boolean = () 
   const own = (p: string) => readPlanTitle(p).jornada ?? (ONLY_JORNADA.exec(p) ? Number(ONLY_JORNADA.exec(p)![1]) : null);
   let jornada = own(parts[first]);
   const rest: string[] = [];
+  let plan = false;
   parts.forEach((p, i) => {
     if (i === first) return;
     if (ONLY_JORNADA.test(p)) {
       jornada ??= own(p);
+      return;
+    }
+    const planPart = /^plan(?:\s*·\s*(.*))?$/i.exec(p);
+    if (planPart) {
+      plan = true;
+      // «Plan · 2», «· 3»: el número del segundo plan del mismo día (*Create another*), no un lugar.
+      if (planPart[1]?.trim() && !/^\d+$/.test(planPart[1].trim())) rest.push(planPart[1].trim());
       return;
     }
     rest.push(p);
@@ -76,6 +89,7 @@ export function datedTitle(title: string, isLoc: (text: string) => boolean = () 
     jornada: jornada !== null ? `D${pad(jornada)}` : null,
     place: at >= 0 ? rest[at] : null,
     note: rest.some((_, i) => i !== at) ? rest.filter((_, i) => i !== at).join(' · ') : null,
+    ...(plan ? { plan: true as const } : {}),
   };
 }
 

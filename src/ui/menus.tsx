@@ -319,6 +319,8 @@ export function PageMenu(props: {
       {saveOffer.reuse && canEditRow && item(tr('pageMenu.useAsTemplate'), <TemplateIcon />, () => void tree.setSetting(props.pageId, 'template', {}))}
       {reportFolder &&
         item(tr('dayReport.new'), <DayReportIcon />, () => requestDayReport(props.pageId))}
+      {reportFolder &&
+        item(tr('dayReport.newPlan'), <DayReportIcon />, () => requestDayReport(props.pageId, 'plan'))}
       <button
         role="menuitem"
         disabled={!canEditRow}

@@ -228,7 +228,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'assistantApply', keys: ['Mod-Enter'], place: 'menus', context: 'assistant', owner: 'app', source: 'dom' },
   // *Place* en *Dictate to report*, con el foco en la hoja (con la vista previa abierta, el mismo atajo aplica: `assistantApply`).
   { id: 'dictationPlace', keys: ['Mod-Enter'], place: 'menus', context: 'dictation', owner: 'app', source: 'dom' },
-  // Las pestañas de una ventana (Install app: iPhone, Android, computadora).
+  // Las pestañas de una ventana (Install app: iPhone, Android, computadora) y las del globito del día (*New day report* /
+  // *New day plan*, que usa solo ← y →).
   { id: 'tabsMove', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'menus', context: 'tabs', owner: 'app', source: 'dom' },
 
   // --- La recorrida (con el foco en el globito) ---

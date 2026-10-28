@@ -12,7 +12,8 @@ export function stripKinds(tree: KindTree, pageId: string): BuiltinKind[] {
   const kind = pageKind(tree, pageId);
   if (kind.kind === 'scene') return ['scene', 'prepro', 'shot'];
   if (kind.kind === 'location') return ['location'];
-  if (kind.kind === 'day') return ['onset'];
+  // En una carpeta de días también el plan de jornada, que va al lado de su reporte (D813).
+  if (kind.kind === 'day') return ['onset', 'dayPlan'];
   if (kind.kind === 'part' && kind.ofKind === 'location') return ['techScout', 'creativeScout', 'testReport'];
   if (kind.kind === 'doc' && kind.doc === 'scouting') return ['techScout', 'creativeScout'];
   if (kind.kind === 'doc' && kind.doc === 'test') return ['testReport'];

@@ -325,6 +325,14 @@ export const relations = {
   'day.newTitle': { en: "Tomorrow · {date}", es: "Mañana · {date}" },
   'day.newNoReport': { en: "no report yet", es: "todavía sin reporte" },
   'day.newCreate': { en: "Create and prepare tomorrow’s report", es: "Crear y preparar el reporte de mañana" },
+  'day.planCreate': { en: "Plan tomorrow", es: "Planear mañana" },
+  'day.planOpen': { en: "Open tomorrow’s plan", es: "Abrir el plan de mañana" },
+  'day.planCreating': { en: "Creating tomorrow’s plan…", es: "Creando el plan de mañana…" },
+  'day.planFailed': { en: "Tomorrow’s plan couldn’t be created. Nothing was changed.", es: "No se pudo crear el plan de mañana. No se cambió nada." },
+  'day.planHalf': {
+    en: "Tomorrow’s plan was created but couldn’t be filled in: in its ⋯ menu, Apply template… › Day plan starts it.",
+    es: "Se creó el plan de mañana pero no se pudo llenar: en su menú ⋯, Aplicar plantilla… › Plan de jornada lo empieza.",
+  },
   'day.newHint': {
     en: "Creates «{title}» in «{folder}», like New day report, and adds one section per scene. If that day already has a report there, it prepares that one.",
     es: "Crea «{title}» en «{folder}», como New day report, y agrega una sección por escena. Si ese día ya tiene un reporte ahí, prepara ese.",

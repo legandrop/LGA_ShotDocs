@@ -27,6 +27,16 @@ describe('datedTitle', () => {
     });
   });
 
+  it('el plan al lado de su reporte (D813): «Plan» no es el lugar ni la nota, y de «Plan · …» queda el resto', () => {
+    expect(datedTitle('2026-05-12 | Día 40 | 7 Puentes | Plan')).toEqual({ date: '12/05', year: 2026, jornada: 'D40', place: '7 Puentes', note: null, plan: true });
+    expect(datedTitle('2026-05-12 | Día 40 | Plan')).toEqual({ date: '12/05', year: 2026, jornada: 'D40', place: null, note: null, plan: true });
+    expect(datedTitle('2026-05-12 | Día 40 | Plan · Casa Rosada')).toMatchObject({ place: 'Casa Rosada', note: null, plan: true });
+    // El segundo plan del mismo día (*Create another*): el número no es un lugar.
+    expect(datedTitle('2026-05-12 | Día 40 | Plan · 2')).toMatchObject({ place: null, note: null, plan: true });
+    expect(datedTitle('2026-05-12 | Día 40 | 7 Puentes | Plan · 2')).toMatchObject({ place: '7 Puentes', note: null, plan: true });
+    expect(datedTitle('2026-05-12 | Día 40 | Planta Bernal')).toEqual({ date: '12/05', year: 2026, jornada: 'D40', place: 'Planta Bernal', note: null });
+  });
+
   it('plan: jornada y fecha en la misma parte', () => {
     expect(datedTitle('D37 26.01.18 | Centro CABA')).toMatchObject({ date: '18/01', year: 2026, jornada: 'D37', place: 'Centro CABA', note: null });
     expect(datedTitle('D03_26.03.25 | Estudio')).toMatchObject({ date: '25/03', jornada: 'D03', place: 'Estudio' });

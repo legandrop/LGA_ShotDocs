@@ -153,6 +153,12 @@ export const templates = {
   'dayReport.createAnother': { en: "Create another", es: "Crear otro" },
   'dayReport.exists': { en: "{name} already exists", es: "{name} ya existe" },
   'dayReport.several': { en: "{count} reports for {date}", es: "{count} reportes del {date}" },
+  'dayReport.planFailed': {
+    en: "The day plan couldn't be created. Nothing was lost; try again.",
+    es: "No se pudo crear el plan del día. No se perdió nada; probá de nuevo.",
+  },
+  'dayReport.planExists': { en: "The plan for {name} already exists", es: "El plan del {name} ya existe" },
+  'dayReport.planSeveral': { en: "{count} plans for {date}", es: "{count} planes del {date}" },
   'dayReport.incomplete': {
     en: "The previous report hasn't finished downloading — check the location",
     es: "El reporte anterior todavía no terminó de bajar: revisá la locación",

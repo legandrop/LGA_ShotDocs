@@ -49,6 +49,7 @@ export const menus = {
   'templateBanner.dayReport': { en: "Day reports", es: "Reportes del día" },
   // El reporte del día (Docs/Doc_Plantillas.md, sección 6): el botón arriba del título y el menú de la página.
   'dayReport.new': { en: "New day report", es: "Nuevo reporte del día" },
+  'dayReport.newPlan': { en: "New day plan", es: "Nuevo plan del día" },
   'pageMenu.useForDayReports': { en: "Use for day reports", es: "Usar para reportes del día" },
   'pageMenu.useForDayReportsTip': {
     en: "New day report, on this page and the ones inside,\ncreates the next report here",

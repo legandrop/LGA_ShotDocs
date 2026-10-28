@@ -12,12 +12,13 @@ import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { findUnknownContent } from '../ui/unknownContent';
 import { isEmptyPage } from './apply';
 import { builtinBlocks, type TemplateBlock } from './builtin';
-import { BUILTIN_ONSET } from './builtinIds';
-import { dateAtStart, dayInTitle, dayReportsMark, isReusableReport, localDate, reportTitle } from './dayReport';
+import { BUILTIN_ONSET, BUILTIN_PLAN } from './builtinIds';
+import { dateAtStart, dayInTitle, dayReportsMark, isReusableReport, localDate, planTitleFor, reportTitle } from './dayReport';
 import { fillReport, readFacts, type ReportFacts } from './dayReportFacts';
 import { isTemplatePage } from './own';
 import { readOwnTemplate } from './ownCopy';
 import { onlyTitleRests, TITLE_REST_PREFIX } from '../sync/titleRest';
+import { isDayPlanRow } from '../relations/kind';
 
 // Crear el reporte del día (Docs/Doc_Plantillas.md, 6.3 a 6.6): leer los reportes de la carpeta (todo está en el
 // dispositivo: anda sin red), proponer la fecha, el día y la locación, y crear la página con la plantilla llena. La
@@ -61,6 +62,13 @@ export interface DayReportPlan {
   projectId: string;
   /** Los reportes, en el orden de la carpeta (sin los vacíos de `emptyReports`). */
   reports: ReportEntry[];
+  /**
+   * Los planes de jornada de la carpeta con fecha en el título, en su orden (D813: el plan va al lado de su reporte). No
+   * son reportes: no se copian, no cuentan para el número de día ni para «ya existe» del reporte.
+   */
+  plans: ReportEntry[];
+  /** Las páginas de la carpeta, en su orden (para ubicar el reporte o el plan nuevo entre los dos). */
+  order: string[];
   /**
    * Páginas con título de reporte pero sin contenido, completas en el dispositivo: una a la que se le deshizo la
    * plantilla, o una que se creó y no se pudo llenar (auditoría, O2 y O4). No cuentan como reportes y, si la fecha
@@ -165,8 +173,15 @@ export async function planDayReport(
     (await readPage(id)).empty && !(await deps.engine.isMissingContent(id).catch(() => true));
 
   const reports: ReportEntry[] = [];
+  const plans: ReportEntry[] = [];
   let reads = 0;
   for (const p of siblings) {
+    // Un plan al lado de su reporte (D813) no es un reporte: ni lo de ayer, ni el número de día, ni «ya existe».
+    if (isDayPlanRow(p)) {
+      const date = dateAtStart(p.title);
+      if (date) plans.push({ id: p.id, title: p.title, date, day: dayInTitle(p.title) });
+      continue;
+    }
     let date = dateAtStart(p.title);
     let day = dayInTitle(p.title);
     if (!date && reads < MAX_DATE_READS) {
@@ -206,6 +221,8 @@ export async function planDayReport(
     parentId: target.parentId,
     projectId: target.projectId,
     reports,
+    plans,
+    order: siblings.map((p) => p.id),
     emptyReports,
     last,
     facts,
@@ -223,6 +240,82 @@ export function reportsOn(plan: DayReportPlan, date: string): ReportEntry[] {
   return plan.reports.filter((r) => r.date === date);
 }
 
+/** Los planes de jornada de la carpeta con esa fecha (D813). */
+export function plansOn(plan: Pick<DayReportPlan, 'plans'>, date: string): ReportEntry[] {
+  return (plan.plans ?? []).filter((p) => p.date === date);
+}
+
+/** `AAAA-MM-DD` + `n` días, en el calendario. */
+function nextDate(date: string, n: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
+}
+
+/**
+ * La fecha que propone *New day plan* (D813): el plan se escribe antes de filmar, así que hoy si todavía no tiene reporte
+ * y si no mañana; y la primera de ahí en adelante que todavía no tiene plan (una semana como mucho).
+ */
+export function suggestedPlanDate(plan: Pick<DayReportPlan, 'reports' | 'plans'>, today: string): string {
+  let date = plan.reports.some((r) => r.date === today) ? nextDate(today, 1) : today;
+  for (let i = 0; i < 7 && plansOn(plan, date).length; i++) date = nextDate(date, 1);
+  return date;
+}
+
+/**
+ * El título de un plan nuevo (D813, idea de Lega: el mismo nombre que su reporte, con « | Plan»): el del reporte de esa
+ * fecha si ya existe; si no, el que le va a poner *New day report* (fecha y día, sin el lugar: la locación escrita va
+ * al campo del plan). Si la carpeta ya tiene un plan con ese título (*Create another*), « | Plan · 2», « · 3»…
+ */
+export function dayPlanTitle(plan: Pick<DayReportPlan, 'reports'> & Partial<Pick<DayReportPlan, 'plans'>>, input: DayReportInput, lang: string): string {
+  const report = plan.reports.filter((r) => r.date === input.date).at(-1);
+  const base = planTitleFor(report ? report.title : reportTitle(input.date, input.day, lang));
+  const taken = new Set((plan.plans ?? []).map((p) => p.title.trim()));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base} · ${n}`)) n++;
+  return `${base} · ${n}`;
+}
+
+/**
+ * *New day plan* (D813): el plan de jornada con la plantilla *Day plan* (la fecha, el día y la locación escritos), la
+ * marca de plan y, si el reporte de esa fecha ya existe, el puntero a él; en la carpeta, justo arriba de su reporte o
+ * antes del primer reporte o plan de una fecha mayor. Todo local: sin red, igual. Nada se copia de ayer (eso es del
+ * reporte).
+ */
+export async function createDayPlan(
+  deps: DayReportDeps,
+  plan: DayReportPlan,
+  input: DayReportInput,
+  lang: string,
+  /** `title`: el de *Plan tomorrow*; `reuse`: la página de un intento que no pudo escribir el contenido (no se crea otra). */
+  options: { title?: string; reuse?: string } = {},
+): Promise<string> {
+  const { tree } = deps;
+  const blocks = fillReport(builtinBlocks('dayPlan', lang), { ...input, previous: null }, lang);
+  const reports = plan.reports.filter((r) => r.date === input.date && tree.get(r.id) && !tree.isTrashed(r.id));
+  const title = options.title || dayPlanTitle(plan, input, lang);
+  const old = options.reuse ? tree.get(options.reuse) : undefined;
+  const reuse = old && !tree.isTrashed(old.id) && old.parent_id === plan.parentId ? old.id : null;
+  // Un reintento con otra fecha o con otro día cambia el título, como el del reporte (O4): `writeNewPage` igual no
+  // escribe en una página que ya tiene algo.
+  if (reuse && old!.title !== title) await tree.rename(reuse, title);
+  const id =
+    reuse ??
+    (await tree.create(plan.parentId, title, plan.projectId, {
+      templateId: BUILTIN_PLAN,
+      before: placeBefore(plan, input.date, true),
+    }));
+  // La marca explícita (y el puntero, con un solo reporte de esa fecha): no depende del título ni de la carpeta.
+  await tree.setSetting(id, 'entity', reports.length === 1 ? { kind: 'plan', day: reports[0].id } : { kind: 'plan' });
+  try {
+    await writeNewPage(deps.docs, id, blocks, [], []);
+  } catch (err) {
+    throw new DayReportWriteError(id, err);
+  }
+  return id;
+}
+
 /**
  * El día de rodaje que propone el globito para esa fecha (O1): si ya hay un reporte ese día, su número (*Create
  * another* es una segunda unidad o un día partido: el mismo día de rodaje); si no, el siguiente al último.
@@ -235,12 +328,30 @@ export function suggestedDay(plan: DayReportPlan, date: string): number {
 }
 
 /**
- * Dónde va el reporte (6.5): al final; si la fecha es anterior a la del último, justo antes del primer reporte (en el
- * orden de la carpeta) con fecha mayor, así la carpeta queda en orden. Devuelve el id de esa hermana o `undefined`.
+ * El día que propone *New day plan* para esa fecha: el del reporte o el plan que ya la tienen; si no, el siguiente al más
+ * alto de los reportes y planes de fechas anteriores (dos planes por adelantado: Día 03 y Día 04); sin ninguno, el de la
+ * propuesta del reporte.
  */
-export function placeBefore(plan: DayReportPlan, date: string): string | undefined {
-  if (!plan.last || date >= plan.last.date) return undefined;
-  return plan.reports.find((r) => r.date > date)?.id;
+export function suggestedPlanDay(plan: DayReportPlan, date: string): number {
+  const known = [...reportsOn(plan, date), ...plansOn(plan, date)].map((r) => r.day).filter((d): d is number => d !== null);
+  if (known.length) return known[0];
+  const before = [...plan.reports, ...plan.plans].filter((e) => e.date < date && e.day !== null).map((e) => e.day as number);
+  return before.length ? Math.max(...before) + 1 : plan.suggestion.day;
+}
+
+/**
+ * Dónde va el reporte (6.5): justo antes del primer reporte o plan (en el orden de la carpeta) con fecha mayor, así la
+ * carpeta queda en orden y el plan de mañana, escrito la noche anterior, queda abajo del reporte de hoy (D813); si no hay,
+ * al final. Con `forPlan`, el plan nuevo: antes del reporte de su fecha (arriba de él) o del primero de una fecha mayor.
+ * Devuelve el id de esa hermana o `undefined`.
+ */
+export function placeBefore(plan: Pick<DayReportPlan, 'reports' | 'plans' | 'order'>, date: string, forPlan = false): string | undefined {
+  const at = new Map((plan.order ?? []).map((id, i) => [id, i]));
+  const after = (e: ReportEntry, isPlan: boolean) => (forPlan && !isPlan ? e.date >= date : e.date > date);
+  const found = [...plan.reports.filter((r) => after(r, false)), ...(plan.plans ?? []).filter((p) => after(p, true))];
+  // Sin el orden (un plan de antes de D813), el de los reportes, que ya está en el de la carpeta.
+  found.sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity));
+  return found[0]?.id;
 }
 
 /** Lo que se elige en el globito. */

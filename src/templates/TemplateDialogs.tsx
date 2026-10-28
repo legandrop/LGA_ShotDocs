@@ -5,6 +5,7 @@ import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import { notify } from '../ui/notice';
 import { dayReportFolderOf } from './dayReport';
+import { isDayPlanRow } from '../relations/kind';
 import { DESCRIPTION_MAX, saveTemplateSettings, templateInfo } from './own';
 import { saveAsTemplate, suggestedTemplateName, TemplateReadError, TemplateTooLarge } from './ownCopy';
 import type { OwnTemplatesRequest } from './ownTemplatesUi';
@@ -42,7 +43,8 @@ export function SaveTemplateDialog({ pageId, onClose }: { pageId: string; onClos
   const reportFolder = dayReportFolderOf(tree, pageId);
   const [name, setName] = useState(() => suggestedTemplateName(row, tr.lang));
   const [description, setDescription] = useState('');
-  const [dayReport, setDayReport] = useState(() => !!reportFolder);
+  // Un plan de jornada al lado de su reporte (D813) no se ofrece como la plantilla de los reportes.
+  const [dayReport, setDayReport] = useState(() => !!reportFolder && !isDayPlanRow(row));
   const [clear, setClear] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -7,6 +7,7 @@ import { locationOf, type DayRef, type LiveSource } from './liveView';
 import type { PrepareDeps, PrepareOptions, PrepareResult } from './prepareDay';
 import { BUILTIN_ONSET } from '../templates/builtinIds';
 import { cardFields, findFields } from './relationIndex';
+import { isDayPlanRow } from './kind';
 
 // La tarjeta *Tomorrow* de un día sin día siguiente (Docs/Doc_Relaciones.md, sección 11; roadmap v0.241 (1); D573–D577):
 // ofrece crear el reporte de mañana como *New day report* (misma carpeta que el día, el título con la forma de los días
@@ -226,10 +227,13 @@ export function subscribeCreating(fn: () => void): () => void {
 }
 export const creatingSnapshot = () => creatingVersion;
 
-/** Los reportes de esa fecha que están en la carpeta (no en la papelera), en el orden de la carpeta. */
+/**
+ * Los reportes de esa fecha que están en la carpeta (no en la papelera), en el orden de la carpeta. Un plan de jornada al
+ * lado de su reporte (D813) no es un reporte: *Prepare* no escribe adentro de él ni el reporte nuevo le cede el lugar.
+ */
 export function reportsOnDate(tree: Pick<PageTree, 'children' | 'roots' | 'isTrashed'>, parentId: string | null, projectId: string, date: string): string[] {
   const rows = parentId ? tree.children(parentId) : tree.roots(projectId);
-  return rows.filter((p) => !tree.isTrashed(p.id) && dateAtStart(p.title) === date).map((p) => p.id);
+  return rows.filter((p) => !tree.isTrashed(p.id) && !isDayPlanRow(p) && dateAtStart(p.title) === date).map((p) => p.id);
 }
 
 /** El primer reporte de esa fecha en la carpeta, si hay. */

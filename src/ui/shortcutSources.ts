@@ -117,7 +117,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   versionName: ['HistoryPanel.tsx'],
   assistantApply: ['AssistantPanel.tsx', 'CaptionSection.tsx', 'DictationPanel.tsx'],
   dictationPlace: ['DictationPanel.tsx'],
-  tabsMove: ['InstallDialog.tsx'],
+  tabsMove: ['InstallDialog.tsx', 'DayReportPopover.tsx'],
   tourNext: ['TourLayer.tsx'],
   tourBack: ['TourLayer.tsx'],
   tourExit: ['TourLayer.tsx'],

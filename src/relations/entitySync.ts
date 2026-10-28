@@ -49,10 +49,22 @@ function losesEpisode(fromTitle: string, stored: string | null | undefined): boo
   return !fromTitle.includes('_') && !!stored?.includes('_');
 }
 
+/**
+ * Un plan escrito a mano al lado de su reporte (`… | Plan` en una carpeta de días, sin marca; D813): se le escribe la
+ * marca de plan, así sigue siéndolo si después cambia el título. Nunca pisa una marca.
+ */
+export function wantsPlanMark(tree: KindTree, id: string): boolean {
+  const row = tree.get(id);
+  if (!row || !row.title.trim() || tree.isTrashed(id) || entityMark(row) !== null) return false;
+  const kind = kindReader(tree).kindOf(id);
+  return kind.kind === 'doc' && kind.doc === 'plan' && kind.source === 'page' && docMark(row) === null;
+}
+
 /** Pone o pone al día la marca de la página (ver arriba). */
 export async function syncEntityMark(tree: SyncTree, id: string): Promise<void> {
   const wanted = wantedMark(tree, id);
   if (wanted) await tree.setSetting(id, 'entity', wanted);
+  else if (wantsPlanMark(tree, id)) await tree.setSetting(id, 'entity', { kind: 'plan' });
 }
 
 /** Las páginas que toman su tipo de esta carpeta: el primer nivel y lo de adentro de sus grupos (episodios, bloques). */

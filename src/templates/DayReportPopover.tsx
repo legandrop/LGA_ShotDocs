@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/templates';
 import { navigate, pagePath } from '../router';
@@ -8,12 +8,16 @@ import { notify } from '../ui/notice';
 import { builtinTexts } from './builtin';
 import { dayName, isValidDate, localDate } from './dayReport';
 import {
+  createDayPlan,
   createDayReport,
   DayReportWriteError,
   planDayReport,
+  plansOn,
   reportsOn,
   resolveReportTemplate,
   suggestedDay,
+  suggestedPlanDate,
+  suggestedPlanDay,
   type DayReportPlan,
   type ReportTemplate,
   type ReportTemplateNotice,
@@ -24,21 +28,30 @@ import { requestReportFocus } from './dayReportUi';
 // El globito del reporte del día (Docs/Doc_Plantillas.md, 6.3): la fecha de hoy (hora del dispositivo), el día de
 // rodaje siguiente y la locación del último reporte, ya puestos y editables; Enter crea. Si ya hay uno con esa fecha
 // (PL8), Enter lo abre y *Create another* crea otro. Todo sale del dispositivo: anda sin red.
+// Arriba, *Day report* o *Day plan* (D813): el plan de jornada va en la misma carpeta, justo arriba del reporte de su
+// fecha, con el mismo nombre y « | Plan»; propone hoy si todavía no tiene reporte y si no mañana, sin locación (la de
+// ayer no sirve para mañana) y sin copiar nada.
+
+export type DayPageKind = 'report' | 'plan';
 
 interface Props {
   /** La carpeta de reportes. */
   folderId: string;
   anchor: HTMLElement | null;
   onClose: () => void;
+  /** Con qué se abre: el reporte (botón y atajo) o el plan (*New day plan* del menú). */
+  initialKind?: DayPageKind;
 }
 
-export function DayReportPopover({ folderId, anchor, onClose }: Props) {
+export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'report' }: Props) {
   const { docs, engine } = useServices();
   const tree = useTree();
   const perms = usePermissions();
   const tr = useT();
   const ref = useRef<HTMLFormElement>(null);
-  useFloating(ref, onClose, anchor);
+  // El foco va a la fecha, no a las pestañas *Day report* / *Day plan* de arriba.
+  useFloating(ref, onClose, anchor, false, false);
+  useLayoutEffect(() => ref.current?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true }), []);
   const [plan, setPlan] = useState<DayReportPlan | null>(null);
   const [date, setDate] = useState(() => localDate());
   const [day, setDay] = useState('');
@@ -54,9 +67,13 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
   const [queued, setQueued] = useState(false);
   // La página que dejó un intento que no pudo escribir el contenido (O4): el reintento la usa en vez de crear otra.
   const failedPage = useRef<string | undefined>(undefined);
+  const failedPlan = useRef<string | undefined>(undefined);
   // La plantilla (entrega 3): la de la carpeta, o la que se elija si hay más de una a mano. `null`: la de fábrica.
   const [choice, setChoice] = useState<{ id: string | null; template: ReportTemplate | null; notice: ReportTemplateNotice | null } | null>(null);
   const [reading, setReading] = useState(false);
+  const [kind, setKind] = useState<DayPageKind>(initialKind);
+  const kindNow = useRef(kind);
+  kindNow.current = kind;
 
   // La propuesta: se lee una vez al abrir (lo que se escribe en los campos manda desde ahí).
   useEffect(() => {
@@ -68,11 +85,7 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
         if (cancelled) return;
         setPlan(next);
         setChoice({ id: next.template?.id ?? null, template: next.template, notice: next.templateNotice });
-        const t = touched.current;
-        const chosen = t.date && isValidDate(dateNow.current) ? dateNow.current : next.suggestion.date;
-        if (!t.date) setDate(chosen);
-        if (!t.day) setDay(String(suggestedDay(next, chosen)));
-        if (!t.location) setLocation(next.suggestion.location);
+        propose(next, kindNow.current);
       })
       .catch((err) => {
         console.error('Reporte del día: no se pudieron leer los reportes', err);
@@ -88,15 +101,47 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderId]);
 
+  /** La propuesta para el reporte o el plan, sin pisar lo que la persona ya tocó. */
+  function propose(next: DayReportPlan, as: DayPageKind) {
+    const t = touched.current;
+    const own = as === 'plan' ? suggestedPlanDate(next, next.suggestion.date) : next.suggestion.date;
+    const chosen = t.date && isValidDate(dateNow.current) ? dateNow.current : own;
+    if (!t.date) setDate(chosen);
+    if (!t.day) setDay(String(as === 'plan' ? suggestedPlanDay(next, chosen) : suggestedDay(next, chosen)));
+    if (!t.location) setLocation(as === 'plan' ? '' : next.suggestion.location);
+  }
+
+  const switchKind = (next: DayPageKind) => {
+    if (next === kind) return;
+    setKind(next);
+    if (plan) propose(plan, next);
+  };
+
   const validDate = isValidDate(date);
   // Lo que ya está en la carpeta con esa fecha (en el árbol de ahora: uno borrado mientras tanto no cuenta).
-  const existing = plan && validDate ? reportsOn(plan, date).filter((r) => tree.get(r.id) && !tree.isTrashed(r.id)) : [];
+  const existing =
+    plan && validDate ? (kind === 'plan' ? plansOn(plan, date) : reportsOn(plan, date)).filter((r) => tree.get(r.id) && !tree.isTrashed(r.id)) : [];
   const dayNumber = Number.parseInt(day, 10);
   const validDay = Number.isInteger(dayNumber) && dayNumber > 0 && dayNumber < 10000;
 
   const create = async () => {
     if (!plan || busy || reading || !validDate || !validDay) return;
     setBusy(true);
+    if (kind === 'plan') {
+      try {
+        const id = await createDayPlan({ tree, docs, engine }, plan, { date, day: dayNumber, location: location.replace(/\s+/g, ' ').trim() }, tr.lang, {
+          reuse: failedPlan.current,
+        });
+        onClose();
+        navigate(pagePath(id));
+      } catch (err) {
+        console.error('Plan del día: no se pudo crear', err);
+        if (err instanceof DayReportWriteError) failedPlan.current = err.pageId;
+        notify(t('dayReport.planFailed'));
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const id = await createDayReport(
         { tree, docs, engine },
@@ -183,19 +228,21 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
     newer: tr('dayReport.templateNewer', { name: onsetName }),
   };
 
+  const existsName = existing.length === 1 ? (existing[0].day ? `${dayName(existing[0].day, tr.lang)} · ${date}` : date) : '';
   const existsText =
     existing.length > 1
-      ? tr('dayReport.several', { count: existing.length, date })
+      ? tr(kind === 'plan' ? 'dayReport.planSeveral' : 'dayReport.several', { count: existing.length, date })
       : existing.length === 1
-        ? tr('dayReport.exists', { name: existing[0].day ? `${dayName(existing[0].day, tr.lang)} · ${date}` : date })
+        ? tr(kind === 'plan' ? 'dayReport.planExists' : 'dayReport.exists', { name: existsName })
         : null;
+  const heading = tr(kind === 'plan' ? 'dayReport.newPlan' : 'dayReport.new');
 
   return (
     <form
       ref={ref}
       className="day-report-popover"
       role="dialog"
-      aria-label={tr('dayReport.new')}
+      aria-label={heading}
       // Los campos se validan acá (la fecha y el día): mientras se lee la carpeta el día está vacío y Enter se recuerda.
       noValidate
       onSubmit={(e) => {
@@ -203,7 +250,34 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
         submit();
       }}
     >
-      <h2>{tr('dayReport.new')}</h2>
+      <div
+        className="day-report-kinds"
+        role="tablist"
+        // ←/→ cambian de pestaña, como en cualquier lista de pestañas.
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          const next = kind === 'report' ? 'plan' : 'report';
+          switchKind(next);
+          e.currentTarget.querySelector<HTMLElement>(`[data-kind="${next}"]`)?.focus();
+        }}
+      >
+        {(['report', 'plan'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            data-kind={k}
+            aria-selected={kind === k}
+            tabIndex={kind === k ? 0 : -1}
+            className={kind === k ? 'on' : undefined}
+            disabled={busy}
+            onClick={() => switchKind(k)}
+          >
+            {tr(k === 'plan' ? 'dayReport.newPlan' : 'dayReport.new')}
+          </button>
+        ))}
+      </div>
       <div className="day-report-row">
         <label className="day-report-field">
           <span className="pref-label">{tr('dayReport.date')}</span>
@@ -214,8 +288,9 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
             onChange={(e) => {
               touched.current.date = true;
               setDate(e.target.value);
-              // El día que va con esa fecha (O1): el del reporte que ya la tiene, o el siguiente al último.
-              if (plan && !touched.current.day && isValidDate(e.target.value)) setDay(String(suggestedDay(plan, e.target.value)));
+              // El día que va con esa fecha (O1): el del reporte (o el plan) que ya la tiene, o el siguiente al último.
+              if (plan && !touched.current.day && isValidDate(e.target.value))
+                setDay(String(kind === 'plan' ? suggestedPlanDay(plan, e.target.value) : suggestedDay(plan, e.target.value)));
             }}
           />
         </label>
@@ -236,7 +311,7 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
           }}
         />
       </label>
-      {plan && options.length > 1 && (
+      {plan && kind === 'report' && options.length > 1 && (
         <label className="day-report-field">
           <span className="pref-label">{tr('dayReport.template')}</span>
           <select value={choice?.id ?? ''} disabled={reading || busy} onChange={(e) => void choose(e.target.value)}>
@@ -248,8 +323,8 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
           </select>
         </label>
       )}
-      {choice?.notice && <p className="notice-line warn">{noticeText[choice.notice]}</p>}
-      {plan?.lastIncomplete && <p className="notice-line warn">{tr('dayReport.incomplete')}</p>}
+      {kind === 'report' && choice?.notice && <p className="notice-line warn">{noticeText[choice.notice]}</p>}
+      {kind === 'report' && plan?.lastIncomplete && <p className="notice-line warn">{tr('dayReport.incomplete')}</p>}
       {existsText && (
         <p className="notice-line" role="status">
           {existsText}

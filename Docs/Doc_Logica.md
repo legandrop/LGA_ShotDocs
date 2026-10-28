@@ -63,6 +63,14 @@ que crean. Para saber qué es una página, la app sube por el árbol y **gana lo
 La marca de documento no se escribe en cada página: mover un plan de carpeta le cambia el tipo. Sacar una entidad de su
 carpeta no le quita la marca. Una carpeta de días es la carpeta de reportes del día: marcar una marca la otra.
 
+**Los planes al lado de su reporte (v0.303, D813).** Desde la parte 2 de `Plan_Fichas_Cuaderno.md` el plan de cada día
+puede vivir en la carpeta de días, justo arriba de su reporte (`2026-05-12 | Día 40 | 7 Puentes | Plan`). Ahí la
+carpeta dice «días», así que el plan se reconoce **por su marca propia** (`entity.kind = 'plan'`, la escriben *New day
+plan*, la plantilla *Day plan* y el reacomodo) y, sin marca, por una parte del título que es «Plan» o «Plan · …» (la
+red de `kind.ts`; al confirmar el título recibe la marca de plan, nunca la de día). Esto invierte, para los planes en
+Rodaje, la decisión 3 de `Plan_Estructura_Etapas.md` (el tipo de documento sale de la carpeta). *New day report*,
+*Tomorrow* y el orden de la carpeta saltean los planes (`isDayPlanRow`).
+
 | Tipo | Qué es | Cómo se marca | Dónde aparece |
 |---|---|---|---|
 | Escena | Una escena, con su número | Carpeta *Scenes*, *Type › Scene* o plantilla *Scene* | Cabecera propia, *Overview › Scenes* |
@@ -71,7 +79,7 @@ carpeta no le quita la marca. Una carpeta de días es la carpeta de reportes del
 | Día de rodaje | Una jornada: su reporte | Carpeta *Shoot days*, *On-Set Report* o *New day report* | Cabecera, *Overview › Shoot days* |
 | Scouting | Un recorrido | Carpeta *Scouting reports*, *Tech scout* o *Creative scout* | Sus locaciones y escenas, *Overview › Scouting* |
 | Prueba | Una prueba | Carpeta *Test reports* o plantilla *Test report* | Sus locaciones y escenas, *Overview › Scouting* |
-| Plan de jornada | Lo previsto para un día | Carpeta *Day plans* o plantilla *Day plan* | Su día y sus escenas, *Overview › Shoot days* |
+| Plan de jornada | Lo previsto para un día | Carpeta *Day plans*, plantilla *Day plan* o *New day plan* (al lado de su reporte) | Su día y sus escenas, *Overview › Shoot days* |
 | Parte de | Fichas, fotos, anexos | Estar adentro de una entidad | La cabecera de su entidad |
 | Nada | Notas, tablas, referencia | Sin marca, o *None of these* | *Other* / *Also named in* |
 
@@ -225,6 +233,11 @@ locación para varias fechas van en `Sin orden`.
 `| CENADE`, que es lo que lee la app) y copia del anterior la unidad, el equipo y la cámara. Cada escena abre su sección
 con `Escena 105_027` y lo filmado debajo; la primera sección sin número (*Info general*) es del día. La víspera,
 *Prepare tomorrow's report* deja listos los títulos.
+
+**El plan al lado del reporte (v0.303, D813).** En la misma semana, *New day plan* (la pestaña de al lado en el globito
+de *New day report*, o el menú ⋯) o *Plan tomorrow* (la tarjeta *Tomorrow*) crean el plan del día justo arriba de su
+reporte, con su mismo nombre y « | Plan». En la barra quedan uno arriba del otro: ↑/↓ pasan del plan al reporte.
+Cuando VLLF y ERSO se reacomoden (parte 4), `4 | Planeamiento` deja de existir.
 
 ## 7. Lo que todavía no hace o está a medias
 

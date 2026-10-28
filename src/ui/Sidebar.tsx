@@ -560,11 +560,18 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     // código: una fecha larga (`2025-11-05`) ya no apaga la división de la lista entera.
     const dated = new Map<string, DatedTitle>();
     if (splitOn) {
+      // La etiqueta PLAN (D813) sale del tipo: un plan al lado de días la lleva aunque su título no diga «Plan», y un día
+      // con una parte «Plan» en el título no (esa parte vuelve a la nota).
+      const nextToDays = pages.some((p) => kinds.kindOf(p.id).kind === 'day');
       for (const page of pages) {
-        const kind = kinds.kindOf(page.id).kind;
-        if (kind !== 'day' && kind !== 'doc') continue;
-        const d = datedTitle(page.title, isLoc);
-        if (d) dated.set(page.id, d);
+        const k = kinds.kindOf(page.id);
+        if (k.kind !== 'day' && k.kind !== 'doc') continue;
+        let d = datedTitle(page.title, isLoc);
+        if (!d) continue;
+        const isPlan = k.kind === 'doc' && k.doc === 'plan';
+        if (d.plan && !isPlan) d = { ...d, plan: undefined, note: d.note ? `${d.note} · Plan` : 'Plan' };
+        else if (isPlan && !d.plan && nextToDays) d = { ...d, plan: true };
+        dated.set(page.id, d);
       }
     }
     const split = splitOn ? splitSiblings(pages.filter((p) => !dated.has(p.id))) : null;
@@ -681,6 +688,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
               <span className="code date">{dated.date}</span>
               {dated.place && <span className={`title place${isLoc(dated.place) ? ' loc' : ''}`}>{dated.place}</span>}
               {dated.note && <span className="note">{dated.note}</span>}
+              {/* El plan al lado de su reporte (D813): la misma fila, con su etiqueta. */}
+              {dated.plan && <span className="tree-holds" data-holds="plan">{tr('sidebar.tagPlan')}</span>}
             </span>
           ) : split ? (
             <span className="label">

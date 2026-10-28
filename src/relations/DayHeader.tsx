@@ -18,7 +18,9 @@ import { addToPlan, adjustedPlan, movePlan, removeFromPlan, usePlanAdjust } from
 import { wasRevivedHere } from './cededCopy';
 import { createTomorrow, creatingKey, creatingSnapshot, isCreating, nextDayNumber, nextDayTitle, proposeTomorrow, subscribeCreating, twinsLeft, undoTomorrow, type TomorrowProposal } from './tomorrowNew';
 import type { PreparedSection } from './prepareDay';
-import { localDate } from '../templates/dayReport';
+import { dateAtStart, localDate, planTitleFor } from '../templates/dayReport';
+import { isDayPlanRow } from './kind';
+import { plansOfDay } from './planDay';
 
 // La cabecera viva de un día de rodaje y su tarjeta *Tomorrow* (Docs/Doc_Relaciones.md, sección 11; maqueta S4 «D»,
 // `c_dia.html`). Es interfaz, como la de escena y locación: no se guarda en la página ni sale impresa. Lo único que
@@ -525,7 +527,9 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
   const adj = usePlanAdjust(key);
   const codes = adjustedPlan(proposal.plan.codes, adj);
   const [picking, setPicking] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // Qué se está creando: el reporte (*Create and prepare*) o el plan (*Plan tomorrow*).
+  const [busy, setBusyRaw] = useState<false | 'report' | 'plan'>(false);
+  const setBusy = (b: boolean | 'plan') => setBusyRaw(b === true ? 'report' : b);
   const today = tree.get(v.day.pageId);
   const projectId = src.snap.projectId;
   const parentId = today?.parent_id ?? null;
@@ -538,7 +542,42 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
   // El título que va a tener (sin número de día en el de hoy, el número lo decide al crear, como New day report: la fecha).
   const n = nextDayNumber(today?.title ?? '', 0);
   const title = n ? nextDayTitle(today?.title ?? '', proposal.date, n, tr.lang, proposal.place) : proposal.date;
-  const source = proposal.plan.source === 'breakdown' ? tr('day.srcBreakdown', { label: proposal.plan.label, date: ddmm(proposal.date) }) : tr('day.srcNone');
+  const source =
+    proposal.plan.source === 'plan'
+      ? tr('day.srcPlan')
+      : proposal.plan.source === 'breakdown'
+        ? tr('day.srcBreakdown', { label: proposal.plan.label, date: ddmm(proposal.date) })
+        : tr('day.srcNone');
+  // El plan de mañana (D813): el que ya conectó el lector con esa fecha (esté donde esté) o uno de la carpeta con esa
+  // fecha en el título; si no hay, *Plan tomorrow* lo crea en la misma carpeta, arriba de donde va a ir el reporte.
+  const planOfTomorrow =
+    plansOfDay(src, '', proposal.date).find((id) => tree.get(id) && !tree.isTrashed(id)) ??
+    (parentId ? tree.children(parentId) : tree.roots(projectId)).find((p) => !tree.isTrashed(p.id) && isDayPlanRow(p) && dateAtStart(p.title) === proposal.date)?.id;
+
+  const createPlan = async () => {
+    if (busy) return;
+    setBusy('plan');
+    try {
+      const deps = { tree: services.tree, docs: services.docs, engine: services.engine };
+      const { planDayReport, createDayPlan, suggestedPlanDay } = await import('../templates/dayReportCreate');
+      const plan = await planDayReport(deps, { parentId, projectId }, { skipTemplate: true });
+      const day = n || suggestedPlanDay(plan, proposal.date);
+      const dayTitle = n ? title : nextDayTitle(today?.title ?? '', proposal.date, day, tr.lang, proposal.place);
+      const id = await createDayPlan(deps, plan, { date: proposal.date, day, location: proposal.place ?? '' }, tr.lang, { title: planTitleFor(dayTitle) });
+      navigate(pagePath(id));
+    } catch (err) {
+      console.warn('[relaciones] no se pudo crear el plan de mañana', err);
+      // Si la página quedó creada y falló escribirla, se va a ella: ahí se le pone la plantilla *Day plan* con ⋯ › *Apply
+      // template…* (la tira no sale: una página creada con título y plantilla no es «fresca»).
+      const pageId = (err as { pageId?: unknown } | null)?.pageId;
+      if (typeof pageId === 'string' && tree.get(pageId)) {
+        notify(tr('day.planHalf'));
+        navigate(pagePath(pageId));
+      } else notify(tr('day.planFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const create = async () => {
     if (busy) return;
@@ -678,11 +717,26 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
       <div className="row2">
         {canCreate() ? (
           <>
-            <button className="primary lh-prepare" onClick={() => void create()} disabled={busy}>
+            <button className="primary lh-prepare" onClick={() => void create()} disabled={!!busy}>
               <Ic name="wand" small />
               {tr('day.newCreate')}
             </button>
-            {busy ? <span role="status">{tr('day.newCreating', { title })}</span> : <span>{tr('day.newHint', { title, folder })}</span>}
+            {planOfTomorrow ? (
+              <button className="lh-tbtn" onClick={() => navigate(pagePath(planOfTomorrow))}>
+                {tr('day.planOpen')}
+              </button>
+            ) : (
+              <button className="lh-tbtn" onClick={() => void createPlan()} disabled={!!busy}>
+                {tr('day.planCreate')}
+              </button>
+            )}
+            {busy === 'report' ? (
+              <span role="status">{tr('day.newCreating', { title })}</span>
+            ) : busy === 'plan' ? (
+              <span role="status">{tr('day.planCreating')}</span>
+            ) : (
+              <span>{tr('day.newHint', { title, folder })}</span>
+            )}
           </>
         ) : (
           <span>{tr('day.newCantCreate', { folder })}</span>

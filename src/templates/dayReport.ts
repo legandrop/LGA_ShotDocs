@@ -95,6 +95,29 @@ export function isReportPage(row: PageRow, tree?: Pick<PageTree, 'get'>): boolea
   return row.template_id === BUILTIN_ONSET || (!!tree && isDayReportTemplate(tree, row.template_id));
 }
 
+/**
+ * El título de un plan de jornada al lado de su reporte (D813): una parte entera es «Plan» o empieza con «Plan ·»
+ * (`2026-05-12 | Día 40 | 7 Puentes | Plan`, `… | Plan · Casa Rosada`). Una parte que solo empieza con la palabra
+ * («Planta Bernal», «Plano 3») no lo es.
+ */
+export function planTitle(title: string | null | undefined): boolean {
+  return (title ?? '').split('|').some((part) => /^plan(?:\s*·.*)?$/i.test(part.trim()));
+}
+
+/**
+ * Un título de plan que además dice su fecha o su jornada (`2026-05-12 | Día 40 | Plan`, `D40 | 26.05.12 | Plan`): lo que
+ * reconoce la red de D813 sin marca. Una página que se llama solo «Plan» (o «Plan · Semana 3») es un grupo, no un plan.
+ */
+export function datedPlanTitle(title: string | null | undefined): boolean {
+  const t = title ?? '';
+  return planTitle(t) && (/\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{2}|(?<!\d)\d{6}(?!\d)/.test(t) || /(?:^|[\s_|])(?:d[ií]a|day|d)\s*\d{1,3}(?!\d)/i.test(t));
+}
+
+/** El título del plan de una jornada: el de su día más « | Plan» (D813). */
+export function planTitleFor(dayTitle: string): string {
+  return `${dayTitle.trim()} | Plan`;
+}
+
 /** Un título con la forma exacta de `reportTitle`: `2026-10-02 | Day 06` o `2026-10-02 | Día 06`, nada más. */
 export function hasReportTitle(title: string): boolean {
   const m = /^(\d{4}-\d{2}-\d{2}) \| (?:Day|Día) \d{2,4}$/.exec(title);

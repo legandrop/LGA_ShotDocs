@@ -59,6 +59,31 @@
   font-size: 14px;
 }
 
+/* *Day report* o *Day plan* (D813): los dos títulos son pestañas; el elegido, como el título de antes. */
+.day-report-kinds {
+  display: flex;
+  gap: 4px;
+  margin: -4px 0 0 -6px;
+}
+
+.day-report-kinds button {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: none;
+  color: var(--faint);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.day-report-kinds button:hover:not(:disabled) {
+  color: var(--muted);
+  background: var(--hover);
+}
+
+.day-report-kinds button.on {
+  color: var(--text);
+}
+
 .day-report-field {
   display: grid;
   gap: 4px;

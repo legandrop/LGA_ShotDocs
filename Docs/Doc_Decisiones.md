@@ -2482,4 +2482,6 @@ solo en el Panorama, con lo automático arriba y lo propio editable abajo; *Page
 reporte de cada día van uno al lado del otro en Rodaje; `BD Main` se reemplaza por una tabla de planos generada
 (*Overview › Shots*). Plan, partes y preguntas abiertas: `Plan_Fichas_Cuaderno.md`. Con «Sí, arrancá» (2026-10-27)
 Lega aprobó el plan y sacar *Overview › Scouting* de la barra (pregunta 2). La parte 1 (la barra) salió en v0.302; los
-títulos de las escenas de VLLF (pregunta 1) siguen abiertos.
+títulos de las escenas de VLLF (pregunta 1) siguen abiertos. La parte 2 (el plan al lado del reporte) salió en v0.303:
+en la carpeta de días un plan se reconoce por su marca o por una parte « | Plan» del título, lo contrario de la decisión
+3 de `Plan_Estructura_Etapas.md` para los planes que viven en Rodaje.

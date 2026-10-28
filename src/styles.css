@@ -1306,6 +1306,11 @@ code {
   flex: 0 1 auto;
 }
 
+/* La etiqueta PLAN del plan al lado de su reporte (D813), al final de la fila. */
+.tree-row .label.dated .tree-holds {
+  margin-left: auto;
+}
+
 .tree-row .label.dated .place.loc {
   color: var(--loc-fg);
 }

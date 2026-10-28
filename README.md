@@ -250,7 +250,9 @@ In development. What works today:
   and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
   *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new
   pages get a copy. *New day report* creates the day's on-set report with today's date, the next shoot day and
-  yesterday's location and camera package, offline too, from the report folder's template.
+  yesterday's location and camera package, offline too, from the report folder's template. *New day plan* (and *Plan
+  tomorrow* in the day's header) creates the day's plan right above its report, with the same name and `| Plan`, so
+  plan and report sit next to each other.
 - Scenes, locations and shoot days: *Type* in a folder's menu sets what's created inside it, the folder shows a small
   SCENES, LOCATIONS or SHOOT DAYS label, and its pages are marked as such, with the scene number taken from the title
   (`101_074`). A scene's breakdown cards, a location's scouts and a day's plan count as part of it.

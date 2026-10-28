@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { isDayPlanRow } from '../relations/kind';
 import '../i18n/lazy/templates';
 import type { CopiedPhoto } from '../media/markupClipboard';
 import { mediaIdsInText } from '../media/markupClipboard';
@@ -328,6 +329,8 @@ export async function saveAsTemplate(
 /** El nombre que propone *Save as template…*: el título; un reporte del día (`2026-10-02 | Day 06`), *On-Set Report*. */
 export function suggestedTemplateName(row: PageRow | undefined, lang: string): string {
   if (!row) return '';
+  // Un plan de jornada al lado de su reporte (D813) tiene fecha en el título, pero no es un reporte.
+  if (isDayPlanRow(row)) return builtinTexts(lang).names.dayPlan;
   if (dateAtStart(row.title)) return builtinTexts(lang).names.onset;
   return row.title;
 }

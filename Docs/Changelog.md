@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.303 :
+
+Parte 2 del plan D813: el plan de cada día pasa a vivir al lado de su reporte, en la misma semana de Rodaje. Antes de
+mudar nada había que arreglar lo que buscaba reportes por la fecha del título: *New day report* tomaba el plan de mañana
+por el último reporte (copiaba sus datos, sumaba un día y decía «ya existe»), *Tomorrow* podía preparar las escenas
+adentro del plan y el orden no miraba los planes. Ahora los tres los saltean (`isDayPlanRow`), un plan escrito a mano
+con « | Plan» en una carpeta de días recibe la marca de plan y nunca la de día (`kind.ts`, `entitySync.ts`), el globito
+del reporte tiene la pestaña *New day plan* (también en el menú ⋯) y la tarjeta *Tomorrow* suma *Plan tomorrow*: el plan
+sale justo arriba del reporte de su fecha, con su nombre y « | Plan». La tira de una carpeta de días ofrece *Day plan*.
+
+[El plan del día al lado de su reporte]
+
 v0.302 :
 
 Lega vio que *Overview › Sets* abría las mismas páginas de `1.3 | Decorados`: cada escena, locación y decorado se veía

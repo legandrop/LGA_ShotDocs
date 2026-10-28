@@ -15,28 +15,34 @@ import './dayReport.css';
 
 const DayReportPopover = lazyPart(() => import('./DayReportPopover').then((m) => m.DayReportPopover));
 
+type DayPageKind = 'report' | 'plan';
+
 /** El botón de cada página abierta: el menú lo abre por acá. */
-const openers = new Map<string, () => void>();
+const openers = new Map<string, (kind: DayPageKind) => void>();
 /** *New day report* desde el menú de una página que no estaba abierta: se abre el globito cuando la página está. */
-let pending: { pageId: string; at: number } | null = null;
+let pending: { pageId: string; at: number; kind: DayPageKind } | null = null;
 const PENDING_MS = 15_000;
 
-/** *New day report* del menú de la página: con la página abierta, el globito; si no, se abre la página y después. */
-export function requestDayReport(pageId: string): void {
+/**
+ * *New day report* (o *New day plan*, D813) del menú de la página: con la página abierta, el globito; si no, se abre la
+ * página y después.
+ */
+export function requestDayReport(pageId: string, kind: DayPageKind = 'report'): void {
   const open = openers.get(pageId);
   if (open) {
-    open();
+    open(kind);
     return;
   }
-  pending = { pageId, at: Date.now() };
+  pending = { pageId, at: Date.now(), kind };
   navigate(pagePath(pageId));
 }
 
-function takeDayReportRequest(pageId: string): boolean {
-  if (!pending || pending.pageId !== pageId) return false;
+function takeDayReportRequest(pageId: string): DayPageKind | null {
+  if (!pending || pending.pageId !== pageId) return null;
   const fresh = Date.now() - pending.at < PENDING_MS;
+  const kind = pending.kind;
   pending = null;
-  return fresh;
+  return fresh ? kind : null;
 }
 
 /** El reporte recién creado se abre con el cursor en *Summary* (6.5): lo toma la página al tener el editor. */
@@ -68,16 +74,18 @@ export function DayReportButton({ pageId }: { pageId: string }) {
 
 function DayReportControl({ pageId, folderId }: { pageId: string; folderId: string }) {
   const tr = useT();
-  const [open, setOpen] = useState(false);
+  // Cerrado, o abierto con el reporte o con el plan (el globito cambia entre los dos).
+  const [open, setOpen] = useState<DayPageKind | null>(null);
   const button = useRef<HTMLButtonElement>(null);
 
   // El globito se baja ya: sin red tiene que estar (la app lo guarda con el resto al instalarse).
   useEffect(() => DayReportPopover.preload(), []);
 
   useEffect(() => {
-    const show = () => setOpen(true);
+    const show = (kind: DayPageKind) => setOpen(kind);
     openers.set(pageId, show);
-    if (takeDayReportRequest(pageId)) show();
+    const asked = takeDayReportRequest(pageId);
+    if (asked) show(asked);
     return () => {
       if (openers.get(pageId) === show) openers.delete(pageId);
     };
@@ -88,7 +96,7 @@ function DayReportControl({ pageId, folderId }: { pageId: string; folderId: stri
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isDayReportShortcut(e)) return;
       e.preventDefault();
-      setOpen((o) => !o);
+      setOpen((o) => (o ? null : 'report'));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -100,17 +108,17 @@ function DayReportControl({ pageId, folderId }: { pageId: string; folderId: stri
         ref={button}
         type="button"
         className="day-report-button"
-        aria-expanded={open}
+        aria-expanded={!!open}
         aria-haspopup="dialog"
         data-tip={tipRows([{ shortcut: 'newDayReport', action: asAction(tr('dayReport.new')) }])}
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen(open ? null : 'report')}
       >
         <DayReportIcon size={16} />
         <span className="day-report-label">{tr('dayReport.new')}</span>
       </button>
       {open && (
-        <Part onClose={() => setOpen(false)}>
-          <DayReportPopover folderId={folderId} anchor={button.current} onClose={() => setOpen(false)} />
+        <Part onClose={() => setOpen(null)}>
+          <DayReportPopover key={open} folderId={folderId} anchor={button.current} onClose={() => setOpen(null)} initialKind={open} />
         </Part>
       )}
     </span>

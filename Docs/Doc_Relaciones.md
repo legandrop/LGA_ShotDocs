@@ -477,6 +477,14 @@ botón, ya pasado en un renglón, el último día pasado sin tarjeta, el gemelo 
 
 **Decisiones:** D429–D445 en `Doc_Decisiones.md`.
 
+**El plan al lado del reporte (v0.303, D813).** Un plan de jornada puede vivir en la carpeta de días, justo arriba de su
+reporte (`… | Plan`). `reportsOnDate` lo saltea (`isDayPlanRow` de `kind.ts`), así *Prepare* nunca escribe adentro de un
+plan y el reporte nuevo nunca le cede el lugar a un plan de la misma fecha; el reporte nuevo va justo abajo del plan de
+su fecha (`placeBefore`). La tarjeta de un día sin día siguiente suma *Plan tomorrow* (crea el plan con
+`createDayPlan`, título `nextDayTitle` + « | Plan», en la misma carpeta) u *Open tomorrow's plan* si ya hay un plan de
+esa fecha (`plansOfDay` con la fecha, esté donde esté, o uno de la carpeta con esa fecha en el título); con un plan, la
+tarjeta dice que las escenas salen de él (`day.srcPlan`). Pruebas: `src/templates/dayPlan.test.ts`.
+
 ### Lo que falta (E5)
 
 - ~~Sin día siguiente no hay tarjeta~~: hecho en la v0.248 (sección 18).

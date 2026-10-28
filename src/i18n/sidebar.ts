@@ -42,6 +42,7 @@ export const sidebar = {
   'sidebar.tagScoutings': { en: "Scouting", es: "Scouting" },
   'sidebar.tagTests': { en: "Tests", es: "Pruebas" },
   'sidebar.tagPlans': { en: "Plans", es: "Planes" },
+  'sidebar.tagPlan': { en: "Plan", es: "Plan" },
   'sidebar.holdsDays': { en: "Everything created inside is a shoot day", es: "Todo lo que se crea adentro es un día de rodaje" },
   'sidebar.holdsScoutings': { en: "Everything inside, at any depth, is a scouting report: it links to the locations it names", es: "Todo lo de adentro, a cualquier profundidad, es un reporte de scouting: se conecta con las locaciones que nombra" },
   'sidebar.holdsPlans': { en: "Everything inside, at any depth, is a day plan: it links to its shoot day by date and day number", es: "Todo lo de adentro, a cualquier profundidad, es un plan de jornada: se conecta con su día por la fecha y el número de día" },
