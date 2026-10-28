@@ -41,8 +41,8 @@ export type Route =
   // OAuth de cada Supabase es `/oauth/consent/<ref>`; el ref elige el workspace (la app es una para todos).
   | { name: 'oauthConsent'; projectRef: string };
 
-export type MapTab = 'locations' | 'sets' | 'scenes' | 'scouting' | 'days' | 'pending';
-export const MAP_TABS: readonly MapTab[] = ['locations', 'sets', 'scenes', 'scouting', 'days', 'pending'];
+export type MapTab = 'locations' | 'sets' | 'scenes' | 'scouting' | 'days' | 'shots' | 'pending';
+export const MAP_TABS: readonly MapTab[] = ['locations', 'sets', 'scenes', 'scouting', 'days', 'shots', 'pending'];
 
 /** La dirección del mapa del proyecto, en una pestaña (`/map`, `/map/scenes`…). */
 export function mapPath(tab: MapTab = 'locations'): string {

@@ -242,6 +242,51 @@ describe('el mapa en la app', () => {
     expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).not.toContain('Scouting');
   });
 
+  it('Shots: la tabla de planos de todas las escenas (D813), ordenar, filtrar e ir al plano en su escena', async () => {
+    const { built, host } = await app(
+      () => '/map/shots',
+      async (d, b) => {
+        await writeBlocks(d, b.ids.s029, [
+          { p: 'La escena entera.' },
+          { h: 1, text: 'Planos' },
+          { h: 2, text: 'ERSO_105_029_010' },
+          { table: [['Shot Name', 'ERSO_105_029_010'], ['Descripción', 'Vuelco de la ambulancia'], ['Complejidad', 'Alta'], ['Fecha Rodaje', '06/03/2026']] },
+          { h: 2, text: 'ERSO_105_029_020' },
+          { table: [['Shot Name', 'ERSO_105_029_020'], ['Descripción', 'Detalle de la rueda'], ['Complejidad', 'Baja'], ['Fecha Rodaje', '20/02/2026']] },
+        ]);
+      },
+    );
+    await until(() => complete(host) && host.querySelector('.mp-shots tbody tr'), 'la tabla de planos');
+    expect(host.querySelector('.mp-tab.on')!.textContent).toContain('Shots');
+    // En la barra, *Shots* es solo el nombre de la vista (sin lista), como *Pending*.
+    const part = host.querySelector<HTMLAnchorElement>('.ov-part-name[href="/map/shots"]');
+    expect(part?.textContent).toBe('Shots');
+    const shotsOf = () => [...host.querySelectorAll('.mp-shots tbody tr')].map((r) => r.children[1].textContent);
+    expect(shotsOf()).toContain('ERSO_105_029_010');
+    // Ordenar por *Complejidad*: «Alta» antes que «Baja»; otro clic, al revés; lo vacío siempre al final.
+    const header = [...host.querySelectorAll<HTMLButtonElement>('.mp-shots th button')].find((b) => b.textContent === 'Complejidad')!;
+    click(header);
+    const mine = () => shotsOf().filter((s) => s!.startsWith('ERSO_105_029'));
+    expect(mine()).toEqual(['ERSO_105_029_010', 'ERSO_105_029_020']);
+    click(header);
+    expect(mine()).toEqual(['ERSO_105_029_020', 'ERSO_105_029_010']);
+    // Las fechas se ordenan como fechas: el 20/02 antes que el 06/03 (no por el día).
+    click(header);
+    const date = [...host.querySelectorAll<HTMLButtonElement>('.mp-shots th button')].find((b) => b.textContent === 'Fecha Rodaje')!;
+    click(date);
+    expect(mine()).toEqual(['ERSO_105_029_020', 'ERSO_105_029_010']);
+    // El filtro: el número de escena como en *Scenes* («Escena 29» en el episodio, `5029`), y si no, el texto.
+    type(host.querySelector<HTMLInputElement>('.mp-filter input')!, '5029');
+    expect(shotsOf().length).toBeGreaterThan(0);
+    expect([...host.querySelectorAll('.mp-shots tbody tr')].every((r) => r.children[0].textContent === '105_029')).toBe(true);
+    type(host.querySelector<HTMLInputElement>('.mp-filter input')!, 'rueda');
+    expect(shotsOf()).toEqual(['ERSO_105_029_020']);
+    // Un clic en el plano lleva a su sección en la escena.
+    click(host.querySelector('.mp-shots tbody a.mp-link'));
+    await wait();
+    expect(location.pathname).toBe(pagePath(built.ids.s029));
+  });
+
   it('Planes: uno que se contradice va a Pending con los dos días; una fecha solo planeada va en Shoot days', async () => {
     const { host } = await app(
       () => '/map/pending',

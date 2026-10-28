@@ -405,9 +405,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'find',
     title: 'help.relationsMap.title',
     text: 'help.relationsMap.text',
-    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'sets', 'decorados', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
-    // Subió con *Sets* (D804).
-    since: '0.294',
+    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'sets', 'decorados', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'shots', 'planos', 'bd main', 'breakdown table', 'tabla', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
+    // Subió con *Sets* (D804) y con *Shots*, la tabla de planos (D813).
+    since: '0.304',
   },
   {
     id: 'scenesSection',

@@ -141,7 +141,8 @@ describe('Overview y Scenes en la barra lateral', () => {
     const order = [...nav.querySelectorAll('.ov-nav, .section-title')].map((x) => (x.classList.contains('ov-nav') ? 'overview' : 'pages'));
     expect(order).toEqual(['overview', 'pages']);
     // *Sets* sin decorados aparece igual, sin número ni flecha, para quien puede crear el primero con su «+» (D813).
-    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Sets', 'Scenes', 'Shoot days']);
+    // *Shots* (D813, parte 3) es solo la vista de los planos, sin lista, como *Pending*: aparece con escenas.
+    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Sets', 'Scenes', 'Shoot days', 'Shots']);
     const sets = [...nav.querySelectorAll('.ov-part')].find((p) => p.querySelector('.ov-part-name')?.textContent === 'Sets')!;
     expect(sets.querySelector('.toggle, .scene-nav-n')).toBeNull();
     expect(sets.querySelector('.ov-add')).toBeTruthy();
@@ -366,7 +367,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     const { host } = mount(d, pagePath(folder));
     await shown(() => expect(scenesPart(host)).toBeTruthy());
     // Las partes vacías, solo con su «+»; el título igual abre la primera con algo.
-    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Sets', 'Scenes']);
+    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Sets', 'Scenes', 'Shots']);
     act(() => navigate(mapPath()));
     await wait();
     expect(scenesPart(host)!.querySelector('.toggle')!.getAttribute('aria-expanded')).toBe('true');

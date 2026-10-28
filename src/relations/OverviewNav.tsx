@@ -24,7 +24,7 @@ import './scenesNav.css';
 
 // *Overview* en la barra lateral (Docs/Doc_Relaciones.md, secciones 12 y 21; D772): un solo bloque que arma la app con
 // lo que dicen las páginas, con sus partes adentro, las mismas pestañas de la vista del centro: *Locations*, *Sets*,
-// *Scenes*, *Shoot days* y *Pending*. Reemplaza a la fila *Map* y a la sección *Scenes*, que eran hermanas aunque las
+// *Scenes*, *Shoot days*, *Shots* (D813: solo la vista, sin lista, como *Pending*) y *Pending*. Reemplaza a la fila *Map* y a la sección *Scenes*, que eran hermanas aunque las
 // escenas son una parte del mapa. Como en el árbol de páginas: clic en el nombre abre su vista (y despliega su lista);
 // la flecha solo pliega o despliega. Una sola parte abierta a la vez (pedido de Lega): abrir una cierra las otras. Sale
 // del registro de lo que la persona ve (no arma el mapa entero), aparece solo en un proyecto con escenas, locaciones o
@@ -39,6 +39,9 @@ const FOLD_KEY = 'shotdocs-overview-nav';
 export const OVERVIEW_PAGE = 60;
 
 type Part = 'locations' | 'sets' | 'scenes' | 'days';
+/** Las partes que son solo una vista del centro, sin lista en la barra. */
+type ViewPart = 'shots' | 'pending';
+const isViewPart = (part: string): part is ViewPart => part === 'shots' || part === 'pending';
 const PARTS: readonly Part[] = ['locations', 'sets', 'scenes', 'days'];
 
 /** Las filas de las fichas: las del árbol de *Pages*, con su menú, su «+», el arrastre y el teclado (`Sidebar.tsx`). */
@@ -177,7 +180,7 @@ function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<t
       return;
     }
     browsedPart.current = null;
-    if (!tab || tab === 'pending' || tab === 'scouting' || sizes[tab] === 0) return;
+    if (!tab || tab === 'pending' || tab === 'shots' || tab === 'scouting' || sizes[tab] === 0) return;
     const f = readFold(projectId);
     const eps = activeEp !== null ? [activeEp] : f.eps;
     if (f.part !== tab || eps.join() !== f.eps.join() || f.closed) update({ closed: false, part: tab, eps });
@@ -235,10 +238,10 @@ function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<t
     // Plegar lo que tiene adentro lo abierto lo lleva a lo plegado, como plegar una madre de la página abierta en *Pages*:
     // se abre la vista de la parte (sin volver a desplegarla).
     const holdsOpen = () => !!from.closest('li')?.querySelector('a.scene-nav-row.active, .tree-row.active');
-    const part = from.dataset.part as Part | 'pending' | undefined;
+    const part = from.dataset.part as Part | ViewPart | undefined;
     const ep = from.dataset.ep;
     if (part) {
-      if (part === 'pending') return;
+      if (isViewPart(part)) return;
       const open = fold.part === part;
       if (right) {
         if (open) toChild();
@@ -340,11 +343,12 @@ function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<t
     browsedPart.current = part;
     go(part);
   };
-  // *Pending* no tiene lista: llegar ahí (con las flechas o un clic) pliega la parte desplegada, como las demás partes.
-  const openPending = () => {
+  // *Shots* y *Pending* no tienen lista: llegar ahí (con las flechas o un clic) pliega la parte desplegada, como las demás
+  // partes.
+  const openView = (part: ViewPart) => {
     const f = readFold(projectId);
     if (f.part !== null) update({ ...f, part: null, eps: [] });
-    go('pending');
+    go(part);
   };
   const togglePart = (part: Part) => update({ ...fold, part: fold.part === part ? null : part });
 
@@ -507,8 +511,8 @@ function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<t
   };
 
   /** El renglón de una parte: la flecha pliega o despliega; el resto de la fila abre su pestaña. */
-  const partRow = (part: Part | 'pending', label: string, count: ReactNode, body: (() => ReactNode) | null) => {
-    const open = part !== 'pending' && fold.part === part && !!body;
+  const partRow = (part: Part | ViewPart, label: string, count: ReactNode, body: (() => ReactNode) | null) => {
+    const open = !isViewPart(part) && fold.part === part && !!body;
     // La vista de la parte, o su carpeta escondida abierta (D813).
     const on = (tab === part && !activeScene) || (!!folderInfo && folderInfo.part === part && folderInfo.ep === null);
     const name = (
@@ -520,7 +524,7 @@ function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<t
           if (!plainClick(e)) return;
           e.preventDefault();
           e.stopPropagation();
-          if (part === 'pending') openPending();
+          if (isViewPart(part)) openView(part);
           else if (clickedByKeys() || expandSubpages !== 'onClick') browsePart(part);
           else openPart(part);
         }}
@@ -537,7 +541,7 @@ function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<t
             if (!plainClick(e)) return;
             // El foco queda en la parte, como en una fila de *Pages*: las flechas siguen desde acá.
             e.currentTarget.querySelector<HTMLElement>('a.ov-part-name')?.focus({ preventScroll: true });
-            if (part === 'pending') openPending();
+            if (isViewPart(part)) openView(part);
             else if (expandSubpages !== 'onClick') browsePart(part);
             else openPart(part);
           }}
@@ -611,6 +615,8 @@ function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<t
   fichaPartRow('sets', tr('sidebar.sets'), counts.sets, setsBody);
   fichaPartRow('scenes', tr('sidebar.scenes'), counts.scenes, scenesBody);
   if (counts.days) parts.push(partRow('days', tr('sidebar.days'), <span className="scene-nav-n">{counts.days}</span>, daysBody));
+  // La tabla de planos (D813): solo la vista del centro, como *Pending* (la barra no tiene el contenido de las páginas).
+  if (counts.scenes) parts.push(partRow('shots', tr('sidebar.shots'), null, null));
   if (pending > 0) parts.push(partRow('pending', tr('sidebar.pending'), <span className="map-nav-count">{pending}</span>, null));
 
   return (

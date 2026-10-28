@@ -1,5 +1,19 @@
 # Changelog — LGA Shot Docs
 
+v0.304 :
+
+Parte 3 del plan D813: *Overview › Shots*, la tabla de planos que reemplaza a `BD Main`. En Coda, `BD Main` era una
+tabla que se mantenía a mano para saltar de un plano a otro; desde D785 cada plano vive adentro de su escena (título
+«Planos» y un subtítulo por plano), así que la tabla se arma sola: una fila por plano de todas las escenas, con los
+campos de su tabla como columnas (primero descripción, decorado, locación, fecha, INT/EXT, consulta y categoría), las
+fichas que todavía son subpáginas, orden por columna, el filtro del mapa, *Copy table* para pegar en una planilla y un
+clic que lleva al plano resaltado en su escena. Solo lee: se escribe en la escena. Sale de lo que el índice ya tiene en
+memoria, una pasada por foto (`shotsTable.ts`). En la barra es solo el nombre de la vista, como *Pending*. Además, la
+parte 4 (en la base, no en el código): VLLF y ERSO reacomodados con los planes al lado de su día, `4 | Planeamiento`
+vacía a la papelera y `BD Main` al Archivo (`Doc_Logica.md`, sección 6).
+
+[Overview › Shots: la tabla de planos en lugar de BD Main]
+
 v0.303 :
 
 Parte 2 del plan D813: el plan de cada día pasa a vivir al lado de su reporte, en la misma semana de Rodaje. Antes de

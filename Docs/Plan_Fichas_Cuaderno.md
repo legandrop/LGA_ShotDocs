@@ -198,7 +198,10 @@ reacomodo de v0.276, y registro para deshacer.
 
 Después: copia de seguridad, mover, esperar la sincronización y repetir la comparación sobre la base real.
 
-1. Los planes a `Rodaje` con sus títulos (parte 2); `4 | Planeamiento` a la papelera.
+1. Los planes a `Rodaje` con sus títulos (parte 2): el del día con « | Plan». Lo que el título viejo decía y el del
+   día no (el lugar planeado, «SIN VFX», «ESMA Salon Dorado») queda como « · nota» («… | ESMA | Plan · ESMA Salon
+   Dorado»), así no se pierde nada del nombre; dos planes del mismo día se distinguen igual. `4 | Planeamiento` (con
+   sus semanas: 16 carpetas, todas sin contenido, medido en la base) a la papelera.
 2. `BD Main` a `90 | Archivo` (en ERSO, `ERSO | BD Main` con sus 5 índices).
 3. Nombres, en los dos: `1.2 | Locaciones y scoutings` → `1.2 | Locaciones` (los scoutings ya no están ahí);
    `5 | Rodaje` → `4 | Rodaje` y `6 | Tablas y referencia` → `5 | Referencia` (sin el número que deja libre
@@ -212,7 +215,8 @@ Después: copia de seguridad, mover, esperar la sincronización y repetir la com
 
 - Ayuda (`src/i18n/lazy/help.ts`): `pagesTree`, `pagesArrange`, `pagesKeys`, `pagesExpand`, `pageTypes`,
   `relationsMap`, `scenesSection`, `findPage`, `trash`, `share`, `templates`, `dayReports` y `liveDay` (el plan al lado
-  del reporte, *New day plan*, *Plan tomorrow*), y una entrada nueva para *Shots*.
+  del reporte, *New day plan*, *Plan tomorrow*), y *Shots* (quedó adentro de `relationsMap`, la del Overview, junto
+  a las otras vistas, con sus palabras de búsqueda: *shots*, *planos*, *bd main*).
 - Tutorial: el paso `pages` apunta al árbol (`src/tutorial/steps.ts`, ancla `pages` de `Sidebar.tsx`): se revisa su
   texto (`tour.pages.*` en `src/i18n/lazy/tutorial.ts`).
 - Documentos: `Doc_Logica.md` (secciones 1, 2, 5 y 6), `Doc_Relaciones.md` (secciones 11 y 22), `Doc_Plantillas.md`
@@ -230,8 +234,11 @@ Cada parte sale entera (código, ayuda, pruebas), auditada por alguien que no la
    `1.3 | Decorados` (en ERSO también los cinco episodios), a los que se llega con el ⋯ de su parte o episodio.
 2. El código del plan y el reporte juntos (parte 2): las tres funciones que ignoran planes, la red, *New day plan*,
    el orden. Publicar y subir `min_app_version`. **Hecha (v0.303).**
-3. El reacomodo de VLLF y ERSO (parte 4, puntos 1 a 3).
-4. *Shots* (parte 3).
+3. El reacomodo de VLLF y ERSO (parte 4, puntos 1 a 3). **Hecho (2026-10-28, con `min_app_version` 0.303):** 117
+   operaciones en una sola transacción, cada una con la fila como estaba; después, las 117 en la base tal cual, ninguna
+   otra página cambiada y la pasada de la barra igual (ninguna página sin lugar, mismas fichas). El contenido de las
+   páginas no se tocó.
+4. *Shots* (parte 3). **Hecha (v0.304).**
 5. Los títulos de las escenas de VLLF (parte 4, punto 4).
 
 ## 10. Preguntas que decide Lega

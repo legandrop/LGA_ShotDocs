@@ -13,6 +13,7 @@ export const sidebar = {
   'sidebar.sets': { en: "Sets", es: "Decorados" },
   'sidebar.days': { en: "Shoot days", es: "Días de rodaje" },
   'sidebar.pending': { en: "Pending", es: "Pendientes" },
+  'sidebar.shots': { en: "Shots", es: "Planos" },
   'sidebar.mapTip': {
     en: "Every scene, location and set of the project, each one its own page, and the shoot days. What links them the app makes from what the pages say",
     es: "Todas las escenas, locaciones y decorados del proyecto, cada uno su página, y los días de rodaje. Lo que los une lo arma la app con lo que dicen las páginas",

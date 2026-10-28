@@ -41,6 +41,24 @@ export const map = {
     es: "Todavía no hay reportes de scouting ni de pruebas. Creá uno con la plantilla Scouting técnico o Reporte de prueba, o marcá una carpeta con Tipo › Lo que se crea adentro es: Reportes de scouting.",
   },
   'map.tabPending': { en: "Pending", es: "Pendientes" },
+  'map.tabShots': { en: "Shots", es: "Planos" },
+  'map.noShots': {
+    en: "No shots yet: write them in each scene, under a Shots heading with one subheading per shot.",
+    es: "Todavía no hay planos: se escriben en cada escena, bajo un título Planos con un subtítulo por plano.",
+  },
+  'map.colShotScene': { en: "Scene", es: "Escena" },
+  'map.colShot': { en: "Shot", es: "Plano" },
+  'map.shotsCount': { en: { one: "{count} shot", other: "{count} shots" }, es: { one: "{count} plano", other: "{count} planos" } },
+  'map.shotsWithout': {
+    en: { one: "{count} scene without shots", other: "{count} scenes without shots" },
+    es: { one: "{count} escena sin planos", other: "{count} escenas sin planos" },
+  },
+  'map.shotsShown': { en: "{count} shown", es: "{count} a la vista" },
+  'map.shotsCopy': { en: "Copy table", es: "Copiar tabla" },
+  'map.shotsCopied': {
+    en: { one: "Copied {count} shot: paste it in a spreadsheet", other: "Copied {count} shots: paste them in a spreadsheet" },
+    es: { one: "Se copió {count} plano: pegalo en una planilla", other: "Se copiaron {count} planos: pegalos en una planilla" },
+  },
   'map.copy': { en: "Copy overview", es: "Copiar panorama" },
   'map.copyTip': {
     en: "Every scene, location and shoot day as text, to paste into an assistant or a document. Only what you can see.",

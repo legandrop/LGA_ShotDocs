@@ -1,0 +1,122 @@
+/* *Overview › Shots* (D813, parte 3): la tabla de planos. Con muchas columnas se desplaza de costado adentro de su
+   recuadro; el encabezado y las dos primeras columnas (escena y plano) quedan fijos. */
+
+.mp-shots {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mp-shots-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.mp-shots-scroll {
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.mp-shots table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  min-width: 100%;
+}
+
+.mp-shots th,
+.mp-shots td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  text-align: left;
+  vertical-align: top;
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+
+.mp-shots th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.mp-shots th button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 500 11px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.mp-shots th button:hover {
+  color: var(--text);
+}
+
+/* La escena y el plano, fijos a la izquierda al desplazar de costado. */
+.mp-shots th:nth-child(-n + 2),
+.mp-shots td:nth-child(-n + 2) {
+  position: sticky;
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.mp-shots th:nth-child(1),
+.mp-shots td:nth-child(1) {
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 88px;
+  min-width: 88px;
+  max-width: 88px;
+}
+
+.mp-shots th:nth-child(2),
+.mp-shots td:nth-child(2) {
+  left: 88px;
+  z-index: 1;
+  box-shadow: inset -1px 0 0 var(--border-soft);
+}
+
+.mp-shots th:nth-child(-n + 2) {
+  z-index: 3;
+}
+
+.mp-shots td.scene {
+  color: var(--scene-fg);
+}
+
+.mp-shots tbody tr:hover td {
+  background: linear-gradient(var(--hover), var(--hover)) var(--surface);
+}
+
+.mp-shots tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Las columnas de datos no se aprietan hasta una palabra por renglón: con muchas, la tabla se desplaza de costado. */
+.mp-shots th:nth-child(n + 3),
+.mp-shots td:nth-child(n + 3) {
+  min-width: 150px;
+}
+
+/* En una pantalla angosta, solo la escena queda fija: con el plano también, no quedaría lugar para lo demás. */
+@media (max-width: 640px) {
+  .mp-shots th:nth-child(2),
+  .mp-shots td:nth-child(2) {
+    position: static;
+    white-space: normal;
+    min-width: 140px;
+  }
+}

@@ -24,6 +24,8 @@ import { contentCounts } from './merge';
 import { twinLabels } from './twinNames';
 import { mapPathFrom, sceneLinks, sceneMentions, scenePageCount, type SceneLinks } from './sceneMentions';
 import { sceneLive, setIndex, type LiveSource, type PageChip, type SceneLive, type SetRow } from './liveView';
+import { shotsTable } from './shotsTable';
+import { ShotsView } from './ShotsView';
 import { sceneStageRows, stagePageIds } from './sceneStageRows';
 import { SceneStages } from './SceneStages';
 import type { SceneMentionList } from './sceneMentions';
@@ -60,6 +62,7 @@ const ICONS = {
   copy: 'M9 9h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1',
   code: 'm8 8-4 4 4 4M16 8l4 4-4 4',
   filter: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5',
+  table: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 10h18M3 15h18M9 5v14',
 } as const;
 
 function Ic({ name, small }: { name: keyof typeof ICONS; small?: boolean }) {
@@ -194,6 +197,8 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
     { id: 'scenes', icon: 'scene', label: tr('map.tabScenes'), n: counts.scenes },
     { id: 'scouting', icon: 'scout', label: tr('map.tabScouting'), n: counts.scoutings },
     { id: 'days', icon: 'day', label: tr('map.tabDays'), n: counts.days },
+    // La tabla de planos (D813): reemplaza a la tabla `BD Main` que se mantenía a mano.
+    { id: 'shots', icon: 'table', label: tr('map.tabShots'), n: src ? shotsTable(src).rows.length : 0 },
     { id: 'pending', icon: 'warn', label: tr('map.tabPending'), n: counts.toResolve + merges },
   ];
   const empty = !!data && complete && counts.scenes === 0 && counts.locations === 0 && counts.days === 0 && sets.length === 0;
@@ -273,6 +278,8 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
             <Scoutings data={data} fq={fq} />
           ) : tab === 'days' ? (
             <Days data={data} fq={fq} codes={codes} registry={snap?.registry ?? null} />
+          ) : tab === 'shots' ? (
+            <ShotsView src={src} fq={fq} codes={codes} complete={complete} />
           ) : (
             <Pending data={data} complete={complete} partial={partial} session={session} snap={snap} projectId={projectId} onPlace={(p) => goToPlace(services, p)} />
           )}

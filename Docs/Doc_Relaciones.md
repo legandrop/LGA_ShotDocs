@@ -529,6 +529,24 @@ de su título, D398; «planeada en» = lo que nombra su desglose, D393):
   see» para un invitado, D401). Nunca «not shot».
 - *Shoot days*, por fecha: día, locación del título (si el título no nombra una que exista, lo que dice, apagado:
   «Frente Ruso Villarino»; `titlePlace`), «1 with a section · 2 planned», «nothing written».
+- *Shots* (v0.304, D813, parte 3 de `Plan_Fichas_Cuaderno.md`): la tabla de planos que reemplaza a `BD Main` (la tabla
+  que se mantenía a mano en Coda). Una fila por plano de todas las escenas, en orden de escena: los planos escritos
+  adentro de la página de la escena (cada título 2 adentro del título 1 «Planos» / «Shots», D785, con los campos de su
+  tabla de dos columnas; también los de la segunda página de una escena repetida, hasta que se unan) y las subpáginas
+  directas de la escena que tienen campos y no son un documento (las fichas que todavía no se trajeron). Las
+  columnas son los rótulos de esos campos (`fields.ts`, normalizados): primero los que se buscan siempre (descripción,
+  decorado, locación, fecha de rodaje, INT/EXT, consulta abierta, categoría VFX) y después los demás por cuántos planos
+  los tienen. El nombre de la fila es el título de la sección (con su « · 2» si se repite) o el de la ficha; un *Shot
+  Name* que dice lo mismo no es columna, uno distinto sí. Un clic en un encabezado ordena por esa columna (otro, al
+  revés; otro, sin orden): las fechas como fechas y los números como números, lo vacío siempre al final; el filtro lee
+  el número de escena como *Scenes* (`5029`, «Escena 29») y si no, busca en todo; mientras el índice lee, no dice
+  cuántas escenas no tienen planos (D402); *Copy table* copia lo que se ve
+  separado por tabulaciones, para pegar en una planilla; cada plano lleva a su sección resaltada (`goToPlace`) o a su
+  ficha. Solo lee: se escribe en la escena. Sale de lo que el índice ya tiene en memoria (`shotSections`, `pageBlocks`,
+  `snap.fields`), una pasada por foto guardada en un `WeakMap` (`shotsTable.ts`), con lo de cada página guardado por
+  sus objetos de contenido y de campos (una foto nueva rearma solo las páginas que cambiaron); la vista es `ShotsView.tsx` +
+  `shots.css` (la escena y el plano, fijos al desplazar de costado; en el teléfono solo la escena). En la barra,
+  *Shots* es solo el nombre de la vista, sin lista (la barra no tiene el contenido de las páginas), como *Pending*.
 - *Pending*: los números que no existen con dónde se nombran (lleva al bloque), las escenas en dos páginas
   (`registration.duplicates`) y las secciones de un reporte con fotos y sin número (sin la general, D429; *Open section*
   lleva a la sección exacta). Cada fila es un `PendingRow` con una ranura `actions`: ahí van *Create* y *Assign* con sus
@@ -1359,10 +1377,12 @@ siendo `shotdocs.map`.
 | Textos | `sidebar.map`, `sidebar.auto`, `sidebar.locations`, `sidebar.days`, `sidebar.pending`, `map.title`, `map.copy*` |
 
 **El bloque.** Un título `OVERVIEW` con la marca `AUTO` (se arma solo, no se edita; lo dice su tooltip), la flecha que
-lo pliega entero y, si hay, `N pending`. Adentro, las cuatro partes de la vista del centro, cada una con su número:
+lo pliega entero y, si hay, `N pending`. Adentro, las partes de la vista del centro, cada una con su número:
 *Locations* (por nombre; cada fila a la página de la locación), *Scenes* (por episodio, como la sección 21), *Shoot
-days* (la etiqueta corta del día y sus locaciones; cada fila a su página) y *Pending* (sin lista: solo abre su pestaña).
-Una parte vacía no aparece; el bloque entero, solo en un proyecto con escenas, locaciones o días.
+days* (la etiqueta corta del día y sus locaciones; cada fila a su página), *Shots* (v0.304, D813: sin lista, solo abre
+su pestaña; aparece en un proyecto con escenas) y *Pending* (sin lista: solo abre su pestaña). Desde v0.302 también
+*Sets*, y *Scouting* ya no está en la barra (sigue como pestaña del centro). Una parte vacía no aparece; el bloque
+entero, solo en un proyecto con escenas, locaciones o días.
 
 **Cómo se toca, como una página del árbol.** Clic en el nombre de una parte abre su pestaña en el centro y despliega su
 lista; la flecha solo pliega o despliega, sin cambiar de vista. Clic en el título abre el mapa en la parte desplegada

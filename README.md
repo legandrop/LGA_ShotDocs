@@ -257,7 +257,8 @@ In development. What works today:
   SCENES, LOCATIONS or SHOOT DAYS label, and its pages are marked as such, with the scene number taken from the title
   (`101_074`). A scene's breakdown cards, a location's scouts and a day's plan count as part of it.
 - *Overview*, above the pages: every location in time, every scene with where a report has a section of it, the shoot
-  days and what's still pending, built from what the pages say. Every scene, location and set lives there, each one its
+  days, every shot of every scene in one table (sortable, to copy into a spreadsheet) and what's still pending, built
+  from what the pages say. Every scene, location and set lives there, each one its
   own page with what's inside it, and *Pages* keeps what you write at each stage (notes, scouts, tests, plans and day
   reports) without repeating them; the + next to *Scenes*, *Locations* or *Sets* creates one by number or name. In the
   sidebar it lists its locations, sets, scenes and shoot days, one part open at a time. *Copy overview* and *Copy JSON*

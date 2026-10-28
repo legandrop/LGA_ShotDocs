@@ -58,7 +58,7 @@ que crean. Para saber qué es una página, la app sube por el árbol y **gana lo
    días, una página sin fecha ni número de día (`Semana 03`) es un grupo, y adentro es día lo que tiene fecha **y**
    número de día, o un reporte.
 3. Subiendo, si aparece primero una entidad, la página es parte de ella; si aparece una carpeta de documentos, es ese
-   documento **a cualquier profundidad** (`4 | Planeamiento › Semana 03 › plan`).
+   documento **a cualquier profundidad** (`Planes por locación › Palomar › plan`).
 
 La marca de documento no se escribe en cada página: mover un plan de carpeta le cambia el tipo. Sacar una entidad de su
 carpeta no le quita la marca. Una carpeta de días es la carpeta de reportes del día: marcar una marca la otra.
@@ -176,8 +176,10 @@ El *Overview* (*Panorama*) tiene **las fichas** y **las vistas**. Está en la ba
 - **Las vistas** (no tienen páginas propias, llevan a donde vive cada cosa): en el centro, *Locations* en el tiempo (un
   punto por día cuyo título la nombra), *Sets* con sus escenas y dónde se filman, *Scenes* con todas las páginas que
   hablan de cada una, *Scouting* (cada scouting y prueba por fecha; en la barra ya no está: repetía `2 | Scouting
-  Reports`), *Shoot days* (en la barra, cada día abre su página en *Pages*, donde vive) y *Pending*, lo ambiguo de la
-  sección 3, con *Create*, *Assign*, *Merge* o *Bring them all in*.
+  Reports`), *Shoot days* (en la barra, cada día abre su página en *Pages*, donde vive), *Shots* (D813, v0.304: una
+  fila por plano de todas las escenas con los campos de su desglose, ordenable y para copiar a una planilla; reemplaza a
+  `BD Main`, que se mantenía a mano: se escribe en la escena, la tabla solo lee) y *Pending*, lo ambiguo de la sección
+  3, con *Create*, *Assign*, *Merge* o *Bring them all in*.
 
 En la barra se despliega una parte a la vez; una parte vacía aparece solo para quien puede crear (con su «+»). La
 carpeta de un tipo y la de cada episodio, que *Pages* ya no muestra, se alcanzan con el ⋯ de su parte o de su episodio
@@ -198,12 +200,12 @@ carpeta.
    1.1 | Desglose          Type › Scenes             una página por escena, sus fichas adentro
    1.2 | Locaciones        Type › Locations          una página por lugar físico
    1.3 | Decorados         Type › Sets               una página por decorado de guion
-2 | Scouting               Type › Scouting reports   un reporte por recorrido, por fecha
-3 | Pruebas                Type › Test reports       un reporte por prueba
-4 | Planeamiento           Type › Day plans          semanas › un plan por jornada; «Sin orden»
-5 | Rodaje                 cada semana, Shoot days   un reporte por jornada
-6 | Tablas y referencia    sin tipo
-90 | Archivo               Leave out of relations
+2 | Scouting Reports       Type › Scouting reports   un reporte por recorrido, por fecha
+3 | Pruebas y previs       Type › Test reports       un reporte por prueba o previs
+4 | Rodaje                 cada semana, Shoot days   el plan y el reporte de cada jornada, uno arriba del otro
+   Planes por locación     Type › Day plans          los planes de una locación para varias fechas
+5 | Referencia             sin tipo
+90 | Archivo               Leave out of relations    lo viejo (BD Main: hoy es Overview › Shots)
 ```
 
 **Notas.** Páginas libres, donde se quiera; lo que nombran va a *Other* y *Also named in*. Una nota adentro de una
@@ -219,25 +221,24 @@ y cuándo está planeada y la pregunta abierta.
 sus *Otros nombres* y sus coordenadas. Una página por decorado, con su nombre de guion y un campo *Locación* que diga
 dónde se filma; las escenas lo nombran en su campo *Decorado*.
 
-**Scouting.** En `2 | Scouting`, plantilla *Tech scout* o *Creative scout*. La fecha al principio del título
+**Scouting.** En `2 | Scouting Reports`, plantilla *Tech scout* o *Creative scout*. La fecha al principio del título
 (`26.01.29 | Scouting | Palomar`) o en *Fecha*; las locaciones en *Locación*, en el título o como títulos de sección,
 uno por lugar con su nombre exacto.
 
-**Pruebas.** En `3 | Pruebas`, plantilla *Test report*, con *Fecha* (opcional) y *Locación*; las escenas, por número.
+**Pruebas.** En `3 | Pruebas y previs`, plantilla *Test report*, con *Fecha* (opcional) y *Locación*; las escenas, por número.
 
-**Planeamiento.** En `4 | Planeamiento › Semana 03`, plantilla *Day plan* (*Fecha*, *Día*, *Locación*). El título lleva
-jornada y fecha (`D03_26.03.25_Palomar`), o el campo *Día*, un link al día; las escenas, por número. Los planes de una
-locación para varias fechas van en `Sin orden`.
-
-**Rodaje.** En `5 | Rodaje › Semana 03`, *New day report* crea el día (`2026-02-19 | Día 59`; conviene sumar el lugar,
+**Rodaje.** En `4 | Rodaje › Semana 03`, *New day report* crea el día (`2026-02-19 | Día 59`; conviene sumar el lugar,
 `| CENADE`, que es lo que lee la app) y copia del anterior la unidad, el equipo y la cámara. Cada escena abre su sección
 con `Escena 105_027` y lo filmado debajo; la primera sección sin número (*Info general*) es del día. La víspera,
 *Prepare tomorrow's report* deja listos los títulos.
 
 **El plan al lado del reporte (v0.303, D813).** En la misma semana, *New day plan* (la pestaña de al lado en el globito
 de *New day report*, o el menú ⋯) o *Plan tomorrow* (la tarjeta *Tomorrow*) crean el plan del día justo arriba de su
-reporte, con su mismo nombre y « | Plan». En la barra quedan uno arriba del otro: ↑/↓ pasan del plan al reporte.
-Cuando VLLF y ERSO se reacomoden (parte 4), `4 | Planeamiento` deja de existir.
+reporte, con su mismo nombre y « | Plan», y la plantilla *Day plan* (*Fecha*, *Día*, *Locación*); las escenas, por
+número. En la barra quedan uno arriba del otro: ↑/↓ pasan del plan al reporte. Los planes de una locación para varias
+fechas van en una carpeta de planes aparte (Type › Day plans), al principio de Rodaje. VLLF y ERSO se reacomodaron así
+el 2026-10-28 (parte 4): `4 | Planeamiento` ya no existe (está en la papelera, vacía), y cada plan tomó el nombre de su
+día con « | Plan» y, como nota, lo que su título viejo decía y el del día no (`… | ESMA | Plan · ESMA Salon Dorado`).
 
 ## 7. Lo que todavía no hace o está a medias
 

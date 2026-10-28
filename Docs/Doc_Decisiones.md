@@ -2484,4 +2484,7 @@ reporte de cada día van uno al lado del otro en Rodaje; `BD Main` se reemplaza 
 Lega aprobó el plan y sacar *Overview › Scouting* de la barra (pregunta 2). La parte 1 (la barra) salió en v0.302; los
 títulos de las escenas de VLLF (pregunta 1) siguen abiertos. La parte 2 (el plan al lado del reporte) salió en v0.303:
 en la carpeta de días un plan se reconoce por su marca o por una parte « | Plan» del título, lo contrario de la decisión
-3 de `Plan_Estructura_Etapas.md` para los planes que viven en Rodaje.
+3 de `Plan_Estructura_Etapas.md` para los planes que viven en Rodaje. La parte 3 (*Overview › Shots*, la tabla de
+planos que reemplaza a `BD Main`) salió en v0.304. En la mudanza de VLLF y ERSO (parte 4), cada plan toma el nombre de su
+día con « | Plan», y lo que su título viejo decía y el del día no (el lugar planeado, «SIN VFX») queda como « · nota»:
+no se pierde nada del nombre.
