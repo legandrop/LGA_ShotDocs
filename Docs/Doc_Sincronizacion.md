@@ -562,6 +562,42 @@ arma). Siguen apagados en la base hasta la entrega 3.
   llega. Con una base sin esa función, o con un cambio que dejó en la cola una versión anterior, sube el
   objeto entero y queda el último (`Doc_Plantillas.md`, sección 8).
 
+### El árbol en cada vuelta (v0.301)
+
+Hasta v0.300 cada vuelta del ciclo (cada 10 s con la app a la vista) bajaba la lista entera de páginas de todos los
+proyectos: con ERSO y VLLF, 1.729 filas y casi 1 MB. Con varias pestañas y servidores de prueba contra la base, eso se
+llevó en pocos días la cuota de tráfico de salida del plan gratis de Supabase (5 GB por mes).
+
+- **La marca.** `pages.changed_at` (migración `20261116120000_arbol_por_cambios.sql`, `schema_version` 26) es la hora
+  del último cambio de cualquier columna de la fila, también de `update_seq`, `clean_seq`, `snapshot_seq` y
+  `content_epoch`, que `updated_at` no mira. La pone un trigger (`zz_pages_changed_at`, el último de los `before`) con
+  `clock_timestamp()`; la API no la puede escribir. Las filas que existían antes de la migración tienen 2000-01-01.
+- **Cada vuelta** (`SupabaseRemote.fetchTree`) pide solo lo que cambió y lo suma a su copia del árbol. A `PageTree` le
+  sigue llegando la lista entera, como antes: nada cambia más arriba.
+  - Mientras la marca más nueva recibida es **reciente**, pide las filas con `changed_at` desde 2 minutos antes de ella
+    (`TREE_CHANGES_OVERLAP_MS`): una transacción que confirmó tarde puede traer una marca anterior. Esas filas vuelven a
+    llegar en cada vuelta durante ese rato.
+  - Cuando la marca está **asentada** pide solo lo posterior a la marca exacta (`gt`, con los microsegundos), y sin
+    cambios la respuesta es una lista vacía. Se asienta cuando, pasados los 2 minutos desde que llegó, una vuelta más
+    pidió con el solape, o, en la lista entera, cuando la más nueva ya es más vieja que el solape más 10 minutos
+    (`TREE_CLOCK_SLACK_MS`, por si el reloj del dispositivo está adelantado). Una marca que llega en una vuelta por
+    cambios siempre es reciente.
+- **La lista entera** se baja al abrir, cada 30 minutos (`TREE_WHOLE_EVERY_MS`) y cuando la copia puede estar vieja:
+  - cambian los proyectos pedidos, los permisos propios (`fetchMyAccess`) o la generación de la base (una copia
+    restaurada);
+  - el total de páginas que la sesión ve (un `HEAD` con el total, como mucho cada minuto, `TREE_COUNT_EVERY_MS`) deja de
+    coincidir con la copia, o no se lo pudo saber tres veces seguidas (`TREE_COUNT_FAILS`). Cubre lo que entra o sale
+    de lo que se ve sin cambiar la fila, como un permiso de otro. Si en el mismo minuto entra una y sale otra, el total
+    coincide: el peor caso son los 30 minutos;
+  - el reloj del dispositivo fue para atrás (todo plazo se toma por vencido).
+- La copia nunca saca filas entre dos listas enteras: lo que deja de verse sale con la lista entera siguiente.
+- **Base sin la migración**, o una app vieja: se baja la lista entera, como siempre. Si la base dice 26 pero no tiene la
+  columna, la app deja de pedirla 10 minutos (como `clean_seq`).
+- Una pestaña oculta no corre el ciclo (`onWake` mira `visibilityState`), y las miniaturas quedan en el dispositivo:
+  cada una se baja una sola vez.
+- **Copias de seguridad** (repo privado de copias): cada una lee la base entera, así que desde 2026-10-27 se copia solo
+  si la base cambió desde la anterior.
+
 ### Topes de largo
 
 La base tiene `check` de largo (`length()`, en caracteres de Postgres: **puntos de código**, no unidades UTF-16 de JS;

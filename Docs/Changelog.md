@@ -1,5 +1,19 @@
 # Changelog — LGA Shot Docs
 
+v0.301 :
+
+Supabase avisó que el proyecto pasó la cuota de tráfico de salida del plan gratis (5,5 GB de 5). La causa: cada vuelta
+del ciclo (cada 10 s con la app a la vista) bajaba la lista entera de páginas, casi 1 MB con ERSO y VLLF, en cada
+pestaña y en cada servidor de prueba contra la base. Ahora `pages.changed_at` (un trigger, `schema_version` 26) marca
+el último cambio de cada fila y `fetchTree` pide sobre una copia del árbol solo lo que cambió: con 2 minutos de solape
+mientras la última marca es reciente, después solo lo posterior a ella (sin cambios, una lista vacía). La lista entera
+se baja al abrir, cada 30 minutos y cuando la copia puede estar vieja (otros proyectos, permisos propios o generación,
+un total que no coincide, el reloj para atrás). Sin la migración o con una app vieja, todo sigue como antes.
+Las copias de seguridad, que leían la base entera cuatro veces por día, ahora copian solo si hubo cambios. De paso,
+`menciones_permisos.sql` mira solo a sus personas: fallaba con miembros reales en el workspace.
+
+[Bajar del árbol solo lo que cambió]
+
 v0.300 :
 
 No había tabs: la app mostraba una sola página, y en el navegador la segunda pestaña quedaba en «abierta en otra

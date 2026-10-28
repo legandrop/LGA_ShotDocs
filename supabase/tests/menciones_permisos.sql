@@ -292,9 +292,10 @@ begin
     '00000000-0000-4000-8000-000000000e07', '00000000-0000-4000-8000-000000000e08',
     '00000000-0000-4000-8000-000000000e09', '00000000-0000-4000-8000-000000000e10']::uuid[]),
     format('caso 5: la lista de la dueña: %s', got);
-  -- Desde la entrega 2 (ME2), la dueña, que puede compartir c, recibe sin acceso a quien no la ve: solo m0.
+  -- Desde la entrega 2 (ME2), la dueña, que puede compartir c, recibe sin acceso a quien no la ve: solo m0. Solo entre
+  -- las personas de la prueba: los miembros reales del workspace tampoco ven c y también aparecen.
   assert (select coalesce(array_agg(c.user_id), '{}') from public.mention_candidates('00000000-0000-4000-8000-000000000eb2') c
-          where not c.has_access) = array['00000000-0000-4000-8000-000000000e06']::uuid[],
+          where not c.has_access and c.email like '%@test.invalid') = array['00000000-0000-4000-8000-000000000e06']::uuid[],
     'caso 5: las sin acceso de la dueña no son {m0}';
 end;
 $$;

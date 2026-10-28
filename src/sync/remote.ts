@@ -42,6 +42,8 @@ export interface Remote {
    * para que, cuando se pueda compartir, lo compartido llegue por su propio camino. `schemaVersion`: la versión de la
    * base, si se sabe; desde la 12 se pide también `clean_seq` (Docs/Doc_Privacidad_Borrado.md). `known`: cuántas
    * páginas tiene el dispositivo de la bajada anterior; con muchas no se le pide el total a la API (`CountChoice`).
+   * Devuelve siempre la lista entera, aunque desde la 26 casi siempre baje solo lo que cambió
+   * (`CHANGED_AT_SCHEMA_VERSION`).
    */
   fetchTree(projectIds: string[], schemaVersion?: number | null, known?: number): Promise<PageRow[]>;
   /**
@@ -298,6 +300,82 @@ export const PROJECT_PURGE_SCHEMA_VERSION = 23;
  * (una base sin la migración sigue andando igual, sin aviso).
  */
 export const SNAPSHOT_SCHEMA_VERSION = 17;
+/**
+ * La versión con `pages.changed_at` (20261116120000_arbol_por_cambios.sql): cada vuelta baja solo las páginas que
+ * cambiaron (Docs/Doc_Sincronizacion.md, «El árbol en cada vuelta»). Constante propia: una base sin la migración sigue
+ * bajando la lista entera, sin aviso.
+ */
+export const CHANGED_AT_SCHEMA_VERSION = 26;
+/** Cada cuánto se baja igual la lista entera del árbol, aunque no haya ninguna señal de que haga falta. */
+export const TREE_WHOLE_EVERY_MS = 30 * 60_000;
+/** Cada cuánto se compara el total de páginas que la sesión ve con la copia (lo que entra o sale de lo compartido). */
+export const TREE_COUNT_EVERY_MS = 60_000;
+/**
+ * Cuánto antes de la última marca recibida se vuelve a pedir, mientras esa marca es reciente: lo que una transacción
+ * confirmó tarde. Una escritura desde la API dura como mucho el tope de cada consulta (segundos); lo que se escape lo
+ * trae la lista entera de cada tanto.
+ */
+export const TREE_CHANGES_OVERLAP_MS = 2 * 60_000;
+/** Lo que el reloj del dispositivo puede estar adelantado: una marca más vieja que el solape y esto ya no es reciente. */
+export const TREE_CLOCK_SLACK_MS = 10 * 60_000;
+/** Cuántos totales seguidos sin respuesta aguanta la copia antes de bajar la lista entera. */
+export const TREE_COUNT_FAILS = 3;
+
+/** Una fila del árbol tal como llega, con la marca de su último cambio cuando se la pidió (`changed_at`). */
+type MarkedPageRow = PageRow & { changed_at?: string | null };
+
+/**
+ * La copia del árbol que arma `fetchTree`: la última lista entera más lo que trajo cada vuelta por cambios. Sirve solo
+ * para los mismos proyectos (`key`).
+ */
+interface TreeCopy {
+  key: string;
+  rows: Map<string, PageRow>;
+  /** La marca más nueva recibida (`changed_at`), en microsegundos y tal como la mandó la base. */
+  mark: number;
+  markText: string;
+  /** Cuándo llegó esa marca (hora del dispositivo). */
+  markSeenAt: number;
+  /**
+   * Ya no puede confirmarse nada anterior a la marca: la marca es vieja, o se pidió con el solape una vez pasado el
+   * solape desde que llegó. Desde ahí se pide solo lo posterior a la marca exacta, y sin cambios llega una lista vacía.
+   */
+  settled: boolean;
+  /** Cuándo se bajó la lista entera y cuándo se comparó el total por última vez (hora del dispositivo). */
+  wholeAt: number;
+  countAt: number;
+  /** Totales seguidos que no se pudieron saber. */
+  countFails: number;
+}
+
+/**
+ * `changed_at` en microsegundos (cabe entero en un número). Postgres manda hasta seis decimales y saca los ceros del
+ * final; `Date.parse` se queda con los milisegundos y el resto se suma aparte.
+ */
+function markOf(row: MarkedPageRow): number | null {
+  if (typeof row.changed_at !== 'string') return null;
+  const fraction = /\.(\d+)/.exec(row.changed_at)?.[1] ?? '';
+  const ms = Date.parse(row.changed_at.replace(/\.\d+/, `.${fraction.slice(0, 3).padEnd(3, '0')}`));
+  return Number.isFinite(ms) ? ms * 1000 + Number(fraction.slice(3, 6).padEnd(3, '0')) : null;
+}
+
+/** Cuánto pasó desde `t` en el reloj del dispositivo. Si el reloj fue para atrás, todo plazo se toma por vencido. */
+function elapsed(t: number): number {
+  const age = Date.now() - t;
+  return age < 0 ? Infinity : age;
+}
+
+/** Una marca más vieja que el solape (con margen para un reloj adelantado): no puede llegar nada anterior a ella. */
+function oldMark(mark: number): boolean {
+  return Date.now() - mark / 1000 >= TREE_CHANGES_OVERLAP_MS + TREE_CLOCK_SLACK_MS;
+}
+
+/** La fila sin la marca: al árbol del dispositivo llega lo de siempre. */
+function unmarked(row: MarkedPageRow): PageRow {
+  const copy = { ...row };
+  delete copy.changed_at;
+  return copy;
+}
 
 /** El tramo a compactar que devuelve `claim_page_compaction` (Docs/Doc_Compactar.md, 4.2). */
 export interface CompactionClaim {
@@ -855,6 +933,14 @@ export class SupabaseRemote
   /** Desde cuándo la base no tiene las funciones de archivos con la versión de la app; se reintenta cada tanto. */
   private versionedFilesMissingAt = 0;
 
+  /** El árbol de la última vuelta (`fetchTree`), para pedir solo lo que cambió. `null`: la próxima baja la lista entera. */
+  private treeCopy: TreeCopy | null = null;
+  /** Desde cuándo la base no tiene `pages.changed_at` (aunque diga la versión 26); se reintenta cada tanto. */
+  private changedAtMissingAt = 0;
+  /** La generación y los permisos propios de la vuelta anterior: si cambian, el árbol se baja entero. */
+  private treeGeneration: number | null = null;
+  private treeAccess: string | null = null;
+
   /**
    * `appVersion` viaja con cada subida de contenido y con cada pedido de la cola de archivos (registrar, usar y
    * dejar de usar): el servidor rechaza los de una versión más vieja que la mínima del workspace.
@@ -893,6 +979,9 @@ export class SupabaseRemote
     // Los snapshots se bajan con `pull_page_content` solo prendidos y con la base en la versión 17 (si no, todo sale
     // por `pull_page_updates`, como siempre).
     this.snapshotsOn = Number(row.schema_version) >= SNAPSHOT_SCHEMA_VERSION && extra.snapshot_min_version != null;
+    // Una base restaurada (otra generación) puede tener filas con marcas anteriores a las de la copia: lista entera.
+    if (this.treeGeneration !== null && Number(row.generation) !== this.treeGeneration) this.treeCopy = null;
+    this.treeGeneration = Number(row.generation);
     return {
       generation: Number(row.generation),
       minAppVersion: row.min_app_version === null ? null : Number(row.min_app_version),
@@ -919,15 +1008,119 @@ export class SupabaseRemote
   }
 
   async fetchTree(projectIds: string[], schemaVersion?: number | null, known?: number): Promise<PageRow[]> {
+    // Lo de siempre era bajar la lista entera en cada vuelta: casi 1 MB cada 10 s con ERSO y VLLF, la cuota de tráfico
+    // del plan en pocos días. Con `changed_at` (versión 26) se baja solo lo que cambió y se suma a la copia; la lista
+    // entera, solo cuando hace falta (Docs/Doc_Sincronizacion.md, «El árbol en cada vuelta»).
+    const key = [...projectIds].sort().join(',');
+    const marked = (schemaVersion ?? 0) >= CHANGED_AT_SCHEMA_VERSION && Date.now() - this.changedAtMissingAt >= 10 * 60_000;
+    const copy = this.treeCopy;
+    if (marked && copy && copy.key === key && elapsed(copy.wholeAt) < TREE_WHOLE_EVERY_MS) {
+      const rows = await this.fetchTreeChanges(projectIds, schemaVersion, copy);
+      if (rows) return rows;
+    }
     // De a 100 proyectos por consulta: la lista viaja en la dirección y tiene un largo máximo.
-    const rows: PageRow[] = [];
+    const rows: MarkedPageRow[] = [];
     // Con un árbol chico se le pide el total a la API (un pedido, como siempre); con uno grande, no: contar duplica el
     // costo de cada pedido, y la lista termina con una página vacía pedida por clave.
     const counting = new CountChoice(known);
+    const wholeAt = Date.now();
     for (let i = 0; i < projectIds.length; i += 100) {
-      rows.push(...(await this.fetchTreeOf(projectIds.slice(i, i + 100), schemaVersion, counting)));
+      const part = await this.fetchTreeOf(projectIds.slice(i, i + 100), schemaVersion, counting, marked ? '' : null);
+      // La lista entera nunca vuelve sin filas: un árbol recortado le sacaría páginas al dispositivo (`setSnapshot`).
+      if (!part) throw new RemoteError('the page tree came back empty', false);
+      rows.push(...part);
     }
-    return rows;
+    // Sin marcas (una base sin la columna, o un árbol vacío) no hay desde dónde seguir: la próxima vuelta, entera.
+    let newest: MarkedPageRow | null = null;
+    let mark = -Infinity;
+    for (const row of rows) {
+      const m = markOf(row);
+      if (m === null) {
+        newest = null;
+        break;
+      }
+      if (m > mark) [mark, newest] = [m, row];
+    }
+    const fresh: TreeCopy = {
+      key,
+      rows: new Map(rows.map((r) => [r.id, unmarked(r)])),
+      mark,
+      markText: newest?.changed_at ?? '',
+      markSeenAt: wholeAt,
+      settled: oldMark(mark),
+      wholeAt,
+      countAt: wholeAt,
+      countFails: 0,
+    };
+    this.treeCopy = marked && newest ? fresh : null;
+    // Copias: el árbol del dispositivo se queda con las filas que recibe y la de acá sigue para la próxima vuelta.
+    return [...fresh.rows.values()].map((r) => ({ ...r }));
+  }
+
+  /**
+   * Una vuelta por cambios, sumada a la copia: con una marca reciente, las filas con `changed_at` desde un rato antes
+   * de ella (lo que una transacción confirmó tarde); con una marca asentada, solo las posteriores a ella, y sin cambios
+   * no llega ninguna. `null` si hace falta la lista entera: la base no tiene la columna, o el total que la sesión ve ya
+   * no es el de la copia (algo entró o salió de lo que se ve sin cambiar: un permiso, una rama movida adentro de una
+   * compartida), o hace rato que no se lo puede saber.
+   */
+  private async fetchTreeChanges(projectIds: string[], schemaVersion: number | null | undefined, copy: TreeCopy): Promise<PageRow[] | null> {
+    const askedAt = Date.now();
+    const settled = copy.settled;
+    const since = settled ? copy.markText : new Date(copy.mark / 1000 - TREE_CHANGES_OVERLAP_MS).toISOString();
+    const changed: MarkedPageRow[] = [];
+    for (let i = 0; i < projectIds.length; i += 100) {
+      const part = await this.fetchTreeOf(projectIds.slice(i, i + 100), schemaVersion, new CountChoice(), since, settled);
+      if (!part) return null;
+      changed.push(...part);
+    }
+    let moved = false;
+    for (const row of changed) {
+      copy.rows.set(row.id, unmarked(row));
+      const m = markOf(row);
+      if (m !== null && m > copy.mark) {
+        [copy.mark, copy.markText, moved] = [m, row.changed_at as string, true];
+      }
+    }
+    if (moved) {
+      // Una marca que acaba de llegar es reciente, diga lo que diga el reloj del dispositivo (puede estar adelantado).
+      copy.markSeenAt = Date.now();
+      copy.settled = false;
+    } else if (askedAt - copy.markSeenAt >= TREE_CHANGES_OVERLAP_MS) {
+      // Se pidió con el solape cuando ya había pasado el solape desde que llegó la marca: lo anterior a ella ya está.
+      copy.settled = true;
+    }
+    if (elapsed(copy.countAt) >= TREE_COUNT_EVERY_MS) {
+      const total = await this.countTree(projectIds);
+      copy.countAt = Date.now();
+      copy.countFails = total === null ? copy.countFails + 1 : 0;
+      // La copia ya no sirve: si la lista entera que sigue falla, la vuelta siguiente también baja la lista entera.
+      if ((total !== null && total !== copy.rows.size) || copy.countFails >= TREE_COUNT_FAILS) {
+        this.treeCopy = null;
+        return null;
+      }
+    }
+    return [...copy.rows.values()].map((r) => ({ ...r }));
+  }
+
+  /**
+   * Cuántas páginas de estos proyectos ve la sesión, sin bajar ninguna (`HEAD` con el total). `null` si no se pudo
+   * saber (la base cortó por tiempo, la red): esa vuelta no compara.
+   */
+  private async countTree(projectIds: string[]): Promise<number | null> {
+    let total = 0;
+    for (let i = 0; i < projectIds.length; i += 100) {
+      try {
+        const { error, count } = await timed(
+          this.client.from('pages').select('id', { count: 'exact', head: true }).in('workspace_id', projectIds.slice(i, i + 100)),
+        );
+        if (error || typeof count !== 'number') return null;
+        total += count;
+      } catch {
+        return null;
+      }
+    }
+    return total;
   }
 
   /** Desde cuándo la base no tiene `pages.clean_seq` (aunque diga la versión 12); se reintenta cada tanto. */
@@ -939,40 +1132,60 @@ export class SupabaseRemote
   /** Los snapshots están prendidos en la base, según los últimos ajustes leídos (`fetchWorkspaceSettings`). */
   private snapshotsOn = false;
 
-  private async fetchTreeOf(projectIds: string[], schemaVersion: number | null | undefined, counting: CountChoice): Promise<PageRow[]> {
+  /**
+   * `since`: `null`, la lista entera sin marcas (como siempre); `''`, la lista entera con `changed_at`; una fecha, solo
+   * las filas con `changed_at` desde ahí (`after`: solo las posteriores). Devuelve `null` solo si se pidió desde una
+   * fecha y la base no tiene la columna.
+   */
+  private async fetchTreeOf(
+    projectIds: string[],
+    schemaVersion: number | null | undefined,
+    counting: CountChoice,
+    since: string | null = null,
+    after = false,
+  ): Promise<MarkedPageRow[] | null> {
     // De a 1000, por id: si se crean páginas mientras se baja, no se saltea ninguna. Hasta el total que dice la API
     // (o una página vacía, que es lo único que la termina cuando no se pide el total), nunca por haber recibido menos
     // de 1000: un árbol cortado se tomaría por "estas páginas ya no existen" (`PageTree.setSnapshot` reemplaza la
     // copia del dispositivo por lo que llega).
-    const list = new KeyedList<PageRow>('pages', (r) => r.id);
+    const list = new KeyedList<MarkedPageRow>('pages', (r) => r.id);
     // `clean_seq` solo con la versión 12 o más; si falta igual, se sigue sin ella un rato (como `settings`).
     const clean = (schemaVersion ?? 0) >= CLEAN_SCHEMA_VERSION && Date.now() - this.cleanSeqMissingAt >= 10 * 60_000;
     // `snapshot_seq` y `content_epoch` con la 17 o más; si faltan igual, se dejan primero ellas (son las más nuevas).
     const snap = (schemaVersion ?? 0) >= SNAPSHOT_SCHEMA_VERSION && Date.now() - this.snapshotColumnsMissingAt >= 10 * 60_000;
+    // `changed_at` (la 26), la más nueva de todas: si falta, se deja primero.
+    const marked = since !== null && Date.now() - this.changedAtMissingAt >= 10 * 60_000;
+    if (since && !marked) return null;
     for (;;) {
       const columns =
         (this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS) +
         (clean ? ', clean_seq' : '') +
-        (snap ? ', snapshot_seq, content_epoch' : '');
+        (snap ? ', snapshot_seq, content_epoch' : '') +
+        (marked ? ', changed_at' : '');
       let query = this.client.from('pages').select(columns, counting.option).in('workspace_id', projectIds);
+      if (since) query = after ? query.gt('changed_at', since) : query.gte('changed_at', since);
       if (list.last) query = query.gt('id', list.last.id);
       const { data, error, status, count } = await timed(query.order('id').limit(MAX_ROWS_PER_REQUEST));
       // La base cortó por tiempo un pedido que contaba: el mismo pedido, sin contar.
       if (counting.timedOut(error)) continue;
+      if (error?.code === UNDEFINED_COLUMN && marked) {
+        this.changedAtMissingAt = Date.now();
+        return since ? null : this.fetchTreeOf(projectIds, schemaVersion, counting, null);
+      }
       if (error?.code === UNDEFINED_COLUMN && snap) {
         this.snapshotColumnsMissingAt = Date.now();
-        return this.fetchTreeOf(projectIds, schemaVersion, counting);
+        return this.fetchTreeOf(projectIds, schemaVersion, counting, since, after);
       }
       if (error?.code === UNDEFINED_COLUMN && clean) {
         this.cleanSeqMissingAt = Date.now();
-        return this.fetchTreeOf(projectIds, schemaVersion, counting);
+        return this.fetchTreeOf(projectIds, schemaVersion, counting, since, after);
       }
       if (error?.code === UNDEFINED_COLUMN && !this.settingsMissing) {
         this.settingsMissingAt = Date.now();
-        return this.fetchTreeOf(projectIds, schemaVersion, counting);
+        return this.fetchTreeOf(projectIds, schemaVersion, counting, since, after);
       }
       if (error) throw toRemoteError(error, status);
-      if (list.add((data ?? []) as unknown as PageRow[], count)) return list.rows;
+      if (list.add((data ?? []) as unknown as MarkedPageRow[], count)) return list.rows;
     }
   }
 
@@ -1560,7 +1773,13 @@ export class SupabaseRemote
       if (list.add(grants.data as { id: string }[], grants.count)) break;
     }
     try {
-      return parseAccess(member.data, list.rows);
+      const access = parseAccess(member.data, list.rows);
+      // Otros permisos propios: las páginas que se empiezan a ver no cambiaron (su marca es vieja) y las que se dejan
+      // de ver no llegan por cambios. La próxima vuelta baja el árbol entero.
+      const signature = JSON.stringify([member.data, list.rows]);
+      if (this.treeAccess !== null && signature !== this.treeAccess) this.treeCopy = null;
+      this.treeAccess = signature;
+      return access;
     } catch (err) {
       // No es un rechazo: se vuelve a preguntar en la próxima sincronización y nada cambia.
       throw new RemoteError(err instanceof Error ? err.message : String(err), false);

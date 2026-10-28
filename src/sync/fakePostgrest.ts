@@ -85,6 +85,7 @@ function condition(column: string, rest: string): Check {
   const check: Check =
     op === 'eq' ? (r) => r[column] != null && compare(r[column], value) === 0
     : op === 'gt' ? (r) => r[column] != null && compare(r[column], value) > 0
+    : op === 'gte' ? (r) => r[column] != null && compare(r[column], value) >= 0
     : op === 'lt' ? (r) => r[column] != null && compare(r[column], value) < 0
     : op === 'is' ? (r) => (value === 'null' ? r[column] == null : r[column] === (value === 'true'))
     : op === 'in' ? ((list) => (r: FakeRow) => list.includes(String(r[column]).toLowerCase()))(raw.slice(1, -1).split(',').map((v) => unquote(v).toLowerCase()))
