@@ -2471,3 +2471,13 @@ otra está importando, reemplazando, subiendo una carpeta o tiene un comentario 
 *Take over* como antes (también si no contesta en 3 s: puede estar ocupada); si no contesta en 15 s (el navegador la
 congeló), se le saca.
 **Cómo se revierte:** `handoffChannel()` en `src/services.ts` devolviendo `null` (vuelve el *Take over* de siempre).
+
+### D813 · Fichas en el Panorama, documentos en Páginas (2026-10-27)
+**Pedido de Lega:** el Panorama abría las mismas páginas que estaban en *Pages* (Decorados se veía igual en los dos
+lados y se podía editar), `BD Main` repetía el Desglose y el plan de cada día vivía en otra carpeta que su reporte. Pidió
+pensar cómo ordenar la información para cargarla rápido en cada etapa y que en post se llegue a todo desde la escena.
+**Eligió la alternativa B** de tres (A: el Panorama como lente sobre *Pages*; C: un Panorama que nunca se edita): se
+escribe por etapa y se lee por cosa, y cada página vive en un solo lugar. Las fichas (escena, locación, decorado) se ven
+solo en el Panorama, con lo automático arriba y lo propio editable abajo; *Pages* es el cuaderno por etapas; el plan y el
+reporte de cada día van uno al lado del otro en Rodaje; `BD Main` se reemplaza por una tabla de planos generada
+(*Overview › Shots*). Plan, partes y preguntas abiertas: `Plan_Fichas_Cuaderno.md`. Todavía sin implementar.
