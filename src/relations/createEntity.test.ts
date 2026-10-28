@@ -142,6 +142,8 @@ describe('las guardas (G1–G5)', () => {
     const four = await d.tree.create(a, '004 | Cuatro', projectId);
     expect(createGuard(await c(), { kind: 'scene', code: '003' })).toEqual({ ok: true, parentId: a, before: four, title: '003' });
     expect(createGuard({ ...(await c()), perms: { ...owner, canCreateIn: () => false } }, { kind: 'scene', code: '003' })).toEqual({ ok: false, reason: 'cantCreate', pageId: a });
+    // La carpeta elegida (el «+» del *Overview* pregunta en cuál cuando hay dos, D813): va ahí.
+    expect(createGuard(await c(), { kind: 'scene', code: '005', in: b })).toEqual({ ok: true, parentId: b, title: '005' });
     // Las escenas de un episodio repartidas entre su grupo y la carpeta Scenes misma (empatan): no se elige (O9).
     const p3 = await d.tree.createProject('Serie repartida');
     const scenes = await d.tree.create(null, 'Desglose', p3);
@@ -259,6 +261,25 @@ describe('crear', () => {
     if (!res.ok) return;
     expect(d.tree.get(res.pageId)!.settings?.entity).toEqual({ kind: 'location' });
     expect(d.tree.children(built.ids.locaciones).at(-1)!.id).toBe(res.pageId);
+  });
+
+  it('un decorado (D813): sin carpeta de decorados no hay dónde; con ella, al final, con su marca y sin plantilla; otra vez, ya existe', async () => {
+    const { d, built, snap, ctx } = await world();
+    expect(createGuard(await ctx(), { kind: 'set', name: 'Hospital | Pasillo INT' })).toEqual({ ok: false, reason: 'noFolder' });
+    await d.tree.setSetting(built.ids.decorados, 'holds', 'set');
+    const { deps, ready } = depsOf(d, built, snap);
+    await ready();
+    const res = await createEntity(deps, { kind: 'set', name: 'hospital | Pasillo INT' });
+    expect(res).toMatchObject({ ok: true, parentId: built.ids.decorados, title: 'Hospital | Pasillo INT' });
+    if (!res.ok) return;
+    expect(d.tree.get(res.pageId)!.settings?.entity).toEqual({ kind: 'set' });
+    expect(d.tree.children(built.ids.decorados).at(-1)!.id).toBe(res.pageId);
+    await ready();
+    expect(await createEntity(deps, { kind: 'set', name: 'Hospital  |  pasillo int' })).toMatchObject({ ok: false, reason: 'exists', pageId: res.pageId });
+    // Otra carpeta de decorados elegida: va ahí.
+    const otra = await d.tree.create(null, 'Decorados B', built.projectId);
+    await d.tree.setSetting(otra, 'holds', 'set');
+    expect(createGuard(await ctx(), { kind: 'set', name: 'Quirófano', in: otra })).toEqual({ ok: true, parentId: otra, title: 'Quirófano' });
   });
 
   it('Undo: a la papelera solo si nadie la tocó', async () => {

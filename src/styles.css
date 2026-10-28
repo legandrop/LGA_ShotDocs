@@ -1754,6 +1754,15 @@ code {
   padding: 8px 10px;
 }
 
+/* Los dos grupos de destinos, como en la barra: *Pages* y las fichas del *Overview* (D813). */
+.move-group {
+  padding: 10px 10px 4px;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

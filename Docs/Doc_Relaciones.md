@@ -1370,6 +1370,27 @@ una parte o una fila se abre como un clic y un episodio solo recibe el foco. Con
 abierto desde acá pliega *Pages*, y una página abierta por otro camino pliega la parte desplegada: lo recordado vale
 hasta la próxima página.
 
+**Las fichas viven acá (v0.302, D813; `Docs/Plan_Fichas_Cuaderno.md`, parte 1).** *Scenes*, *Locations* y *Sets* listan
+cada escena, locación y decorado **como su página**, dibujada con las mismas filas del árbol de *Pages* (`Sidebar.tsx`
+le pasa `fichaRows` a `OverviewNav`): un clic abre la página (la de una escena también; antes abría el mapa), la flecha
+muestra lo de adentro, y tienen el menú ⋯, el «+», renombrar, soltar páginas adentro, ⌘/Ctrl+clic, los puntos de
+menciones y el mismo teclado (← en una escena cerrada sube a su episodio o a su parte). No se arrastran: el *Overview*
+las ordena por número o por nombre, y se mueven con *Move to…*, que suma un grupo «Overview» con las fichas agrupadas
+por parte y episodio; para una página que ya es escena, locación o decorado también ofrece la carpeta de su tipo y los
+episodios (cambiar una escena de episodio), y nunca lo que está adentro de la página que se mueve. *Pages* esconde lo
+que el *Overview* muestra (`overviewPlaces.ts`: las fichas con lo de adentro, y una sola carpeta por parte y por número
+de episodio, si ya no tiene otra cosa adentro); lo demás sigue en *Pages*. Se llega a la carpeta escondida con el ⋯ de
+su parte o de su episodio, un menú reducido (*Share*, *Move to…*, *Type*, *Leave out of relations* y la papelera); si
+se abre por la búsqueda o un link, marca su parte o su episodio. El «+» de cada parte (`OverviewNew.tsx`) pide el
+número o el nombre y crea con `createEntity.ts` (que ahora también crea decorados y escenas con letra, `027A`, junto a
+su escena base); el «+» de cada episodio completa el episodio solo (`27` crea `105_027`). Sin carpeta de ese tipo la
+crea en la raíz, y con dos posibles pregunta en cuál. Una ficha abierta por cualquier camino (link, búsqueda, Atrás, un
+tab) despliega su parte y su episodio y marca su fila; un día abierto desde *Shoot days* se abre en su semana en
+*Pages*, centrado y sin plegar el *Overview*. *Scouting* ya no está en la barra (repetía `2 | Scouting Reports`; sigue en la vista del centro). La ruta de
+una ficha dice «Overview › Scenes» en el encabezado de la página, las migas, la búsqueda, el PDF y el zip, y en los
+diálogos de formato y encabezado la carpeta escondida se nombra como su parte. Al arrancar, hasta la primera foto de las
+relaciones, y con un link público, *Pages* muestra todo como antes.
+
 ## 23. Una escena: dónde está cada cosa, y sus planos adentro (v0.279, D783–D786)
 
 Pedido de Lega: la vista de una escena en el Overview mezclaba todo lo que la nombra («La escena y su desglose», «Shot

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent, type MouseEvent, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
@@ -19,9 +19,10 @@ import { ProjectSwitcher } from './ProjectSwitcher';
 import { HelpButton } from './HelpButton';
 import { LinkHeader } from './LinkHeader';
 import { MentionTreeDot } from './mentionDots';
-import { OverviewNav } from '../relations/OverviewNav';
+import { OverviewNav, type FichaRows } from '../relations/OverviewNav';
 import { HoldsTag } from '../relations/HoldsTag';
 import { kindReader } from '../relations/kind';
+import { fichaBranch, fichaOf, useOverviewPlaces } from '../relations/overviewPlaces';
 import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { LinkTreeIcon } from './LinkTreeIcon';
 import { useLinkMode } from '../linkMode';
@@ -48,7 +49,7 @@ import {
   treeKeyAction,
   visibleRows,
 } from './treeNav';
-import { clearOpenedFromOverview, goToRow, openedFromOverview, sidebarEdge, sidebarStep, sidebarStepAround, TREE_AWAY_EVENT, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
+import { clearOpenedFromOverview, goToRow, openedFromOverview, overviewParent, sidebarEdge, sidebarStep, sidebarStepAround, TREE_AWAY_EVENT, TREE_GO_EVENT, type TreeGo } from './sidebarRows';
 
 /** Llevar la fila a la vista: centrada con el colapso automático (treeNav.ts), si no, lo justo para que se vea. */
 const showRow = AUTO_COLLAPSE ? centerRow : revealRow;
@@ -164,28 +165,52 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const { expandSubpages } = usePrefs();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
+  // Dónde vive cada página (Plan_Fichas_Cuaderno.md, parte 1; D813): las fichas (escenas, locaciones, decorados) se
+  // dibujan en el *Overview* con estas mismas filas, y *Pages* no las dibuja. Sin foto de las relaciones, todo en *Pages*.
+  const places = useOverviewPlaces();
+  const hiddenIds = places?.hidden;
+  /** Las subpáginas que se dibujan acá: sin las que viven en el *Overview*. */
+  const kids = (id: string): PageRow[] => {
+    const all = tree.children(id);
+    return hiddenIds ? all.filter((p) => !hiddenIds.has(p.id)) : all;
+  };
+  /**
+   * La página vive en el *Overview*: una ficha (o algo adentro de una) o la carpeta escondida de una parte o de un
+   * episodio, a la que se llega con su ⋯.
+   */
+  const inOverview = (id: string): boolean => !!fichaOf(places, tree, id) || !!hiddenIds?.has(id);
+  /** Las madres que se abren para que se vea `id`: en una ficha, solo las de adentro; una carpeta escondida, ninguna. */
+  const branchTo = (id: string): string[] => {
+    const ficha = fichaOf(places, tree, id);
+    if (ficha) return fichaBranch(tree, ficha, id);
+    return hiddenIds?.has(id) ? [] : tree.ancestors(id).map((p) => p.id);
+  };
   // Colapso automático (treeNav.ts): al abrir otra página, lo desplegado de su proyecto pasa a ser solo su rama. Se
   // calcula al dibujar, no en un efecto: el árbol no se pinta un cuadro con la rama vieja abierta, y la fila se centra
   // con lo que queda (abajo, `tryReveal`). Espera a que la página esté en el árbol (al cargar puede no haber llegado).
-  // Lo abierto desde el *Overview* (una vista del mapa o una página desde sus listas) pliega todo *Pages*: la barra es un
-  // solo árbol y queda abierto solo el camino a lo que se abrió (sidebarRows.ts, D806).
+  // Una vista del mapa o una ficha (lo que vive en el *Overview*) pliega todo *Pages*: la barra es un solo árbol y queda
+  // abierto solo el camino a lo que se abrió (sidebarRows.ts, D806). Lo que vive en *Pages* se abre en *Pages*, también
+  // si se abrió desde una lista del *Overview* (un día): ahí se ve dónde está (D813).
   const [branchOf, setBranchOf] = useState<string | null>(null);
-  // La página abierta desde el *Overview*: sus madres no se abren en *Pages* (ni cuando el árbol cambia después).
+  // La página que vive en el *Overview*: sus madres de *Pages* no se abren (ni cuando el árbol cambia después).
   const shutFor = useRef<string | null>(null);
   const onMap = route.name === 'map';
-  const branchKey = onMap ? `map:${route.tab}` : activeId;
+  // Lo abierto que vive en el *Overview* (la ficha que lo tiene adentro, o la carpeta escondida misma).
+  const activeHome = activeId ? (fichaOf(places, tree, activeId) ?? (hiddenIds?.has(activeId) ? activeId : null)) : null;
+  // Cuando llega la foto de las relaciones, una ficha abierta deja *Pages*: se vuelve a mirar.
+  const branchKey = onMap ? `map:${route.tab}` : activeId ? `${activeId}|${activeHome ?? ''}` : null;
   if (AUTO_COLLAPSE && branchKey && branchOf !== branchKey && (onMap || (tree.get(activeId!) && !tree.isTrashed(activeId!)))) {
     setBranchOf(branchKey);
-    const fromOverview = onMap || openedFromOverview(activeId);
-    shutFor.current = fromOverview ? activeId : null;
+    const shut = onMap || !!activeHome;
+    shutFor.current = shut ? activeId : null;
     const project = activeId ? tree.get(activeId)?.workspace_id : projectId;
-    const branch = fromOverview || !activeId ? [] : tree.ancestors(activeId).map((p) => p.id);
+    const branch = !activeId ? [] : branchTo(activeId);
     // Lo que no es de este proyecto, o no está en el árbol (otro workspace, algo que todavía no bajó), queda como estaba.
     const outside = (id: string) => tree.get(id)?.workspace_id !== project;
     // Si la fila ya se ve (sus madres están abiertas: las flechas, un clic en el árbol), no se pliega nada: el colapso
     // llega cuando algo se despliega (`expand`, D809). Un link o la búsqueda a una rama cerrada sí la deja sola.
     setExpanded((prev) =>
-      !fromOverview && branch.every((id) => prev.has(id)) ? prev : collapseToBranch(prev, branch, fromOverview ? '' : activeId!, outside),
+      !shut && branch.every((id) => prev.has(id)) ? prev : collapseToBranch(prev, branch, activeId ?? '', outside),
     );
   }
   // La fila hasta donde llegaron las flechas con la tecla apretada: se marca como la elegida enseguida, aunque la página
@@ -193,7 +218,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const [browsing, setBrowsing] = useState<string | null>(null);
   const shownActive = browsing ?? activeId;
   const [renaming, setRenaming] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ id: string; position: MenuPosition; anchor: HTMLElement } | null>(null);
+  const [menu, setMenu] = useState<{ id: string; position: MenuPosition; anchor: HTMLElement; folderOnly?: boolean } | null>(null);
   const [account, setAccount] = useState<MenuPosition | null>(null);
   const accountButton = useRef<HTMLButtonElement>(null);
   // "Google Drive" (menú de la cuenta). Al volver de conectar Drive, Google deja `?drive=<resultado>` en la
@@ -283,10 +308,12 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const revision = tree.getRevision();
   // Antes de pintar: el árbol no se dibuja un cuadro con la fila escondida y recién después abierto.
   useLayoutEffect(() => {
-    if (!activeId || (AUTO_COLLAPSE && shutFor.current === activeId)) return;
-    const ids = tree.ancestors(activeId).map((p) => p.id);
+    if (!activeId) return;
+    // Una ficha abre sus madres adentro de ella (en el *Overview*), nunca las de *Pages*.
+    if (!activeHome && AUTO_COLLAPSE && shutFor.current === activeId) return;
+    const ids = branchTo(activeId);
     setExpanded((prev) => (ids.every((id) => prev.has(id)) ? prev : new Set([...prev, ...ids])));
-  }, [activeId, tree, revision]);
+  }, [activeId, tree, revision, activeHome]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Con *Pages* plegada, abrir otra página (un link, la búsqueda, atrás) la despliega: la página abierta se ve en el
   // árbol. Solo cuando cambia la página abierta, no al arrancar (lo plegado se recuerda) ni con cada cambio del árbol.
@@ -367,7 +394,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   useLayoutEffect(() => {
     if (revealTimer.current) clearTimeout(revealTimer.current);
     // Con el colapso automático, también la que abrió el árbol: el árbol cambió alrededor de su fila y va centrada.
-    const follow = activeId && (AUTO_COLLAPSE ? !openedFromOverview(activeId) : activeId !== openedByTree.current);
+    // Lo que vive en *Pages* (un día) abierto desde el *Overview* también: se ve dónde está (D813).
+    const follow = activeId && (AUTO_COLLAPSE ? !openedFromOverview(activeId) || !inOverview(activeId) : activeId !== openedByTree.current);
     reveal.current = follow ? { id: activeId, at: Date.now() } : null;
     openedByTree.current = null;
     settle.current = null;
@@ -382,9 +410,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       setExpanded((prev) => new Set(prev).add(id));
       return;
     }
-    // Desplegar es lo que pliega lo demás de su proyecto (D809).
+    // Desplegar es lo que pliega lo demás de su proyecto (D809). Una ficha (en el *Overview*) no abre nada de *Pages*.
     const project = tree.get(id)?.workspace_id;
-    const ancestors = tree.ancestors(id).map((p) => p.id);
+    const ancestors = branchTo(id);
     setExpanded((prev) =>
       collapseForExpand(prev, ancestors, id, (other) => tree.isDescendant(other, id), (other) => tree.get(other)?.workspace_id !== project),
     );
@@ -409,8 +437,10 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       next.delete(id);
       return next;
     });
-    if (activeId && tree.isDescendant(activeId, id)) browse.current(id);
-    else if (pending) browse.current(tree.isDescendant(pending, id) ? id : pending);
+    // Lo que queda escondido es lo que se ve adentro de `id`: una ficha abierta (en el *Overview*) no, aunque esté
+    // guardada en una carpeta de *Pages* (D813).
+    if (activeId && branchTo(activeId).includes(id)) browse.current(id);
+    else if (pending) browse.current(branchTo(pending).includes(id) ? id : pending);
   };
   /** Pone el foco en la fila; si no, la trae a la vista con `showRow` (que cuenta las madres pegadas arriba). */
   const focusRow = (id: string, preventScroll = false) => {
@@ -447,9 +477,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     const rect = e.currentTarget.getBoundingClientRect();
     const y = (e.clientY - rect.top) / rect.height;
     // Una madre pegada arriba (D771) no está en su lugar: antes o después de ella sería muy lejos de lo que se ve.
-    // Ahí solo se suelta adentro.
+    // Ahí solo se suelta adentro. Y en una ficha también: el *Overview* las ordena por número o por nombre (D813).
     const home = e.currentTarget.parentElement?.getBoundingClientRect().top ?? rect.top;
-    const stuck = rect.top - home > 1;
+    const stuck = rect.top - home > 1 || !!places?.fichas.has(page.id);
     const zone: DropZone = stuck ? 'inside' : y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
     if (!allowedZone(page, zone)) {
       if (drop?.id === page.id) setDrop(null);
@@ -486,7 +516,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       if (edge && edge !== e.currentTarget) goToRow(edge, false);
       return;
     }
-    const action = treeKeyAction(rows, id, e.key);
+    const action = treeKeyAction(rowsAround(id), id, e.key);
     if (action.type === 'go') {
       // El foco pasa ya; la página se abre al instante o, con la tecla apretada, al frenar (treeNav.ts).
       goTree(action.id, e.repeat);
@@ -494,6 +524,10 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       // Arriba de la primera fila (o abajo de la última) sigue el *Overview*: la barra es un solo recorrido (D806).
       const next = sidebarStep(e.currentTarget, e.key === 'ArrowDown' ? 1 : -1);
       if (next) goToRow(next, e.repeat);
+    } else if (action.type === 'none' && e.key === 'ArrowLeft' && e.currentTarget.closest('.ov-nav')) {
+      // Una ficha cerrada sube a su episodio o a su parte del *Overview*, como cualquier fila a su madre.
+      const up = overviewParent(e.currentTarget);
+      if (up) goToRow(up, false);
     } else if (action.type === 'open') {
       openPage(action.id);
     } else if (action.type === 'expand') {
@@ -507,6 +541,17 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   // que ya leyó; uno por fila recorría las hermanas de cada escena (cientos de escenas: N² por dibujo).
   const kinds = kindReader(tree);
   const isLoc = useLocMatcher();
+
+  /** El foco salió de un árbol (el de *Pages* o una lista de fichas del *Overview*), si no se fue a otra fila. */
+  function treeBlur(e: ReactFocusEvent<HTMLUListElement>) {
+    const to = e.relatedTarget as Element | null;
+    if (e.currentTarget.contains(to) || to?.closest('[role="tree"]')) return;
+    // Al volver con Tab, entra por la página abierta, y lo que las flechas iban a abrir ya no va (la página no cambia
+    // bajo el cursor).
+    setFocusId(null);
+    opener.cancel();
+    setBrowsing(null);
+  }
 
   /** Una lista de hermanas: si corresponde, con los títulos divididos y la columna del código alineada. */
   function renderList(parentId: string | null, pages: PageRow[], depth: number, role: 'tree' | 'group') {
@@ -537,18 +582,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
         role={role}
         aria-label={role === 'tree' ? tr('sidebar.tree') : undefined}
         style={style}
-        onBlur={
-          role === 'tree'
-            ? (e) => {
-                if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-                // El foco salió del árbol: al volver con Tab, entra por la página abierta, y lo que las
-                // flechas iban a abrir ya no va (la página no cambia bajo el cursor).
-                setFocusId(null);
-                opener.cancel();
-                setBrowsing(null);
-              }
-            : undefined
-        }
+        onBlur={role === 'tree' ? treeBlur : undefined}
       >
         {pages.map((page) => renderItem(page, depth, split?.titles.get(page.id) ?? null, dated.get(page.id) ?? null, jornadas))}
       </ul>
@@ -556,7 +590,9 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   }
 
   function renderItem(page: PageRow, depth: number, split: SplitTitle | null, dated: DatedTitle | null, jornadas: boolean) {
-    const children = tree.children(page.id);
+    const children = kids(page.id);
+    // Una ficha no se arrastra: el *Overview* la ordena solo (por número o por nombre); se mueve con *Move to…*.
+    const ficha = !!places?.fichas.has(page.id);
     const open = expanded.has(page.id);
     const dropClass = drop?.id === page.id ? ` drop-${drop.zone}` : '';
     // Una sola fila del árbol en el orden de Tab (con sus botones): la del foco o, si no, la abierta.
@@ -575,7 +611,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           data-page={page.id}
           className={`tree-row${children.length ? ' parent' : ''}${children.length && open ? ' sticky-head' : ''}${page.id === shownActive ? ' active' : ''}${menu?.id === page.id ? ' menu-open' : ''}${renaming === page.id ? ' renaming' : ''}${dropClass}`}
           style={{ paddingLeft: 4 + depth * 18, '--depth': depth } as CSSProperties}
-          draggable={renaming !== page.id && perms.canManagePage(page.id)}
+          draggable={renaming !== page.id && !ficha && perms.canManagePage(page.id)}
           onDragStart={(e) => {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', page.id);
@@ -695,12 +731,21 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     );
   }
 
-  const roots = tree.roots(projectId);
+  // Una ficha que se ve sola (un invitado con permiso solo sobre ella) también vive en el *Overview*.
+  const roots = hiddenIds ? tree.roots(projectId).filter((p) => !hiddenIds.has(p.id)) : tree.roots(projectId);
   // Las filas que se ven, en orden: lo que recorren las flechas (ninguna con *Pages* plegada).
-  const rows = pagesClosed ? [] : visibleRows(roots, (id) => tree.children(id), expanded);
+  const rows = pagesClosed ? [] : visibleRows(roots, kids, expanded);
   const visible = new Set(rows.map((r) => r.id));
-  const tabStop =
-    focusId && visible.has(focusId) ? focusId : activeId && visible.has(activeId) ? activeId : (rows[0]?.id ?? null);
+  /** Las filas del mismo árbol que `id`: *Pages*, o la ficha del *Overview* con lo desplegado adentro. */
+  const rowsAround = (id: string) => {
+    if (visible.has(id)) return rows;
+    const ficha = fichaOf(places, tree, id);
+    const page = ficha ? tree.get(ficha) : undefined;
+    return page ? visibleRows([page], kids, expanded) : [];
+  };
+  /** La fila está dibujada: en *Pages* o, en una ficha, en el *Overview* (dibujada la última vez). */
+  const shown = (id: string) => visible.has(id) || (!!fichaOf(places, tree, id) && !!rowEls.current.get(id)?.isConnected);
+  const tabStop = focusId && shown(focusId) ? focusId : activeId && shown(activeId) ? activeId : (rows[0]?.id ?? null);
 
   // Si la fila con el foco desaparece (otra persona la mandó a la papelera o la movió adentro de una cerrada),
   // el foco caería al documento y las flechas dejarían de responder: pasa a la fila visible que le seguía (o
@@ -709,7 +754,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   useEffect(() => {
     const before = shownBefore.current;
     shownBefore.current = rows.map((r) => r.id);
-    if (!focusId || visible.has(focusId)) return;
+    if (!focusId || shown(focusId)) return;
     const at = before.indexOf(focusId);
     const lost = !document.activeElement || document.activeElement === document.body;
     const neighbor =
@@ -747,7 +792,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   lostKey.current = (e) => {
     if (!isTreeMoveKey(e.key) || !isPlainKey(e) || !tabStop) return;
     e.preventDefault();
-    const action = treeKeyAction(rows, tabStop, e.key);
+    const action = treeKeyAction(rowsAround(tabStop), tabStop, e.key);
     if (action.type !== 'go') return;
     goTree(action.id, e.repeat);
   };
@@ -782,6 +827,16 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   // Con un link público: sin proyectos, papelera ni cuenta (Docs/Doc_Link_Publico.md, 3.5).
   const linkMode = useLinkMode();
   const canCreateRoot = perms.canCreateIn(null, projectId);
+  // Las fichas en el *Overview*, con estas mismas filas: menú, «+», renombrar, arrastrar adentro, ⌘/Ctrl+clic, los
+  // puntos de menciones y el teclado (D813).
+  const fichaRows: FichaRows = {
+    row: (pageId, depth, label) => {
+      const page = tree.get(pageId);
+      return page && !tree.isTrashed(pageId) ? renderItem(page, depth, label, null, false) : null;
+    },
+    onBlur: treeBlur,
+    menu: (id, anchor) => setMenu(menu?.id === id ? null : { id, position: menuBelow(anchor, PAGE_MENU_WIDTH), anchor, folderOnly: true }),
+  };
 
   return (
     <nav className="sidebar" aria-label={tr('sidebar.pages')}>
@@ -804,7 +859,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       <OfflineLine />
       {/* *Overview* (Docs/Doc_Relaciones.md, secciones 12 y 21; D772): locaciones, escenas, días y pendientes, armados con
           lo que dicen las páginas; solo en un proyecto con escenas, locaciones o días. */}
-      {!linkMode && <OverviewNav />}
+      {!linkMode && <OverviewNav fichaRows={fichaRows} />}
 
       {/* *Pages* en su propio bloque: su título (y cada madre abierta) queda arriba al bajar mientras se ve lo de
           adentro, y se va con el final del árbol (pedido de Lega, 2026-10-25). */}
@@ -915,6 +970,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           position={menu.position}
           anchor={menu.anchor}
           onClose={() => setMenu(null)}
+          folderOnly={menu.folderOnly}
           onNewChild={() => void newPage(menu.id)}
           onRename={() => setRenaming(menu.id)}
           onMove={() => setMoving(menu.id)}

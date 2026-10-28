@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
-import { navigate, pagePath, STAY_PARAM, useSearchParam } from '../router';
+import { mapPath, navigate, pagePath, STAY_PARAM, useSearchParam } from '../router';
 import { useLinkMode } from '../linkMode';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION } from '../sync/accessRequests';
@@ -10,6 +10,7 @@ import { mergedTarget, readPointer, restorePage } from '../relations/merge';
 import { searchSession } from './projectSearchUi';
 import { sameTitle } from '../relations/twinNames';
 import { cededMark } from '../relations/cededCopy';
+import { placeName, routeLabel, routeOf, useOverviewPlaces } from '../relations/overviewPlaces';
 import { DayReportButton } from '../templates/dayReportUi';
 import { TemplateBanner } from '../templates/ownTemplatesUi';
 import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
@@ -25,7 +26,7 @@ import { LinkAsideNotice } from './LinkAsideNotice';
 import { LinkVisitorAsideNotice } from './LinkVisitorAsideNotice';
 import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
-import { headerLevels, headerPages, ownHeader } from './titles';
+import { headerLevels, ownHeader } from './titles';
 import { setDocumentTitle } from './titleBadge';
 
 export interface TitlePreparation {
@@ -433,36 +434,43 @@ const LEVEL_CHOICES: { value: number | null; label: string }[] = [
 
 /**
  * Encabezado arriba del título con las páginas que contienen a esta ("MGTZD | Brief · Uruguay"). Cuántos
- * niveles muestra, o si se oculta, se guarda en una página y vale para todas las de adentro.
+ * niveles muestra, o si se oculta, se guarda en una página y vale para todas las de adentro. En una ficha, su ruta en el
+ * *Overview* («Overview · Scenes», D813): no las carpetas de *Pages* donde está guardada.
  */
 function PageHeader({ id, editable }: { id: string; editable: boolean }) {
   const tree = useTree();
+  const places = useOverviewPlaces();
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
-  const pages = headerPages(tree, id);
-  const hasAncestors = tree.ancestors(id).length > 0;
+  const { levels } = headerLevels(tree, id);
+  const route = routeOf(tree, places, id);
+  const pages = levels === null ? route : levels <= 0 ? [] : route.slice(-levels);
+  const hasAncestors = route.length > 0;
   const tr = useT();
 
   return (
     <div className="page-header">
-      {pages.map((p, i) => (
-        <span key={p.id} style={{ display: 'contents' }}>
-          {i > 0 && (
-            <span className="dot" aria-hidden="true">
-              ·
-            </span>
-          )}
-          <button
-            className={`ancestor${i === pages.length - 1 ? ' nearest' : ''}`}
-            onClick={() => navigate(pagePath(p.id))}
-            data-tip={p.title || undefined}
-            data-tip-plain
-            data-tip-overflow
-          >
-            {p.title || tr('common.untitled')}
-          </button>
-        </span>
-      ))}
+      {pages.map((p, i) => {
+        const label = routeLabel(p, tr);
+        return (
+          <span key={'page' in p ? p.page.id : `ov:${p.part ?? ''}`} style={{ display: 'contents' }}>
+            {i > 0 && (
+              <span className="dot" aria-hidden="true">
+                ·
+              </span>
+            )}
+            <button
+              className={`ancestor${i === pages.length - 1 ? ' nearest' : ''}`}
+              onClick={() => navigate('page' in p ? pagePath(p.page.id) : mapPath(p.part ?? undefined))}
+              data-tip={label}
+              data-tip-plain
+              data-tip-overflow
+            >
+              {label}
+            </button>
+          </span>
+        );
+      })}
       {editable && (
         <button
           ref={toggle}
@@ -490,6 +498,7 @@ function PageHeader({ id, editable }: { id: string; editable: boolean }) {
 
 function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElement | null; onClose: () => void }) {
   const tree = useTree();
+  const places = useOverviewPlaces();
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, onClose, anchor);
   const { levels, last, from } = headerLevels(tree, id);
@@ -501,7 +510,9 @@ function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElemen
   // Si mientras está abierto cambia dónde se define (otro dispositivo), la elección vieja puede quedar
   // fuera de la rama: vuelve a la de por defecto.
   const target = branch.some((p) => p.id === chosen) ? chosen : (from?.id ?? id);
-  const shown = headerPages(tree, id);
+  // Lo que muestra el encabezado: en una ficha, su ruta del *Overview* (D813).
+  const route = routeOf(tree, places, id);
+  const shown = levels === null ? route : levels <= 0 ? [] : route.slice(-levels);
   const own = ownHeader(tree, id);
   const visible = levels !== 0;
   const tr = useT();
@@ -543,7 +554,7 @@ function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElemen
           <select id="header-target" value={target} onChange={(e) => setTarget(e.target.value)}>
             {branch.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.id === id ? tr('pageFormat.thisBranch') : tr('pageFormat.branch', { title: p.title || tr('common.untitled') })}
+                {p.id === id ? tr('pageFormat.thisBranch') : tr('pageFormat.branch', { title: placeName(places, p, tr) })}
               </option>
             ))}
           </select>
@@ -551,11 +562,11 @@ function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElemen
       )}
       <p>
         {visible && shown.length > 0 ? (
-          <>{tr.rich('header.startsAt', { title: <strong>{shown[0].title || tr('common.untitled')}</strong> })} </>
+          <>{tr.rich('header.startsAt', { title: <strong>{routeLabel(shown[0], tr)}</strong> })} </>
         ) : null}
         {from ? (
           tr.rich('header.setOn', {
-            where: <strong>{from.id === id ? tr('header.thisPage') : from.title || tr('common.untitled')}</strong>,
+            where: <strong>{from.id === id ? tr('header.thisPage') : placeName(places, from, tr)}</strong>,
           })
         ) : (
           tr('header.notSet')

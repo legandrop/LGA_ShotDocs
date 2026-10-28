@@ -17,6 +17,7 @@ import { searchSession, type ResultRequest } from './projectSearchUi';
 import { existingRelationsSession } from './relationsUi';
 import { redoReplace, undoReplace, useReplaceSession } from './replaceUi';
 import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
+import { routeLabel, routeOf, useOverviewPlaces } from '../relations/overviewPlaces';
 
 // El panel de buscar en el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, y "Cómo quedó (entrega 2)"). Se abre
 // con la lupa de la barra lateral o con Ctrl/⌘+K; en la computadora es una ventana arriba al centro y en el
@@ -73,6 +74,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
   const session = searchSession(services);
   const index = session.index;
   const tree = useTree();
+  const places = useOverviewPlaces();
   const perms = usePermissions();
   const status = useSyncStatus();
   const projectId = useCurrentProject();
@@ -467,9 +469,11 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
                         <span className="search-title">
                           {hit.page.title ? <Highlight text={hit.page.title} ranges={hit.titleRanges} /> : tr('common.untitled')}
                         </span>
-                        {hit.path.length > 0 && (
-                          <span className="search-path">{hit.path.map((p) => p.title || tr('common.untitled')).join(' › ')}</span>
-                        )}
+                        {(() => {
+                          // La ruta de la página: en una ficha, «Overview › Scenes» (D813).
+                          const path = routeOf(tree, places, hit.page.id);
+                          return path.length > 0 && <span className="search-path">{path.map((p) => routeLabel(p, tr)).join(' › ')}</span>;
+                        })()}
                       </span>
                     </>,
                   )}

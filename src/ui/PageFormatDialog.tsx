@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useT } from '../i18n';
 import { useTree } from '../services';
+import { placeName, useOverviewPlaces } from '../relations/overviewPlaces';
 import { ownFormat, PAGE_SIZES, pageFormat, sizeLabel, type PageSize } from './pageFormat';
 
 const SIZES: PageSize[] = ['free', ...(Object.keys(PAGE_SIZES) as (keyof typeof PAGE_SIZES)[])];
@@ -8,6 +9,7 @@ const SIZES: PageSize[] = ['free', ...(Object.keys(PAGE_SIZES) as (keyof typeof 
 /** Elegir el tamaño de hoja de una página y de las de adentro (se guarda en la página elegida de la rama). */
 export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose: () => void }) {
   const tree = useTree();
+  const places = useOverviewPlaces();
   const page = tree.get(pageId);
   const format = pageFormat(tree, pageId);
   // Igual que el encabezado: se puede guardar en esta página o en un contenedor, hasta la página que ya
@@ -20,7 +22,8 @@ export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose:
   const parentId = page?.parent_id;
   const inheritsFrom = parentId && tree.get(parentId) ? pageFormat(tree, parentId).from : null;
   const tr = useT();
-  const titled = (p: { title: string }) => p.title || tr('common.untitled');
+  // La carpeta escondida de una parte del *Overview* se nombra como la parte (D813).
+  const titled = (p: { id: string; title: string }) => placeName(places, p, tr);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();

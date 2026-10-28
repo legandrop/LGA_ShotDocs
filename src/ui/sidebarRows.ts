@@ -160,14 +160,15 @@ export function goToRow(row: HTMLElement, repeat: boolean): void {
     return;
   }
   row.focus({ preventScroll: true });
-  window.dispatchEvent(new Event(TREE_AWAY_EVENT));
   const nav = row.closest<HTMLElement>('.sidebar-scroll');
   if (nav) revealRow(row, nav);
   if (!(row instanceof HTMLAnchorElement)) {
+    // Un episodio no abre nada: lo abierto (una ficha, con las filas del árbol) sigue marcado.
     opener.cancel();
     unmark();
     return;
   }
+  window.dispatchEvent(new Event(TREE_AWAY_EVENT));
   mark(row);
   target = row;
   opener.request(row.getAttribute('href') ?? '', repeat);

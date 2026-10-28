@@ -2480,4 +2480,6 @@ pensar cómo ordenar la información para cargarla rápido en cada etapa y que e
 escribe por etapa y se lee por cosa, y cada página vive en un solo lugar. Las fichas (escena, locación, decorado) se ven
 solo en el Panorama, con lo automático arriba y lo propio editable abajo; *Pages* es el cuaderno por etapas; el plan y el
 reporte de cada día van uno al lado del otro en Rodaje; `BD Main` se reemplaza por una tabla de planos generada
-(*Overview › Shots*). Plan, partes y preguntas abiertas: `Plan_Fichas_Cuaderno.md`. Todavía sin implementar.
+(*Overview › Shots*). Plan, partes y preguntas abiertas: `Plan_Fichas_Cuaderno.md`. Con «Sí, arrancá» (2026-10-27)
+Lega aprobó el plan y sacar *Overview › Scouting* de la barra (pregunta 2). La parte 1 (la barra) salió en v0.302; los
+títulos de las escenas de VLLF (pregunta 1) siguen abiertos.

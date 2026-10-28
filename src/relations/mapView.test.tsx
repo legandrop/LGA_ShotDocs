@@ -220,7 +220,7 @@ describe('el mapa en la app', () => {
     expect(location.pathname).toBe(pagePath(built.ids.arenera));
   });
 
-  it('Scouting: los scoutings y pruebas por fecha con sus locaciones, en la vista y en la barra lateral', async () => {
+  it('Scouting: los scoutings y pruebas por fecha con sus locaciones, en la vista (en la barra no hay parte)', async () => {
     const { host } = await app(
       () => '/map/scouting',
       async (d, b) => {
@@ -237,9 +237,9 @@ describe('el mapa en la app', () => {
       ['2026-01-05', '26.01.05 | Scouting | La Arenera (estudio)', 'La Arenera (estudio)', ''],
       ['—', 'Comparación de técnicas', 'No location named', 'Test'],
     ]);
-    // «Tech scout 06/01», adentro de CENADE y sin año en el título, sigue en la cabecera de la locación pero no acá.
-    const part = [...host.querySelectorAll<HTMLElement>('.ov-part')].find((p) => p.querySelector('.ov-part-name')?.textContent === 'Scouting')!;
-    expect(part.querySelector('.scene-nav-n')!.textContent).toBe('2');
+    // «Tech scout 06/01», adentro de CENADE y sin año en el título, sigue en la cabecera de la locación pero no acá. En la
+    // barra no hay parte *Scouting*: los scoutings viven en *Pages* (D813).
+    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).not.toContain('Scouting');
   });
 
   it('Planes: uno que se contradice va a Pending con los dos días; una fecha solo planeada va en Shoot days', async () => {

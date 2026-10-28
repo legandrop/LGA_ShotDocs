@@ -1,6 +1,6 @@
 # La lógica de LGA Shot Docs, de una sola lectura
 
-Cómo piensa la app (v0.298): qué es cada página, cómo se da cuenta sola de qué escena, locación, decorado o día nombra
+Cómo piensa la app (v0.302): qué es cada página, cómo se da cuenta sola de qué escena, locación, decorado o día nombra
 cada una y qué muestra con eso. El detalle técnico está en los documentos de la sección 8. Ante una duda, manda el
 código (`src/relations/`).
 
@@ -13,6 +13,14 @@ una isla con su servidor y su Drive.
 Lo que la app sabe de una página no se escribe en su texto: hay dos marcas en sus ajustes (`settings.entity`, qué es;
 `settings.holds`, qué se crea adentro) y lo demás, quién nombra a quién, **se arma en el dispositivo con las páginas que
 la persona ve** y se rearma al escribir. *Leave out of relations*, en el menú ⋯, saca una rama del cálculo (D540).
+
+**Dónde se ve cada página (D813).** La barra tiene dos partes: el *Overview* (*Panorama*), con **las fichas** (cada
+escena, locación y decorado es su página, con lo de adentro) y las vistas que arma la app; y *Pages* (*Páginas*), **el
+cuaderno**: lo que se escribe en cada etapa (notas, scoutings, pruebas, planes y reportes, referencia). Cada página se
+ve en un solo lugar: *Pages* no dibuja las fichas ni la carpeta de un tipo que solo tiene fichas. En la base no cambia
+nada: las fichas siguen guardadas en sus carpetas (`1 | Preproducción › 1.1 | Desglose`), y lo que el *Overview* no
+puede listar (una escena sin número, la segunda con el mismo número, lo que está fuera de las relaciones) sigue en
+*Pages* con su carpeta (`overviewPlaces.ts`).
 
 **En términos simples:** no es una base de datos con columnas. Es un cuaderno que la app lee como una persona atenta, y
 con lo que lee arma índices que se actualizan solos.
@@ -148,21 +156,29 @@ el teléfono arranca así). Los documentos no tienen cabecera: aparecen en las d
 
 ## 5. El Overview (Panorama)
 
-El *Overview* (*Panorama*) es el mapa del proyecto, armado con lo que la persona ve; **no se edita**. Está en la barra
-lateral, arriba de *Pages* (*Páginas*), y en una vista grande en el centro. Sus partes:
+El *Overview* (*Panorama*) tiene **las fichas** y **las vistas**. Está en la barra lateral, arriba de *Pages*
+(*Páginas*), y en una vista grande en el centro.
 
-- ***Locations***: cada locación en el tiempo, un punto por día cuyo título la nombra (lleno si el reporte tiene algo).
-- ***Sets***: los decorados por nombre, con sus escenas y dónde se filman.
-- ***Scenes***: por episodio, con sus locaciones y sus días; abrir una muestra todas las páginas que hablan de ella, con
-  los renglones por etapa de la cabecera.
-- ***Scouting***: cada scouting y cada prueba por fecha, con las locaciones que nombra, esté donde esté.
-- ***Shoot days***: cada día con su locación, sus escenas y su plan; una fecha con solo plan figura como planeada.
-- ***Pending***: lo ambiguo de la sección 3, con *Create*, *Assign*, *Merge* o *Bring them all in*.
+- **Las fichas** (D813): en la barra, ***Locations***, ***Sets*** y ***Scenes*** (por episodio) listan cada locación,
+  decorado y escena **como su página**, con las mismas filas del árbol de *Pages*: un clic la abre, la flecha muestra lo
+  de adentro, y tienen su ⋯ y su «+». La cabecera de la página (lo que arma la app) no se edita; lo de abajo (el
+  desglose, la dirección, los otros nombres), sí. El «+» de cada parte pide el número o el nombre y la crea con las
+  guardas de siempre; sin carpeta de ese tipo, la crea en la raíz con su tipo, y con dos posibles pregunta en cuál. La
+  ruta de una ficha dice «Overview › Scenes», no las carpetas de *Pages* donde está guardada.
+- **Las vistas** (no tienen páginas propias, llevan a donde vive cada cosa): en el centro, *Locations* en el tiempo (un
+  punto por día cuyo título la nombra), *Sets* con sus escenas y dónde se filman, *Scenes* con todas las páginas que
+  hablan de cada una, *Scouting* (cada scouting y prueba por fecha; en la barra ya no está: repetía `2 | Scouting
+  Reports`), *Shoot days* (en la barra, cada día abre su página en *Pages*, donde vive) y *Pending*, lo ambiguo de la
+  sección 3, con *Create*, *Assign*, *Merge* o *Bring them all in*.
 
-En la barra, una parte vacía no aparece y se despliega una a la vez. La barra es **un solo árbol** (D805 a D807): ↑ y
-↓ recorren el *Overview* y siguen en *Pages*, con partes y episodios como carpetas y filas como páginas. Al abrir una
-página queda abierto solo el camino hasta ella, con su fila centrada; lo abierto desde el *Overview* pliega *Pages*, y
-al revés.
+En la barra se despliega una parte a la vez; una parte vacía aparece solo para quien puede crear (con su «+»). La
+carpeta de un tipo y la de cada episodio, que *Pages* ya no muestra, se alcanzan con el ⋯ de su parte o de su episodio
+(*Share*, *Move to…*, *Type*, *Leave out of relations*, papelera); si hay dos de la misma parte o del mismo episodio,
+quedan en *Pages*. La barra es **un solo árbol** (D805 a D807): ↑ y ↓ recorren el *Overview* y siguen en *Pages*, con
+partes y episodios como carpetas y filas como páginas. Al abrir una página queda abierto solo el camino hasta ella, con
+su fila centrada. Una ficha (o la carpeta de su parte), se abra como se abra, despliega su parte y su episodio y pliega
+*Pages*; algo de *Pages* (un día) abierto desde el *Overview* se abre en su semana, con su fila a la vista. Para cambiar
+una escena de episodio o de carpeta, *Move to…* ofrece, solo para una página de ese tipo, la carpeta y los episodios.
 
 ## 6. Cómo se cargan las cosas, por etapa
 
@@ -170,7 +186,7 @@ El árbol que se sugiere (`Plan_Estructura_Etapas.md`, sección 3). Nombres y or
 carpeta.
 
 ```
-1 | Preproducción
+1 | Preproducción          notas y reuniones (lo de abajo se ve en el Overview, D813)
    1.1 | Desglose          Type › Scenes             una página por escena, sus fichas adentro
    1.2 | Locaciones        Type › Locations          una página por lugar físico
    1.3 | Decorados         Type › Sets               una página por decorado de guion

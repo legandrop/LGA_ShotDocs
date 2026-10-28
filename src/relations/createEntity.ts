@@ -8,7 +8,8 @@ import { bareLocationName, locationFromTitle } from './register';
 
 // Crear una escena o una locación que el texto nombra y no existe (Docs/Doc_Relaciones.md, sección 15; E7, D512–D517,
 // D525). Una sola función de guardas (`createGuard`, pura) y una sola de crear (`createEntity`), usadas desde el `/`, el
-// adelanto de un pendiente, la cabecera del día y *Map › Pending*.
+// adelanto de un pendiente, la cabecera del día, *Map › Pending* y el «+» de cada parte del *Overview* (D813), que
+// también crea decorados y deja elegir la carpeta cuando hay más de una (`in`).
 //
 // Las guardas existen para no duplicar una escena (C8 B3): con dos páginas de la misma escena las relaciones se parten.
 // Se crea solo si:
@@ -22,7 +23,12 @@ import { bareLocationName, locationFromTitle } from './register';
 // - G5: hay una sola carpeta destino y la persona puede crear ahí.
 // Lo escrito nunca se pierde: si no se puede crear, el número queda escrito y pendiente.
 
-export type CreateWant = { kind: 'scene'; code: string } | { kind: 'location'; name: string };
+/** Lo que se crea. `in`: la carpeta que eligió la persona (con dos posibles, G5); si no, la que dicen las guardas. */
+export type CreateWant =
+  /** `letters`: el «+» del *Overview* crea también una escena con letra al lado de su base (D813); el `/` no. */
+  | { kind: 'scene'; code: string; in?: string; letters?: true }
+  | { kind: 'location'; name: string; in?: string }
+  | { kind: 'set'; name: string; in?: string };
 
 export type CreateReason =
   | 'partial'
@@ -152,7 +158,7 @@ function mostCommonParent(tree: GuardTree, pageIds: string[]): { id: string | nu
 }
 
 /** Las carpetas marcadas con ese tipo, a la vista y dentro de las relaciones. */
-function typedFolders(tree: GuardTree, projectId: string, holds: 'scene' | 'location'): PageRow[] {
+function typedFolders(tree: GuardTree, projectId: string, holds: 'scene' | 'location' | 'set'): PageRow[] {
   const reader = kindReader(tree);
   return tree
     .allRowsOf(projectId)
@@ -186,6 +192,37 @@ function locationFolder(tree: GuardTree, projectId: string, registry: Registry):
   return folders.length === 1 ? { id: folders[0].id } : { reason: 'twoFolders' };
 }
 
+/** Dónde va un decorado nuevo: la carpeta de los otros decorados, o la única *Sets*. */
+function setFolder(tree: GuardTree, projectId: string): { id: string } | { reason: 'noFolder' | 'twoFolders' } {
+  const reader = kindReader(tree);
+  const sets = tree.allRowsOf(projectId).filter((r) => !tree.isTrashed(r.id) && !graphOff(tree, r) && reader.kindOf(r.id).kind === 'set');
+  const common = mostCommonParent(tree, sets.map((r) => r.id));
+  if (common.id) return { id: common.id };
+  if (common.tie) return { reason: 'twoFolders' };
+  const folders = typedFolders(tree, projectId, 'set');
+  if (!folders.length) return { reason: 'noFolder' };
+  return folders.length === 1 ? { id: folders[0].id } : { reason: 'twoFolders' };
+}
+
+/**
+ * Las carpetas entre las que elige la persona cuando las guardas dicen `twoFolders`: las del tipo y, para una escena de
+ * una serie, los grupos de su episodio adentro de ellas (si hay).
+ */
+export function folderChoices(tree: GuardTree, projectId: string, want: CreateWant): PageRow[] {
+  const holds = want.kind;
+  const folders = typedFolders(tree, projectId, holds);
+  if (want.kind !== 'scene' || !want.code.includes('_')) return folders;
+  const ep = want.code.slice(0, 3);
+  const groups = folders.flatMap((f) => tree.children(f.id).filter((c) => isEpisodeTitle(c.title) && episodeOf(c.title) === ep));
+  return groups.length ? groups : folders;
+}
+
+/** La carpeta que eligió la persona, si se puede usar: está a la vista y no está fuera de las relaciones. */
+function chosenFolder(tree: GuardTree, want: CreateWant): { id: string } | null {
+  const row = want.in ? tree.get(want.in) : undefined;
+  return row && !tree.isTrashed(row.id) && !graphOff(tree, row) ? { id: row.id } : null;
+}
+
 /** La hermana antes de la cual va el código, si las escenas de la carpeta ya están en orden por número. */
 function beforeSibling(tree: GuardTree, parentId: string, code: string): string | undefined {
   const reader = kindReader(tree);
@@ -217,12 +254,12 @@ export function createGuard(ctx: GuardContext, want: CreateWant): GuardResult {
     const found = sceneCodesInTree(tree, projectId).filter((x) => baseOf(x.code) === base);
     const same = found.find((x) => x.code === code);
     if (same) return { ok: false, ...placeOf(tree, same.row) };
-    if (found.length) {
+    if (found.length && !want.letters) {
       const other = found[0];
       return { ok: false, reason: code === base ? 'letter' : 'base', other: other.code, pageId: other.row.id };
     }
     // G5
-    const folder = sceneFolder(tree, projectId, snap.registry, code);
+    const folder = chosenFolder(tree, want) ?? sceneFolder(tree, projectId, snap.registry, code);
     if ('reason' in folder) return { ok: false, reason: folder.reason };
     if (!perms.canCreateIn(folder.id, projectId)) return { ok: false, reason: 'cantCreate', pageId: folder.id };
     return { ok: true, parentId: folder.id, before: beforeSibling(tree, folder.id, code), title: code };
@@ -231,6 +268,20 @@ export function createGuard(ctx: GuardContext, want: CreateWant): GuardResult {
   if (fold(name).replace(/[^\p{L}\p{N}]/gu, '').length < 2) return { ok: false, reason: 'invalid' };
   const wanted = fold(name);
   const reader = kindReader(tree);
+  const title = name.charAt(0).toUpperCase() + name.slice(1);
+  if (want.kind === 'set') {
+    // Un decorado se nombra por su título entero (D804): no se crea otro con el mismo nombre, en ningún lado.
+    for (const row of tree.allRowsOf(projectId)) {
+      if (reader.excluded(row.id)) continue;
+      const mark = entityMark(row);
+      const isSet = (mark && mark !== 'other' && mark.kind === 'set') || reader.kindOf(row.id).kind === 'set';
+      if (isSet && fold(row.title).replace(/\s+/g, ' ').trim() === wanted) return { ok: false, ...placeOf(tree, row) };
+    }
+    const folder = chosenFolder(tree, want) ?? setFolder(tree, projectId);
+    if ('reason' in folder) return { ok: false, reason: folder.reason };
+    if (!perms.canCreateIn(folder.id, projectId)) return { ok: false, reason: 'cantCreate', pageId: folder.id };
+    return { ok: true, parentId: folder.id, title };
+  }
   for (const row of tree.allRowsOf(projectId)) {
     if (reader.excluded(row.id)) continue;
     const mark = entityMark(row);
@@ -249,10 +300,9 @@ export function createGuard(ctx: GuardContext, want: CreateWant): GuardResult {
     const row = writtenBy(snap.registry.locations.get(n.loc)?.pageId ?? null);
     if (row && fold(n.alias).replace(/\s+/g, ' ').trim() === wanted) return { ok: false, ...placeOf(tree, row) };
   }
-  const folder = locationFolder(tree, projectId, snap.registry);
+  const folder = chosenFolder(tree, want) ?? locationFolder(tree, projectId, snap.registry);
   if ('reason' in folder) return { ok: false, reason: folder.reason };
   if (!perms.canCreateIn(folder.id, projectId)) return { ok: false, reason: 'cantCreate', pageId: folder.id };
-  const title = name.charAt(0).toUpperCase() + name.slice(1);
   return { ok: true, parentId: folder.id, title, generic: !recognizedAlone(title) };
 }
 
@@ -260,7 +310,7 @@ export function createGuard(ctx: GuardContext, want: CreateWant): GuardResult {
 
 export interface CreateDeps {
   tree: Pick<PageTree, 'create' | 'setSetting' | 'get' | 'children' | 'trash' | 'isTrashed'> & GuardTree;
-  /** Escribe la plantilla en la página nueva (sin pantalla, solo agregando: `writeNewPage`). */
+  /** Escribe la plantilla en la página nueva (sin pantalla, solo agregando: `writeNewPage`). Un decorado no tiene. */
   write(pageId: string, kind: 'scene' | 'location'): Promise<void>;
   /** Una sincronización ahora (para mirar de nuevo con el árbol recién bajado); `null` si no hay. */
   syncNow: (() => Promise<void>) | null;
@@ -276,6 +326,9 @@ export type CreateResult = { ok: true; pageId: string; parentId: string; title: 
 const inFlightByTree = new WeakMap<object, Map<string, Promise<CreateResult>>>();
 
 const keyOf = (projectId: string, want: CreateWant) => `${projectId}|${want.kind}|${want.kind === 'scene' ? want.code : fold(want.name).trim()}`;
+
+/** La plantilla de fábrica de cada tipo (un decorado no tiene: es una página libre). */
+const TEMPLATE: Record<CreateWant['kind'], string | null> = { scene: BUILTIN_SCENE, location: BUILTIN_LOCATION, set: null };
 
 /**
  * Crea la escena o la locación (D517): con las guardas, una sincronización en el momento y las guardas otra vez; la
@@ -306,17 +359,18 @@ export function createEntity(deps: CreateDeps, want: CreateWant): Promise<Create
     const guard = createGuard(ctx, want);
     if (!guard.ok) return guard;
     const kind = want.kind;
+    const template = TEMPLATE[kind];
     const pageId = await deps.tree.create(guard.parentId, guard.title, ctx.projectId, {
-      templateId: kind === 'scene' ? BUILTIN_SCENE : BUILTIN_LOCATION,
+      ...(template ? { templateId: template } : {}),
       ...(guard.before ? { before: guard.before } : {}),
     });
     // La marca explícita (D517): no depende de que la carpeta se la dé al leer (`onPlaced` puede no estar).
-    await deps.tree.setSetting(pageId, 'entity', kind === 'scene' ? { kind: 'scene', code: want.code } : { kind: 'location' });
+    await deps.tree.setSetting(pageId, 'entity', want.kind === 'scene' ? { kind: 'scene', code: want.code } : { kind: want.kind });
     // Que la fila suba ya y no en el próximo ciclo (D546, O1 de la auditoría): la ventana en que otro dispositivo todavía
     // no la ve y la puede crear también se achica a un viaje de ida y vuelta. No se espera: lo de abajo es local.
     if (deps.syncNow) void deps.syncNow().catch(() => undefined);
     try {
-      await deps.write(pageId, kind);
+      if (kind !== 'set') await deps.write(pageId, kind);
     } catch (err) {
       // La página ya existe y queda (vacía es mejor que perderla): ofrece las plantillas al abrirla.
       console.warn('[crear] no se pudo escribir la plantilla en la página nueva', pageId, err);

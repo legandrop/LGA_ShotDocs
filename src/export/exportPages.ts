@@ -3,7 +3,8 @@ import { PHOTO_MARKUP_MAP } from '../media/markup';
 import { branchPages } from '../media/offlinePlan';
 import type { PageTree } from '../sync/tree';
 import { pageFormat, type PageFormat } from '../ui/pageFormat';
-import { headerPages } from '../ui/titles';
+import { fichaOf, routeOf, type ExportRoute } from '../relations/overviewPlaces';
+import { headerLevels, headerPages } from '../ui/titles';
 import { ExportCancelled, type ExportEditor, type RenderedPage } from './exportEditor';
 import { readPageContent, type PageContent } from './pageContent';
 
@@ -32,8 +33,22 @@ export interface ExportPlanPage {
 
 type PlanTree = Pick<PageTree, 'get' | 'children' | 'roots' | 'isTrashed' | 'ancestors' | 'resolveSetting'>;
 
+/**
+ * El encabezado de una página exportada: el de la pantalla, con solo lo que también se exporta (regla 2). En una ficha,
+ * su ruta del *Overview* («Overview · Scenes», D813), con el *Overview* y su parte solo si la ficha no es la raíz.
+ */
+function headerOf(tree: PlanTree, id: string, inside: ReadonlySet<string>, route?: ExportRoute): string[] {
+  const ficha = route ? fichaOf(route.places, tree, id) : null;
+  if (!route || !ficha) return headerPages(tree as PageTree, id).filter((p) => inside.has(p.id)).map((p) => p.title);
+  const { levels } = headerLevels(tree as PageTree, id);
+  const steps = routeOf(tree, route.places, id);
+  const shown = levels === null ? steps : levels <= 0 ? [] : steps.slice(-levels);
+  const above = inside.has(tree.get(ficha)?.parent_id ?? '');
+  return shown.flatMap((s) => ('page' in s ? (inside.has(s.page.id) ? [s.page.title] : []) : above ? [route.partLabel(s.part)] : []));
+}
+
 /** Las páginas de una rama (`page`) o de un proyecto (`project`), en el orden del árbol, sin la papelera. */
-export function exportPlan(tree: PlanTree, kind: 'page' | 'project', target: string): ExportPlanPage[] {
+export function exportPlan(tree: PlanTree, kind: 'page' | 'project', target: string, route?: ExportRoute): ExportPlanPage[] {
   const ids = branchPages(tree, kind, target);
   const inside = new Set(ids);
   const depthOf = new Map<string, number>();
@@ -51,9 +66,7 @@ export function exportPlan(tree: PlanTree, kind: 'page' | 'project', target: str
       depth,
       parent: parentDepth === undefined ? null : row.parent_id,
       // Solo los contenedores que también se exportan: nunca el título de algo de arriba de la rama.
-      header: headerPages(tree as PageTree, id)
-        .filter((p) => inside.has(p.id))
-        .map((p) => p.title),
+      header: headerOf(tree, id, inside, route),
       format: { size: format.size, landscape: format.landscape },
     });
   }

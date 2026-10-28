@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.302 :
+
+Lega vio que *Overview › Sets* abría las mismas páginas de `1.3 | Decorados`: cada escena, locación y decorado se veía
+dos veces, en el Panorama y en *Pages*, y no se entendía qué era cada cosa. Parte 1 del plan D813
+(`Plan_Fichas_Cuaderno.md`): las fichas viven en el *Overview*, dibujadas con las mismas filas del árbol (menú, «+»,
+lo de adentro, teclado), y *Pages* esconde solo lo que el *Overview* muestra (`overviewPlaces.ts`; en la base no cambia
+nada). Cada parte tiene un «+» que crea por número o nombre (`OverviewNew.tsx`; `createEntity.ts` ahora crea decorados
+y acepta la carpeta elegida), *Move to…* agrupa las fichas por parte y episodio, y la ruta de una ficha dice «Overview ›
+Scenes» en el encabezado, las migas, la búsqueda, el PDF y el zip. Una escena abre su página; un día abierto desde el
+*Overview* se revela en su semana. *Scouting* sale de la barra (repetía `2 | Scouting Reports`).
+
+[Fichas en el Panorama y cuaderno en Pages]
+
 v0.301 :
 
 Supabase avisó que el proyecto pasó la cuota de tráfico de salida del plan gratis (5,5 GB de 5). La causa: cada vuelta

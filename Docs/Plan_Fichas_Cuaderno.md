@@ -224,7 +224,10 @@ Después: copia de seguridad, mover, esperar la sincronización y repetir la com
 
 Cada parte sale entera (código, ayuda, pruebas), auditada por alguien que no la escribió, y publicada.
 
-1. Con la respuesta a la pregunta 2: la barra (parte 1), con su pasada en seco de lo que queda en *Pages*.
+1. Con la respuesta a la pregunta 2: la barra (parte 1), con su pasada en seco de lo que queda en *Pages*. **Hecha
+   (v0.302).** Pasada en seco sobre la base (2026-10-28): ERSO 226 escenas, 52 locaciones y 136 decorados; VLLF 142,
+   45 y 66. En las dos, ninguna página sin lugar, y *Pages* esconde `1.1 | Desglose`, `1.2 | Locaciones y scoutings` y
+   `1.3 | Decorados` (en ERSO también los cinco episodios), a los que se llega con el ⋯ de su parte o episodio.
 2. El código del plan y el reporte juntos (parte 2): las tres funciones que ignoran planes, la red, *New day plan*,
    el orden. Publicar y subir `min_app_version`.
 3. El reacomodo de VLLF y ERSO (parte 4, puntos 1 a 3).
@@ -236,7 +239,8 @@ Cada parte sale entera (código, ayuda, pruebas), auditada por alguien que no la
 1. **Los títulos de las escenas de VLLF.** Hoy son el comienzo de la descripción del primer plano. Opciones: (a) armados
    solos con el decorado y el INT/EXT de sus planos (`059 | Puente Larralde · EXT`); (b) un nombre corto que escribe
    Lega; (c) dejarlos. Recomendada: a, y después cada uno lo cambia si quiere.
-2. **¿Se saca *Overview › Scouting*?** Recomendado: sí (sección 4, punto 6).
+2. **¿Se saca *Overview › Scouting*?** Recomendado: sí (sección 4, punto 6). **Respondida: sí** (Lega, 2026-10-27).
+   Hecho en v0.302.
 
 Lo demás va como dice este plan salvo que Lega diga otra cosa: el plan con « | Plan» y el reporte sin sufijo (sección
 5, punto 2), los nombres nuevos de las carpetas, la ruta «Overview › …» también en el PDF y la parte *Shots*.

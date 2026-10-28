@@ -143,3 +143,195 @@
     outline: 2px solid CanvasText;
   }
 }
+
+/* Las fichas (Plan_Fichas_Cuaderno.md, parte 1; D813): las filas del árbol de *Pages* (`.tree-row`), con la sangría de
+   un hijo de su parte o de su episodio. Adentro del *Overview* no se pegan arriba al bajar: ahí ya quedan pegados el
+   título, la parte y el episodio. */
+.ov-fichas {
+  padding-left: 18px;
+}
+
+.ov-nav .tree-row.sticky-head {
+  position: relative;
+  top: auto;
+  z-index: auto;
+}
+
+/* El «+» de una parte con fichas: aparece al pasar el mouse por la parte, como los de una fila del árbol, y sin hover no
+   ocupa lugar (el número de la parte queda contra el borde). El margen negativo se come el hueco de la fila. */
+.ov-add,
+.ov-more {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 0;
+  height: 22px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted-2);
+  cursor: pointer;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ov-part:hover :is(.ov-add, .ov-more),
+:is(.ov-add, .ov-more):focus-visible {
+  width: 22px;
+  margin-left: 0;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+:is(.ov-add, .ov-more):hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* En pantallas táctiles no hay hover: el «+» se ve siempre. */
+@media (hover: none) {
+  .ov-add,
+  .ov-more {
+    width: 22px;
+    margin-left: 0;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Una parte vacía no tiene número: el «+» va igual a la derecha (después de las reglas de arriba). */
+.ov-part .ov-part-name + .ov-add {
+  margin-left: auto;
+}
+
+/* El número o el nombre de la ficha nueva, en el lugar de una fila. */
+.ov-new {
+  padding: 3px 4px 3px 26px;
+}
+
+.ov-new .rename {
+  width: 100%;
+  height: 26px;
+  padding: 2px 8px;
+}
+
+.ov-new-why {
+  padding: 4px 8px 2px;
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.ov-new-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ov-new-where button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* El ⋯ de la carpeta de un episodio (D813): encima del número del episodio, al pasar el mouse por su renglón. */
+.ov-ep {
+  position: relative;
+}
+
+.ov-ep-more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--sidebar-bg);
+  color: var(--muted-2);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 29;
+}
+
+.ov-ep:has(> .scene-nav-ep:hover) > .ov-ep-more,
+.ov-ep-more:hover,
+.ov-ep-more:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ov-ep-more:hover {
+  background: linear-gradient(var(--hover), var(--hover)) var(--sidebar-bg);
+  color: var(--text);
+}
+
+/* El «+» de un episodio, a la izquierda del ⋯ (o en su lugar, sin carpeta propia). */
+.ov-ep-add {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--sidebar-bg);
+  color: var(--muted-2);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 29;
+}
+
+.ov-ep-add.alone {
+  right: 4px;
+}
+
+.ov-ep:has(> .scene-nav-ep:hover) > .ov-ep-add,
+.ov-ep-add:hover,
+.ov-ep-add:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ov-ep-add:hover {
+  background: linear-gradient(var(--hover), var(--hover)) var(--sidebar-bg);
+  color: var(--text);
+}
+
+/* El episodio con su carpeta abierta (la búsqueda o un link la abrió): como una parte marcada. */
+.scene-nav-ep.on {
+  background: var(--active);
+  box-shadow: inset 2px 0 0 var(--accent-text);
+}
+
+/* En pantallas táctiles no hay hover: el ⋯ y el «+» del episodio se ven siempre (sin ellos, su carpeta no se alcanza). */
+@media (hover: none) {
+  .ov-ep-more,
+  .ov-ep-add {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Lugar para los dos botones: si no, tapan cuántas escenas tiene el episodio. */
+  .ov-ep:has(> .ov-ep-add) > .scene-nav-ep {
+    padding-right: 56px;
+  }
+
+  .ov-ep:has(> .ov-ep-add.alone) > .scene-nav-ep,
+  .ov-ep:has(> .ov-ep-more):not(:has(> .ov-ep-add)) > .scene-nav-ep {
+    padding-right: 32px;
+  }
+}

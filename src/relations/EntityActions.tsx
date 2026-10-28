@@ -38,7 +38,7 @@ export function reasonText(tr: Translate, r: CreateFail, want: CreateWant, title
     case 'base':
       return tr('create.why.base', { other: r.other ?? '' });
     case 'noFolder':
-      return tr(want.kind === 'scene' ? 'create.why.noFolderScene' : 'create.why.noFolderLocation');
+      return tr(want.kind === 'scene' ? 'create.why.noFolderScene' : want.kind === 'set' ? 'create.why.noFolderSet' : 'create.why.noFolderLocation');
     case 'twoFolders':
       return tr('create.why.twoFolders');
     case 'cantCreate':
@@ -98,7 +98,10 @@ export async function runCreate(
   const { pageSignature } = await import('./createWrite');
   const signature = await pageSignature(services.docs, created.pageId).catch(() => null);
   const folder = title(created.parentId) ?? '';
-  const message = want.kind === 'scene' ? tr('create.createdScene', { code: want.code, folder }) : tr('create.createdLocation', { name: created.title, folder });
+  const message =
+    want.kind === 'scene'
+      ? tr('create.createdScene', { code: want.code, folder })
+      : tr(want.kind === 'set' ? 'create.createdSet' : 'create.createdLocation', { name: created.title, folder });
   notify(
     message,
     { label: tr('create.open'), run: () => navigate(pagePath(created.pageId)) },

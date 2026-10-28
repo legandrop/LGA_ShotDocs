@@ -1,39 +1,55 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FocusEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { locale, useT } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { usePrefs } from '../prefs';
 import { mapPath, navigate, pagePath, useRoute, useSearchParam, type MapTab } from '../router';
-import { useServices, useTree } from '../services';
-import { CollapseIcon, ExpandIcon } from '../ui/icons';
+import { usePermissions, useServices, useTree } from '../services';
+import { CollapseIcon, ExpandIcon, MoreIcon, PlusIcon } from '../ui/icons';
 import { setNavOpen, useNavOpen } from '../ui/navStore';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
+import type { SplitTitle } from '../ui/titles';
 import { AUTO_COLLAPSE, isPlainKey, revealRow } from '../ui/treeNav';
 import { clickedByKeys, goToRow, markOpenedFromOverview, openedFromOverview, OVERVIEW_ROW, overviewParent, overviewTarget, sidebarEdge, sidebarStep, sidebarStepAround } from '../ui/sidebarRows';
 import { dayList, dayShortLabel } from './dayLive';
 import { setIndex } from './liveView';
 import { mergeRows } from './merge';
-import { scoutList } from './scoutList';
+import { fichaOf, folderPlace, useOverviewPlaces, type FichaPart } from './overviewPlaces';
+import { NewFicha } from './OverviewNew';
 import { pendingSummary } from './projectMap';
-import { mapPathFrom, sceneEpisodes, sceneMapPath } from './sceneMentions';
+import { mapPathFrom, sceneEpisodes } from './sceneMentions';
 import { useSlashDraft } from './slashDraft';
 import './mapNav.css';
 import './scenesNav.css';
 
 // *Overview* en la barra lateral (Docs/Doc_Relaciones.md, secciones 12 y 21; D772): un solo bloque que arma la app con
-// lo que dicen las páginas, con sus partes adentro, las mismas pestañas de la vista del centro: *Locations*,
-// *Scenes*, *Scouting* (los scoutings y pruebas por fecha, Plan_Estructura_Etapas.md), *Shoot days* y *Pending*. Reemplaza a la fila *Map* y a la sección *Scenes*, que eran hermanas aunque las
+// lo que dicen las páginas, con sus partes adentro, las mismas pestañas de la vista del centro: *Locations*, *Sets*,
+// *Scenes*, *Shoot days* y *Pending*. Reemplaza a la fila *Map* y a la sección *Scenes*, que eran hermanas aunque las
 // escenas son una parte del mapa. Como en el árbol de páginas: clic en el nombre abre su vista (y despliega su lista);
 // la flecha solo pliega o despliega. Una sola parte abierta a la vez (pedido de Lega): abrir una cierra las otras. Sale
 // del registro de lo que la persona ve (no arma el mapa entero), aparece solo en un proyecto con escenas, locaciones o
 // días, y lo plegado se recuerda por proyecto en este dispositivo. Con un link público no está.
+//
+// Las filas de *Scenes*, *Locations* y *Sets* son las fichas (Plan_Fichas_Cuaderno.md, parte 1; D813): cada una es su
+// página, con las mismas filas del árbol de *Pages* (`FichaRows`, las dibuja `Sidebar`), y *Pages* no las dibuja. La
+// parte *Scouting* se sacó: repetía `2 | Scouting Reports` uno a uno (los scoutings viven en *Pages*).
 
 const FOLD_KEY = 'shotdocs-overview-nav';
 /** Cuántas filas de una lista se dibujan antes de «Show N more» (ERSO tiene episodios de 40 a 60). */
 export const OVERVIEW_PAGE = 60;
 
-type Part = 'locations' | 'sets' | 'scenes' | 'scouting' | 'days';
-const PARTS: readonly Part[] = ['locations', 'sets', 'scenes', 'scouting', 'days'];
+type Part = 'locations' | 'sets' | 'scenes' | 'days';
+const PARTS: readonly Part[] = ['locations', 'sets', 'scenes', 'days'];
+
+/** Las filas de las fichas: las del árbol de *Pages*, con su menú, su «+», el arrastre y el teclado (`Sidebar.tsx`). */
+export interface FichaRows {
+  /** La fila de la página (y lo desplegado adentro), o `null` si no está en el árbol. `label`: el número y el nombre. */
+  row(pageId: string, depth: number, label: SplitTitle | null): ReactNode;
+  /** Lo que hace el árbol de *Pages* cuando el foco se va de una lista. */
+  onBlur(e: FocusEvent<HTMLUListElement>): void;
+  /** Abre el menú ⋯ de una página (la carpeta escondida de una parte o de un episodio) debajo de `anchor`. */
+  menu(pageId: string, anchor: HTMLElement): void;
+}
 
 /**
  * Lo plegado de un proyecto: el bloque entero, la parte abierta (una sola) y el episodio abierto de *Scenes* (uno solo,
@@ -73,18 +89,22 @@ function writeFold(projectId: string, fold: Fold): void {
   }
 }
 
+/** Las partes con fichas, que tienen su «+» (D813), y lo que dice ese «+». */
+const fichaPart = (part: string): part is FichaPart => part === 'scenes' || part === 'locations' || part === 'sets';
+const NEW_LABEL = { scenes: 'sidebar.newScene', locations: 'sidebar.newLocation', sets: 'sidebar.newSet' } as const;
+
 /** Un clic común (no Ctrl/⌘, Shift ni la rueda, que abren otra pestaña como cualquier link). */
 const plainClick = (e: MouseEvent) => !(e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0);
 
-export function OverviewNav() {
+export function OverviewNav({ fichaRows }: { fichaRows: FichaRows }) {
   const link = useLinkMode();
   const services = useServices();
   const session = link ? null : existingRelationsSession(services);
   if (!session) return null;
-  return <OverviewFor session={session} />;
+  return <OverviewFor session={session} fichaRows={fichaRows} />;
 }
 
-function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof existingRelationsSession>> }) {
+function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<typeof existingRelationsSession>>; fichaRows: FichaRows }) {
   const tr = useT();
   const route = useRoute();
   const sceneQuery = useSearchParam('scene');
@@ -99,6 +119,10 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const [fold, setFold] = useState<Fold>(() => readFold(projectId));
   // Cuántas se muestran de cada lista; no se recuerda.
   const [shown, setShown] = useState<Record<string, number>>({});
+  // La parte donde se está creando una ficha con su «+».
+  /** Dónde está abierto el campo de una ficha nueva: una parte (`scenes`) o un episodio (`ep:105`). */
+  const [adding, setAdding] = useState<string | null>(null);
+  const perms = usePermissions();
   useEffect(() => {
     setFold(readFold(projectId));
     setShown({});
@@ -116,14 +140,20 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     const scenes = sceneEpisodes(snap.registry.scenes.values(), title);
     const locations = [...snap.registry.locations.values()].sort((a, b) => a.name.localeCompare(b.name, locale()));
     const days = dayList({ snap, title, content: () => undefined });
-    const scoutings = scoutList({ snap, title, content: () => undefined });
     const sets = [...setIndex({ snap, title, content: () => undefined }).rows].sort((a, b) => a.name.localeCompare(b.name, locale()));
-    return { scenes, locations, sets, days, scoutings };
+    return { scenes, locations, sets, days };
   }, [snap, revision, tree, treeRevision]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tab: MapTab | null = route.name === 'map' ? route.tab : null;
   const activeScene = tab === 'scenes' ? sceneQuery : null;
   const activePage = route.name === 'page' ? route.id : null;
+  // La ficha abierta (o la que tiene adentro la página abierta): su parte y su episodio se despliegan, se abra como se abra.
+  const places = useOverviewPlaces();
+  const activeFicha = fichaOf(places, tree, activePage);
+  const fichaInfo = activeFicha ? (places?.fichas.get(activeFicha) ?? null) : null;
+  // La carpeta escondida de una parte o de un episodio, abierta por la búsqueda o un link: se marca su parte o su episodio.
+  const folderInfo = folderPlace(places, activePage);
+  const homeInfo = fichaInfo ?? folderInfo;
   const activeEp = activeScene && lists ? (lists.scenes.find((g) => g.scenes.some((s) => s.code === activeScene))?.ep ?? null) : null;
 
   /** Cuántas tiene cada parte: una parte vacía no se dibuja. */
@@ -131,7 +161,6 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     locations: lists?.locations.length ?? 0,
     sets: lists?.sets.length ?? 0,
     scenes: lists?.scenes.reduce((n, g) => n + g.scenes.length, 0) ?? 0,
-    scouting: lists?.scoutings.length ?? 0,
     days: lists?.days.length ?? 0,
   };
   /** La parte que abre el título: la desplegada o, sin ninguna, la primera que tiene algo. */
@@ -148,12 +177,12 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
       return;
     }
     browsedPart.current = null;
-    if (!tab || tab === 'pending' || sizes[tab] === 0) return;
+    if (!tab || tab === 'pending' || tab === 'scouting' || sizes[tab] === 0) return;
     const f = readFold(projectId);
     const eps = activeEp !== null ? [activeEp] : f.eps;
     if (f.part !== tab || eps.join() !== f.eps.join() || f.closed) update({ closed: false, part: tab, eps });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, activeScene, activeEp, projectId, sizes.locations, sizes.sets, sizes.scenes, sizes.scouting, sizes.days]);
+  }, [tab, activeScene, activeEp, projectId, sizes.locations, sizes.sets, sizes.scenes, sizes.days]);
 
   // La fila de la escena abierta se lleva a la vista al abrirla y al abrir el cajón del teléfono, debajo de lo que queda
   // pegado arriba (`revealRow`, D771). Si su parte o su episodio estaban plegados, la fila aparece un dibujo después (el
@@ -205,7 +234,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     };
     // Plegar lo que tiene adentro lo abierto lo lleva a lo plegado, como plegar una madre de la página abierta en *Pages*:
     // se abre la vista de la parte (sin volver a desplegarla).
-    const holdsOpen = () => !!from.closest('li')?.querySelector('a.scene-nav-row.active');
+    const holdsOpen = () => !!from.closest('li')?.querySelector('a.scene-nav-row.active, .tree-row.active');
     const part = from.dataset.part as Part | 'pending' | undefined;
     const ep = from.dataset.ep;
     if (part) {
@@ -240,27 +269,38 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     const link = e.target instanceof Element ? e.target.closest('a') : null;
     if (link && plainClick(e)) markOpenedFromOverview(overviewTarget(link.getAttribute('href') ?? ''));
   };
-  // Y una página abierta por otro camino (el árbol, un link, la búsqueda, atrás) pliega lo de acá (colapso automático).
+  // Una ficha abierta (o algo adentro de una), se abra como se abra, despliega su parte y su episodio: su fila se ve y
+  // queda marcada (D813; la lleva a la vista `Sidebar`, como en *Pages*). Una página abierta por otro camino (el árbol,
+  // un link, la búsqueda, atrás) pliega lo de acá (colapso automático).
   useEffect(() => {
-    if (!AUTO_COLLAPSE || !activePage || openedFromOverview(activePage)) return;
+    if (!activePage) return;
     const f = readFold(projectId);
+    if (homeInfo) {
+      const eps = homeInfo.ep !== null ? [homeInfo.ep] : f.eps;
+      if (f.closed || f.part !== homeInfo.part || eps.join() !== f.eps.join()) update({ closed: false, part: homeInfo.part, eps });
+      return;
+    }
+    if (!AUTO_COLLAPSE || openedFromOverview(activePage)) return;
     if (f.part !== null || f.eps.length) update({ ...f, part: null, eps: [] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePage, projectId]);
+  }, [activePage, projectId, homeInfo?.part, homeInfo?.ep]);
 
+  // La escena abierta en el mapa (`/map/scenes?scene=…`): su fila se lleva a la vista al abrirla y al abrir el cajón
+  // del teléfono, debajo de lo que queda pegado arriba (`revealRow`, D771). Si su parte o su episodio estaban plegados,
+  // la fila aparece un dibujo después (el efecto de arriba los despliega): queda pendiente hasta que exista.
   const navOpen = useNavOpen();
-  const activeRow = useRef<HTMLAnchorElement | null>(null);
   const toReveal = useRef(false);
+  const mapScenePage = activeScene && lists ? (lists.scenes.flatMap((g) => g.scenes).find((s) => s.code === activeScene)?.pageId ?? null) : null;
   useEffect(() => {
-    toReveal.current = !!activeScene;
-  }, [activeScene, navOpen]);
+    toReveal.current = !!mapScenePage;
+  }, [mapScenePage, navOpen]);
   useEffect(() => {
-    const row = activeRow.current;
+    const row = mapScenePage ? document.querySelector<HTMLElement>(`.ov-nav .tree-row[data-page="${CSS.escape(mapScenePage)}"]`) : null;
     const nav = row?.closest<HTMLElement>('.sidebar-scroll');
     if (!toReveal.current || !row || !nav) return;
     toReveal.current = false;
     revealRow(row, nav);
-  }, [activeScene, navOpen, fold.part, fold.eps.join(), fold.closed]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapScenePage, navOpen, fold.part, fold.eps.join(), fold.closed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!snap || !lists) return null;
   const typed =
@@ -273,6 +313,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   // tarde a una página unida (E16).
   const pending = pendingSummary({ snap, title: (id) => tree.get(id)?.title }).total + mergeRows(tree, projectId).length;
   const counts = sizes;
+  // Crear una ficha pide poder crear en el proyecto (las guardas de `createEntity.ts` miran el resto).
+  const canCreate = perms.canCreateIn(null, projectId);
 
   /**
    * Abre una pestaña del mapa (en la vista de una escena, la misma ruta: con `mapPathFrom`, D746). Como una página, el
@@ -323,41 +365,26 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     };
   };
 
-  const openScene = (e: MouseEvent, code: string) => {
-    if (!plainClick(e)) return;
-    e.preventDefault();
-    navigate(sceneMapPath(code));
-    // En el teléfono se cierra el cajón: ya en el mapa, cambiar de escena no cambia la ruta (solo `?scene=`).
-    setNavOpen(false);
-  };
   const openPage = (e: MouseEvent, pageId: string) => {
     if (!plainClick(e)) return;
     e.preventDefault();
     navigate(pagePath(pageId));
   };
 
+  /** Una lista de fichas: un árbol de WAI-ARIA con las filas de *Pages* (`FichaRows`). */
+  const fichaList = (className: string, label: string, rows: ReactNode, button: ReactNode) => (
+    <ul className={`scene-nav-list ov-fichas ${className}`} role="tree" aria-label={label} onBlur={fichaRows.onBlur}>
+      {rows}
+      {button}
+    </ul>
+  );
+
   const sceneList = (key: string, scenes: (typeof lists.scenes)[number]['scenes']) => {
-    const { n, button } = more(`s:${key}`, scenes.length, activeScene ? scenes.findIndex((s) => s.code === activeScene) : -1);
-    return (
-      <ul className="scene-nav-list">
-        {scenes.slice(0, n).map((s) => (
-          <li key={s.code}>
-            <a
-              ref={s.code === activeScene ? activeRow : undefined}
-              className={`scene-nav-row${s.code === activeScene ? ' active' : ''}`}
-              href={sceneMapPath(s.code)}
-              aria-current={s.code === activeScene ? 'page' : undefined}
-              onClick={(e) => openScene(e, s.code)}
-            >
-              <span className="code">{s.code}</span>
-              {/* Sin tooltip: el nombre ya se ve (D794). */}
-              <span className="title">{s.title}</span>
-            </a>
-          </li>
-        ))}
-        {button}
-      </ul>
-    );
+    const keep = scenes.findIndex((s) => (activeFicha ? s.pageId === activeFicha : s.code === activeScene));
+    const { n, button } = more(`s:${key}`, scenes.length, keep);
+    // El número de la escena (el canónico: `105_027`) y su nombre, como en la cabecera de la escena.
+    const rows = scenes.slice(0, n).map((s) => (s.pageId ? fichaRows.row(s.pageId, 0, { code: s.code, name: s.title }) : null));
+    return fichaList('ov-scenes', tr('sidebar.scenes'), rows, button);
   };
 
   const scenesBody = () => {
@@ -367,18 +394,54 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
       <ul className="scene-nav-eps">
         {lists.scenes.map((g) => {
           const isOpen = fold.eps.includes(g.ep);
+          const folder = places?.episodes.get(g.ep);
+          const on = !!folder && folderInfo?.ep === g.ep;
+          const addKey = `ep:${g.ep}`;
           return (
-            <li key={g.ep}>
+            <li key={g.ep} className="ov-ep">
               <button
-                className={`scene-nav-ep${isOpen ? ' sticky-head' : ''}`}
+                className={`scene-nav-ep${isOpen ? ' sticky-head' : ''}${on ? ' on' : ''}`}
                 data-ep={g.ep}
                 aria-expanded={isOpen}
+                aria-current={on ? 'page' : undefined}
                 onClick={() => update({ ...fold, eps: isOpen ? [] : [g.ep] })}
               >
                 {isOpen ? <CollapseIcon size={14} /> : <ExpandIcon size={14} />}
                 <span className="label">{g.ep ? tr('live.episode', { ep: g.ep }) : tr('sidebar.scenesNoEpisode')}</span>
                 <span className="scene-nav-n">{g.scenes.length}</span>
               </button>
+              {folder && (
+                // El menú de la carpeta del episodio, que en *Pages* ya no está (D813).
+                <button
+                  className="ov-ep-more"
+                  aria-label={tr('sidebar.folderActions')}
+                  data-tip={tr('sidebar.folderActionsTip', { title: tree.get(folder)?.title ?? '' })}
+                  tabIndex={-1}
+                  onClick={(e) => fichaRows.menu(folder, e.currentTarget)}
+                >
+                  <MoreIcon size={14} />
+                </button>
+              )}
+              {canCreate && g.ep && (
+                // Una escena de este episodio: alcanza con su número (`27` → `105_027`).
+                <button
+                  className={`ov-ep-add${folder ? '' : ' alone'}`}
+                  aria-label={tr('sidebar.newSceneIn', { ep: g.ep })}
+                  data-tip={tr('sidebar.newSceneIn', { ep: g.ep })}
+                  tabIndex={-1}
+                  onClick={() => {
+                    if (!isOpen) update({ ...fold, eps: [g.ep] });
+                    setAdding(addKey);
+                  }}
+                >
+                  <PlusIcon size={14} />
+                </button>
+              )}
+              {adding === addKey && (
+                <ul className="scene-nav-list ov-fichas">
+                  <NewFicha part="scenes" ep={g.ep} projectId={projectId} onDone={() => setAdding(null)} />
+                </ul>
+              )}
               {isOpen && sceneList(g.ep, g.scenes)}
             </li>
           );
@@ -388,46 +451,31 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   };
 
   const locationsBody = () => {
-    const { n, button } = more('l', lists.locations.length, lists.locations.findIndex((l) => !!l.pageId && l.pageId === activePage));
-    return (
-      <ul className="scene-nav-list ov-list ov-locs">
-        {lists.locations.slice(0, n).map((l) => {
-          const on = !!l.pageId && l.pageId === activePage;
-          return (
-            <li key={l.name}>
-              <a
-                className={`scene-nav-row${on ? ' active' : ''}`}
-                href={l.pageId ? pagePath(l.pageId) : mapPath('locations')}
-                aria-current={on ? 'page' : undefined}
-                onClick={(e) => (l.pageId ? openPage(e, l.pageId) : plainClick(e) && (e.preventDefault(), go('locations')))}
-              >
-                <span className="title">{l.name}</span>
-              </a>
-            </li>
-          );
-        })}
-        {button}
-      </ul>
+    const { n, button } = more('l', lists.locations.length, lists.locations.findIndex((l) => !!l.pageId && l.pageId === activeFicha));
+    const rows = lists.locations.slice(0, n).map((l) =>
+      l.pageId ? (
+        fichaRows.row(l.pageId, 0, null)
+      ) : (
+        // Una locación sin página (solo nombrada): lleva a su pestaña del mapa.
+        <li key={l.name} role="none">
+          <a
+            className="scene-nav-row"
+            role="treeitem"
+            href={mapPath('locations')}
+            onClick={(e) => plainClick(e) && (e.preventDefault(), go('locations'))}
+          >
+            <span className="title">{l.name}</span>
+          </a>
+        </li>
+      ),
     );
+    return fichaList('ov-locs', tr('sidebar.locations'), rows, button);
   };
 
   const setsBody = () => {
-    const { n, button } = more('st', lists.sets.length, lists.sets.findIndex((s) => s.pageId === activePage));
-    return (
-      <ul className="scene-nav-list ov-list ov-sets">
-        {lists.sets.slice(0, n).map((s) => {
-          const on = s.pageId === activePage;
-          return (
-            <li key={s.pageId}>
-              <a className={`scene-nav-row${on ? ' active' : ''}`} href={pagePath(s.pageId)} aria-current={on ? 'page' : undefined} onClick={(e) => openPage(e, s.pageId)}>
-                <span className="title">{s.name}</span>
-              </a>
-            </li>
-          );
-        })}
-        {button}
-      </ul>
-    );
+    const { n, button } = more('st', lists.sets.length, lists.sets.findIndex((s) => s.pageId === activeFicha));
+    const rows = lists.sets.slice(0, n).map((s) => fichaRows.row(s.pageId, 0, null));
+    return fichaList('ov-sets', tr('sidebar.sets'), rows, button);
   };
 
   const daysBody = () => {
@@ -458,37 +506,11 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     );
   };
 
-  const scoutingBody = () => {
-    const { n, button } = more('sc', lists.scoutings.length, lists.scoutings.findIndex((s) => s.pageId === activePage));
-    // La fecha corta (`29/01`) como el número de un día; sin fecha, nada.
-    const labels = lists.scoutings.map((s) => (s.date ? `${s.date.slice(8, 10)}/${s.date.slice(5, 7)}` : ''));
-    const width = Math.max(0, ...labels.map((l) => l.length));
-    return (
-      <ul className="scene-nav-list ov-list ov-days" style={{ '--code-w': `${width}ch` } as CSSProperties}>
-        {lists.scoutings.slice(0, n).map((s, i) => {
-          const on = s.pageId === activePage;
-          const name = s.locs.join(' + ') || s.title;
-          return (
-            <li key={s.pageId}>
-              <a className={`scene-nav-row${on ? ' active' : ''}`} href={pagePath(s.pageId)} aria-current={on ? 'page' : undefined} onClick={(e) => openPage(e, s.pageId)}>
-                <span className="code">{labels[i]}</span>
-                {/* El título del scouting solo cuando la fila muestra sus locaciones: ahí es un dato que no se ve (D794). */}
-                <span className={s.locs.length ? 'title locs' : 'title'} data-tip={s.locs.length ? s.title || undefined : undefined} data-tip-plain>
-                  {name}
-                </span>
-              </a>
-            </li>
-          );
-        })}
-        {button}
-      </ul>
-    );
-  };
-
   /** El renglón de una parte: la flecha pliega o despliega; el resto de la fila abre su pestaña. */
   const partRow = (part: Part | 'pending', label: string, count: ReactNode, body: (() => ReactNode) | null) => {
     const open = part !== 'pending' && fold.part === part && !!body;
-    const on = tab === part && !activeScene;
+    // La vista de la parte, o su carpeta escondida abierta (D813).
+    const on = (tab === part && !activeScene) || (!!folderInfo && folderInfo.part === part && folderInfo.ep === null);
     const name = (
       <a
         className="ov-part-name"
@@ -539,7 +561,42 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
           )}
           {name}
           {count}
+          {fichaPart(part) && places?.folders.get(part)?.[0] && (
+            // El menú de la carpeta de la parte (*Type*, *Share*, *Leave out of relations*): en *Pages* ya no está (D813).
+            <button
+              className="ov-more"
+              aria-label={tr('sidebar.folderActions')}
+              data-tip={tr('sidebar.folderActionsTip', { title: tree.get(places.folders.get(part)![0])?.title ?? '' })}
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation();
+                fichaRows.menu(places.folders.get(part)![0], e.currentTarget);
+              }}
+            >
+              <MoreIcon size={14} />
+            </button>
+          )}
+          {fichaPart(part) && canCreate && (
+            <button
+              className="ov-add"
+              aria-label={tr(NEW_LABEL[part])}
+              data-tip={tr(NEW_LABEL[part])}
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!open) update({ ...fold, closed: false, part });
+                setAdding(part);
+              }}
+            >
+              <PlusIcon size={14} />
+            </button>
+          )}
         </div>
+        {(open || !body) && adding === part && (
+          <ul className="scene-nav-list ov-fichas">
+            <NewFicha part={part as FichaPart} projectId={projectId} onDone={() => setAdding(null)} />
+          </ul>
+        )}
         {open && body!()}
       </li>
     );
@@ -547,10 +604,12 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
 
   const codeWidth = Math.max(0, ...lists.scenes.flatMap((g) => g.scenes.map((s) => s.code.length)));
   const parts: ReactNode[] = [];
-  if (counts.locations) parts.push(partRow('locations', tr('sidebar.locations'), <span className="scene-nav-n">{counts.locations}</span>, locationsBody));
-  if (counts.sets) parts.push(partRow('sets', tr('sidebar.sets'), <span className="scene-nav-n">{counts.sets}</span>, setsBody));
-  if (counts.scenes) parts.push(partRow('scenes', tr('sidebar.scenes'), <span className="scene-nav-n">{counts.scenes}</span>, scenesBody));
-  if (counts.scouting) parts.push(partRow('scouting', tr('sidebar.scouting'), <span className="scene-nav-n">{counts.scouting}</span>, scoutingBody));
+  // Una parte de fichas vacía aparece igual para quien puede crear, sin número ni flecha: su «+» crea la primera (D813).
+  const fichaPartRow = (part: FichaPart, label: string, n: number, body: () => ReactNode) =>
+    (n || canCreate) && parts.push(partRow(part, label, n ? <span className="scene-nav-n">{n}</span> : null, n ? body : null));
+  fichaPartRow('locations', tr('sidebar.locations'), counts.locations, locationsBody);
+  fichaPartRow('sets', tr('sidebar.sets'), counts.sets, setsBody);
+  fichaPartRow('scenes', tr('sidebar.scenes'), counts.scenes, scenesBody);
   if (counts.days) parts.push(partRow('days', tr('sidebar.days'), <span className="scene-nav-n">{counts.days}</span>, daysBody));
   if (pending > 0) parts.push(partRow('pending', tr('sidebar.pending'), <span className="map-nav-count">{pending}</span>, null));
 
@@ -563,7 +622,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
           update({ ...fold, closed: false });
           go(headPart);
           // El *Overview* está arriba de todo: con la barra desplazada, lo que se abre quedaría fuera de la vista.
-          e.currentTarget.closest('.sidebar-scroll')?.scrollTo({ top: 0 });
+          e.currentTarget.closest('.sidebar-scroll')?.scrollTo?.({ top: 0 });
         }}
       >
         <a
