@@ -595,8 +595,8 @@ llevó en pocos días la cuota de tráfico de salida del plan gratis de Supabase
   columna, la app deja de pedirla 10 minutos (como `clean_seq`).
 - Una pestaña oculta no corre el ciclo (`onWake` mira `visibilityState`), y las miniaturas quedan en el dispositivo:
   cada una se baja una sola vez.
-- **Copias de seguridad** (repo privado de copias): cada una lee la base entera, así que desde 2026-10-27 se copia solo
-  si la base cambió desde la anterior.
+- **Copias de seguridad** (repo privado de copias): cada una lee la base entera, unos 130 MB de tráfico de salida.
+  Desde 2026-10-27 se copia solo si la base cambió desde la anterior, y desde 2026-10-28 una vez por día (eran cuatro).
 
 ### Topes de largo
 
