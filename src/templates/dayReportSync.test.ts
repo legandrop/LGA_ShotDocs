@@ -153,6 +153,7 @@ describe('el reporte del día: la prueba de aceptación', () => {
     expect(plan.lastIncomplete).toBe(false);
     expect(reportsOn(plan, '2026-10-02')).toEqual([]);
     const second = await createDayReport(deps(a), plan, plan.suggestion, 'en', { canMark: true });
+    // La locación de ayer que nadie tocó no va al título (D814).
     expect(a.tree.get(second)?.title).toBe('2026-10-02 | Day 02');
     expect(a.tree.get(second)?.parent_id).toBe(folder);
     expect(a.tree.get(second)?.template_id).toBe(BUILTIN_ONSET);

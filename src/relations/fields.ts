@@ -63,7 +63,8 @@ export const FIELD_LABELS = {
   openQuestion: ['consultas', 'consulta', 'open question', 'open questions', 'questions', 'pregunta abierta', 'preguntas abiertas', 'preguntas', 'dudas'],
   set: ['locacion guion', 'locacion de guion', 'decorado', 'decorados', 'set', 'sets', 'script location'],
   intExt: ['int ext dia noche', 'int ext', 'int ext day night', 'int ext dia', 'interior exterior'],
-  shootDate: ['fecha rodaje', 'fecha de rodaje', 'shoot date', 'shooting date'],
+  // «Shoot date (planned)» y «Fecha de rodaje (planeada)» son los de la plantilla *Scene* (`builtin.*.ts`).
+  shootDate: ['fecha rodaje', 'fecha de rodaje', 'shoot date', 'shooting date', 'shoot date planned', 'fecha de rodaje planeada', 'fecha rodaje planeada'],
   location: ['locacion real', 'locacion', 'location', 'real location', 'location planned', 'locacion planeada'],
   coords: ['coordenadas', 'coordinates', 'coords', 'gps', 'ubicacion', 'where'],
   description: ['descripcion', 'description'],

@@ -15,7 +15,7 @@ import { unmountAll } from '../ui/collabHarness';
 import { IS_MAC } from '../ui/shortcuts';
 import { BUILTIN_ONSET } from './builtinIds';
 import { dayReportsMark, localDate } from './dayReport';
-import { createDayReport, planDayReport, writeNewPage } from './dayReportCreate';
+import { createDayPlan, createDayReport, planDayReport, writeNewPage } from './dayReportCreate';
 // El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
 // primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
 // le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
@@ -248,9 +248,26 @@ describe('el botón New day report y su globito', () => {
     act(() => popover()!.requestSubmit());
     for (let i = 0; i < 60 && location.pathname === '/'; i++) await wait(30);
     const made = device.tree.children(folder).at(-1)!;
-    expect(made.title).toBe(`${tomorrow} | Day 02`);
+    // El lugar escrito va al título: de ahí lo lee el Overview (simulación de D813). La locación de ayer que el globito
+    // propone y nadie toca, no (D814: los «Create another» y los días siguientes de abajo).
+    expect(made.title).toBe(`${tomorrow} | Day 02 | Galpón 2`);
     expect(location.pathname).toBe(`/p/${made.id}`);
     expect(popover()).toBeNull();
+  });
+
+  it('abierto desde un plan sin reporte: propone la fecha, el día y el lugar del plan (simulación de D813)', async () => {
+    const { device, folder } = await withReport();
+    const deps = { tree: device.tree, docs: device.docs, engine: device.engine };
+    const later = addDays(localDate(), 3);
+    const plan = await planDayReport(deps, { parentId: folder, projectId: device.tree.workspaceId });
+    const planId = await createDayPlan(deps, plan, { date: later, day: 4, location: 'Casa Rosada' }, 'en');
+    const host = await open(device, planId);
+    click(host.querySelector('.day-report-button'));
+    await popoverReady();
+    const [date, day, place] = inputs();
+    expect(date.value).toBe(later);
+    expect(day.value).toBe('4');
+    expect(place.value).toBe('Casa Rosada');
   });
 
   it('ya existe: Enter abre el de hoy y Create another hace otro', async () => {
@@ -272,7 +289,7 @@ describe('el botón New day report y su globito', () => {
     for (let i = 0; i < 80 && !opened(); i++) await wait(30);
     expect(opened()).toBe(true);
     // O1: otro del mismo día es el mismo día de rodaje (una segunda unidad, un día partido).
-    expect(device.tree.children(folder).map((p) => p.title)).toEqual([`${localDate()} | Day 01`, `${localDate()} | Day 01`]);
+    expect(device.tree.children(folder).map((p) => p.title)).toEqual([`${localDate()} | Day 01 | Estancia La Paz`, `${localDate()} | Day 01`]);
   });
 
   it('O3: Enter mientras se lee la carpeta se recuerda y crea apenas llega la propuesta', async () => {
@@ -304,7 +321,7 @@ describe('el botón New day report y su globito', () => {
     const opened = () => device.tree.children(folder).length === 2 && location.pathname === `/p/${device.tree.children(folder)[1].id}`;
     for (let i = 0; i < 80 && !opened(); i++) await wait(30);
     const kids = device.tree.children(folder);
-    expect(kids.map((p) => p.title)).toEqual([`${addDays(localDate(), -1)} | Day 01`, `${localDate()} | Day 02`]);
+    expect(kids.map((p) => p.title)).toEqual([`${addDays(localDate(), -1)} | Day 01 | Galpón`, `${localDate()} | Day 02`]);
     expect(location.pathname).toBe(`/p/${kids[1].id}`);
   });
 
@@ -337,7 +354,7 @@ describe('el botón New day report y su globito', () => {
       const opened = () => location.pathname === `/p/${device.tree.children(folder)[1]?.id}`;
       for (let i = 0; i < 80 && !opened(); i++) await wait(30);
       const kids = device.tree.children(folder);
-      expect(kids.map((p) => p.title)).toEqual([`${localDate()} | Day 01`, `${addDays(localDate(), 2)} | Day 02`]);
+      expect(kids.map((p) => p.title)).toEqual([`${localDate()} | Day 01 | Estancia La Paz`, `${addDays(localDate(), 2)} | Day 02`]);
       expect(opened()).toBe(true);
     } finally {
       window.removeEventListener('shotdocs:notice', listen);

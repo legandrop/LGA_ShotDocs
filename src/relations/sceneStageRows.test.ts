@@ -72,6 +72,17 @@ describe('sceneStageRows', () => {
     expect(shoot[1]).toMatchObject({ kind: 'path', named: true, lead: { label: 'Día 80' } });
   });
 
+  it('preguntas abiertas: un renglón con rótulo es otra (una por departamento), la primera se ve y las demás suman «+N»', () => {
+    const v = live({
+      questions: [
+        { text: 'Director: ¿la lluvia es de día?\nArt: ¿los carteles se cambian?', place: { pageId: 'scene', blockId: 'q1' }, cards: [] },
+        { text: '¿Permiso de corte de calle?\nVer con locaciones.', place: { pageId: 'scene', blockId: 'q2' }, cards: [] },
+      ],
+    } as unknown as Partial<SceneLive>);
+    const q = sceneStageRows(v, opts()).find((r) => r.id === 'question')!.lines[0];
+    expect(q).toMatchObject({ kind: 'question', text: 'Director: ¿la lluvia es de día?', more: 2, place: { pageId: 'scene', blockId: 'q1' } });
+  });
+
   it('scouting: los que la nombran; si no hay, los de la locación donde se filmó, con «de …»', () => {
     const via = sceneStageRows(live({ scoutsVia: [{ pageId: 'sc1', title: '260109 | Scouting técnico', loc: 'Inquilinato' }] } as unknown as Partial<SceneLive>), opts());
     expect(via.find((r) => r.id === 'scouting')!.lines).toEqual([{ kind: 'links', via: 'Inquilinato', links: [{ label: '260109 | Scouting técnico', target: { kind: 'page', pageId: 'sc1' } }] }]);

@@ -11,6 +11,7 @@ import { schema } from '../ui/editorSchema';
 import { disposeRelationsSession, relationsSession } from '../ui/relationsUi';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { buildRegistry } from './reader';
+import { kindReader } from './kind';
 import { parseSlashQuery, partLetter, pendingCode, relationSlash } from './slashRelations';
 import { searchScenes } from './sceneSearch';
 import { SuggestionMenu } from '@blocknote/core/extensions';
@@ -283,6 +284,54 @@ describe('el / en el editor', () => {
     await until(() => inline(e, id).includes('/p/'), 'el link');
     expect(inline(e, id)).toBe(`Falta la [105_120](/p/${created.id}) `);
     expect(d.tree.children(built.ids.ep5).filter((p) => p.title === '105_120')).toHaveLength(1);
+  });
+
+  it('un proyecto sin carpeta de escenas: /e 001 ofrece crearla; ↵ crea «Scenes» con su tipo, la escena adentro y el link (simulación de D813)', async () => {
+    const server = new FakeServer();
+    server.enableTeam();
+    const d = await makeDevice(server);
+    devices.push(d);
+    const projectId = await d.tree.createProject('Corto');
+    const page = await d.tree.create(null, 'Página a página', projectId);
+    await d.engine.syncNow();
+    const session = relationsSession(d);
+    session.open(projectId);
+    await until(() => session.relations.snapshot(projectId)?.complete, 'el índice');
+    const { e } = await editorOn(d, page);
+    const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => page, tr: t as never });
+    const item = slash.items('e 001')!.at(-1)!;
+    expect(item.title).toBe('Create scene 001');
+    expect(item.subtext).toBe('In a new «Scenes» folder');
+    const id = typeLine(e, 'La ');
+    item.onItemClick();
+    expect(inline(e, id)).toBe('La 001 ');
+    const folderOf = () => d.tree.roots(projectId).find((p) => p.title === 'Scenes');
+    // Como en la app, el cambio del árbol vuelve a abrir el proyecto en la sesión (el índice lee la carpeta nueva).
+    await until(() => folderOf(), 'la carpeta');
+    session.open(projectId);
+    await until(() => d.tree.children(folderOf()!.id).some((p) => p.title === '001'), 'la escena');
+    const scene = d.tree.children(folderOf()!.id).find((p) => p.title === '001')!;
+    expect(kindReader(d.tree).holdsOf(folderOf()!.id)).toBe('scene');
+    await until(() => inline(e, id).includes('/p/'), 'el link');
+    expect(inline(e, id)).toBe(`La [001](/p/${scene.id}) `);
+  });
+
+  it('sin carpeta y sin poder crear en la raíz (permisos desconocidos): no ofrece crear la carpeta, deja el número como texto', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const projectId = await d.tree.createProject('Corto');
+    const page = await d.tree.create(null, 'Página a página', projectId);
+    await d.engine.syncNow();
+    const session = relationsSession(d);
+    session.open(projectId);
+    await until(() => session.relations.snapshot(projectId)?.complete, 'el índice');
+    const { e } = await editorOn(d, page);
+    const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => page, tr: t as never });
+    const item = slash.items('e 001')!.at(-1)!;
+    expect(item.title).toBe('Keep 001 as text');
+    item.onItemClick();
+    await wait(50);
+    expect(d.tree.roots(projectId).map((r) => r.title)).toEqual(['Página a página']);
   });
 
   it('Undo del aviso: la escena creada va a la papelera y el número escrito pierde el link (vuelve a ser pendiente)', async () => {

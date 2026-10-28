@@ -29,7 +29,10 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
     const hidden = places?.hidden;
     const PART = { scene: 'scenes', location: 'locations', set: 'sets' } as const;
     const kindNow = kinds.kindOf(pageId).kind;
-    const mine: FichaPart | null = kindNow === 'scene' || kindNow === 'location' || kindNow === 'set' ? PART[kindNow] : null;
+    // Una página suelta cuyo título ya es una escena («002 | Persecución»): la carpeta de escenas también es su destino,
+    // porque ahí entra como la escena que su título dice (lo encontró la simulación de D813: no había cómo meterla).
+    const mine: FichaPart | null =
+      kindNow === 'scene' || kindNow === 'location' || kindNow === 'set' ? PART[kindNow] : kindNow === 'none' && kinds.titleCode(pageId) ? 'scenes' : null;
     /** La parte de una carpeta de tipo o de un episodio (`null` si no es una). */
     const folderPart = (id: string): FichaPart | null => {
       const holds = kinds.holdsOf(id);
@@ -37,7 +40,12 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
       const row = tree.get(id);
       return row?.parent_id && kinds.holdsOf(row.parent_id) === 'scene' && isEpisodeTitle(row.title) ? 'scenes' : null;
     };
-    const target = (id: string) => !isFichaFolder(tree, id, kinds) || (!!mine && folderPart(id) === mine);
+    // Una página suelta con un número sin episodio («074 | …») en una serie: solo los episodios. En la carpeta de escenas
+    // quedaría como una escena sin número (auditoría de v0.305).
+    const looseCode = kindNow === 'none' ? kinds.titleCode(pageId) : null;
+    const onlyEpisodes = !!looseCode && !looseCode.includes('_') && !!places && places.episodes.size > 0;
+    const target = (id: string) =>
+      !isFichaFolder(tree, id, kinds) || (!!mine && folderPart(id) === mine && !(onlyEpisodes && kinds.holdsOf(id) === 'scene'));
     const kids = (id: string) => tree.children(id).filter((p) => !hidden?.has(p.id));
     const walk = (list: PageRow[], depth: number, group: 'pages' | 'overview', head?: string) => {
       for (const p of list) {
@@ -53,7 +61,7 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
         [routeLabel({ part: null }, tr), routeLabel({ part }, tr), ...(ep ? [tr('live.episode', { ep })] : [])].join(' › ');
       // La carpeta escondida de su tipo (y los episodios), para una escena, locación o decorado.
       if (mine) {
-        const folders = [...(places.folders.get(mine) ?? []), ...(mine === 'scenes' ? [...places.episodes.values()] : [])];
+        const folders = [...(onlyEpisodes ? [] : (places.folders.get(mine) ?? [])), ...(mine === 'scenes' ? [...places.episodes.values()] : [])];
         for (const id of folders) {
           const row = tree.get(id);
           if (row && id !== pageId && !tree.isDescendant(id, pageId)) out.push({ page: row, depth: 0, group: 'overview', head: label(mine) });

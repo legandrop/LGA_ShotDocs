@@ -260,7 +260,7 @@ export function createTomorrow(deps: TomorrowDeps, input: TomorrowInput, canCrea
   if (running) return running;
   const job = (async (): Promise<TomorrowResult> => {
     const { freshSync } = await import('./createEntity');
-    const { isArriving, prepareReport, sectionBlocks } = await import('./prepareDay');
+    const { isArriving, prepareReport, sectionBlocks, sectionsSpot } = await import('./prepareDay');
     const { pageSignature } = await import('./createWrite');
     const { planDayReport, placeBefore, reportBlocks, writeNewPage } = await import('../templates/dayReportCreate');
     // 1. Lo local, antes.
@@ -312,9 +312,13 @@ export function createTomorrow(deps: TomorrowDeps, input: TomorrowInput, canCrea
     // 5. La plantilla y las secciones, de una vez.
     const scenes = input.prepare.scenes.filter((x, i, all) => all.findIndex((y) => y.code === x.code) === i);
     const added = scenes.map((x) => ({ code: x.code, headingId: crypto.randomUUID(), paragraphId: crypto.randomUUID(), text: `${input.prepare.word} ${x.code}` }));
+    // Las secciones después del *Summary* de la plantilla, donde se escribe en el set (`sectionsSpot`), no al final.
+    const base = reportBlocks(plan, { date: input.date, day, location: plan.facts?.location ?? '' }, input.lang, template);
+    const at = sectionsSpot(base, new Set(), input.prepare.level);
     const blocks = [
-      ...reportBlocks(plan, { date: input.date, day, location: plan.facts?.location ?? '' }, input.lang, template),
+      ...base.slice(0, at),
       ...scenes.flatMap((x, i) => sectionBlocks(x, input.prepare.word, input.prepare.level, { heading: added[i].headingId, paragraph: added[i].paragraphId })),
+      ...base.slice(at),
     ];
     await writeNewPage(deps.docs, pageId, blocks, template?.collapsed ?? [], template?.markup ?? []);
     const prepared: PrepareResult = { status: 'ok', added, skipped: [], merged: 0, origin: { client: 0, clock: 0 } };

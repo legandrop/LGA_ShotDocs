@@ -185,7 +185,9 @@ describe('crear y preparar el reporte de mañana', () => {
     const row = A.tree.get(res.pageId)!;
     expect(row).toMatchObject({ title: '2026-03-16 | Día 77', parent_id: built.ids.rodaje, template_id: BUILTIN_ONSET });
     expect(row.settings?.entity).toEqual({ kind: 'day' });
-    // La plantilla (la ficha del día) y, al final, una sección por escena del plan, con el número como link.
+    // La plantilla (la ficha del día) y una sección por escena del plan, con el número como link. Este proyecto titula las
+    // escenas en título 1 y la plantilla trae títulos 2: van al final, porque en el medio la última se quedaría con todo
+    // lo de abajo como su sección (auditoría de v0.305; con escenas en título 2 van después del resumen, `sectionsSpot`).
     const heads = await headingsOf(A, res.pageId);
     expect(heads.slice(-2)).toEqual(['Escena 104_008', 'Escena 105_029']);
     expect(res.prepared).toMatchObject({ status: 'ok', added: [{ code: '104_008' }, { code: '105_029' }] });

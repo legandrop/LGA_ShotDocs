@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
-import { locale, useT } from '../i18n';
+import { locale, useT, type Key } from '../i18n';
 import '../i18n/lazy/map';
 import { mapPath, navigate, pagePath, useSearchParam, type MapTab } from '../router';
 import { SEPARATOR } from '../search/extract';
 import { usePermissions, useServices, useTree } from '../services';
 import { copyText } from '../ui/commentsUi';
 import { notify } from '../ui/notice';
+import { setDocumentTitle } from '../ui/titleBadge';
 import { openExportPages } from '../ui/ExportHost';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession, useIndexProgress } from '../ui/relationsUi';
@@ -39,10 +40,25 @@ import './map.css';
 
 type Session = NonNullable<ReturnType<typeof existingRelationsSession>>;
 
+/** El nombre de cada pestaña del mapa, para el título de la pestaña del navegador. */
+const TAB_TITLE: Record<MapTab, Key> = {
+  locations: 'map.tabLocations',
+  sets: 'map.tabSets',
+  scenes: 'map.tabScenes',
+  scouting: 'map.tabScouting',
+  days: 'map.tabDays',
+  shots: 'map.tabShots',
+  pending: 'map.tabPending',
+};
+
 export function MapView({ tab }: { tab: MapTab }) {
   const tr = useT();
   const services = useServices();
   const session = existingRelationsSession(services);
+  // El título de la pestaña del navegador: «Scenes · Overview · Shot Docs». Sin esto quedaba el de la última página
+  // abierta (lo encontró la simulación de D813).
+  const docTitle = `${tr(TAB_TITLE[tab])} · ${tr('map.title')} · Shot Docs`;
+  useEffect(() => setDocumentTitle(docTitle), [docTitle]);
   if (!session)
     return (
       <div className="mp">
@@ -334,7 +350,7 @@ function Locations({ data, fq, complete }: { data: ProjectMapData; fq: string; c
   const ticks = months.map((mo) => <span key={mo.at} className="mp-tick" style={{ left: x(mo.at) }} />);
   // Dos días se juntan si sus puntos se tocarían con el ancho que tiene la línea ahora (cambia con la ventana).
   const gap = dotGap(width);
-  if (!withDays.length && !without.length) return <p className="mp-empty">{fq ? tr('map.noMatch') : complete ? tr('map.nothingPending') : tr('live.reading')}</p>;
+  if (!withDays.length && !without.length) return <p className="mp-empty">{fq ? tr('map.noMatch') : complete ? tr('map.noLocations') : tr('live.reading')}</p>;
   return (
     <>
       <div className="mp-legend" aria-hidden="true">

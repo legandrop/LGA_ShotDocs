@@ -239,7 +239,12 @@ Cada parte sale entera (código, ayuda, pruebas), auditada por alguien que no la
    otra página cambiada y la pasada de la barra igual (ninguna página sin lugar, mismas fichas). El contenido de las
    páginas no se tocó.
 4. *Shots* (parte 3). **Hecha (v0.304).**
-5. Los títulos de las escenas de VLLF (parte 4, punto 4).
+5. La simulación de punta a punta (2026-10-28): un proyecto nuevo armado solo con la interfaz, sobre el servidor en
+   memoria (`src/dev/simulacion.html`, sin tocar la base): página a página, scouting de director y técnico de la misma
+   locación, una prueba, consultas por departamento, plan y reporte de dos días y la mirada de post desde la escena.
+   Desde la escena se llega con un clic a su desglose, sus scoutings, su plan y la sección exacta del reporte. Lo que
+   cortaba la cadena se arregló en v0.305 (sección 12).
+6. Los títulos de las escenas de VLLF (parte 4, punto 4).
 
 ## 10. Preguntas que decide Lega
 
@@ -256,3 +261,36 @@ Lo demás va como dice este plan salvo que Lega diga otra cosa: el plan con « |
 
 - D813: la alternativa B (este plan). Incluye que los planes en Rodaje se reconocen por su marca propia (sección 5,
   punto 7).
+- D814: el lugar en el título de un día nuevo es el que se escribió o el del plan de esa fecha, nunca la locación de
+  ayer que el globito propone y nadie tocó (sección 12).
+
+## 12. Lo que encontró la simulación
+
+**Arreglado en v0.305:** la fecha planeada de la plantilla *Scene* no se leía (*Tomorrow* decía «0 scenes»); los días
+nuevos se titulaban sin el lugar y el día quedaba sin locación en todo el Overview (D814); *New day report* desde una semana
+creaba el día afuera de la semana (ahora una página con nombre de semana o bloque, `Semana 2`, es la carpeta; `Call
+sheets` no), y desde un plan no proponía sus datos; el primer día de una semana nueva sigue el número y lo de ayer de las
+semanas de antes; las secciones de mañana iban al final del
+reporte; `/e 001` sin carpeta de escenas decía «No items found»; *Move to…* no ofrecía la carpeta de escenas a una página
+con número; la cabecera contaba solo la primera consulta de la sección *Questions*; la ayuda tenía el Overview bajo
+«Find and replace»; el mapa no ponía su nombre en la pestaña y *Locations* vacío decía «Nothing pending».
+
+**No es de la app:** «Only people who see the whole project…» al dueño era del arnés (el servidor de prueba arrancaba sin
+las reglas de equipo); las fotos sin contar en las cabeceras eran porque el arnés no tiene Drive (las fotos quedan
+`sdfile://` y las cabeceras cuentan `sdmedia://`; en Wanka, con Drive, sí cuentan).
+
+**Para decidir con Lega (propuestas, no hechas):**
+
+1. **Un tipo para la preproducción.** «Página a página» y las notas de `1 | Preproducción` caen en *Other | Also named
+   in* de cada escena. Propuesta: *Type › Pages created inside are: Pre-production notes*, y esas páginas van al renglón
+   *Preproduction* de la cabecera.
+2. **Las secciones de hoy.** Un reporte con un plan del mismo día que nombra escenas nace sin sus secciones (la cabecera
+   las marca *PLANNED · NO SECTION*). Propuesta: *Add planned sections* en la cabecera del día, como *Prepare tomorrow's
+   report* pero para hoy.
+3. **Las consultas juntas.** Las preguntas de un scouting que nombran una escena no llegan a la escena, los comentarios no
+   aparecen en ninguna cabecera y *Pending* no lista lo que falta responder. Propuesta: *Overview › Questions*, las
+   consultas abiertas de todo el proyecto por escena y departamento.
+4. **Las fotos sin Drive.** En un workspace sin Drive conectado las fotos no cuentan en las cabeceras. Propuesta: que
+   cuenten igual (hoy solo le pasa a quien no conectó Drive).
+5. **Detalles al escribir:** Enter al final de una *Question* deja un párrafo común (para otra pregunta hay que volver a
+   escribir `/question`), y la cabecera crece en vivo mientras se escribe una consulta y corre el texto.

@@ -159,8 +159,9 @@ el teléfono arranca así). Los documentos no tienen cabecera: aparecen en las d
   que lo nombran en su campo. Sin etapas ni fotos propias: eso está en cada escena.
 - **Día**: la fecha, su locación, el día anterior y el siguiente; las escenas del día con su estado (*shot*, *prepared*,
   *planned*), las preguntas abiertas de sus fichas y de dónde sale el plan. Y la tarjeta *Tomorrow* (*Mañana*), con
-  *Prepare tomorrow's report*: lo único de las relaciones que escribe en una página. Agrega al final del reporte
-  siguiente un título `Escena 105_029` por cada escena sin sección, sin borrar ni reemplazar nada.
+  *Prepare tomorrow's report*: lo único de las relaciones que escribe en una página. Agrega en el reporte siguiente un
+  título `Escena 105_029` por cada escena sin sección, sin borrar ni reemplazar nada: después de las secciones de escena
+  que ya tiene o, si no tiene, después de su primera sección (el *Summary*), no al final (`sectionsSpot`, v0.305).
 
 ## 5. El Overview (Panorama)
 

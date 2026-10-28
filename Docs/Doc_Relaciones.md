@@ -426,7 +426,10 @@ La tarjeta cambia según cómo está mañana (D788), con la lista ajustada y lo 
    tiene contenido que esta versión no conoce, tampoco (`findUnknownContent`).
 2. Lee el documento en el momento (no la foto del índice) con el mismo lector: una escena ya tiene sección si un título
    la nombra de cualquier forma («Escena 105_029a», «5-29», un link).
-3. Agrega al final (antes del renglón vacío de cierre, si hay), por cada escena que no tiene: un título con la palabra
+3. Agrega, después de la última sección de escena que ya tiene el reporte o, si no tiene, después de su primera sección
+   (el *Summary* del reporte en set), antes del próximo título de ese nivel (`sectionsSpot`, v0.305; antes iba al final,
+   abajo de *Data*, *Issues* y *Questions*, y lo encontró la simulación de D813; sin títulos, al final, antes del renglón
+   vacío de cierre), por cada escena que no tiene: un título con la palabra
    y el nivel que usa el proyecto (`headingStyleFor`: mañana, hoy y los días de antes; si ninguno, «Escena»/«Scene» y
    el nivel de los títulos de mañana) y el número como link a la escena (`/p/<id>`, marca `link`), y un renglón vacío.
    No copia el título de la escena. Usa un editor sin pantalla sobre el documento: primero en el dispositivo, después

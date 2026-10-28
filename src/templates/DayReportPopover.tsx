@@ -18,6 +18,7 @@ import {
   suggestedDay,
   suggestedPlanDate,
   suggestedPlanDay,
+  planProposal,
   type DayReportPlan,
   type ReportTemplate,
   type ReportTemplateNotice,
@@ -41,9 +42,11 @@ interface Props {
   onClose: () => void;
   /** Con qué se abre: el reporte (botón y atajo) o el plan (*New day plan* del menú). */
   initialKind?: DayPageKind;
+  /** La página desde la que se abre: si es un plan, el reporte propone su fecha, su día y su lugar (`planProposal`). */
+  fromId?: string;
 }
 
-export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'report' }: Props) {
+export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'report', fromId }: Props) {
   const { docs, engine } = useServices();
   const tree = useTree();
   const perms = usePermissions();
@@ -104,11 +107,14 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
   /** La propuesta para el reporte o el plan, sin pisar lo que la persona ya tocó. */
   function propose(next: DayReportPlan, as: DayPageKind) {
     const t = touched.current;
-    const own = as === 'plan' ? suggestedPlanDate(next, next.suggestion.date) : next.suggestion.date;
+    // Abierto desde un plan cuya fecha todavía no tiene reporte: el reporte de ese plan (simulación de D813).
+    const fromPlan = as === 'report' && fromId ? planProposal(tree, fromId, next) : null;
+    const own = fromPlan ? fromPlan.date : as === 'plan' ? suggestedPlanDate(next, next.suggestion.date) : next.suggestion.date;
     const chosen = t.date && isValidDate(dateNow.current) ? dateNow.current : own;
     if (!t.date) setDate(chosen);
-    if (!t.day) setDay(String(as === 'plan' ? suggestedPlanDay(next, chosen) : suggestedDay(next, chosen)));
-    if (!t.location) setLocation(as === 'plan' ? '' : next.suggestion.location);
+    const planDay = fromPlan && chosen === fromPlan.date ? fromPlan.day : null;
+    if (!t.day) setDay(String(planDay ?? (as === 'plan' ? suggestedPlanDay(next, chosen) : suggestedDay(next, chosen))));
+    if (!t.location) setLocation(as === 'plan' ? '' : fromPlan && chosen === fromPlan.date && fromPlan.location ? fromPlan.location : next.suggestion.location);
   }
 
   const switchKind = (next: DayPageKind) => {
@@ -151,6 +157,7 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
         {
           canMark: perms.canEditPage(folderId),
           reuse: failedPage.current,
+          placeTyped: touched.current.location,
           template: choice?.template ?? null,
           // La de la carpeta que no se pudo usar (O4) no se pisa: se anota solo una que se usó o la que se eligió.
           markTemplate: choice?.notice ? undefined : (choice?.template?.id ?? null),

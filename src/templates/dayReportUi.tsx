@@ -118,7 +118,7 @@ function DayReportControl({ pageId, folderId }: { pageId: string; folderId: stri
       </button>
       {open && (
         <Part onClose={() => setOpen(null)}>
-          <DayReportPopover key={open} folderId={folderId} anchor={button.current} onClose={() => setOpen(null)} initialKind={open} />
+          <DayReportPopover key={open} folderId={folderId} anchor={button.current} onClose={() => setOpen(null)} initialKind={open} fromId={pageId} />
         </Part>
       )}
     </span>

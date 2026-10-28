@@ -303,10 +303,50 @@ function cleanRepeated(doc: Y.Doc, linkTarget: LinkTarget): number {
   return ok ? ids.length : 0;
 }
 
+/** Lo que hace falta de un bloque del primer nivel para ubicar las secciones nuevas. */
+interface SpotBlock {
+  id?: unknown;
+  type?: unknown;
+  props?: unknown;
+}
+
+const headingLevel = (b: SpotBlock): number | null =>
+  b.type === 'heading' ? Number((b.props as { level?: unknown } | undefined)?.level ?? 1) || 1 : null;
+
 /**
- * Prepara un documento ya abierto: limpia los preparados repetidos y agrega, al final, una sección por escena que no
- * tiene. Sin pantalla; puro sobre el Y.Doc (lo usan las pruebas de colaboración con dos documentos).
+ * Dónde van las secciones de escena nuevas (el índice del bloque antes del que van; `blocks.length`, al final): después de
+ * la última sección de escena que ya tiene el reporte; si no tiene, después de la primera sección de la plantilla (el
+ * *Summary* del reporte en set). Siempre justo antes de un título de nivel igual o mayor que el de la escena (`level`):
+ * si no, la última escena se quedaría con todo lo de abajo (*Camera*, *Data*, *Questions*…) como su sección, y sus
+ * fotos y preguntas (auditoría de v0.305, con escenas en título 1 como ERSO). Si no hay uno, al final. Antes iban siempre
+ * al final, abajo de *Data*, *Issues* y *Questions*, lejos de donde se escribe en el set (simulación de D813).
  */
+export function sectionsSpot(blocks: readonly SpotBlock[], sceneHeadingIds: ReadonlySet<string> = new Set(), level = 2): number {
+  const after = (i: number): number => {
+    const level = headingLevel(blocks[i]) ?? 1;
+    for (let k = i + 1; k < blocks.length; k++) {
+      const l = headingLevel(blocks[k]);
+      if (l !== null && l <= level) return k;
+    }
+    return blocks.length;
+  };
+  /** Desde `i`, el primer título que no queda adentro de la escena nueva (nivel igual o mayor), o el final. */
+  const closing = (i: number): number => {
+    for (let k = i; k < blocks.length; k++) {
+      const l = headingLevel(blocks[k]);
+      if (l !== null && l <= level) return k;
+    }
+    return blocks.length;
+  };
+  let last = -1;
+  blocks.forEach((b, i) => {
+    if (typeof b.id === 'string' && sceneHeadingIds.has(b.id)) last = i;
+  });
+  if (last >= 0) return closing(after(last));
+  const first = blocks.findIndex((b) => headingLevel(b) !== null);
+  return first < 0 ? blocks.length : closing(after(first));
+}
+
 /**
  * La sección que agrega *Prepare* para una escena: el título («Escena» + el número como link) y un renglón vacío. Con
  * `ids`, esos ids (el reporte de mañana creado de una vez, `tomorrowNew.ts`, los escribe junto con la plantilla).
@@ -326,6 +366,11 @@ export function sectionBlocks(s: PrepareScene, word: string, level: 1 | 2 | 3, i
   ];
 }
 
+/**
+ * Prepara un documento ya abierto: limpia los preparados repetidos y agrega una sección por escena que no tiene, después
+ * de las secciones de escena que ya hay o del *Summary* (`sectionsSpot`). Sin pantalla; puro sobre el Y.Doc (lo usan las
+ * pruebas de colaboración con dos documentos).
+ */
 export function prepareInDoc(doc: Y.Doc, opts: PrepareOptions): PrepareOutcome {
   const sections = scenesWithSection(doc, opts);
   const origin = { client: doc.clientID, clock: Y.decodeStateVector(Y.encodeStateVector(doc)).get(doc.clientID) ?? 0 };
@@ -347,8 +392,16 @@ export function prepareInDoc(doc: Y.Doc, opts: PrepareOptions): PrepareOutcome {
     withEditor(doc, (editor) => {
       const list = blocksOf(editor);
       const last = list[list.length - 1];
-      // Un renglón vacío al final (el de la semilla, o el que deja el editor) queda al final: lo nuevo va antes.
-      const inserted = (last && emptyParagraph(last) ? editor.insertBlocks(blocks as never[], last.id, 'before') : editor.insertBlocks(blocks as never[], last.id, 'after')) as unknown as DocBlock[];
+      const spot = sectionsSpot(list, new Set([...sections.values()].flat()), opts.level);
+      // Antes del título que sigue a las secciones de escena (o al *Summary*); al final, un renglón vacío (el de la
+      // semilla, o el que deja el editor) queda al final: lo nuevo va antes.
+      const inserted = (
+        spot < list.length
+          ? editor.insertBlocks(blocks as never[], list[spot].id, 'before')
+          : last && emptyParagraph(last)
+            ? editor.insertBlocks(blocks as never[], last.id, 'before')
+            : editor.insertBlocks(blocks as never[], last.id, 'after')
+      ) as unknown as DocBlock[];
       want.forEach((s, k) => added.push({ code: s.code, headingId: inserted[2 * k].id, paragraphId: inserted[2 * k + 1].id, text: `${opts.word} ${s.code}` }));
     });
   }

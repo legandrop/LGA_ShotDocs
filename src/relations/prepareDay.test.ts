@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from '../ui/editorSchema';
 import type { LinkTarget } from './pageRelations';
-import { prepareInDoc, undoInDoc, type PrepareOptions } from './prepareDay';
+import { prepareInDoc, sectionsSpot, undoInDoc, type PrepareOptions } from './prepareDay';
 import { buildRegistry } from './reader';
 
 // *Prepare tomorrow's report* sobre el Y.Doc (Docs/Doc_Relaciones.md, sección 11): solo agrega, no duplica, no pisa lo
@@ -310,5 +310,30 @@ describe('dos dispositivos preparan a la vez, sin red (D436)', () => {
     expect(headings(a).filter((h) => h === 'Escena 104_009')).toHaveLength(1);
     const i = blocks.findIndex((x) => x.text === 'Escena 104_009');
     expect(blocks.slice(i + 1).map((x) => x.type)).not.toContain('h1');
+  });
+});
+
+describe('dónde van las secciones nuevas (simulación de D813)', () => {
+  const h = (id: string, level = 2) => ({ id, type: 'heading', props: { level } });
+  const p = (id: string) => ({ id, type: 'paragraph' });
+  it('después de la primera sección de la plantilla, antes del próximo título de su nivel', () => {
+    // Ficha, Summary y su renglón, Camera package…: van antes de Camera package.
+    expect(sectionsSpot([{ id: 'f', type: 'table' }, h('sum'), p('p1'), h('cam'), p('p2')])).toBe(3);
+    // Un subtítulo adentro del resumen no corta la sección.
+    expect(sectionsSpot([h('sum'), h('sub', 3), p('p1'), h('cam')])).toBe(3);
+  });
+
+  it('siempre antes de un título de nivel igual o mayor que el de la escena: con escenas en título 1 y la plantilla en 2, al final', () => {
+    const doc = [{ id: 'f', type: 'table' }, h('sum'), p('p1'), h('cam'), p('p2'), h('data'), p('p3')];
+    expect(sectionsSpot(doc, new Set(), 1)).toBe(doc.length);
+    expect(sectionsSpot(doc, new Set(), 2)).toBe(3);
+    expect(sectionsSpot([h('sum', 1), p('p1'), h('cam', 2), h('otro', 1)], new Set(), 1)).toBe(3);
+  });
+
+  it('después de la última sección de escena que ya tiene; sin títulos o sin otra sección, al final', () => {
+    const doc = [h('sum'), p('p1'), h('e1'), p('p2'), h('e2'), p('p3'), h('data'), p('p4')];
+    expect(sectionsSpot(doc, new Set(['e1', 'e2']))).toBe(6);
+    expect(sectionsSpot([p('a'), p('b')])).toBe(2);
+    expect(sectionsSpot([h('sum'), p('p1')])).toBe(2);
   });
 });

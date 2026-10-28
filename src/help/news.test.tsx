@@ -301,7 +301,7 @@ describe('las novedades en la ayuda', () => {
     await openHelp(host);
     expect(dialog()!.querySelector('[data-help-section="news"]')).toBeNull();
     expect(dialog()!.querySelector('.help-new')).toBeNull();
-    expect(dialog()!.querySelectorAll('[data-help-section]').length).toBe(15);
+    expect(dialog()!.querySelectorAll('[data-help-section]').length).toBe(16);
   });
 
   it('en castellano', async () => {

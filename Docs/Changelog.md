@@ -1,5 +1,19 @@
 # Changelog — LGA Shot Docs
 
+v0.305 :
+
+Lo que encontró la simulación de punta a punta de D813 (un proyecto nuevo armado solo con la interfaz, del página a página
+al reporte del día). La fecha planeada de la plantilla *Scene* no se leía («shoot date planned» faltaba en los rótulos),
+así que *Tomorrow* decía «0 scenes». *New day report* y *New day plan* titulaban sin el lugar y en el idioma de la app, y
+el día quedaba sin locación en todo el Overview: ahora siguen la forma de los días de la carpeta y suman la locación
+escrita o la del plan, nunca la de ayer sin tocar (`newDayTitle`, D814); abiertos desde una semana van a esa semana y
+siguen su numeración, y desde un plan proponen su fecha, día y lugar. Las secciones
+de mañana van después del resumen, no al final. `/e 001` sin carpeta de escenas ofrece crearla. *Move to…* ofrece la
+carpeta de escenas a una página con número. Cada departamento de las consultas cuenta. La ayuda tiene su sección
+*Overview, scenes and shoot days*, el mapa pone su nombre en la pestaña y *Locations* vacío ya no dice «Nothing pending».
+
+[Lo que encontró la simulación: el día con su lugar, la fecha planeada y el / sin carpeta]
+
 v0.304 :
 
 Parte 3 del plan D813: *Overview › Shots*, la tabla de planos que reemplaza a `BD Main`. En Coda, `BD Main` era una

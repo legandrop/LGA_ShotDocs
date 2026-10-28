@@ -3,9 +3,12 @@ import { SuggestionMenu } from '@blocknote/core/extensions';
 import type { DefaultReactSuggestionItem } from '@blocknote/react';
 import type { Translate } from '../i18n';
 import type { Services } from '../services';
+import { Permissions } from '../sync/access';
+import { notify } from '../ui/notice';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { pickerOptions, reasonText, runCreate, createEnv } from './EntityActions';
 import type { CreateWant } from './createEntity';
+import { createTypedFolder, FOLDER, typedSceneCode } from './OverviewNew';
 import { planOf } from './dayLive';
 import { dayIdOf, dayRef } from './liveView';
 import { fold, scan, type Registry } from './reader';
@@ -174,6 +177,40 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
     const env2 = createEnv(services, p.projectId, tr.lang);
     const guard = env2.guard(want);
     const group = tr(want.kind === 'scene' ? 'slash.scenes' : 'slash.locations');
+    // Sin carpeta de ese tipo (un proyecto que recién empieza): se crea en la raíz con su tipo, como el «+» del *Overview*,
+    // y adentro la escena o la locación. Antes decía «No items found» y había que descubrir ⋯ › Type (simulación de D813).
+    // Pide poder crear en la raíz del proyecto, como el «+» del *Overview*: si no, la carpeta se armaría en el dispositivo y
+    // el servidor la rechazaría (auditoría de v0.305).
+    const canRoot = () => new Permissions(services.tree, services.access.get(), services.user.id).canCreateIn(null, p.projectId);
+    if (!guard.ok && guard.reason === 'noFolder' && want.kind !== 'set' && canRoot()) {
+      const part = want.kind === 'scene' ? 'scenes' : 'locations';
+      const label = tr(FOLDER[part]);
+      const name = want.kind === 'scene' ? want.code : want.name.replace(/\s+/g, ' ').trim();
+      return {
+        title: want.kind === 'scene' ? tr('create.scene', { code: want.code }) : tr('create.location', { name }),
+        subtext: tr('create.inNew', { folder: label }),
+        group,
+        icon: <PlusIcon />,
+        onItemClick: () => {
+          const at = insertText(editor, name);
+          const pageId = env.pageId();
+          void (async () => {
+            await createTypedFolder(services, p.projectId, part, label);
+            await runCreate(services, env2, want, {
+              tr,
+              inPage: pageId,
+              onCreated: (id) => {
+                const view = editor.prosemirrorView;
+                if (view && at && view.editable) linkTextInBlock(view, at, name, `/p/${id}`);
+              },
+            });
+          })().catch((err) => {
+            console.warn('[crear] no se pudo crear la carpeta', want, err);
+            notify(tr('create.failed'));
+          });
+        },
+      };
+    }
     if (!guard.ok) {
       return {
         title: tr('create.keep', { code: shown }),
@@ -221,7 +258,8 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
         onItemClick: () => insertPageLink(editor, text, o.pageId!),
       };
     });
-    const code = q ? pendingCode(p.snap.registry, q, p.ep) : null;
+    // Sin ninguna escena todavía, el índice no lee «001» como número: se toma como se escribió (`typedSceneCode`).
+    const code = q ? (pendingCode(p.snap.registry, q, p.ep) ?? (p.snap.registry.scenes.size === 0 ? typedSceneCode(q, true) : null)) : null;
     if (code && !options.some((o) => o.code === code)) items.push(createItem(p, { kind: 'scene', code }, code));
     return items;
   };

@@ -258,6 +258,8 @@ describe('el mapa en la app', () => {
     );
     await until(() => complete(host) && host.querySelector('.mp-shots tbody tr'), 'la tabla de planos');
     expect(host.querySelector('.mp-tab.on')!.textContent).toContain('Shots');
+    // El título de la pestaña del navegador dice la vista, no la última página abierta (simulación de D813).
+    expect(document.title).toContain('Shots · Overview · Shot Docs');
     // En la barra, *Shots* es solo el nombre de la vista (sin lista), como *Pending*.
     const part = host.querySelector<HTMLAnchorElement>('.ov-part-name[href="/map/shots"]');
     expect(part?.textContent).toBe('Shots');

@@ -191,7 +191,7 @@ describe('el diálogo de la ayuda', () => {
     await until(() => dialog(), 'el diálogo');
     const d = dialog()!;
     expect(d.getAttribute('aria-modal')).toBe('true');
-    expect(d.querySelectorAll('[data-help-section]').length).toBe(15);
+    expect(d.querySelectorAll('[data-help-section]').length).toBe(16);
     // "Primeros pasos": ver la recorrida y practicar, con sus botones.
     expect(d.querySelector('[data-help-id="tour"] .help-action')?.textContent).toBe('Take the tour');
     expect(d.querySelector('[data-help-id="practice"] .help-action')?.textContent).toBe('Practice');

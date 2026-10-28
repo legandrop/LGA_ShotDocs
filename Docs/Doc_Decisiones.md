@@ -2488,3 +2488,17 @@ en la carpeta de días un plan se reconoce por su marca o por una parte « | Pla
 planos que reemplaza a `BD Main`) salió en v0.304. En la mudanza de VLLF y ERSO (parte 4), cada plan toma el nombre de su
 día con « | Plan», y lo que su título viejo decía y el del día no (el lugar planeado, «SIN VFX») queda como « · nota»:
 no se pierde nada del nombre.
+
+### D814 · El lugar en el título de un día nuevo: el escrito o el del plan, nunca el de ayer solo (2026-10-28)
+**Qué pasaba:** la simulación de D813 mostró que *New day report* y *New day plan* titulaban sin el lugar
+(`2026-11-03 | Day 01`), y como el Overview saca de ahí dónde se filmó (D398), los días quedaban sin locación en todo
+el Panorama. Pero el globito propone la locación del reporte anterior, y ponerla siempre en el título diría mal dónde
+se filmó cuando nadie la cambia: es lo que D574 evitó para el reporte de mañana.
+**Elegí:** el título sigue la forma de los días de la carpeta (la misma palabra, `Día` o `Day`, los mismos ceros y el
+mismo separador) y lleva el lugar que se escribió; la locación de ayer que el globito propone y nadie tocó va solo si
+el plan de esa fecha la nombra en su título (el día sigue en el mismo lugar y está planeado). Un plan lleva siempre la
+locación escrita (su campo arranca vacío). Abierto desde un plan, *New day report* propone la fecha, el día y el lugar
+de ese plan.
+**Si preferís otra:** A) poner siempre la locación del globito en el título (más días con lugar, con el riesgo de D574);
+B) nunca ponerla (como antes: hay que escribirla a mano en el título). Se cambia en `titlePlace`
+(`src/templates/dayReportCreate.ts`).

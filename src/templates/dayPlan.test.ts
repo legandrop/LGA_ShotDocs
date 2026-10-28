@@ -5,7 +5,7 @@ import { syncEntityMark } from '../relations/entitySync';
 import { isDayPlanRow, pageKind } from '../relations/kind';
 import { reportsOnDate } from '../relations/tomorrowNew';
 import { BUILTIN_PLAN } from './builtinIds';
-import { planTitle, planTitleFor } from './dayReport';
+import { dayReportFolderOf, hasReportTitle, newDayTitle, planTitle, planTitleFor } from './dayReport';
 import {
   createDayPlan,
   createDayReport,
@@ -13,6 +13,8 @@ import {
   markReportFolder,
   planDayReport,
   placeBefore,
+  planProposal,
+  titlePlace,
   plansOn,
   reportsOn,
   suggestedDay,
@@ -79,11 +81,11 @@ describe('New day plan', () => {
     expect(suggestedPlanDay(plan, '2026-10-03')).toBe(3);
     const id = await createDayPlan(deps(d), plan, { date: '2026-10-03', day: 3, location: 'Casa  Rosada' }, 'en');
     const row = d.tree.get(id)!;
-    // La locación va al campo del plan, no al nombre: el reporte que después crea *New day report* no la lleva.
-    expect(row.title).toBe('2026-10-03 | Day 03 | Plan');
+    // La locación va también al nombre, con los espacios limpios (simulación de D813): de ahí lee el Overview el lugar.
+    expect(row.title).toBe('2026-10-03 | Day 03 | Casa Rosada | Plan');
     expect(row.template_id).toBe(BUILTIN_PLAN);
     expect(row.settings?.entity).toEqual({ kind: 'plan' });
-    expect(titles(d, folder)).toEqual(['2026-10-01 | Day 01', '2026-10-02 | Day 02', '2026-10-03 | Day 03 | Plan']);
+    expect(titles(d, folder)).toEqual(['2026-10-01 | Day 01', '2026-10-02 | Day 02', '2026-10-03 | Day 03 | Casa Rosada | Plan']);
     expect(pageKind(d.tree, id)).toMatchObject({ kind: 'doc', doc: 'plan' });
   });
 
@@ -278,5 +280,96 @@ describe('el plan escrito a mano en una carpeta de días (la red)', () => {
     const folder = await weekWith(d, [1]);
     const page = await d.tree.create(folder, '2026-10-02 | Day 02');
     expect(stripKinds(d.tree, page)).toEqual(['onset', 'dayPlan']);
+  });
+});
+
+describe('el día con su lugar y en su semana (simulación de D813)', () => {
+  it('el título sigue la forma de los días de la carpeta y lleva el lugar escrito', () => {
+    expect(newDayTitle(null, '2026-11-03', 1, 'en')).toBe('2026-11-03 | Day 01');
+    expect(newDayTitle(null, '2026-11-03', 1, 'es', 'Costanera  Sur')).toBe('2026-11-03 | Día 01 | Costanera Sur');
+    // La palabra y los ceros de la carpeta, aunque el idioma sea otro.
+    expect(newDayTitle('2026-05-12 | Día 40 | 7 Puentes', '2026-05-13', 41, 'en', 'Casa Rosada')).toBe('2026-05-13 | Día 41 | Casa Rosada');
+    expect(newDayTitle('2026-05-12 | Day 007', '2026-05-13', 8, 'es')).toBe('2026-05-13 | Day 008');
+    // Una barra en el lugar partiría el título: pasa a «·».
+    expect(newDayTitle(null, '2026-11-03', 2, 'en', 'Galpón | nave 2')).toBe('2026-11-03 | Day 02 | Galpón · nave 2');
+  });
+
+  it('un reporte con lugar sigue siendo un título de la app (se puede reusar vacío); un plan no', () => {
+    expect(hasReportTitle('2026-11-03 | Day 01')).toBe(true);
+    expect(hasReportTitle('2026-11-03 | Día 01 | Costanera Sur')).toBe(true);
+    expect(hasReportTitle('2026-11-03 | Día 01 | Costanera Sur | Plan')).toBe(false);
+    expect(hasReportTitle('2026-11-03 | Día 01 | Plan')).toBe(false);
+    expect(hasReportTitle('2026-11-03 | Día 01 | A | B')).toBe(false);
+    // Las formas que copia `newDayTitle` de la carpeta: el reintento las reusa (O4).
+    expect(hasReportTitle('2026-11-03|Dia 01|Galpón')).toBe(true);
+    expect(hasReportTitle('2026-11-03 | DIA 7')).toBe(true);
+    expect(hasReportTitle('2026-11-03 | Day40 | ')).toBe(false);
+  });
+
+  it('una semana vacía adentro de la carpeta de días es la carpeta de lo que se crea desde ella', async () => {
+    const d = await device();
+    const shoot = await weekWith(d, [1]);
+    const week = await d.tree.create(shoot, 'Semana 2');
+    const page = await d.tree.create(week, 'Notas de la semana');
+    expect(dayReportFolderOf(d.tree, week)).toBe(week);
+    // Una página suelta de la semana: el día va a la semana, no a la carpeta de arriba.
+    expect(dayReportFolderOf(d.tree, page)).toBe(week);
+    // Un reporte de la carpeta de días sigue creando ahí.
+    const report = d.tree.children(shoot).find((p) => p.title.startsWith('2026-10-01'))!;
+    expect(dayReportFolderOf(d.tree, report.id)).toBe(shoot);
+    // Una página recién creada, sin título, todavía no es una semana.
+    const blank = await d.tree.create(shoot, '');
+    expect(dayReportFolderOf(d.tree, blank)).toBe(shoot);
+    // Otra página sin fecha de la carpeta de días no es una semana: el día va a la carpeta, no adentro de ella.
+    const sheets = await d.tree.create(shoot, 'Call sheets');
+    expect(dayReportFolderOf(d.tree, sheets)).toBe(shoot);
+  });
+
+  it('el primer día de una semana nueva sigue el número y lo de ayer de las semanas de antes', async () => {
+    const d = await device();
+    const shoot = await d.tree.create(null, '4 | Rodaje');
+    await markReportFolder(d.tree, shoot);
+    const w1 = await d.tree.create(shoot, 'Semana 1');
+    let plan = await planDayReport(deps(d), { parentId: w1, projectId: d.tree.workspaceId }, { now: at(1) });
+    await createDayReport(deps(d), plan, { date: '2026-10-01', day: 1, location: 'Galpón' }, 'es', { canMark: true });
+    plan = await planDayReport(deps(d), { parentId: w1, projectId: d.tree.workspaceId }, { now: at(2) });
+    await createDayReport(deps(d), plan, { date: '2026-10-02', day: 2, location: 'Galpón' }, 'es', { canMark: true });
+    const w2 = await d.tree.create(shoot, 'Semana 2');
+    plan = await planDayReport(deps(d), { parentId: w2, projectId: d.tree.workspaceId }, { now: at(8) });
+    expect(plan.reports).toEqual([]);
+    expect(plan.last?.title).toBe('2026-10-02 | Día 02');
+    expect(plan.suggestion.day).toBe(3);
+    const id = await createDayReport(deps(d), plan, { date: '2026-10-08', day: 3, location: 'Bar El Puerto' }, 'en', { canMark: true });
+    // La forma de los días de la carpeta (Día, no Day) y adentro de su semana.
+    expect(d.tree.get(id)).toMatchObject({ title: '2026-10-08 | Día 03 | Bar El Puerto', parent_id: w2 });
+  });
+
+  it('D814: la locación de ayer que nadie tocó no va al título; la escrita o la del plan de esa fecha, sí', () => {
+    const base = { suggestion: { date: '2026-10-02', day: 2, location: 'Galpón' }, plans: [] as { id: string; title: string; date: string; day: number | null }[] };
+    expect(titlePlace(base, { date: '2026-10-02', day: 2, location: 'Galpón' })).toBe('');
+    // Si la persona tocó el campo (aunque vuelva a poner la de ayer), va.
+    expect(titlePlace(base, { date: '2026-10-02', day: 2, location: 'Galpón' }, true)).toBe('Galpón');
+    expect(titlePlace(base, { date: '2026-10-02', day: 2, location: 'Bar El Puerto' })).toBe('Bar El Puerto');
+    const planned = { ...base, plans: [{ id: 'p', title: '2026-10-02 | Día 02 | galpon | Plan', date: '2026-10-02', day: 2 }] };
+    expect(titlePlace(planned, { date: '2026-10-02', day: 2, location: 'Galpón' })).toBe('Galpón');
+    expect(titlePlace(planned, { date: '2026-10-03', day: 3, location: 'Galpón' })).toBe('');
+  });
+
+  it('New day report abierto desde un plan propone su fecha, su día y su lugar; con el reporte hecho, la propuesta de siempre', async () => {
+    const d = await device();
+    const folder = await weekWith(d, [1, 2]);
+    let plan = await planDayReport(deps(d), { parentId: folder, projectId: d.tree.workspaceId }, { now: at(2) });
+    const planId = await createDayPlan(deps(d), plan, { date: '2026-10-05', day: 3, location: 'Casa Rosada' }, 'en');
+    plan = await planDayReport(deps(d), { parentId: folder, projectId: d.tree.workspaceId }, { now: at(2) });
+    expect(planProposal(d.tree, planId, plan)).toEqual({ date: '2026-10-05', day: 3, location: 'Casa Rosada' });
+    // Un reporte no es un plan.
+    const report = d.tree.children(folder)[0];
+    expect(planProposal(d.tree, report.id, plan)).toBeNull();
+    // Con el reporte de esa fecha creado, ya no propone el plan; el reporte queda abajo de su plan, con el lugar.
+    const id = await createDayReport(deps(d), plan, { date: '2026-10-05', day: 3, location: 'Casa Rosada' }, 'en', { canMark: true });
+    expect(titles(d, folder).slice(-2)).toEqual(['2026-10-05 | Day 03 | Casa Rosada | Plan', '2026-10-05 | Day 03 | Casa Rosada']);
+    expect(d.tree.get(id)?.title).toBe('2026-10-05 | Day 03 | Casa Rosada');
+    plan = await planDayReport(deps(d), { parentId: folder, projectId: d.tree.workspaceId }, { now: at(2) });
+    expect(planProposal(d.tree, planId, plan)).toBeNull();
   });
 });

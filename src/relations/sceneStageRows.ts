@@ -87,10 +87,14 @@ export function sceneStageRows(v: SceneLive, o: StageOptions): StageRow[] {
   for (const d of v.days) if (d.sections.length) for (const name of d.day.locs) addLoc(name, o.locPage(name));
   add('location', 'pre', locs.length ? [{ kind: 'links', links: locs }] : [], true);
 
-  // Preproducción | Preguntas abiertas: la primera, de qué plano, y cuántas más.
-  const q = v.questions[0];
-  if (q) {
-    add('question', 'pre', [{ kind: 'question', text: q.text.split('\n')[0], place: q.place, shot: q.cards.length === 1 ? q.cards[0].shot : null, cards: q.cards.length, more: v.questions.length - 1 }], false);
+  // Preproducción | Preguntas abiertas: la primera, de qué plano, y cuántas más. Un renglón con rótulo es otra pregunta:
+  // la sección «Questions» de la plantilla trae una por departamento («Director: …», «Art: …»), y contar solo la primera
+  // escondía las demás sin un «+2» (lo encontró la simulación de D813). Un renglón sin rótulo sigue la pregunta de arriba.
+  const lines = v.questions.flatMap((q) => questionItems(q.text).map((t) => ({ q, t })));
+  const first = lines[0];
+  if (first) {
+    const q = first.q;
+    add('question', 'pre', [{ kind: 'question', text: first.t, place: q.place, shot: q.cards.length === 1 ? q.cards[0].shot : null, cards: q.cards.length, more: lines.length - 1 }], false);
   }
 
   // Scouting | Reportes: los que la nombran; si ninguno, los de las locaciones donde se filmó («de …»).
@@ -157,4 +161,14 @@ export function stagePageIds(v: SceneLive): Set<string> {
     for (const ex of [...d.sections, ...d.mentions]) ids.add(ex.pageId);
   }
   return ids;
+}
+
+/** Un renglón que empieza con un rótulo («Art: ¿…?», «Producción: …»): la pregunta de un departamento. */
+const LABELED = /^[^:\n]{1,40}:\s+\S/;
+
+/** Las preguntas de un valor: cada renglón con rótulo es una; los demás siguen a la de arriba. */
+export function questionItems(text: string): string[] {
+  const out: string[] = [];
+  for (const line of text.split('\n').map((t) => t.trim()).filter(Boolean)) if (!out.length || LABELED.test(line)) out.push(line);
+  return out;
 }

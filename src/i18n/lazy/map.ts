@@ -20,6 +20,10 @@ export const map = {
     en: "No sets yet. Mark a folder with Type › Sets and each page inside becomes one.",
     es: "Todavía no hay decorados. Marcá una carpeta con Tipo › Decorados y cada página de adentro pasa a ser uno.",
   },
+  'map.noLocations': {
+    en: "No locations yet. Create one with the + of Overview › Locations, or mark a folder with Type › Locations.",
+    es: "Todavía no hay locaciones. Creá una con el + de Overview › Locaciones, o marcá una carpeta con Tipo › Locaciones.",
+  },
   'map.setNoScenes': { en: "No scene names it", es: "Ninguna escena lo nombra" },
   'map.tabScenes': { en: "Scenes", es: "Escenas" },
   'map.tabScouting': { en: "Scouting", es: "Scouting" },

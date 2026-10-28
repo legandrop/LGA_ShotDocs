@@ -14,6 +14,7 @@ import { searchSession } from '../ui/projectSearchUi';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { buildProject, type Built } from './fixtures/proyectoSintetico';
+import { kindReader } from './kind';
 import { SceneStages } from './SceneStages';
 import { sceneStageRows } from './sceneStageRows';
 import type { SceneLive } from './liveView';
@@ -627,6 +628,42 @@ describe('las fichas en el Overview (D813)', () => {
     click(preRow().querySelector('.toggle'));
     await wait();
     expect(location.pathname).toBe(pagePath(built.ids.s027));
+  });
+
+  it('simulación de D813: una página suelta con número de escena puede ir a la carpeta de escenas con Move to…; una nota, no', async () => {
+    const { d, built } = await owner();
+    const loose = await d.tree.create(null, '105_040 | Persecución en la rambla', built.projectId);
+    const note = await d.tree.create(null, 'Notas sueltas', built.projectId);
+    const { host } = mount(d, pagePath(loose));
+    await shown(() => expect(host.querySelector('.pages-section .tree-row.active')).toBeTruthy());
+    const moveTargets = async (id: string) => {
+      const row = [...host.querySelectorAll('.pages-section .tree-row')].find((r) => r.getAttribute('data-page') === id)!;
+      click(row.querySelector('button[aria-label="More actions"]'));
+      click([...document.querySelectorAll('button')].find((b) => b.textContent === 'Move to…'));
+      await wait();
+      return [...document.querySelectorAll<HTMLButtonElement>('.move-list li > button')];
+    };
+    // La nota sin número: nunca la carpeta de escenas.
+    expect((await moveTargets(note)).map((b) => b.textContent)).not.toContain('1.1 | Desglose');
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    await wait();
+    // Un número sin episodio («040 | …») en una serie: solo los episodios, nunca la carpeta (ahí quedaría sin número),
+    // aunque la carpeta se vea en Pages por una nota de adentro.
+    await d.tree.create(built.ids.desglose, 'Notas del desglose', built.projectId);
+    const flat = await d.tree.create(null, '040 | Otra persecución', built.projectId);
+    await wait();
+    const flatTargets = (await moveTargets(flat)).map((b) => b.textContent);
+    expect(flatTargets).not.toContain('1.1 | Desglose');
+    expect(flatTargets).toContain('105 | Episodio 5');
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    await wait();
+    // La página con número: la carpeta y los episodios; al moverla al episodio, es la escena 105_040.
+    const buttons = await moveTargets(loose);
+    expect(buttons.map((b) => b.textContent)).toContain('1.1 | Desglose');
+    click(buttons.find((b) => b.textContent === '105 | Episodio 5'));
+    await wait();
+    expect(d.tree.get(loose)!.parent_id).toBe(built.ids.ep5);
+    expect(kindReader(d.tree).kindOf(loose)).toMatchObject({ kind: 'scene' });
   });
 
   it('el «+» de Scenes pide el número, crea la escena y la abre; sin carpeta de escenas, la crea con su tipo', async () => {

@@ -429,6 +429,7 @@ export const relations = {
   'create.scene': { en: "Create scene {code}", es: "Crear la escena {code}" },
   'create.location': { en: "Create location «{name}»", es: "Crear la locación «{name}»" },
   'create.in': { en: "In «{folder}»", es: "En «{folder}»" },
+  'create.inNew': { en: "In a new «{folder}» folder", es: "En una carpeta nueva «{folder}»" },
   'create.generic': { en: "won’t be recognized in text by itself", es: "no se va a reconocer sola en el texto" },
   'create.keep': { en: "Keep {code} as text", es: "Dejar {code} como texto" },
   'create.createdScene': { en: "Created scene {code} in «{folder}»", es: "Se creó la escena {code} en «{folder}»" },

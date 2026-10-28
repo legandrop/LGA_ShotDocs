@@ -61,6 +61,20 @@ export function reportTitle(date: string, day: number, lang: string): string {
   return `${date} | ${dayName(day, lang)}`;
 }
 
+/**
+ * El título de un día nuevo de *New day report* o *New day plan*: con la forma de los días de la carpeta (`like`, el último
+ * reporte: la misma palabra, `Día` o `Day`, los mismos ceros y el mismo separador; sin ninguno, la del idioma) y, si se
+ * escribió la locación, con ella (`2026-11-03 | Día 01 | Costanera Sur`): del título lee la app el lugar del día (D398).
+ * Antes de la simulación de D813 el lugar iba solo al contenido, y el día quedaba sin locación en el Overview.
+ */
+export function newDayTitle(like: string | null | undefined, date: string, day: number, lang: string, place = ''): string {
+  const m = /^\s*\d{4}-\d{2}-\d{2}(\s*\|\s*)((?:day|d[ií]a)\s*)(\d+)/iu.exec(like ?? '');
+  // Los mismos ceros que el de la carpeta (`Día 6` → `Día 7`, `Día 06` → `Día 07`), como `nextDayTitle`.
+  const base = m ? `${date}${m[1]}${m[2]}${String(day).padStart(m[3].length, '0')}` : reportTitle(date, day, lang);
+  const where = place.replace(/\s+/g, ' ').replace(/\|/g, '·').trim();
+  return where ? `${base}${m ? m[1] : ' | '}${where}` : base;
+}
+
 /** Lo que va en la fila *Date*: `2026-10-02 · Thu` (`2026-10-02 · jue`), el día de la semana en el idioma del contenido. */
 export function dateWithWeekday(date: string, lang: string): string {
   if (!isValidDate(date)) return date;
@@ -118,10 +132,15 @@ export function planTitleFor(dayTitle: string): string {
   return `${dayTitle.trim()} | Plan`;
 }
 
-/** Un título con la forma exacta de `reportTitle`: `2026-10-02 | Day 06` o `2026-10-02 | Día 06`, nada más. */
+/**
+ * Un título con la forma que pone la app: `2026-10-02 | Day 06` o `2026-10-02 | Día 06` y como mucho el lugar
+ * (`… | Costanera Sur`), sin « | Plan». Acepta todas las formas que copia `newDayTitle` de la carpeta (`Dia`, `DIA`, `|`
+ * sin espacios, `Day40`): si no, el reintento después de un fallo de escritura no reusaba la página y creaba otra
+ * (auditoría de v0.305, O4).
+ */
 export function hasReportTitle(title: string): boolean {
-  const m = /^(\d{4}-\d{2}-\d{2}) \| (?:Day|Día) \d{2,4}$/.exec(title);
-  return !!m && isValidDate(m[1]);
+  const m = /^(\d{4}-\d{2}-\d{2})\s*\|\s*(?:day|d[ií]a)\s*\d{1,4}(?:\s*\|\s*[^|]*[^|\s][^|]*)?$/iu.exec(title.trim());
+  return !!m && isValidDate(m[1]) && !planTitle(title);
 }
 
 /**
@@ -150,11 +169,42 @@ export function isDayReportFolder(tree: PageTree, id: string): boolean {
   return tree.children(id).some((p) => isReportPage(p, tree));
 }
 
-/** La carpeta de reportes de la página: ella misma, o la de arriba si es una (cada reporte tiene el botón), o `null`. */
+/** El nombre de una semana o un bloque de rodaje: `Semana 03`, `Week 2`, `Bloque 1`, `Sem. 4`. */
+const WEEK_TITLE = /^\s*(?:semana|week|bloque|block|sem\.?|wk)(?:\s|\d|$)/iu;
+
+/**
+ * Una semana de una carpeta de días (`Semana 03`, `Bloque 2`): con nombre de semana o bloque, sin fecha al principio ni
+ * número de día, y no un reporte ni un plan. Cualquier otra página sin fecha de la carpeta (`Call sheets`, `Planes`)
+ * no es una semana: crear un día ahí lo metería adentro y la marcaría como carpeta de reportes para siempre (auditoría
+ * de v0.305). Una página sin título todavía no es nada: se está creando.
+ */
+function isDaysGroup(tree: PageTree, row: PageRow): boolean {
+  const title = row.title.trim();
+  return WEEK_TITLE.test(title) && dateAtStart(title) === null && dayInTitle(title) === null && !planTitle(title) && !isReportPage(row, tree);
+}
+
+/** La semana de una carpeta de días (`isDaysGroup`) y su carpeta, o `null`: para seguir la numeración de las otras. */
+export function weekOf(tree: PageTree, folderId: string | null): { week: string; days: string } | null {
+  const row = folderId ? tree.get(folderId) : undefined;
+  const parent = row?.parent_id ? tree.get(row.parent_id) : undefined;
+  return row && parent && isDayReportFolder(tree, parent.id) && isDaysGroup(tree, row) ? { week: row.id, days: parent.id } : null;
+}
+
+/**
+ * La carpeta de reportes de la página: ella misma, o la de arriba si es una (cada reporte tiene el botón), o `null`. Una
+ * semana adentro de la carpeta de días (`4 | Rodaje › Semana 1`, todavía vacía) es la carpeta de lo que se cree desde
+ * ella o desde algo de adentro (el plan solo de una semana sin reportes): el día va en su semana, no en `Rodaje` (lo
+ * encontró la simulación de D813). Con el primer reporte, la semana queda marcada como carpeta de reportes, como las de
+ * VLLF y ERSO.
+ */
 export function dayReportFolderOf(tree: PageTree, pageId: string): string | null {
   if (isDayReportFolder(tree, pageId)) return pageId;
-  const parent = tree.get(pageId)?.parent_id;
-  return parent && isDayReportFolder(tree, parent) ? parent : null;
+  const row = tree.get(pageId);
+  const parent = row?.parent_id ? tree.get(row.parent_id) : undefined;
+  if (!row || !parent) return null;
+  if (isDayReportFolder(tree, parent.id)) return isDaysGroup(tree, row) ? row.id : parent.id;
+  const grand = parent.parent_id;
+  return grand && isDayReportFolder(tree, grand) && isDaysGroup(tree, parent) ? parent.id : null;
 }
 
 // --- El atajo (sección 9) --------------------------------------------------------------------------------------------

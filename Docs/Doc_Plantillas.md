@@ -319,7 +319,20 @@ Al tocar el botón, un globito con los datos ya puestos y editables; Enter crea:
 ### 6.5 La página
 
 - **Título** (PL7): `2026-10-02 | Day 06` (`Día 06` en castellano): la fecha como código del "|" (D-10), que ordena y
-  se busca igual en todos lados.
+  se busca igual en todos lados. Desde v0.305 (`newDayTitle`) sigue la forma de los días de la carpeta (la misma palabra,
+  `Día` o `Day`, y los mismos ceros que el último reporte; sin ninguno, la del idioma) y lleva al final la locación
+  (`2026-11-03 | Día 01 | Costanera Sur`): del título lee la app el lugar del día (D398), y sin él el día quedaba sin
+  locación en el Overview (lo encontró la simulación de D813). Es la que se escribió; la de ayer que el globito propone y
+  nadie tocó, solo si el plan de esa fecha la nombra (D814, `titlePlace`). Una barra en la locación pasa a «·». Un reporte
+  vacío con ese título (la fecha, el día y como mucho el lugar, en cualquiera de las formas que copia) se sigue reusando
+  (`hasReportTitle`).
+- **Carpeta:** la de reportes de la página. Una semana adentro de la carpeta de días (`4 | Rodaje › Semana 2`, todavía
+  vacía; con nombre de semana o bloque: `Semana`, `Week`, `Bloque`, `Block`) es la carpeta de lo que se crea desde ella o
+  desde algo de adentro (`dayReportFolderOf`, v0.305): el día va a su semana, no a `Rodaje`. Otra página sin fecha de la
+  carpeta (`Call sheets`) no es una semana. El primer día de una semana nueva toma como «ayer» el último día de las
+  semanas de antes (su número, su unidad, su equipo y su cámara) y, si la semana no tiene plantilla, la de la carpeta de
+  días. Abierto desde un plan cuya fecha todavía no tiene reporte, el globito propone la fecha, el día y
+  la locación de ese plan (`planProposal`).
 - **Lugar en el árbol:** antes del primer reporte o plan de jornada (en el orden de la carpeta) con fecha mayor
   (`keyBetween`), así la carpeta queda en orden; si no hay, al final. Un reporte queda justo abajo del plan de su fecha
   (D813).
@@ -334,7 +347,7 @@ Al tocar el botón, un globito con los datos ya puestos y editables; Enter crea:
   planes por adelantado: Día 03 y Día 04), y la locación vacía (la de ayer no sirve para mañana). Sin selector de
   plantilla: siempre *Day plan*. Las pestañas cambian con ←/→.
 - **Título:** el del reporte de esa fecha con « | Plan» (`2026-10-02 | Day 06 | Plan`); sin reporte, el que le va a
-  poner *New day report* (fecha y día; la locación escrita va al campo del plan, no al nombre) con « | Plan». *Create
+  poner *New day report* (fecha, día y, desde v0.305, la locación escrita) con « | Plan». *Create
   another* suma « · 2», « · 3». *Plan tomorrow*, en la tarjeta *Tomorrow*, usa la forma de los días de la carpeta
   (`nextDayTitle`). Si falla escribir el contenido, el reintento usa la página que quedó (como el reporte, O4).
 - **Lugar:** justo arriba del reporte de su fecha o antes del primer reporte o plan de una fecha mayor

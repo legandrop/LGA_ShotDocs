@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent } from 'react';
 import { useT } from '../i18n';
 import { navigate, pagePath } from '../router';
-import { useServices, useTree } from '../services';
+import { useServices, useTree, type Services } from '../services';
 import type { PageRow } from '../sync/types';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { folderChoices, type CreateWant } from './createEntity';
@@ -16,7 +16,7 @@ import type { FichaPart } from './overviewPlaces';
 // carpeta de ese tipo, la crea en la raíz con su tipo; con dos posibles, pregunta en cuál.
 
 const PLACEHOLDER = { scenes: 'sidebar.newScenePlaceholder', locations: 'sidebar.newLocationPlaceholder', sets: 'sidebar.newSetPlaceholder' } as const;
-const FOLDER = { scenes: 'type.scenes', locations: 'type.locations', sets: 'type.sets' } as const;
+export const FOLDER = { scenes: 'type.scenes', locations: 'type.locations', sets: 'type.sets' } as const;
 const KIND = { scenes: 'scene', locations: 'location', sets: 'set' } as const;
 
 /**
@@ -31,7 +31,7 @@ export function typedSceneCode(text: string, flat: boolean): string | null {
 }
 
 /** Espera a que el índice del proyecto termine de leer (como mucho `ms`). */
-function indexReady(services: Parameters<typeof existingRelationsSession>[0], projectId: string, ms = 5000): Promise<void> {
+export function indexReady(services: Parameters<typeof existingRelationsSession>[0], projectId: string, ms = 5000): Promise<void> {
   const relations = existingRelationsSession(services)?.relations;
   if (!relations) return Promise.resolve();
   return new Promise((resolve) => {
@@ -49,6 +49,17 @@ function indexReady(services: Parameters<typeof existingRelationsSession>[0], pr
     // Recién creada la carpeta, la foto vieja todavía puede decir «completa»: se mira después de que el índice la vea.
     setTimeout(check, 50);
   });
+}
+
+/**
+ * Una carpeta en la raíz del proyecto con su tipo («Scenes», «Locations», «Sets»), para cuando no hay ninguna: la crean el
+ * «+» del *Overview* y el `/e` / `/l` (simulación de D813). Espera a que el índice la vea antes de volver.
+ */
+export async function createTypedFolder(services: Pick<Services, 'tree'> & Parameters<typeof existingRelationsSession>[0], projectId: string, part: FichaPart, label: string): Promise<void> {
+  const folder = await services.tree.create(null, label, projectId);
+  await markFolderHolds(services.tree, folder, KIND[part]);
+  // El índice vuelve a leer con la carpeta nueva: las guardas esperan a que termine (G2).
+  await indexReady(services, projectId);
 }
 
 /**
@@ -87,10 +98,7 @@ export function NewFicha({ part, ep, projectId, onDone }: { part: FichaPart; ep?
       }
       // Sin carpeta de ese tipo, una en la raíz («Scenes», «Locations», «Sets») con su tipo.
       if (!guard.ok && guard.reason === 'noFolder') {
-        const folder = await services.tree.create(null, tr(FOLDER[part]), projectId);
-        await markFolderHolds(services.tree, folder, KIND[part]);
-        // El índice vuelve a leer con la carpeta nueva: las guardas esperan a que termine (G2).
-        await indexReady(services, projectId);
+        await createTypedFolder(services, projectId, part, tr(FOLDER[part]));
         guard = env.guard(want);
       }
       if (!guard.ok && guard.reason === 'twoFolders' && !want.in) {

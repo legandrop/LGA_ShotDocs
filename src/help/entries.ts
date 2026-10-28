@@ -9,6 +9,7 @@ import '../i18n/lazy/help';
 export type HelpSection =
   | 'start'
   | 'pages'
+  | 'overview'
   | 'writing'
   | 'photos'
   | 'attachments'
@@ -26,6 +27,7 @@ export type HelpSection =
 export const HELP_SECTIONS: { id: HelpSection; title: Key }[] = [
   { id: 'start', title: 'help.section.start' },
   { id: 'pages', title: 'help.section.pages' },
+  { id: 'overview', title: 'help.section.overview' },
   { id: 'writing', title: 'help.section.writing' },
   { id: 'photos', title: 'help.section.photos' },
   { id: 'attachments', title: 'help.section.attachments' },
@@ -134,8 +136,6 @@ const PROJECT_PURGE = '0.167';
 const TABLE_PHONE = '0.156';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
 const OWN_TEMPLATES = '0.124';
-/** El reporte del día (Docs/Doc_Plantillas.md, entrega 2): la versión la pone quien publica. */
-const DAY_REPORTS = '0.121';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
 /** El ícono del árbol de las páginas con link y quién lo creó, en *Share* (Doc_Link_Publico.md): la versión la pone quien publica. */
@@ -183,12 +183,6 @@ const PAGES_FOLD = '0.268';
  * v0.244, sube con el texto en el color de cada cosa (D774) y con «Escena» dibujada junto a su número (D776).
  */
 const LIVE_UNDERLINE = '0.273';
-/**
- * Lo que quedaba del `/`, *Create*, *Assign*, *Today* y *Tomorrow* (relaciones en vivo, E11): *Undo* de *Assign*,
- * *Assign* en *Map › Pending* y crear el reporte de mañana desde *Tomorrow*. Sube `liveDay` (antes 0.241, E5) y
- * `linkScenes` (antes 0.245, E7). La versión se pone al publicar.
- */
-const REL_RESTOS = '0.248';
 /** Otros nombres de una locación y Dejar fuera de las relaciones (D526–D545). */
 const LOCATION_NAMES = '0.247';
 /**
@@ -333,24 +327,6 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: OWN_TEMPLATES,
   },
   {
-    id: 'dayReports',
-    section: 'pages',
-    title: 'help.dayReports.title',
-    text: 'help.dayReports.text',
-    keys: { newReport: 'newDayReport' },
-    words: ['day report', 'reporte del día', 'shoot day', 'día de rodaje', 'on-set', 'rodaje', 'unit', 'unidad', 'location', 'locación'],
-    since: DAY_REPORTS,
-  },
-  {
-    id: 'pageTypes',
-    section: 'pages',
-    title: 'help.pageTypes.title',
-    text: 'help.pageTypes.text',
-    words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'set', 'decorado', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'test', 'prueba', 'episode', 'episodio', 'folder', 'carpeta'],
-    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los decorados (D804).
-    since: '0.294',
-  },
-  {
     id: 'projects',
     section: 'pages',
     title: 'help.projects.title',
@@ -358,125 +334,6 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { search: 'search' },
     showMe: 'project-switcher',
     since: BEFORE_HELP,
-  },
-  {
-    id: 'indexReading',
-    section: 'find',
-    title: 'help.indexReading.title',
-    text: 'help.indexReading.text',
-    words: ['reading', 'leyendo', 'index', 'índice', 'first time', 'primera vez', 'scenes', 'escenas', 'locations', 'locaciones'],
-    since: INDEX_READING,
-  },
-  {
-    id: 'liveHeader',
-    section: 'find',
-    title: 'help.liveHeader.title',
-    text: 'help.liveHeader.text',
-    words: ['scene', 'escena', 'location', 'locación', 'shot at', 'filmada', 'scouting', 'breakdown', 'desglose', 'header', 'cabecera', 'related', 'relacionado', 'split', 'repartir', 'dividir', 'move report', 'mover reporte'],
-    since: LIVE_HEADER,
-  },
-  {
-    id: 'liveHeaderFields',
-    section: 'find',
-    title: 'help.liveHeaderFields.title',
-    text: 'help.liveHeaderFields.text',
-    words: ['open question', 'pregunta abierta', 'consultas', 'sets', 'decorados', 'int/ext', 'where', 'coordenadas', 'coordinates', 'card', 'ficha', 'campo', 'field'],
-    since: LIVE_FIELDS,
-  },
-  {
-    id: 'liveDay',
-    section: 'find',
-    title: 'help.liveDay.title',
-    text: 'help.liveDay.text',
-    words: ['day plan', 'plan de jornada', 'planeamiento', 'shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana', 'empty copy', 'copia vacía'],
-    // Subió con los planes fuera del día (v0.277) y con la tarjeta Tomorrow por estados (v0.281, D788).
-    since: '0.281',
-  },
-  {
-    id: 'livePhotos',
-    section: 'find',
-    title: 'help.livePhotos.title',
-    text: 'help.livePhotos.text',
-    words: ['photos', 'fotos', 'by source', 'por fuente', 'gallery', 'galería', 'tech scout', 'creative scout', 'scouting técnico', 'scouting creativo', 'carrete', 'viewer', 'go to place'],
-    since: LIVE_PHOTOS,
-  },
-  {
-    id: 'relationsMap',
-    section: 'find',
-    title: 'help.relationsMap.title',
-    text: 'help.relationsMap.text',
-    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'sets', 'decorados', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'shots', 'planos', 'bd main', 'breakdown table', 'tabla', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
-    // Subió con *Sets* (D804) y con *Shots*, la tabla de planos (D813).
-    since: '0.304',
-  },
-  {
-    id: 'scenesSection',
-    section: 'find',
-    title: 'help.scenesSection.title',
-    text: 'help.scenesSection.text',
-    words: ['scenes', 'escenas', 'scene list', 'lista de escenas', 'episode', 'episodio', 'pages', 'páginas', 'mentions', 'menciones', 'where', 'dónde', 'backlinks', 'related', 'relacionado', 'index pages', 'páginas índice', 'export', 'exportar', 'pdf', 'zip', 'stage', 'etapa'],
-    since: SCENES_SECTION,
-  },
-  {
-    id: 'searchEntities',
-    section: 'find',
-    title: 'help.searchEntities.title',
-    text: 'help.searchEntities.text',
-    words: ['scene number', 'número de escena', '5027', '101_074', 'location', 'locación', 'search', 'buscar'],
-    since: LIVE_MAP,
-  },
-  {
-    id: 'liveUnderline',
-    section: 'find',
-    title: 'help.liveUnderline.title',
-    text: 'help.liveUnderline.text',
-    textTouch: 'help.liveUnderline.textTouch',
-    keys: { link: 'relLink' },
-    more: ['peekClose'],
-    words: ['underline', 'subrayado', 'subrayada', 'preview', 'adelanto', 'make it a link', 'volverlo link', 'link', 'today', 'hoy', 'pending', 'pendiente', 'chip', 'ficha'],
-    since: LIVE_UNDERLINE,
-  },
-  {
-    id: 'linkScenes',
-    section: 'find',
-    title: 'help.linkScenes.title',
-    text: 'help.linkScenes.text',
-    more: ['slashScene', 'slashLocation'],
-    words: ['/e', '/l', 'slash', 'link', 'linkear', 'create scene', 'crear escena', 'create location', 'crear locación', 'assign', 'asignar', 'pending', 'pendiente', 'no scene number', 'sin número', 'undo', 'deshacer', 'part', 'parte'],
-    since: REL_RESTOS,
-  },
-  {
-    id: 'locationNames',
-    section: 'find',
-    title: 'help.locationNames.title',
-    text: 'help.locationNames.text',
-    words: ['other names', 'otros nombres', 'also known as', 'aka', 'alias', 'nickname', 'apodo', 'abbreviation', 'abreviatura', 'location', 'locación', 'studio', 'estudio', 'day title', 'título del día', 'link to a location', 'vincular'],
-    since: LOCATION_NAMES,
-  },
-  {
-    id: 'leaveOut',
-    section: 'pages',
-    title: 'help.leaveOut.title',
-    text: 'help.leaveOut.text',
-    showMe: 'page-menu',
-    words: ['leave out', 'dejar fuera', 'left out', 'fuera', 'archive', 'archivo', 'backup', 'copia', 'relations', 'relaciones', 'map', 'mapa', 'ignore', 'ignorar'],
-    since: LOCATION_NAMES,
-  },
-  {
-    id: 'mergePages',
-    section: 'pages',
-    title: 'help.mergePages.title',
-    text: 'help.mergePages.text',
-    words: ['merge', 'unir', 'juntar', 'duplicate', 'duplicada', 'repetida', 'two pages', 'dos páginas', 'same scene', 'misma escena', 'same day', 'mismo día', 'in 2 pages', 'en 2 páginas', 'pending', 'pendiente'],
-    since: RESTOS_E19,
-  },
-  {
-    id: 'foldShots',
-    section: 'pages',
-    title: 'help.foldShots.title',
-    text: 'help.foldShots.text',
-    words: ['shots', 'planos', 'subpages', 'subpáginas', 'cards', 'fichas', 'bring', 'traer', 'into this page', 'a esta página', 'coda', 'sub-rows', 'subfilas', 'one page', 'una sola página'],
-    since: LIVE_HEADER,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },
@@ -499,6 +356,149 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: PROJECT_PURGE,
   },
   { id: 'workspaces', section: 'pages', title: 'help.workspaces.title', text: 'help.workspaces.text', since: BEFORE_HELP },
+
+  // --- Overview, escenas y rodaje (las fichas, las cabeceras y el día de rodaje, D813) ---
+  {
+    id: 'relationsMap',
+    section: 'overview',
+    title: 'help.relationsMap.title',
+    text: 'help.relationsMap.text',
+    words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'sets', 'decorados', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'shots', 'planos', 'bd main', 'breakdown table', 'tabla', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
+    // Subió con *Sets* (D804) y con *Shots*, la tabla de planos (D813).
+    since: '0.304',
+  },
+  {
+    id: 'scenesSection',
+    section: 'overview',
+    title: 'help.scenesSection.title',
+    text: 'help.scenesSection.text',
+    words: ['scenes', 'escenas', 'scene list', 'lista de escenas', 'episode', 'episodio', 'pages', 'páginas', 'mentions', 'menciones', 'where', 'dónde', 'backlinks', 'related', 'relacionado', 'index pages', 'páginas índice', 'export', 'exportar', 'pdf', 'zip', 'stage', 'etapa'],
+    since: SCENES_SECTION,
+  },
+  {
+    id: 'pageTypes',
+    section: 'overview',
+    title: 'help.pageTypes.title',
+    text: 'help.pageTypes.text',
+    words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'set', 'decorado', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'test', 'prueba', 'episode', 'episodio', 'folder', 'carpeta'],
+    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los decorados (D804).
+    since: '0.294',
+  },
+  {
+    id: 'liveHeader',
+    section: 'overview',
+    title: 'help.liveHeader.title',
+    text: 'help.liveHeader.text',
+    words: ['scene', 'escena', 'location', 'locación', 'shot at', 'filmada', 'scouting', 'breakdown', 'desglose', 'header', 'cabecera', 'related', 'relacionado', 'split', 'repartir', 'dividir', 'move report', 'mover reporte'],
+    since: LIVE_HEADER,
+  },
+  {
+    id: 'liveHeaderFields',
+    section: 'overview',
+    title: 'help.liveHeaderFields.title',
+    text: 'help.liveHeaderFields.text',
+    words: ['open question', 'pregunta abierta', 'consultas', 'sets', 'decorados', 'int/ext', 'where', 'coordenadas', 'coordinates', 'card', 'ficha', 'campo', 'field'],
+    since: LIVE_FIELDS,
+  },
+  {
+    id: 'livePhotos',
+    section: 'overview',
+    title: 'help.livePhotos.title',
+    text: 'help.livePhotos.text',
+    words: ['photos', 'fotos', 'by source', 'por fuente', 'gallery', 'galería', 'tech scout', 'creative scout', 'scouting técnico', 'scouting creativo', 'carrete', 'viewer', 'go to place'],
+    since: LIVE_PHOTOS,
+  },
+  {
+    id: 'liveDay',
+    section: 'overview',
+    title: 'help.liveDay.title',
+    text: 'help.liveDay.text',
+    words: ['day plan', 'plan de jornada', 'planeamiento', 'shoot day', 'día de rodaje', 'tomorrow', 'mañana', 'prepare', 'preparar', 'report', 'reporte', 'plan', 'planning', 'fecha rodaje', 'call sheet', 'new day report', 'create tomorrow', 'crear mañana', 'empty copy', 'copia vacía'],
+    // Subió con los planes fuera del día (v0.277) y con la tarjeta Tomorrow por estados (v0.281, D788).
+    // Las secciones de mañana después del resumen (simulación de D813).
+    since: '0.305',
+  },
+  {
+    id: 'dayReports',
+    section: 'overview',
+    title: 'help.dayReports.title',
+    text: 'help.dayReports.text',
+    keys: { newReport: 'newDayReport' },
+    words: ['day report', 'reporte del día', 'shoot day', 'día de rodaje', 'on-set', 'rodaje', 'unit', 'unidad', 'location', 'locación'],
+    // Llegó en v0.121 (entrega 2); sube con el día con su lugar en el título, el reporte desde su plan y la semana
+    // (simulación de D813).
+    since: '0.305',
+  },
+  {
+    id: 'linkScenes',
+    section: 'overview',
+    title: 'help.linkScenes.title',
+    text: 'help.linkScenes.text',
+    more: ['slashScene', 'slashLocation'],
+    words: ['/e', '/l', 'slash', 'link', 'linkear', 'create scene', 'crear escena', 'create location', 'crear locación', 'assign', 'asignar', 'pending', 'pendiente', 'no scene number', 'sin número', 'undo', 'deshacer', 'part', 'parte'],
+    // Llegó en v0.245 (E7) y subió en v0.248 (E11); sube con /e y /l que crean la carpeta si no hay (simulación de D813).
+    since: '0.305',
+  },
+  {
+    id: 'liveUnderline',
+    section: 'overview',
+    title: 'help.liveUnderline.title',
+    text: 'help.liveUnderline.text',
+    textTouch: 'help.liveUnderline.textTouch',
+    keys: { link: 'relLink' },
+    more: ['peekClose'],
+    words: ['underline', 'subrayado', 'subrayada', 'preview', 'adelanto', 'make it a link', 'volverlo link', 'link', 'today', 'hoy', 'pending', 'pendiente', 'chip', 'ficha'],
+    since: LIVE_UNDERLINE,
+  },
+  {
+    id: 'searchEntities',
+    section: 'overview',
+    title: 'help.searchEntities.title',
+    text: 'help.searchEntities.text',
+    words: ['scene number', 'número de escena', '5027', '101_074', 'location', 'locación', 'search', 'buscar'],
+    since: LIVE_MAP,
+  },
+  {
+    id: 'locationNames',
+    section: 'overview',
+    title: 'help.locationNames.title',
+    text: 'help.locationNames.text',
+    words: ['other names', 'otros nombres', 'also known as', 'aka', 'alias', 'nickname', 'apodo', 'abbreviation', 'abreviatura', 'location', 'locación', 'studio', 'estudio', 'day title', 'título del día', 'link to a location', 'vincular'],
+    since: LOCATION_NAMES,
+  },
+  {
+    id: 'foldShots',
+    section: 'overview',
+    title: 'help.foldShots.title',
+    text: 'help.foldShots.text',
+    words: ['shots', 'planos', 'subpages', 'subpáginas', 'cards', 'fichas', 'bring', 'traer', 'into this page', 'a esta página', 'coda', 'sub-rows', 'subfilas', 'one page', 'una sola página'],
+    since: LIVE_HEADER,
+  },
+  {
+    id: 'mergePages',
+    section: 'overview',
+    title: 'help.mergePages.title',
+    text: 'help.mergePages.text',
+    words: ['merge', 'unir', 'juntar', 'duplicate', 'duplicada', 'repetida', 'two pages', 'dos páginas', 'same scene', 'misma escena', 'same day', 'mismo día', 'in 2 pages', 'en 2 páginas', 'pending', 'pendiente'],
+    since: RESTOS_E19,
+  },
+  {
+    id: 'leaveOut',
+    section: 'overview',
+    title: 'help.leaveOut.title',
+    text: 'help.leaveOut.text',
+    showMe: 'page-menu',
+    words: ['leave out', 'dejar fuera', 'left out', 'fuera', 'archive', 'archivo', 'backup', 'copia', 'relations', 'relaciones', 'map', 'mapa', 'ignore', 'ignorar'],
+    since: LOCATION_NAMES,
+  },
+  {
+    id: 'indexReading',
+    section: 'overview',
+    title: 'help.indexReading.title',
+    text: 'help.indexReading.text',
+    words: ['reading', 'leyendo', 'index', 'índice', 'first time', 'primera vez', 'scenes', 'escenas', 'locations', 'locaciones'],
+    since: INDEX_READING,
+  },
 
   // --- Escribir ---
   { id: 'slash', section: 'writing', title: 'help.slash.title', text: 'help.slash.text', more: ['mdSlash'], showMe: 'slash', since: BEFORE_HELP },
