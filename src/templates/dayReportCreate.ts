@@ -342,13 +342,18 @@ export async function createDayPlan(
 
 /**
  * El día de rodaje que propone el globito para esa fecha (O1): si ya hay un reporte ese día, su número (*Create
- * another* es una segunda unidad o un día partido: el mismo día de rodaje); si no, el siguiente al último.
+ * another* es una segunda unidad o un día partido: el mismo día de rodaje); si no, el del plan de esa fecha (si no,
+ * plan y reporte no se unirían: se conectan por fecha y número de día, verificación de v0.306); si no, el siguiente al
+ * último. Un plan de otra fecha no cuenta.
  */
 export function suggestedDay(plan: DayReportPlan, date: string): number {
   const same = reportsOn(plan, date)
     .map((r) => r.day)
     .filter((d): d is number => d !== null);
-  return same.at(-1) ?? plan.suggestion.day;
+  const planned = plansOn(plan, date)
+    .map((p) => p.day)
+    .filter((d): d is number => d !== null);
+  return same.at(-1) ?? planned[0] ?? plan.suggestion.day;
 }
 
 /** Un lugar escrito, para comparar: sin mayúsculas, acentos ni espacios de más. */
@@ -361,11 +366,14 @@ const samePlace = (a: string, b: string) => {
  * El lugar que va al título de un reporte nuevo (D814): el que se escribió (`typed`: la persona tocó el campo, aunque
  * vuelva a poner el de ayer); si es el de ayer que el globito propone y nadie tocó, solo si el plan de esa fecha lo
  * nombra en su título (el día sigue en el mismo lugar, y está planeado). Si no, ninguno: el título es de donde el
- * Overview saca dónde se filmó (D398), y la locación de ayer copiada sola lo diría mal (D574).
+ * Overview saca dónde se filmó (D398), y la locación de ayer copiada sola lo diría mal (D574). Con `typed === false` (el
+ * globito sabe que nadie tocó el campo), una locación sin tocar va solo si la nombra el plan de esa fecha, sea cual sea
+ * (verificación de v0.306); sin ese dato, la que no es la de ayer se toma por escrita.
  */
-export function titlePlace(plan: Pick<DayReportPlan, 'suggestion'> & Partial<Pick<DayReportPlan, 'plans'>>, input: DayReportInput, typed = false): string {
+export function titlePlace(plan: Pick<DayReportPlan, 'suggestion'> & Partial<Pick<DayReportPlan, 'plans'>>, input: DayReportInput, typed?: boolean): string {
   const place = input.location.trim();
-  if (!place || typed || !samePlace(place, plan.suggestion.location)) return place;
+  if (!place || typed) return place;
+  if (typed === undefined && !samePlace(place, plan.suggestion.location)) return place;
   const planned = (plan.plans ?? []).filter((p) => p.date === input.date).some((p) => p.title.split('|').some((part) => samePlace(part, place)));
   return planned ? place : '';
 }
@@ -380,9 +388,28 @@ export function planProposal(tree: Pick<PageTree, 'get'>, pageId: string, plan: 
   if (!row || !isDayPlanRow(row)) return null;
   const date = dateAtStart(row.title);
   if (!date || plan.reports.some((r) => r.date === date)) return null;
-  const parts = row.title.split('|').map((p) => p.trim());
-  const location = parts.slice(1).find((p) => p && dayInTitle(p) === null && dateAtStart(p) === null && !/^plan(?:\s*·.*)?$/i.test(p)) ?? '';
-  return { date, day: dayInTitle(row.title), location };
+  return { date, day: dayInTitle(row.title), location: planTitlePlace(row.title) };
+}
+
+/**
+ * El lugar del título de un plan (`2026-11-04 | Día 02 | Bar El Puerto | Plan`): la parte que no es fecha, día, unidad
+ * (`U2`, `Unidad 2`) ni «Plan».
+ */
+function planTitlePlace(title: string): string {
+  const parts = title.split('|').map((p) => p.trim());
+  return parts.slice(1).find((p) => p && dayInTitle(p) === null && dateAtStart(p) === null && !/^plan(?:\s*·.*)?$/i.test(p) && !/^(?:u|unidad|unit)\s*\d+$/i.test(p)) ?? '';
+}
+
+/**
+ * La locación del plan de esa fecha de la carpeta, si hay uno y su título la nombra: *New day report* la propone en vez
+ * de la de ayer aunque no se abra desde el plan (auditoría final de D813).
+ */
+export function plannedLocation(plan: Pick<DayReportPlan, 'plans'>, date: string): string {
+  for (const p of plansOn(plan, date)) {
+    const place = planTitlePlace(p.title);
+    if (place) return place;
+  }
+  return '';
 }
 
 /**

@@ -19,6 +19,7 @@ import {
   suggestedPlanDate,
   suggestedPlanDay,
   planProposal,
+  plannedLocation,
   type DayReportPlan,
   type ReportTemplate,
   type ReportTemplateNotice,
@@ -114,7 +115,9 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
     if (!t.date) setDate(chosen);
     const planDay = fromPlan && chosen === fromPlan.date ? fromPlan.day : null;
     if (!t.day) setDay(String(planDay ?? (as === 'plan' ? suggestedPlanDay(next, chosen) : suggestedDay(next, chosen))));
-    if (!t.location) setLocation(as === 'plan' ? '' : fromPlan && chosen === fromPlan.date && fromPlan.location ? fromPlan.location : next.suggestion.location);
+    // La locación: la del plan del que se abre o la del plan de esa fecha; si no hay, la de ayer.
+    const planned = as === 'report' ? (fromPlan && chosen === fromPlan.date && fromPlan.location ? fromPlan.location : plannedLocation(next, chosen)) : '';
+    if (!t.location) setLocation(as === 'plan' ? '' : planned || next.suggestion.location);
   }
 
   const switchKind = (next: DayPageKind) => {
@@ -260,11 +263,11 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
       <div
         className="day-report-kinds"
         role="tablist"
-        // ←/→ cambian de pestaña, como en cualquier lista de pestañas.
+        // ←/→ cambian de pestaña e Inicio/Fin van a la primera o la última, como en cualquier lista de pestañas (`tabsMove`).
         onKeyDown={(e) => {
-          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
           e.preventDefault();
-          const next = kind === 'report' ? 'plan' : 'report';
+          const next = e.key === 'Home' ? 'report' : e.key === 'End' ? 'plan' : kind === 'report' ? 'plan' : 'report';
           switchKind(next);
           e.currentTarget.querySelector<HTMLElement>(`[data-kind="${next}"]`)?.focus();
         }}
@@ -298,6 +301,10 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
               // El día que va con esa fecha (O1): el del reporte (o el plan) que ya la tiene, o el siguiente al último.
               if (plan && !touched.current.day && isValidDate(e.target.value))
                 setDay(String(kind === 'plan' ? suggestedPlanDay(plan, e.target.value) : suggestedDay(plan, e.target.value)));
+              // Y la locación que va con esa fecha, si nadie la tocó: la del plan de esa fecha o la de ayer. Si no, la
+              // propuesta de otra fecha quedaba y llegaba al título sin que nadie la escribiera (verificación de v0.306).
+              if (plan && kind === 'report' && !touched.current.location && isValidDate(e.target.value))
+                setLocation(plannedLocation(plan, e.target.value) || plan.suggestion.location);
             }}
           />
         </label>

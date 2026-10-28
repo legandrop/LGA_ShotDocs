@@ -14,6 +14,7 @@ import {
   planDayReport,
   placeBefore,
   planProposal,
+  plannedLocation,
   titlePlace,
   plansOn,
   reportsOn,
@@ -353,6 +354,31 @@ describe('el día con su lugar y en su semana (simulación de D813)', () => {
     const planned = { ...base, plans: [{ id: 'p', title: '2026-10-02 | Día 02 | galpon | Plan', date: '2026-10-02', day: 2 }] };
     expect(titlePlace(planned, { date: '2026-10-02', day: 2, location: 'Galpón' })).toBe('Galpón');
     expect(titlePlace(planned, { date: '2026-10-03', day: 3, location: 'Galpón' })).toBe('');
+  });
+
+  it('auditoría final de D813: New day report propone el lugar del plan de esa fecha aunque no se abra desde el plan', () => {
+    const plans = [
+      { id: 'p1', title: '2026-10-02 | Día 02 | Plan · SIN VFX', date: '2026-10-02', day: 2 },
+      { id: 'p2', title: '2026-10-03 | Día 03 | Bar El Puerto | Plan', date: '2026-10-03', day: 3 },
+    ];
+    expect(plannedLocation({ plans }, '2026-10-03')).toBe('Bar El Puerto');
+    // Un plan sin lugar en el título, o una fecha sin plan: nada (queda la de ayer).
+    expect(plannedLocation({ plans }, '2026-10-02')).toBe('');
+    expect(plannedLocation({ plans }, '2026-10-04')).toBe('');
+    // Una unidad no es un lugar.
+    expect(plannedLocation({ plans: [{ id: 'p3', title: '2026-10-05 | Día 04 | U2 | Plan', date: '2026-10-05', day: 4 }] }, '2026-10-05')).toBe('');
+    expect(plannedLocation({ plans: [{ id: 'p4', title: '2026-10-05 | Día 04 | Unidad 2 | Plan', date: '2026-10-05', day: 4 }] }, '2026-10-05')).toBe('');
+    expect(plannedLocation({ plans: [{ id: 'p5', title: '2026-10-05 | Día 04 | U2 Estudio | Plan', date: '2026-10-05', day: 4 }] }, '2026-10-05')).toBe('U2 Estudio');
+  });
+
+  it('verificación de v0.306: con el campo sin tocar (el globito lo sabe), al título va solo la locación del plan de esa fecha', () => {
+    const base = { suggestion: { date: '2026-10-02', day: 2, location: 'Galpón' }, plans: [{ id: 'p', title: '2026-10-03 | Día 03 | Bar El Puerto | Plan', date: '2026-10-03', day: 3 }] };
+    // La del plan de otra fecha, que quedó en el campo al cambiar la fecha: no.
+    expect(titlePlace(base, { date: '2026-10-04', day: 3, location: 'Bar El Puerto' }, false)).toBe('');
+    expect(titlePlace(base, { date: '2026-10-03', day: 3, location: 'Bar El Puerto' }, false)).toBe('Bar El Puerto');
+    // Escrita: siempre. Sin saber si se tocó (otros caminos): la que no es la de ayer, como antes.
+    expect(titlePlace(base, { date: '2026-10-04', day: 3, location: 'Bar El Puerto' }, true)).toBe('Bar El Puerto');
+    expect(titlePlace(base, { date: '2026-10-04', day: 3, location: 'Bar El Puerto' })).toBe('Bar El Puerto');
   });
 
   it('New day report abierto desde un plan propone su fecha, su día y su lugar; con el reporte hecho, la propuesta de siempre', async () => {

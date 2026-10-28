@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.306 :
+
+Lo que encontró la auditoría final de D813. Con un solo episodio, su carpeta, escondida de *Pages*, quedaba sin ⋯
+(*Share*, *Type*, *Move to…* solo por ⌘K): ahora su renglón se ve. El ⋯ de una carpeta escondida suma *Open*, para su
+texto propio o exportar todo junto. *Create and prepare tomorrow's report* titulaba el día sin lugar aunque el plan de
+mañana lo nombrara (`planPlace`, D814). *New day report* propone el lugar y el número de día del plan de la fecha elegida
+(`plannedLocation`; antes, Day 02 contra el Day 03 del plan, y no se unían), los vuelve a proponer al cambiar la fecha, y
+al título va solo la locación escrita o la del plan de esa fecha. *Shots* avisa que todavía lee; Inicio y Fin en el
+globito; tutorial, ayuda, docs y README al día.
+
+[Auditoría final de D813: el episodio único, Open en las carpetas escondidas y el lugar del plan]
+
 v0.305 :
 
 Lo que encontró la simulación de punta a punta de D813 (un proyecto nuevo armado solo con la interfaz, del página a página

@@ -630,6 +630,25 @@ describe('las fichas en el Overview (D813)', () => {
     expect(location.pathname).toBe(pagePath(built.ids.s027));
   });
 
+  it('auditoría final de D813: con un solo episodio, su renglón se ve con su ⋯, que abre la carpeta escondida', async () => {
+    const { d, built } = await owner();
+    // Sin el 101 ni el 104, queda un solo grupo de escenas: el 105, cuya carpeta no está en Pages.
+    await d.tree.trash(built.ids.ep4);
+    await d.tree.trash(built.ids.ep1);
+    const { host } = mount(d, pagePath(built.ids.s027));
+    await shown(() => expect(host.querySelector('.ov-scenes .tree-row.active')).toBeTruthy());
+    expect(eps(host).map((b) => b.textContent)).toEqual([expect.stringContaining('105')]);
+    const more = host.querySelector<HTMLElement>('.ov-ep-more');
+    expect(more).toBeTruthy();
+    click(more);
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
+    expect(items.map((b) => b.textContent)).toContain('Open');
+    expect(items.map((b) => b.textContent)).toContain('Move to…');
+    click(items.find((b) => b.textContent === 'Open'));
+    await wait();
+    expect(location.pathname).toBe(pagePath(built.ids.ep5));
+  });
+
   it('simulación de D813: una página suelta con número de escena puede ir a la carpeta de escenas con Move to…; una nota, no', async () => {
     const { d, built } = await owner();
     const loose = await d.tree.create(null, '105_040 | Persecución en la rambla', built.projectId);

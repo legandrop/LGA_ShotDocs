@@ -1094,7 +1094,9 @@ plantilla, lo de ayer); una sincronización buena en el momento (sin ella no cre
 sabe que no hay red, con tope de 1,5 s); si la carpeta ya tiene un reporte con esa fecha y está llegando de otro
 dispositivo (la fila sí, el contenido no), no se toca («Another device just created…»); si no, se prepara ese. Si no hay,
 la fila sola (título `2026-03-16 | Día 77`, la forma del de hoy, sin la locación de hoy y con la del desglose solo si todas las
-páginas con esa *Fecha Rodaje* dicen la misma del registro y el título de hoy lleva una: `plannedPlace`, D709, v0.254; `template_id`; marca de día explícita;
+páginas con esa *Fecha Rodaje* dicen la misma del registro y el título de hoy lleva una: `plannedPlace`, D709, v0.254; con
+plan de mañana, el lugar que nombran todos sus títulos, aunque el de hoy no lleve uno: `planPlace`, D814, v0.306; el campo
+*Location* del cuerpo dice el mismo; `template_id`; marca de día explícita;
 la marca de la carpeta no se toca) y se sube enseguida; una lectura más y, si otro reporte del mismo día con id menor
 apareció, esta página todavía vacía va a la papelera y queda el otro (`yielded`); si no, la plantilla de *New day report*
 y las secciones de las escenas se escriben **de una vez** (`writeNewPage` con los bloques de `sectionBlocks`) y se sube.

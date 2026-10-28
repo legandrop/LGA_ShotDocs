@@ -392,7 +392,9 @@ function OverviewFor({ session, fichaRows }: { session: NonNullable<ReturnType<t
   };
 
   const scenesBody = () => {
-    const flat = lists.scenes.length === 1;
+    // Un solo grupo va sin el renglón del episodio, salvo que el episodio tenga su carpeta: esa carpeta no está en *Pages*
+    // y su ⋯ es el único camino a *Share*, *Type* y *Move to…* (auditoría final de D813).
+    const flat = lists.scenes.length === 1 && !places?.episodes.get(lists.scenes[0].ep);
     if (flat) return sceneList(lists.scenes[0].ep, lists.scenes[0].scenes);
     return (
       <ul className="scene-nav-eps">

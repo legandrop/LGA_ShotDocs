@@ -49,8 +49,13 @@ export interface TomorrowProposal {
   date: string;
   /** El plan de esa fecha (del desglose: el reporte todavía no existe). */
   plan: DayPlan;
-  /** La locación que dicen todas las fichas de esa fecha (D709), si dicen una sola y el registro la reconoce. */
+  /**
+   * La locación de mañana: la que nombran en su título todos los planes de esa fecha (D814) o, sin plan, la que dicen
+   * todas las fichas de esa fecha (D709); si dicen una sola y el registro la reconoce.
+   */
   place: string | null;
+  /** `place` sale de los planes: va al título aunque los días de la carpeta no lleven lugar (D814). */
+  placeFromPlan?: boolean;
   /** Esa fecha ya pasó (D788): es anterior a hoy. La tarjeta no ofrece crear nada. */
   past: boolean;
 }
@@ -93,7 +98,28 @@ export function proposeTomorrow(src: LiveSource, day: DayRef, today?: string): T
   const next = [...breakdownDates(src)].filter((d) => d > day.date! && d <= last).sort()[0];
   const date = next ?? addDays(day.date, 1);
   const plan = planOf(src, { pageId: '', label: '', date, loc: null, locs: [] });
+  if (plan.source === 'plan') {
+    const place = planPlace(src, plan);
+    return { date, plan, place, placeFromPlan: !!place, past: !!today && date < today };
+  }
   return { date, plan, place: plan.source === 'breakdown' ? plannedPlace(src, date) : null, past: !!today && date < today };
+}
+
+/**
+ * La locación que nombran en su título los planes de esa fecha (`2026-11-04 | Día 02 | Bar El Puerto | Plan`): una parte
+ * que el registro reconoce como locación, la misma en todos. Si alguno no nombra ninguna o nombran distintas, `null`.
+ * Antes, con un plan de mañana, *Create and prepare* titulaba el día sin lugar aunque el plan lo dijera (auditoría final
+ * de D813).
+ */
+export function planPlace(src: LiveSource, plan: Pick<DayPlan, 'pages'>): string | null {
+  let place: string | null = null;
+  for (const page of plan.pages) {
+    const parts = (src.title(page.pageId) ?? '').split('|').map((p) => p.replace(/^\s*plan\s*·\s*/i, '').trim());
+    const found = [...new Set(parts.map((p) => (p ? locationOf(src.snap.registry, p) : null)).filter((x): x is string => !!x))];
+    if (found.length !== 1 || (place && found[0] !== place)) return null;
+    place = found[0];
+  }
+  return place;
 }
 
 /**
@@ -103,12 +129,13 @@ export function proposeTomorrow(src: LiveSource, day: DayRef, today?: string): T
  * proyecto: `2026-04-06 | Día 81 | Farmacia Fanfarria`) y el desglose dice uno solo para mañana (`place`, D709), va el de
  * mañana. Sin esa forma, el de *New day report*.
  */
-export function nextDayTitle(today: string, date: string, day: number, lang: string, place?: string | null): string {
+export function nextDayTitle(today: string, date: string, day: number, lang: string, place?: string | null, always = false): string {
   const m = /^\s*\d{4}-\d{2}-\d{2}(\s*\|\s*)((?:day|d[ií]a)\s*)(\d+)/iu.exec(today);
-  if (!m) return reportTitle(date, day, lang);
+  // `always`: el lugar sale del plan de mañana, que lo nombra (D814): va aunque el título de hoy no lleve uno.
+  if (!m) return always && place?.trim() ? `${reportTitle(date, day, lang)} | ${place.trim()}` : reportTitle(date, day, lang);
   const base = `${date}${m[1]}${m[2]}${String(day).padStart(m[3].length, '0')}`;
   const hasPlace = /^\s*\|\s*\S/u.test(today.slice(m[0].length));
-  return place?.trim() && hasPlace ? `${base}${m[1]}${place.trim()}` : base;
+  return place?.trim() && (hasPlace || always) ? `${base}${m[1]}${place.trim()}` : base;
 }
 
 /** El número de día de mañana: el de hoy + 1, o el que propondría *New day report*. */
@@ -128,8 +155,10 @@ export interface TomorrowInput {
   parentId: string | null;
   /** El título del día de hoy (para la forma del de mañana). */
   todayTitle: string;
-  /** La locación que dice el desglose para mañana (`plannedPlace`, D709), si hay una. */
+  /** La locación de mañana (`proposeTomorrow`): la de sus planes (`planPlace`) o la del desglose (`plannedPlace`, D709). */
   place?: string | null;
+  /** `place` sale del plan de mañana (D814): va al título aunque hoy no lleve lugar. */
+  placeFromPlan?: boolean;
   date: string;
   lang: string;
   prepare: PrepareOptions;
@@ -266,7 +295,7 @@ export function createTomorrow(deps: TomorrowDeps, input: TomorrowInput, canCrea
     // 1. Lo local, antes.
     const plan = await planDayReport(deps, { parentId: input.parentId, projectId: input.projectId });
     const day = nextDayNumber(input.todayTitle, plan.suggestion.day);
-    const title = nextDayTitle(input.todayTitle, input.date, day, input.lang, input.place);
+    const title = nextDayTitle(input.todayTitle, input.date, day, input.lang, input.place, input.placeFromPlan);
     const template = plan.template;
     // 2. Sincronizar. Si el motor ya sabe que no hay red, el tope es corto (1,5 s y no 6): se dice antes (observación de la
     //    auditoría de E11); si la red volvió, esa sincronización igual alcanza.
@@ -313,7 +342,8 @@ export function createTomorrow(deps: TomorrowDeps, input: TomorrowInput, canCrea
     const scenes = input.prepare.scenes.filter((x, i, all) => all.findIndex((y) => y.code === x.code) === i);
     const added = scenes.map((x) => ({ code: x.code, headingId: crypto.randomUUID(), paragraphId: crypto.randomUUID(), text: `${input.prepare.word} ${x.code}` }));
     // Las secciones después del *Summary* de la plantilla, donde se escribe en el set (`sectionsSpot`), no al final.
-    const base = reportBlocks(plan, { date: input.date, day, location: plan.facts?.location ?? '' }, input.lang, template);
+    // La locación del cuerpo, la misma que la del título cuando se sabe la de mañana (verificación de v0.306); si no, la de ayer.
+    const base = reportBlocks(plan, { date: input.date, day, location: input.place?.trim() || plan.facts?.location || '' }, input.lang, template);
     const at = sectionsSpot(base, new Set(), input.prepare.level);
     const blocks = [
       ...base.slice(0, at),

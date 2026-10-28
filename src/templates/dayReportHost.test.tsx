@@ -270,6 +270,29 @@ describe('el botón New day report y su globito', () => {
     expect(place.value).toBe('Casa Rosada');
   });
 
+  it('verificación de v0.306: cambiar la fecha vuelve a proponer el lugar; al título va solo el del plan de esa fecha', async () => {
+    const { device, folder, first } = await withReport();
+    const deps = { tree: device.tree, docs: device.docs, engine: device.engine };
+    const planned = addDays(localDate(), 2);
+    const other = addDays(localDate(), 3);
+    const plan = await planDayReport(deps, { parentId: folder, projectId: device.tree.workspaceId });
+    await createDayPlan(deps, plan, { date: planned, day: 3, location: 'Bar El Puerto' }, 'en');
+    const host = await open(device, first);
+    click(host.querySelector('.day-report-button'));
+    await popoverReady();
+    const [date, , place] = inputs();
+    // La fecha con plan: su lugar. Otra sin plan: vuelve la de ayer (nadie tocó el campo).
+    setInput(date, planned);
+    expect(place.value).toBe('Bar El Puerto');
+    setInput(date, other);
+    expect(place.value).toBe('Estancia La Paz');
+    setInput(date, planned);
+    expect(place.value).toBe('Bar El Puerto');
+    act(() => popover()!.requestSubmit());
+    for (let i = 0; i < 60 && location.pathname === '/'; i++) await wait(30);
+    expect(device.tree.get(location.pathname.slice(3))!.title).toBe(`${planned} | Day 03 | Bar El Puerto`);
+  });
+
   it('ya existe: Enter abre el de hoy y Create another hace otro', async () => {
     const { device, folder, first } = await withReport();
     const host = await open(device, folder);

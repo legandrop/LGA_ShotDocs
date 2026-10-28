@@ -12,7 +12,7 @@ import { dayLive, headingStyleFor, linkTargetOf } from './dayLive';
 import { buildProject, writeBlocks, type Built } from './fixtures/proyectoSintetico';
 import { dayRef, type LiveSource } from './liveView';
 import { RelationIndex } from './relationIndex';
-import { addDays, createTomorrow, nextDayNumber, nextDayTitle, plannedPlace, proposeTomorrow, reportOnDate, twinsLeft, undoTomorrow, type TomorrowInput } from './tomorrowNew';
+import { addDays, createTomorrow, nextDayNumber, nextDayTitle, plannedPlace, planPlace, proposeTomorrow, reportOnDate, twinsLeft, undoTomorrow, type TomorrowInput } from './tomorrowNew';
 
 // La tarjeta *Tomorrow* de un día sin día siguiente (D573–D577): crear el reporte de mañana como *New day report* y
 // prepararlo en un paso, con las garantías de *Prepare*: solo agrega, no duplica (dos toques, otro dispositivo), *Undo*
@@ -101,6 +101,10 @@ describe('qué propone (puro)', () => {
     expect(nextDayTitle('2026-02-20 | Día 60 | ', '2026-02-21', 61, 'en', 'La Arenera')).toBe('2026-02-21 | Día 61');
     expect(nextDayTitle('Rodaje del martes', '2026-10-03', 4, 'en', 'CENADE')).toBe('2026-10-03 | Day 04');
     expect(nextDayTitle('2026-02-20 | Día 60 | CENADE', '2026-02-21', 61, 'en', null)).toBe('2026-02-21 | Día 61');
+    // El lugar que nombra el plan de mañana va aunque hoy no lleve uno (D814, auditoría final de D813).
+    expect(nextDayTitle('2026-02-20 | Día 60', '2026-02-21', 61, 'en', 'La Arenera', true)).toBe('2026-02-21 | Día 61 | La Arenera');
+    expect(nextDayTitle('Rodaje del martes', '2026-10-03', 4, 'en', 'CENADE', true)).toBe('2026-10-03 | Day 04 | CENADE');
+    expect(nextDayTitle('2026-02-20 | Día 60', '2026-02-21', 61, 'en', null, true)).toBe('2026-02-21 | Día 61');
     expect(nextDayNumber('2026-02-20 | Día 60 | CENADE', 3)).toBe(61);
     expect(nextDayNumber('2026-03-10 | Sin reporte', 3)).toBe(3);
     expect(addDays('2026-02-28', 1)).toBe('2026-03-01');
@@ -161,6 +165,22 @@ describe('la locación de mañana (D709)', () => {
     expect(plannedPlace((await placed('CENADE', 'Narnia')).src, '2026-03-16')).toBeNull();
     // Una fecha sin escenas: nada.
     expect(plannedPlace(same.src, '2026-05-01')).toBeNull();
+  });
+
+  it('auditoría final de D813: con plan de mañana, el lugar sale del título del plan (el mismo en todos y conocido)', async () => {
+    const { src } = await placed('CENADE', 'CENADE');
+    const titles: Record<string, string> = {
+      a: '2026-03-16 | Día 77 | CENADE | Plan',
+      b: '2026-03-16 | Día 77 | Plan · CENADE',
+      c: '2026-03-16 | Día 77 | Plan',
+      d: '2026-03-16 | Día 77 | Narnia | Plan',
+    };
+    const at = (...ids: string[]) => planPlace({ ...src, title: (id) => titles[id] }, { pages: ids.map((pageId) => ({ pageId })) as never });
+    expect(at('a')).toBe('CENADE');
+    expect(at('a', 'b')).toBe('CENADE');
+    // Un plan que no nombra ninguno o uno que el registro no conoce: sin lugar.
+    expect(at('a', 'c')).toBeNull();
+    expect(at('d')).toBeNull();
   });
 
   it('el reporte de mañana se crea con el lugar en el título; con la mala, sin lugar', async () => {

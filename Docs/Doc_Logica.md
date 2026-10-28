@@ -1,6 +1,6 @@
 # La lógica de LGA Shot Docs, de una sola lectura
 
-Cómo piensa la app (v0.302): qué es cada página, cómo se da cuenta sola de qué escena, locación, decorado o día nombra
+Cómo piensa la app (v0.306): qué es cada página, cómo se da cuenta sola de qué escena, locación, decorado o día nombra
 cada una y qué muestra con eso. El detalle técnico está en los documentos de la sección 8. Ante una duda, manda el
 código (`src/relations/`).
 
@@ -184,7 +184,8 @@ El *Overview* (*Panorama*) tiene **las fichas** y **las vistas**. Está en la ba
 
 En la barra se despliega una parte a la vez; una parte vacía aparece solo para quien puede crear (con su «+»). La
 carpeta de un tipo y la de cada episodio, que *Pages* ya no muestra, se alcanzan con el ⋯ de su parte o de su episodio
-(*Share*, *Move to…*, *Type*, *Leave out of relations*, papelera); si hay dos de la misma parte o del mismo episodio,
+(*Open*, para su texto propio o exportar todo junto; *Share*, *Move to…*, *Type*, *Leave out of relations*, papelera;
+con un solo episodio, su renglón también se ve); si hay dos de la misma parte o del mismo episodio,
 quedan en *Pages*. La barra es **un solo árbol** (D805 a D807): ↑ y ↓ recorren el *Overview* y siguen en *Pages*, con
 partes y episodios como carpetas y filas como páginas. Al abrir una página queda abierto solo el camino hasta ella, con
 su fila centrada. Una ficha (o la carpeta de su parte), se abra como se abra, despliega su parte y su episodio y pliega
@@ -228,8 +229,10 @@ uno por lugar con su nombre exacto.
 
 **Pruebas.** En `3 | Pruebas y previs`, plantilla *Test report*, con *Fecha* (opcional) y *Locación*; las escenas, por número.
 
-**Rodaje.** En `4 | Rodaje › Semana 03`, *New day report* crea el día (`2026-02-19 | Día 59`; conviene sumar el lugar,
-`| CENADE`, que es lo que lee la app) y copia del anterior la unidad, el equipo y la cámara. Cada escena abre su sección
+**Rodaje.** En `4 | Rodaje › Semana 03`, *New day report* crea el día con la forma de los otros y el lugar
+(`2026-02-19 | Día 59 | CENADE`: la locación escrita o la del plan de esa fecha, nunca la de ayer sin tocar, D814; del
+título lee la app dónde se filmó) y copia del anterior la unidad, el equipo y la cámara. Desde una semana nueva
+(`Semana 04`, vacía) el día va adentro y sigue el número de las anteriores. Cada escena abre su sección
 con `Escena 105_027` y lo filmado debajo; la primera sección sin número (*Info general*) es del día. La víspera,
 *Prepare tomorrow's report* deja listos los títulos.
 
@@ -243,10 +246,10 @@ día con « | Plan» y, como nota, lo que su título viejo decía y el del día 
 
 ## 7. Lo que todavía no hace o está a medias
 
-- *Copy overview* y *Copy JSON* (el mapa como texto) no llevan los decorados. Falta la parte 5 del plan: `6 | Tablas y
-  referencia` y lo suelto en ERSO y VLLF.
-- No hay plantilla de decorado. La fila *Fecha de rodaje (planeada)* de la plantilla *Scene* no la lee el día: cuenta
-  *Fecha Rodaje*.
+- *Copy overview* y *Copy JSON* (el mapa como texto) no llevan los decorados.
+- No hay plantilla de decorado.
+- La preproducción («Página a página», reuniones) no tiene tipo: lo que nombra una escena cae en su renglón *Other*.
+  Esta y otras propuestas de la simulación, en `Plan_Fichas_Cuaderno.md`, sección 12.
 - La locación de un día sale solo de su título (D398). Una carpeta de locaciones no tiene grupos: una subcarpeta queda
   locación (se corrige con *None of these*).
 - *Read here*, leer en la escena la sección entera de un reporte, está diseñado y sin construir (R.6b).

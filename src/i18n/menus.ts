@@ -5,6 +5,7 @@ import type { Dict } from './types';
 export const menus = {
   'pageMenu.label': { en: "Page actions", es: "Acciones de la página" },
   'pageMenu.share': { en: "Share…", es: "Compartir…" },
+  'pageMenu.openFolder': { en: "Open", es: "Abrir" },
   // Sacar una foto o filmar (camera.ts): también en el menú "/" del editor.
   'camera.takePhoto': { en: "Take photo", es: "Sacar una foto" },
   'camera.recordVideo': { en: "Record video", es: "Filmar un video" },

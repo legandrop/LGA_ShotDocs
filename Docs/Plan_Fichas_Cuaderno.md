@@ -3,8 +3,10 @@
 Fecha: 2026-10-27. Pedido de Lega, que eligió la alternativa B de tres (A: el Panorama como lente sobre Páginas; C: un
 Panorama que nunca se edita y todo lo escrito como documentos). Sigue a `Plan_Estructura_Etapas.md`, que dejó el árbol
 por etapas (partes 1 a 4 hechas, v0.275 a v0.295); su parte 5 (`6 | Tablas y referencia` y lo suelto) queda adentro de
-este plan. Auditado contra el código el mismo día (tres bloqueantes y once cambios, ya corregidos acá). **Todavía no se
-implementa nada:** primero lo revisa Lega.
+este plan. Auditado contra el código el mismo día (tres bloqueantes y once cambios, ya corregidos acá). **Estado
+(2026-10-28):** Lega lo aprobó («Sí, arrancá») y salieron las partes 1 (v0.302), 2 (v0.303), 3 (v0.304) y la 4 en la
+base; la simulación de punta a punta dio v0.305 y la auditoría final del plan, v0.306. Queda la pregunta 1 (sección 10)
+y las propuestas de la sección 12.
 
 ## 1. Por qué
 

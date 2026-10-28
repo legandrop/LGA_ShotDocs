@@ -51,8 +51,8 @@ export const tutorial = {
   },
   'tour.pages.title': { en: "Your pages", es: "Tus páginas" },
   'tour.pages.text': {
-    en: "Your project's pages live here, nested. Clicking a page shows its subpages by default. + creates one; drag to reorder.",
-    es: "Acá están las páginas del proyecto, unas adentro de otras. De fábrica, un clic en la página muestra sus subpáginas. Con + creás una; arrastrándolas las ordenás.",
+    en: "Your notes, scouts, tests and shoot days live here, nested; scenes, locations and sets are above, in Overview. Clicking a page shows its subpages by default. + creates one; drag to reorder.",
+    es: "Acá están tus notas, scoutings, pruebas y días de rodaje, unos adentro de otros; las escenas, locaciones y decorados están arriba, en el Panorama. De fábrica, un clic en la página muestra sus subpáginas. Con + creás una; arrastrándolas las ordenás.",
   },
   'tour.projects.title': { en: "Projects", es: "Proyectos" },
   'tour.projects.text': {

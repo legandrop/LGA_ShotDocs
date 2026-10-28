@@ -79,6 +79,8 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
           {tr('map.shotsCount', { count: table.rows.length })} · {tr('map.scenes', { count: table.scenes })}
           {/* Mientras el índice lee, una escena todavía sin leer no es una escena sin planos (D402). */}
           {complete && table.withoutShots > 0 && <span className="mp-none"> · {tr('map.shotsWithout', { count: table.withoutShots })}</span>}
+          {/* La tabla a medio leer no es la cuenta final (auditoría final de D813). */}
+          {!complete && <span className="mp-none"> · {tr('live.reading')}</span>}
           {fq && <span className="mp-none"> · {tr('map.shotsShown', { count: shown.length })}</span>}
         </span>
         <button className="mp-btn" onClick={() => void copy()} disabled={!shown.length}>

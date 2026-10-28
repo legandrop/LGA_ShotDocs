@@ -541,7 +541,7 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
   };
   // El título que va a tener (sin número de día en el de hoy, el número lo decide al crear, como New day report: la fecha).
   const n = nextDayNumber(today?.title ?? '', 0);
-  const title = n ? nextDayTitle(today?.title ?? '', proposal.date, n, tr.lang, proposal.place) : proposal.date;
+  const title = n ? nextDayTitle(today?.title ?? '', proposal.date, n, tr.lang, proposal.place, proposal.placeFromPlan) : proposal.date;
   const source =
     proposal.plan.source === 'plan'
       ? tr('day.srcPlan')
@@ -562,7 +562,7 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
       const { planDayReport, createDayPlan, suggestedPlanDay } = await import('../templates/dayReportCreate');
       const plan = await planDayReport(deps, { parentId, projectId }, { skipTemplate: true });
       const day = n || suggestedPlanDay(plan, proposal.date);
-      const dayTitle = n ? title : nextDayTitle(today?.title ?? '', proposal.date, day, tr.lang, proposal.place);
+      const dayTitle = n ? title : nextDayTitle(today?.title ?? '', proposal.date, day, tr.lang, proposal.place, proposal.placeFromPlan);
       const id = await createDayPlan(deps, plan, { date: proposal.date, day, location: proposal.place ?? '' }, tr.lang, { title: planTitleFor(dayTitle) });
       navigate(pagePath(id));
     } catch (err) {
@@ -593,7 +593,7 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
       const deps = { tree: services.tree, docs: services.docs, engine: services.engine };
       const res = await createTomorrow(
         deps,
-        { projectId, parentId, todayTitle: today?.title ?? '', place: proposal.place, date: proposal.date, lang: tr.lang, prepare: { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level } },
+        { projectId, parentId, todayTitle: today?.title ?? '', place: proposal.place, placeFromPlan: proposal.placeFromPlan, date: proposal.date, lang: tr.lang, prepare: { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level } },
         canCreate,
       );
       if (res.status === 'yielded') {

@@ -27,7 +27,7 @@ independiente del 2026-10-02 ("aprobado con cambios"; ver "Correcciones de la au
   *Templates* (la crea si falta), con la opción de vaciar las tablas y las casillas.
 - **El reporte del día** (sección 6): en la carpeta de reportes y en cada reporte, un botón **New day report**
   (Ctrl/⌘+Alt+Shift+N) abre un globito con la **fecha de hoy** (la del dispositivo, hora local), el **día de rodaje**
-  siguiente y la **locación del último reporte**, ya puestos y editables. Enter crea la página
+  siguiente y la **locación del plan de esa fecha** (o, si no hay, la del último reporte), ya puestos y editables. Enter crea la página
   `2026-10-02 | Day 06` al final de la carpeta, con la unidad, el equipo de cámara y la gente de VFX del día anterior.
   Si ya hay uno con esa fecha, Enter lo abre. Sin red, igual.
 - **La carpeta de reportes es una página marcada** (PL5, `settings.dayReports`), que se marca sola al crear el primer
@@ -332,7 +332,11 @@ Al tocar el botón, un globito con los datos ya puestos y editables; Enter crea:
   carpeta (`Call sheets`) no es una semana. El primer día de una semana nueva toma como «ayer» el último día de las
   semanas de antes (su número, su unidad, su equipo y su cámara) y, si la semana no tiene plantilla, la de la carpeta de
   días. Abierto desde un plan cuya fecha todavía no tiene reporte, el globito propone la fecha, el día y
-  la locación de ese plan (`planProposal`).
+  la locación de ese plan (`planProposal`). Abierto desde otro lado, igual propone la locación del plan de la fecha
+  elegida si su título la nombra (`plannedLocation`, v0.306), y la vuelve a proponer si se cambia la fecha y nadie tocó
+  el campo. Al título va la locación escrita o la del plan de esa fecha; la de ayer sin tocar, nunca (`titlePlace`, D814).
+  Una parte del título del plan que es una unidad (`U2`, `Unidad 2`) no es un lugar. El número de día, en una fecha con
+  plan y sin reporte, es el del plan (`suggestedDay`): plan y reporte se unen por fecha y número de día.
 - **Lugar en el árbol:** antes del primer reporte o plan de jornada (en el orden de la carpeta) con fecha mayor
   (`keyBetween`), así la carpeta queda en orden; si no hay, al final. Un reporte queda justo abajo del plan de su fecha
   (D813).
