@@ -1,9 +1,9 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { language, useT, type Translate } from '../i18n';
 import { navigate, pagePath } from '../router';
-import { usePermissions, useServices, useTree } from '../services';
+import { usePermissions, useServices, useTree, type Services } from '../services';
 import { notify } from '../ui/notice';
-import { dayShortLabel, headingStyleFor, linkTargetOf, sceneTitleOf, type DayLive, type DayPlan, type DayQuestion, type DayRow } from './dayLive';
+import { dayShortLabel, headingStyleFor, linkTargetOf, planSceneLine, sceneTitleOf, type DayLive, type DayPlan, type DayQuestion, type DayRow } from './dayLive';
 import { goToPlace } from './goToPlace';
 import { useLiveOpen } from './liveFold';
 import { Badge, Chip, Ic, Line, LiveDot, useFoldFocus, useGo, type HeaderPhotos } from './LiveHeader';
@@ -306,6 +306,73 @@ function PastCard({ v, src, tr, next }: { v: DayLive; src: LiveSource; tr: Trans
   );
 }
 
+/**
+ * *Prepare* (Docs/Doc_Relaciones.md, sección 11): agrega al reporte de `day` una sección por cada escena de `codes` que no
+ * tenga, solo agregando, con *Undo*, y lleva a lo agregado. Lo usan la tarjeta *Tomorrow* (el reporte de mañana) y el día
+ * mismo, para las escenas planeadas que todavía no tienen sección (D820). `styleFrom`: el día del que se copia cómo se
+ * escriben los títulos de las escenas.
+ */
+async function prepareSections(services: Services, src: LiveSource, tr: Translate, day: DayRef, styleFrom: string, codes: string[], onWait: () => void): Promise<void> {
+  const scenePage = (code: string) => {
+    const id = src.snap.registry.scenes.get(code)?.pageId ?? null;
+    return id && src.title(id) !== undefined ? id : null;
+  };
+  try {
+    const scenes = codes.flatMap((code) => {
+      const pageId = scenePage(code);
+      return pageId ? [{ code, pageId }] : [];
+    });
+    // Las que no tienen una página que la persona ve no se pueden enlazar: se dicen en el aviso (O8 de la auditoría).
+    const noPage = codes.filter((code) => !scenePage(code));
+    const linkTarget = linkTargetOf(src);
+    const style = headingStyleFor(src, styleFrom, tr.lang);
+    const { prepareReport, undoPrepared } = await import('./prepareDay');
+    // Con el árbol: un reporte recién creado en otro dispositivo cuyo contenido todavía no llegó no se prepara (D579).
+    const deps = { docs: services.docs, engine: services.engine, tree: services.tree, onWait };
+    const res = await prepareReport(deps, day.pageId, { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level });
+    if (res.status !== 'ok') {
+      notify(tr(res.status === 'missing' ? 'day.prepareMissing' : res.status === 'busy' ? 'day.prepareBusy' : 'day.prepareUnknown', { day: dayShortLabel(day) }));
+      return;
+    }
+    const parts = [res.added.length ? tr('day.added', { count: res.added.length }) : tr('day.nothingToAdd')];
+    if (res.skipped.length) parts.push(tr('day.alreadyHad', { codes: res.skipped.join(', '), count: res.skipped.length }));
+    if (noPage.length) parts.push(tr('day.noPage', { codes: noPage.join(', '), count: noPage.length }));
+    if (res.merged) parts.push(tr('day.merged', { count: res.merged }));
+    const added: PreparedSection[] = res.added;
+    const prepared = { added, origin: res.origin };
+    notify(
+      `${dayShortLabel(day)} · ${parts.join(' · ')}`,
+      added.length
+        ? {
+            label: tr('day.undo'),
+            run: () => {
+              void undoPrepared(deps, day.pageId, prepared, linkTarget).then((u) => {
+                if (!u) return;
+                // El reporte cambió de forma (un título movido adentro de otro bloque): no se sacó nada.
+                if (u.unexpected && !u.removed) {
+                  notify(tr('day.undoUnexpected'));
+                  return;
+                }
+                const text = !u.kept
+                  ? tr('day.undone', { count: u.removed })
+                  : u.removed
+                    ? `${tr('day.undoneShort', { count: u.removed })} · ${tr('day.undoKept', { count: u.kept })}`
+                    : tr('day.undoNothing', { count: u.kept });
+                // Ya había salido del dispositivo: quedan los renglones vacíos (D437).
+                notify(u.titleOnly && u.removed ? `${text} · ${tr('day.undoLinesStay')}` : text);
+              });
+            },
+          }
+        : undefined,
+    );
+    // Al reporte, con lo agregado resaltado (va al final de la página).
+    if (added.length) goToPlace(services, { pageId: day.pageId, blockId: added[0].headingId, endBlockId: null });
+  } catch (err) {
+    console.warn('[relaciones] no se pudo preparar el reporte', err);
+    notify(tr('day.prepareFailed'));
+  }
+}
+
 function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }) {
   const services = useServices();
   const perms = usePermissions();
@@ -348,59 +415,7 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
     if (busy) return;
     setBusy(true);
     try {
-      const scenes = codes.flatMap((code) => {
-        const pageId = scenePage(code);
-        return pageId ? [{ code, pageId }] : [];
-      });
-      // Las que no tienen una página que la persona ve no se pueden enlazar: se dicen en el aviso (O8 de la auditoría).
-      const noPage = codes.filter((code) => !scenePage(code));
-      const linkTarget = linkTargetOf(src);
-      const style = headingStyleFor(src, v.day.pageId, tr.lang);
-      const { prepareReport, undoPrepared } = await import('./prepareDay');
-      // Con el árbol: un reporte recién creado en otro dispositivo cuyo contenido todavía no llegó no se prepara (D579).
-      const deps = { docs: services.docs, engine: services.engine, tree: services.tree, onWait: () => setWaiting(true) };
-      const res = await prepareReport(deps, t.day.pageId, { scenes, registry: src.snap.registry, linkTarget, word: style.word, level: style.level });
-      setWaiting(false);
-      if (res.status !== 'ok') {
-        notify(tr(res.status === 'missing' ? 'day.prepareMissing' : res.status === 'busy' ? 'day.prepareBusy' : 'day.prepareUnknown', { day: dayShortLabel(t.day) }));
-        return;
-      }
-      const parts = [res.added.length ? tr('day.added', { count: res.added.length }) : tr('day.nothingToAdd')];
-      if (res.skipped.length) parts.push(tr('day.alreadyHad', { codes: res.skipped.join(', '), count: res.skipped.length }));
-      if (noPage.length) parts.push(tr('day.noPage', { codes: noPage.join(', '), count: noPage.length }));
-      if (res.merged) parts.push(tr('day.merged', { count: res.merged }));
-      const added: PreparedSection[] = res.added;
-      const prepared = { added, origin: res.origin };
-      notify(
-        `${dayShortLabel(t.day)} · ${parts.join(' · ')}`,
-        added.length
-          ? {
-              label: tr('day.undo'),
-              run: () => {
-                void undoPrepared(deps, t.day.pageId, prepared, linkTarget).then((u) => {
-                  if (!u) return;
-                  // El reporte cambió de forma (un título movido adentro de otro bloque): no se sacó nada.
-                  if (u.unexpected && !u.removed) {
-                    notify(tr('day.undoUnexpected'));
-                    return;
-                  }
-                  const text = !u.kept
-                    ? tr('day.undone', { count: u.removed })
-                    : u.removed
-                      ? `${tr('day.undoneShort', { count: u.removed })} · ${tr('day.undoKept', { count: u.kept })}`
-                      : tr('day.undoNothing', { count: u.kept });
-                  // Ya había salido del dispositivo: quedan los renglones vacíos (D437).
-                  notify(u.titleOnly && u.removed ? `${text} · ${tr('day.undoLinesStay')}` : text);
-                });
-              },
-            }
-          : undefined,
-      );
-      // Al reporte de mañana, con lo agregado resaltado (va al final de la página).
-      if (added.length) goToPlace(services, { pageId: t.day.pageId, blockId: added[0].headingId, endBlockId: null });
-    } catch (err) {
-      console.warn('[relaciones] no se pudo preparar el reporte de mañana', err);
-      notify(tr('day.prepareFailed'));
+      await prepareSections(services, src, tr, t.day, v.day.pageId, codes, () => setWaiting(true));
     } finally {
       setWaiting(false);
       setBusy(false);
@@ -563,7 +578,11 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
       const plan = await planDayReport(deps, { parentId, projectId }, { skipTemplate: true });
       const day = n || suggestedPlanDay(plan, proposal.date);
       const dayTitle = n ? title : nextDayTitle(today?.title ?? '', proposal.date, day, tr.lang, proposal.place, proposal.placeFromPlan);
-      const id = await createDayPlan(deps, plan, { date: proposal.date, day, location: proposal.place ?? '' }, tr.lang, { title: planTitleFor(dayTitle) });
+      const id = await createDayPlan(deps, plan, { date: proposal.date, day, location: proposal.place ?? '' }, tr.lang, {
+        title: planTitleFor(dayTitle),
+        // Las de la tarjeta, con lo que se ajustó a mano (sacar o sumar una escena), no solo las del desglose.
+        scenes: codes.map((code) => planSceneLine(src, code)),
+      });
       navigate(pagePath(id));
     } catch (err) {
       console.warn('[relaciones] no se pudo crear el plan de mañana', err);
@@ -748,6 +767,37 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
 
 // --- La cabecera del día ---------------------------------------------------------------------------------------
 
+/**
+ * Las escenas planeadas para este día que todavía no tienen sección en el reporte: un botón agrega una por escena
+ * (*Prepare* sobre el día mismo, D820). Antes solo se podía desde la tarjeta *Tomorrow* del día anterior, y el primer
+ * día de rodaje no tiene día anterior.
+ */
+function AddPlannedSections({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }) {
+  const services = useServices();
+  const perms = usePermissions();
+  const [busy, setBusy] = useState(false);
+  const codes = v.rows.flatMap((r) => (r.kind === 'planned' ? [r.code] : []));
+  // Solo hoy o un día por venir: en un día pasado, lo planeado que no tiene sección no se filmó (VLLF, ERSO), y agregarle
+  // secciones vacías no ayuda.
+  const past = !!v.day.date && v.day.date < localDate();
+  if (!codes.length || past || !v.complete || !perms.canEditPage(v.day.pageId)) return null;
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await prepareSections(services, src, tr, v.day, v.day.pageId, codes, () => undefined);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button className="lh-tbtn add lh-addplanned" data-tour="day-add-sections" disabled={busy} onClick={() => void run()}>
+      <Ic name="wand" small />
+      {tr('day.addPlanned', { count: codes.length })}
+    </button>
+  );
+}
+
 export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src: LiveSource; pages: number; partial: boolean; photos: HeaderPhotos }) {
   const tr = useT();
   const [open, setOpenRaw] = useLiveOpen('day');
@@ -801,7 +851,7 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
     ) : null;
 
   return (
-    <section className="lh lh-dayh" aria-label={tr('live.aria')}>
+    <section className="lh lh-dayh" data-tour="live-header" aria-label={tr('live.aria')}>
       <div className="lh-id">
         <Badge kind="day" />
         {/* Como la maqueta: la fecha en su renglón propio en el teléfono; la locación sigue al lado del tipo. */}
@@ -831,6 +881,7 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
         <dt>{tr('day.scenesOfDay')}</dt>
         <dd>
           <Rows v={v} src={src} tr={tr} partial={partial} />
+          <AddPlannedSections v={v} src={src} tr={tr} />
         </dd>
         {v.questions.length > 0 && (
           <>

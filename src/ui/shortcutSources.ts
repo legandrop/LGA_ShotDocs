@@ -75,6 +75,9 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   sidebarResize: ['SidebarResizer.tsx'],
   menusMove: ['menus.tsx'],
   menusClose: [
+    // Esc deja sin crear el nombre de *New location* (FolderIndex.tsx) y de *New set* (LiveHeader.tsx).
+    'FolderIndex.tsx',
+    'LiveHeader.tsx',
     'PhotoReplaceSheet.tsx',
     'menus.tsx',
     'MoveDialog.tsx',
@@ -117,7 +120,10 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   versionName: ['HistoryPanel.tsx'],
   assistantApply: ['AssistantPanel.tsx', 'CaptionSection.tsx', 'DictationPanel.tsx'],
   dictationPlace: ['DictationPanel.tsx'],
-  tabsMove: ['InstallDialog.tsx', 'DayReportPopover.tsx'],
+  // También las pestañas de la ayuda (Tours, Topics, Shortcuts).
+  tabsMove: ['InstallDialog.tsx', 'DayReportPopover.tsx', 'HelpDialog.tsx'],
+  // El borde de una columna de las tablas que arma la app (D821).
+  columnResize: ['columnWidths.tsx'],
   tourNext: ['TourLayer.tsx'],
   tourBack: ['TourLayer.tsx'],
   tourExit: ['TourLayer.tsx'],

@@ -403,7 +403,7 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
   return (
     <>
       {strip && (
-        <div className="template-strip" role="group" aria-label={tr('templates.start')}>
+        <div className="template-strip" data-tour="template-strip" role="group" aria-label={tr('templates.start')}>
           <span className="template-strip-label mono-label">{tr('templates.start')}</span>
           <div className="template-strip-items">
             {stripKinds(tree, pageId).map((kind) => (

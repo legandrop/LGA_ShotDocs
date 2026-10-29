@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.308 :
+
+Lega no entendía para qué había locaciones y decorados en *Pages* y en el *Overview*, ni cómo se arma un proyecto, y la
+ayuda era un muro de texto. Un proyecto nuevo arranca con las carpetas de sus etapas (D817). Escenas y Locaciones
+muestran *New scene* / *New location* y una tabla armada sola; la escena nueva muestra el número en gris y el nombre;
+un decorado vive adentro de su locación (*New set*, *Create page* desde la escena), y mover una página no le cambia el
+tipo (D818). Toda tabla de la app agranda sus columnas en % y pega su encabezado (D821). PLN y REP, chicos y alineados
+con la semana (D816). Ayuda nueva con el encabezado LGA y recorridos por capítulos; *A project from scratch* arma un
+corto en un documento aparte, sin red, probado con clics (D819, D820). El plan trae sus escenas como link y la locación
+del desglose; arreglado `clearFind`, que dejaba la página en blanco.
+
+[Proyecto desde cero: Escenas y Locaciones con su tabla, decorados adentro de su locación y ayuda con recorridos]
+
 v0.307 :
 
 Lega vio VLLF después de D813 y la barra no tenía lógica: `1 | Preproducción` quedaba vacía porque sus carpetas de

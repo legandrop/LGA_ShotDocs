@@ -117,6 +117,7 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   assistantApply: 'shortcut.assistantApply',
   dictationPlace: 'shortcut.dictationPlace',
   tabsMove: 'shortcut.tabsMove',
+  columnResize: 'shortcut.columnResize',
   tourNext: 'shortcut.tourNext',
   tourBack: 'shortcut.tourBack',
   tourExit: 'shortcut.tourExit',

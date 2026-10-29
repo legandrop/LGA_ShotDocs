@@ -35,6 +35,7 @@ import { OfflineBadge, offlineSupported, openOffline } from './SpaceHost';
 import { openExport } from './ExportHost';
 import { LEVEL_VIEW } from '../sync/access';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
+import { createStageFolders } from '../relations/projectStructure';
 import {
   RemoveWorkspaceDialog,
   useCurrentWorkspace,
@@ -360,6 +361,8 @@ function ProjectMenu(props: {
                 backToList();
               } else {
                 const id = await tree.createProject(name);
+                // Todo proyecto nuevo arranca con las carpetas de las etapas, vacías (D817).
+                await createStageFolders(tree, id, t.lang);
                 props.onClose();
                 switchTo(id);
               }

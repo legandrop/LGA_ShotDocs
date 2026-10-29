@@ -1187,6 +1187,33 @@
   font-weight: 500;
 }
 
+/* En el día mismo, debajo de las escenas: una sección por escena planeada (D820). */
+.lh .lh-addplanned {
+  margin-top: 8px;
+}
+
+/* *New set* en la cabecera de una locación (D818): el nombre y *Create*, en el renglón de los decorados. */
+.lh-newset {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  max-width: 100%;
+}
+
+.lh-newset input {
+  width: 200px;
+  max-width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
 .lh-picker {
   position: absolute;
   top: calc(100% + 6px);

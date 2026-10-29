@@ -207,27 +207,54 @@ export function planOf(src: LiveSource, day: DayRef): DayPlan {
     (named ? pages : empty).push({ pageId, title: src.title(pageId) ?? '' });
   }
   if (codes.length) return { codes, source: 'plan', pages, label: '' };
-  // 2. Las fichas del desglose cuya fecha de rodaje es ese día. Solo la escena y lo de adentro de una escena: las copias
-  //    de fichas pegadas en el plan de otro día (adentro de un día, como en ERSO) no cuentan.
+  // 2. Las fichas del desglose cuya fecha de rodaje es ese día.
   if (day.date) {
-    const found = new Set<string>();
-    let label = '';
-    // Las fichas (`cardFields`, sin las copias pegadas en los planes) y la página de la escena misma, si tiene la fecha.
-    const dated = [
-      ...cardFields(snap, 'shootDate').map((x) => ({ code: x.scene, field: x.field })),
-      ...findFields(snap, 'shootDate').flatMap(({ pageId, field }) => {
-        const role = snap.registration.roles.get(pageId);
-        return role?.entity?.kind === 'scene' && role.entity.ref && !role.excluded ? [{ code: role.entity.ref, field }] : [];
-      }),
-    ];
-    for (const { code, field } of dated) {
-      if (fieldDate(field.text) !== day.date) continue;
-      found.add(code);
-      label ||= field.label;
-    }
-    if (found.size) return { codes: [...found].sort(), source: 'breakdown', pages: [], label };
+    const found = breakdownScenesOn(src, day.date);
+    if (found.codes.length) return { codes: found.codes, source: 'breakdown', pages: [], label: found.label };
   }
   return { codes: [], source: 'none', pages: [], label: '', empty };
+}
+
+/**
+ * Las escenas del desglose para esa fecha como se escriben en el plan nuevo (D820): el número (con link a su página) y
+ * el nombre que sigue al número en su título («001 | Andén de noche» → «Andén de noche»; una escena de un episodio,
+ * «029 | X» con número `105_029`, también).
+ */
+export function plannedSceneLines(src: Pick<LiveSource, 'snap' | 'title'>, date: string): { code: string; pageId: string | null; name: string }[] {
+  return breakdownScenesOn(src, date).codes.map((code) => planSceneLine(src, code));
+}
+
+/** Una escena como renglón del plan: su número, su página (el link) y el nombre de su título. */
+export function planSceneLine(src: Pick<LiveSource, 'snap' | 'title'>, code: string): { code: string; pageId: string | null; name: string } {
+  const pageId = src.snap.registry.scenes.get(code)?.pageId ?? null;
+  const title = (pageId && src.title(pageId)?.trim()) || '';
+  const rest = title.startsWith(code) ? title.slice(code.length) : /^\s*\d+[a-z]?\s*[|·:\-–]/i.test(title) ? title.replace(/^\s*\d+[a-z]?/i, '') : '';
+  return { code, pageId, name: rest.replace(/^\s*[|·:\-–]\s*/, '').trim() };
+}
+
+/**
+ * Las escenas que el desglose planea para esa fecha, por número, y el rótulo del campo como está escrito. Solo la escena y
+ * lo de adentro de una escena: las copias de fichas pegadas en el plan de otro día (adentro de un día, como en ERSO) no
+ * cuentan. Lo usan la cabecera del día, *Tomorrow* y el plan nuevo de esa fecha (que las trae escritas, D820).
+ */
+export function breakdownScenesOn(src: Pick<LiveSource, 'snap'>, date: string): { codes: string[]; label: string } {
+  const { snap } = src;
+  const found = new Set<string>();
+  let label = '';
+  // Las fichas (`cardFields`, sin las copias pegadas en los planes) y la página de la escena misma, si tiene la fecha.
+  const dated = [
+    ...cardFields(snap, 'shootDate').map((x) => ({ code: x.scene, field: x.field })),
+    ...findFields(snap, 'shootDate').flatMap(({ pageId, field }) => {
+      const role = snap.registration.roles.get(pageId);
+      return role?.entity?.kind === 'scene' && role.entity.ref && !role.excluded ? [{ code: role.entity.ref, field }] : [];
+    }),
+  ];
+  for (const { code, field } of dated) {
+    if (fieldDate(field.text) !== date) continue;
+    found.add(code);
+    label ||= field.label;
+  }
+  return { codes: [...found].sort(), label };
 }
 
 const valued = (list: FieldValue[]) => list.filter((f) => !emptyValue(f.text));

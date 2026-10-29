@@ -17,7 +17,8 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { PracticeWriteError, practiceSession } from './practiceServices';
 import { practiceEn } from './practice.en';
 import { practiceBlocks, PRACTICE_BLOCKS, PRACTICE_ID } from './practiceTemplate';
-import { dismissTour, getTourUi, readDeviceTour, startTour } from './tourState';
+import { dismissTour, getTourUi, readDeviceTour, startTour, tourSignal } from './tourState';
+import { cursorOf, readProgress } from '../tour/progress';
 // El editor de la página se carga aparte la primera vez que se muestra. Acá se arma antes de las pruebas: si no, la
 // primera que monta una página pagaba ese armado (cientos de módulos) dentro de su plazo, y con la máquina cargada no
 // le alcanzaba (y una prueba que se corta por tiempo deja a las que siguen en el archivo sin poder dibujar).
@@ -370,49 +371,61 @@ describe('la recorrida', () => {
   const count = () => bubble()?.querySelector('.mono-label')?.textContent;
   const press = (key: string) =>
     act(() => void bubble()!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })));
+  // *Getting around* en la computadora: diez pasos en tres capítulos (src/tour/catalog.ts).
+  const PLACES = ['1/3 · Step 1/3', '1/3 · Step 2/3', '1/3 · Step 3/3', '2/3 · Step 1/5', '2/3 · Step 2/5', '2/3 · Step 3/5', '2/3 · Step 4/5', '2/3 · Step 5/5', '3/3 · Step 1/2', '3/3 · Step 2/2'].map((p) => `Ch. ${p}`);
 
   it('la primera vez arranca sola en la práctica; Siguiente, Atrás, flechas; al terminar queda vista en el dispositivo y la cuenta', async () => {
     const h = await app({ firstLoad: true });
     await until(() => bubble(), 'el globito');
     await until(() => location.pathname === '/practice', 'la práctica');
-    expect(count()).toBe('1/10');
+    expect(count()).toBe(PLACES[0]);
     expect(bubble()!.querySelector('h3')?.textContent).toBe('Hi!');
-    expect(document.querySelector('.tour-live')?.textContent).toBe('Step 1 of 10: Hi!');
-    // El foco va a "Siguiente".
-    expect(document.activeElement?.textContent).toBe('Next');
+    expect(document.querySelector('.tour-live')?.textContent).toBe(`${PLACES[0]}: Hi!`);
+    // El globito no se lleva el foco (las teclas se escuchan en la ventana).
+    expect(bubble()!.contains(document.activeElement)).toBe(false);
     // Mientras dura, sin tooltips, y la app no se alcanza ni con el teclado (Tab hasta el "+" de verdad).
     expect(document.documentElement.dataset.tourRunning).toBe('1');
     expect(document.querySelector('.shell')?.hasAttribute('inert')).toBe(true);
 
     click(button('Next'));
-    await until(() => count() === '2/10', 'el paso 2');
+    await until(() => count() === PLACES[1], 'el paso 2');
     press('ArrowRight');
-    await until(() => count() === '3/10', 'el paso 3');
+    await until(() => count() === PLACES[2], 'el paso 3');
     expect(bubble()!.textContent).toContain('Ctrl+K finds pages and projects');
     press('ArrowLeft');
-    await until(() => count() === '2/10', 'atrás');
+    await until(() => count() === PLACES[1], 'atrás');
     click(button('Back'));
-    await until(() => count() === '1/10', 'el paso 1');
-    expect(readDeviceTour()).toMatchObject({ done: false, step: 0 });
+    await until(() => count() === PLACES[0], 'el paso 1');
+    expect(readDeviceTour()).toMatchObject({ done: false });
+    expect(cursorOf('getting-around')).toEqual({ chapter: 'around.pages', step: 'hello' });
 
-    // Hasta el final (el del menú "/" también avanza con Siguiente: nunca se traba).
-    for (let i = 1; i < 10; i++) {
-      click(bubble()!.querySelector('button.primary'));
-      await until(() => count() === `${i + 1}/10` || !bubble(), `el paso ${i + 1}`);
+    // Hasta el final. El del menú "/" es de acción: Siguiente queda gris y no lo hace; usarlo de verdad sigue solo.
+    for (let i = 1; i < PLACES.length; i++) {
+      if (count() === PLACES[3]) {
+        expect(bubble()!.querySelector<HTMLButtonElement>('button.primary')!.disabled).toBe(true);
+        act(() => tourSignal('slash'));
+      } else click(bubble()!.querySelector('button.primary'));
+      await until(() => count() === PLACES[i], `el paso ${i + 1}`);
     }
     expect(bubble()!.querySelector('button.primary')?.textContent).toBe('Finish');
     click(button('Finish'));
     await until(() => !bubble(), 'que termine');
     await wait(50);
-    expect(readDeviceTour()).toEqual({ v: 1, done: true, step: null, account: true });
+    expect(readDeviceTour()).toEqual({ v: 1, done: true, account: true });
     expect(h.metadata.shotdocs_tour).toBe(1);
+    // Los tres capítulos, vistos; no queda nada para seguir.
+    expect(Object.keys(readProgress().seen).sort()).toEqual(['around.editor', 'around.pages', 'around.saved']);
+    expect(cursorOf('getting-around')).toBeNull();
     expect(document.documentElement.dataset.tourRunning).toBeUndefined();
     expect(document.querySelector('.shell')?.hasAttribute('inert')).toBe(false);
   });
 
-  it('Esc sale (cuenta como vista) y avisa que se puede volver a ver desde la ayuda', async () => {
+  it('Esc pregunta en el globito y el segundo sale (cuenta como vista); avisa que se puede volver a ver desde la ayuda', async () => {
     const h = await app({ firstLoad: true });
     await until(() => bubble(), 'el globito');
+    press('Escape');
+    await until(() => button('Keep going'), 'la pregunta');
+    expect(readDeviceTour().done).toBe(false);
     press('Escape');
     await until(() => !bubble(), 'que salga');
     expect(h.host.querySelector('.notice')?.textContent).toContain('You can take the tour again from the help (?).');
@@ -423,7 +436,7 @@ describe('la recorrida', () => {
     await app({ firstLoad: true });
     await until(() => bubble(), 'el globito');
     click(button('Next'));
-    await until(() => count() === '2/10', 'el paso 2');
+    await until(() => count() === PLACES[1], 'el paso 2');
     // En jsdom nada tiene tamaño: el ancla no se ve.
     expect(document.querySelector('.tour-spot')).toBeNull();
     expect(document.querySelector('.tour-dim')).not.toBeNull();
@@ -433,7 +446,7 @@ describe('la recorrida', () => {
     const h = await app({ firstLoad: true });
     await until(() => bubble(), 'el globito');
     click(button('Next'));
-    await until(() => count() === '2/10', 'el paso 2');
+    await until(() => count() === PLACES[1], 'el paso 2');
     act(() => {
       history.pushState(null, '', '/trash');
       window.dispatchEvent(new Event('shotdocs:navigate'));
@@ -441,30 +454,32 @@ describe('la recorrida', () => {
     await until(() => h.host.ownerDocument.querySelector('.tour-card'), 'la tarjeta de pausa');
     expect(document.querySelector('.tour-card')?.textContent).toContain('Tour paused');
     click(button('Continue'));
-    await until(() => location.pathname === '/practice' && count() === '2/10', 'seguir en el paso 2');
+    await until(() => location.pathname === '/practice' && count() === PLACES[1], 'seguir en el paso 2');
   });
 
-  it('se recargó a mitad: la tarjeta de retomar, en el paso guardado', async () => {
-    localStorage.setItem('shotdocs-tour', JSON.stringify({ v: 1, done: false, step: 3 }));
+  it('se recargó a mitad: la tarjeta de retomar, en el capítulo y el paso guardados (por id)', async () => {
+    localStorage.setItem('shotdocs-tour', JSON.stringify({ v: 1, done: false }));
+    localStorage.setItem('shotdocs-tour-progress', JSON.stringify({ seen: {}, at: { 'getting-around': { chapter: 'around.editor', step: 'comments' } } }));
     await app();
     await until(() => document.querySelector('.tour-card'), 'la tarjeta');
     expect(document.querySelector('.tour-card')?.textContent).toContain('Continue the tour?');
-    expect(document.querySelector('.tour-card')?.textContent).toContain('Step 4 of 10');
+    expect(document.querySelector('.tour-card')?.textContent).toContain('Ch. 2 · Writing on a page');
     click(button('Continue'));
-    await until(() => count() === '4/10', 'el paso 4');
+    await until(() => count() === PLACES[5], 'el paso de los comentarios');
   });
 
-  it('la cuenta dice que ya la vio: no arranca y queda el punto en el "?"; la ayuda la ofrece desde el paso 1', async () => {
+  it('la cuenta dice que ya la vio: no arranca y queda el punto en el "?"; la ayuda la ofrece en Tours, desde el principio', async () => {
     const h = await app({ firstLoad: true, accountSeen: true });
     await until(() => h.host.querySelector('.help-button'), 'la barra');
     await wait(300);
     expect(bubble()).toBeNull();
     expect(h.host.querySelector('.help-button')?.classList.contains('has-dot')).toBe(true);
     click(h.host.querySelector('.help-button'));
-    await until(() => document.querySelector('[data-help-id="tour"] .help-action'), 'la ayuda');
+    await until(() => document.querySelector('.help-tours'), 'la ayuda, en Tours');
     expect(h.host.querySelector('.help-button')?.classList.contains('has-dot')).toBe(false);
-    click(document.querySelector('[data-help-id="tour"] .help-action'));
-    await until(() => count() === '1/10', 'la recorrida desde el paso 1');
+    expect(document.querySelector('.help-tour.selected strong')?.textContent).toBe('Getting around');
+    click(document.querySelector('.help-tour-actions button.primary'));
+    await until(() => count() === PLACES[0], 'la recorrida desde el paso 1');
     expect(getTourUi().mode).toBe('running');
   });
 
@@ -489,7 +504,7 @@ describe('la recorrida', () => {
     expect(top(h)).toBe(true);
     expect(dot(h)).toBe(true);
     click(h.host.querySelector('.topbar .help-button'));
-    await until(() => document.querySelector('[data-help-id="tour"] .help-action'), 'la ayuda');
+    await until(() => document.querySelector('.help-tours'), 'la ayuda');
     expect(top(h)).toBe(false);
     expect(drawer(h)).toBe(false);
     expect(dot(h)).toBe(false);
@@ -505,6 +520,6 @@ describe('la recorrida', () => {
     await until(() => !document.querySelector('.tour-card'), 'que se vaya');
     expect(readDeviceTour().done).toBe(false);
     act(() => startTour());
-    await until(() => count() === '1/10', 'la recorrida');
+    await until(() => count() === PLACES[0], 'la recorrida');
   });
 });

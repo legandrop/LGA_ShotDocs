@@ -37,7 +37,8 @@ type Part = 'locations' | 'sets' | 'scenes' | 'days';
 /** Las partes que son solo una vista del centro, sin lista en la barra. */
 type ViewPart = 'shots' | 'pending';
 const isViewPart = (part: string): part is ViewPart => part === 'shots' || part === 'pending';
-const PARTS: readonly Part[] = ['locations', 'sets', 'scenes', 'days'];
+// Las escenas primero, como en Pages (D818).
+const PARTS: readonly Part[] = ['scenes', 'locations', 'sets', 'days'];
 
 /**
  * Lo plegado de un proyecto: el bloque entero, la parte abierta (una sola) y el episodio abierto de *Scenes* (uno solo,
@@ -142,7 +143,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     days: lists?.days.length ?? 0,
   };
   /** La parte que abre el título: la desplegada o, sin ninguna, la primera que tiene algo. */
-  const headPart: Part = (fold.part && sizes[fold.part] > 0 ? fold.part : PARTS.find((p) => sizes[p] > 0)) ?? 'locations';
+  const headPart: Part = (fold.part && sizes[fold.part] > 0 ? fold.part : PARTS.find((p) => sizes[p] > 0)) ?? 'scenes';
 
   // La vista del centro manda: al abrir una pestaña (desde acá, desde la vista o por la dirección) se despliega su parte
   // y se pliegan las otras; al abrir una escena, también su episodio. Después se puede plegar. Una pestaña vacía (un
@@ -506,6 +507,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
       <li key={part}>
         <div
           className={`ov-part${open ? ' sticky-head' : ''}${on ? ' on' : ''}`}
+          // El ancla de los recorridos (src/tour/catalog.ts): `overview-scenes`, `overview-locations`…
+          data-tour={`overview-${part}`}
           onClick={(e) => {
             if (!plainClick(e)) return;
             // El foco queda en la parte, como en una fila de *Pages*: las flechas siguen desde acá.
@@ -542,16 +545,16 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
 
   const codeWidth = Math.max(0, ...lists.scenes.flatMap((g) => g.scenes.map((s) => s.code.length)));
   const parts: ReactNode[] = [];
+  if (counts.scenes) parts.push(partRow('scenes', tr('sidebar.scenes'), <span className="scene-nav-n">{counts.scenes}</span>, scenesBody));
   if (counts.locations) parts.push(partRow('locations', tr('sidebar.locations'), <span className="scene-nav-n">{counts.locations}</span>, locationsBody));
   if (counts.sets) parts.push(partRow('sets', tr('sidebar.sets'), <span className="scene-nav-n">{counts.sets}</span>, setsBody));
-  if (counts.scenes) parts.push(partRow('scenes', tr('sidebar.scenes'), <span className="scene-nav-n">{counts.scenes}</span>, scenesBody));
   if (counts.days) parts.push(partRow('days', tr('sidebar.days'), <span className="scene-nav-n">{counts.days}</span>, daysBody));
   // La tabla de planos (D813): solo la vista del centro, como *Pending* (la barra no tiene el contenido de las páginas).
   if (counts.scenes) parts.push(partRow('shots', tr('sidebar.shots'), null, null));
   if (pending > 0) parts.push(partRow('pending', tr('sidebar.pending'), <span className="map-nav-count">{pending}</span>, null));
 
   return (
-    <div className="scene-nav ov-nav" style={{ '--code-w': `${codeWidth}ch` } as CSSProperties} onKeyDown={onRowsKey} onClickCapture={onRowsClick}>
+    <div className="scene-nav ov-nav" data-tour="overview" style={{ '--code-w': `${codeWidth}ch` } as CSSProperties} onKeyDown={onRowsKey} onClickCapture={onRowsClick}>
       <div
         className="ov-head nav-title sticky-head"
         onClick={(e) => {

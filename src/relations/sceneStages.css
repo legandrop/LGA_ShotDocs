@@ -190,3 +190,30 @@
   color: var(--accent-text);
   font-weight: 600;
 }
+
+/* *Create page* al lado de una locación o un decorado escrito sin página (cabecera de la escena, D818): chico, en la
+   misma línea que el nombre. */
+.ss .ss-create,
+.ss .rel-cant {
+  margin-left: 8px;
+  padding: 1px 8px;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
+.ss .ss-create:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.ss .rel-cant {
+  cursor: default;
+  opacity: 0.7;
+}

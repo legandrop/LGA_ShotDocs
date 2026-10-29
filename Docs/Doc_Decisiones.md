@@ -2516,3 +2516,52 @@ ve en su semana. Sin «+» ni ⋯ en el *Overview*: se crea en *Pages* o con `/e
 empieza con PLAN o REPORT, y un plan con nota muestra la nota. Se queda lo demás de D813: el plan al lado de su
 reporte (parte 2), *Overview › Shots* en lugar de `BD Main` (parte 3), la mudanza de VLLF y ERSO (parte 4) y sin
 *Overview › Scouting* en la barra. En la base no cambió nada: la parte 1 nunca movió páginas.
+
+### D816 · PLN y REP, chicos y alineados con la semana (2026-10-28)
+**Qué pasó:** las etiquetas PLAN y REPORT de v0.307 iban al principio de la fila, ocupaban mucho ancho y no se
+alineaban con el nombre de la semana.
+**Elegimos (Lega):** **PLN** en ámbar y **REP** en verde, en el lugar del triángulo de la fila: quedan debajo de donde
+empieza «Semana» y las fechas forman una columna.
+
+### D817 · Un proyecto nuevo arranca con las carpetas de las etapas (2026-10-28)
+**Elegimos (Lega):** al crear un proyecto se crean, vacías y con su tipo, `1 | Preproducción` (con `1.1 | Escenas` y
+`1.2 | Locaciones`), `2 | Scouting reports`, `3 | Pruebas y previs`, `4 | Rodaje`, `5 | Referencias` y `90 | Archivo`,
+en el idioma de la interfaz (`projectStructure.ts`).
+
+### D818 · Escenas, locaciones y decorados en Pages (2026-10-28)
+**Qué pasó:** Lega no entendía la diferencia entre las locaciones y los decorados de *Pages* y los del *Overview*, ni
+para qué una carpeta de decorados: «tenemos unas locaciones y dentro de las locaciones se escribe qué escenas van acá y
+qué decorados van acá». `Desglose` lo renombró él mismo `Escenas`.
+**Elegimos:** *Preproducción* es Escenas y Locaciones. La carpeta de Escenas (y la de Locaciones) muestra arriba *New
+scene* (*New location*) y una tabla armada sola: foto, número, nombre, locación y decorado. El título de una escena se ve
+partido: el número en gris (un clic lo deja cambiar) y el nombre; se guarda como siempre (`029 | Nombre`). **Un decorado
+es una página adentro de su locación**: se crea con *New set* en la cabecera de la locación o con *Create page* al lado
+del decorado que nombra la escena, y se filma en la locación de arriba. Una locación dice qué escenas van ahí en su
+campo *Escenas*; la escena dice su locación en su campo, y una locación escrita que todavía no existe se crea con *Create
+page* desde la escena. Mover una página no le cambia el tipo (antes, un decorado arrastrado adentro de una locación
+pasaba a leerse como un scouting). En VLLF y ERSO cada decorado se marca como decorado y, si tiene una sola locación
+conocida, pasa adentro de ella; los demás quedan en `1.3 | Decorados`. Una revisión independiente mostró que un
+decorado sin página no existe para la app: por eso siempre tiene página. El *Overview* empieza por Escenas; sus listas
+desplegables (D806, D807) quedan como están: sacarlas lo decide Lega.
+
+### D819 · La ayuda: el nombre de la app, los recorridos primero (2026-10-28)
+**Qué pasó:** la ayuda era «una cantidad de texto ridícula», con una barra de desplazamiento ancha y sin poder
+agrandarse; no tenía el encabezado de las demás apps de Lega.
+**Elegimos (Lega):** arriba, como en las demás apps LGA, `LGA Shot Docs` con la versión, *Developed by Lega Pugliese* y
+`lega.com.ar`. Debajo, tres pestañas: **Tours** (primero: la ayuda es sobre todo con recorridos), **Topics** (las
+entradas de antes, plegadas, con la búsqueda) y **Shortcuts**. La ventana se agranda desde la esquina y recuerda su
+tamaño; la barra de desplazamiento es la fina de la barra lateral.
+
+### D820 · Recorridos con capítulos, sobre un proyecto de práctica (2026-10-28)
+**Elegimos (Lega):** la ayuda se da con recorridos por capítulos. *A project from scratch* arma un proyecto desde cero
+(escenas, su locación creada desde la escena, el decorado, el salto a «veinte escenas después», scouting, plan, reporte
+y el *Overview* para postproducción) sobre la app de verdad con un servidor en memoria, aparte, sin login ni red y sin
+tocar la base de este dispositivo. Un paso de acción se cumple cuando la persona lo hace; *Next* nunca lo hace por
+ella. El proyecto de práctica es un corto inventado, «El último tren», con fotos libres (Wikimedia Commons, dominio
+público y CC0; Lega dio permiso para bajarlas).
+
+### D821 · Las tablas: columnas en porcentaje y encabezado pegado (2026-10-28)
+**Elegimos (Lega):** toda tabla que arma la app (la de Escenas y Locaciones, las vistas del *Overview*, *Shots*) deja
+agrandar sus columnas arrastrando el borde del encabezado o con doble clic (se ajusta al contenido), en porcentaje del
+ancho para que siga siendo responsive, y su encabezado queda pegado arriba mientras se ve alguna fila, como las carpetas
+de la barra lateral. Las tablas que se escriben en una página no entran (el editor ya deja arrastrar sus bordes).

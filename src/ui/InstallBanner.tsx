@@ -16,6 +16,7 @@ import {
 } from './install';
 import { InstallDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
+import { inTourDocument } from '../tutorial/tourState';
 import { notify } from './notice';
 
 // Instalar la app (Docs/Doc_Instalar.md): la ventana con los pasos (una sola, la abra quien la abra) y el aviso
@@ -50,7 +51,8 @@ export function InstallBanner() {
   const { installed, canPrompt } = useInstallState();
   const platform = useMemo(() => detectPlatform(), []);
   const [due, setDue] = useState(() => bannerDue(readBannerStamp()));
-  if (installed || !due || !isMobilePlatform(platform)) return null;
+  // En el documento de práctica de los recorridos, no: ahí se aprende la app, no se la instala.
+  if (installed || !due || !isMobilePlatform(platform) || inTourDocument()) return null;
   return (
     <aside className="install-banner" aria-label={tr('install.banner.title')}>
       <AppIcon size={30} />

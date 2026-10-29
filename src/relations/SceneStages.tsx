@@ -1,6 +1,8 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useT, type Key } from '../i18n';
 import { navigate, pagePath } from '../router';
+import { useCurrentProject } from '../ui/project';
+import { CreateEntityButton } from './EntityActions';
 import { shortDate, useGo } from './LiveHeader';
 import type { Place } from './liveView';
 import type { RowId, StageId, StageLine, StageLink, StageRow } from './sceneStageRows';
@@ -46,7 +48,14 @@ function StageA({ link, children }: { link: StageLink; children?: ReactNode }) {
   const tr = useT();
   const t = link.target;
   const text = children ?? (link.label || tr('common.untitled'));
-  if (!t) return <span className="ss-txt">{text}</span>;
+  if (!t) {
+    return (
+      <>
+        <span className="ss-txt">{text}</span>
+        {link.create && <CreateHere want={link.create} />}
+      </>
+    );
+  }
   const place: Place | null = t.kind === 'place' ? t.place : null;
   const pageId = t.kind === 'place' ? t.place.pageId : t.pageId;
   const cls = t.kind === 'scene' || t.kind === 'loc' || t.kind === 'day' ? `ss-a ${t.kind}` : 'ss-a';
@@ -63,6 +72,18 @@ function StageA({ link, children }: { link: StageLink; children?: ReactNode }) {
     >
       {text}
     </a>
+  );
+}
+
+/** *Create page* al lado de una locación o un decorado escrito sin página (solo en la cabecera de la escena). */
+function CreateHere({ want }: { want: NonNullable<StageLink['create']> }) {
+  const tr = useT();
+  const projectId = useCurrentProject();
+  // El ancla de los recorridos (src/tour/catalog.ts): crear la locación o el decorado desde la escena.
+  return (
+    <span data-tour={want.kind === 'set' ? 'scene-create-set' : 'scene-create-location'}>
+      <CreateEntityButton want={want} projectId={projectId} className="ss-create" label={tr('create.page')} />
+    </span>
   );
 }
 

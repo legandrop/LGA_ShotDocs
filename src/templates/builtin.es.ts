@@ -172,12 +172,12 @@ export const builtinEs: BuiltinTexts = {
     internalRows: [['Artista · Proveedor'], ['Cotización (días)']],
   },
   scene: {
-    facts: [['Escena'], ['Decorado'], ['Locación (planeada)'], ['INT/EXT · Día/Noche'], ['Fecha de rodaje (planeada)'], ['Planos de VFX (estim.)']],
+    facts: [['Escena'], ['Locación (planeada)'], ['Decorado'], ['INT/EXT · Día/Noche'], ['Fecha de rodaje (planeada)'], ['Planos de VFX (estim.)']],
     notes: 'Notas',
     questionItems: ['Director: ', 'Arte: '],
   },
   location: {
-    facts: [['Otros nombres'], ['Dirección'], ['Mapa'], ['Contacto'], ['Acceso · Permisos'], ['Energía · Estacionamiento']],
+    facts: [['Otros nombres'], ['Escenas'], ['Dirección'], ['Mapa'], ['Contacto'], ['Acceso · Permisos'], ['Energía · Estacionamiento']],
     notes: 'Notas',
     artLinks: 'Links de arte',
     photos: 'Fotos',

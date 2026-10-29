@@ -72,6 +72,8 @@ export const FIELD_LABELS = {
   vfxCat: ['vfx cat', 'vfx category', 'categoria vfx'],
   /** Los otros nombres de una locación (D526, D527): solo cuentan en la página de la locación misma (`aliases.ts`). */
   aliases: ['also known as', 'aka', 'a k a', 'other names', 'alias', 'aliases', 'otros nombres', 'tambien conocida como', 'tambien conocido como', 'nombres alternativos'],
+  /** Las escenas que van en una locación (D818): solo cuentan en la página de la locación misma (`liveView.ts`). */
+  scenes: ['escenas', 'scenes', 'escenas aca', 'scenes here'],
 } as const;
 
 export type FieldName = keyof typeof FIELD_LABELS;

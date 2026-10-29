@@ -52,6 +52,7 @@ export const page = {
     es: "Algo de su contenido hizo fallar al editor. No se borró nada: en el historial de versiones podés restaurar una versión anterior, y el resto de la app sigue andando.",
   },
   'page.title': { en: "Title", es: "Título" },
+  'page.sceneName': { en: "Scene name", es: "Nombre de la escena" },
   // El tope del título (500 caracteres, el de la base): lo que sobra va al principio de la página (sync/titleRest.ts).
   'page.titleTooLong': {
     en: "A title can be up to {max} characters.",

@@ -1,3 +1,4 @@
+import type { CreateWant } from './createEntity';
 import type { DayRef, PageChip, Place, SceneLive } from './liveView';
 
 // Los renglones «Etapa | Tipo: links» de una escena (Docs/Doc_Relaciones.md, sección 23; D783, D784): dónde está cada cosa
@@ -24,6 +25,11 @@ export interface StageLink {
   target: StageTarget | null;
   /** Un día: su fecha (`AAAA-MM-DD`), para mostrarla al lado. */
   date?: string | null;
+  /**
+   * Una locación o un decorado escrito sin página, en la cabecera de la página de la escena (D818): lo que crea su botón
+   * *Create page*. En el Overview, que no se edita (D815), nunca.
+   */
+  create?: CreateWant;
 }
 
 export type StageLine =
@@ -47,6 +53,8 @@ export interface StageRow {
 export interface StageOptions {
   /** La cabecera de la página de la escena: sin el renglón *Desglose* (es esta página). */
   self: boolean;
+  /** Quien mira puede crear la página de una locación o un decorado que la escena nombra y no existe (*Create page*). */
+  canCreate?: boolean;
   /** El título de una página que la persona ve. */
   title(pageId: string): string;
   /** La página de una locación, por su nombre (el registro), o `null`. */
@@ -72,20 +80,40 @@ export function sceneStageRows(v: SceneLive, o: StageOptions): StageRow[] {
     add('breakdown', 'pre', v.pageId ? [{ kind: 'links', links: [{ label: o.title(v.pageId), target: { kind: 'scene', pageId: v.pageId } }], shots: v.shots.length }] : [], true);
   }
 
-  // Preproducción | Decorado: los del campo *Locacion Guion* / *Sets* de la escena y sus planos.
-  add('set', 'pre', v.sets.length ? [{ kind: 'links', links: v.sets.map((s) => ({ label: s.title, target: s.pageId ? { kind: 'page', pageId: s.pageId } : null })) }] : [], false);
-
-  // Preproducción | Locación: las que nombra su desglose y las de los días en que se filmó (por el título del día).
+  // Preproducción | Locación: las que nombra su desglose y las de los días en que se filmó (por el título del día). Va
+  // antes que el decorado: un decorado está en su locación (D818).
   const locs: StageLink[] = [];
   const seenLoc = new Set<string>();
   const addLoc = (name: string, pageId: string | null) => {
     if (seenLoc.has(name)) return;
     seenLoc.add(name);
-    locs.push({ label: name, target: pageId ? { kind: 'loc', pageId } : null });
+    locs.push({ label: name, target: pageId ? { kind: 'loc', pageId } : null, ...(o.self && o.canCreate && !pageId ? { create: { kind: 'location' as const, name } } : {}) });
   };
   for (const l of v.plannedAt) addLoc(l.title, l.pageId || o.locPage(l.title));
   for (const d of v.days) if (d.sections.length) for (const name of d.day.locs) addLoc(name, o.locPage(name));
   add('location', 'pre', locs.length ? [{ kind: 'links', links: locs }] : [], true);
+
+  // Preproducción | Decorado: los del campo *Locacion Guion* / *Sets* de la escena y sus planos. Uno sin página se crea
+  // adentro de la locación de la escena, si tiene una sola con página (un decorado se filma en su locación, D818).
+  const locPages = [...new Set(v.plannedAt.map((l) => l.pageId || o.locPage(l.title)).filter((id): id is string => !!id))];
+  const setIn = locPages.length === 1 ? locPages[0] : undefined;
+  add(
+    'set',
+    'pre',
+    v.sets.length
+      ? [
+          {
+            kind: 'links',
+            links: v.sets.map((s) => ({
+              label: s.title,
+              target: s.pageId ? { kind: 'page', pageId: s.pageId } : null,
+              ...(o.self && o.canCreate && !s.pageId ? { create: { kind: 'set' as const, name: s.title, ...(setIn ? { in: setIn } : {}) } } : {}),
+            })),
+          },
+        ]
+      : [],
+    false,
+  );
 
   // Preproducción | Preguntas abiertas: la primera, de qué plano, y cuántas más. Un renglón con rótulo es otra pregunta:
   // la sección «Questions» de la plantilla trae una por departamento («Director: …», «Art: …»), y contar solo la primera

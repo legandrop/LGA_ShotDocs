@@ -8,6 +8,7 @@ import { listenForInstallPrompt } from './ui/install';
 import { listenForMissingFiles } from './ui/lazyPart';
 import { watchNewVersionFromStart } from './ui/appUpdate';
 import { captureDictateLink } from './dictation/dictateLink';
+import { backToTour } from './tour/reload';
 // Los estilos del editor van con la primera pantalla aunque el editor se baje aparte (roadmap B.4): así
 // quedan antes de styles.css, que los ajusta, como antes. Cargados con el editor irían después y le
 // ganarían a esos ajustes.
@@ -34,7 +35,9 @@ watchNewVersionFromStart();
 // Chrome y Edge ofrecen instalar enseguida al cargar: se guarda para el botón "Install" (install.ts).
 listenForInstallPrompt();
 
-createRoot(document.getElementById('root')!).render(
+// Una recarga a mitad de un recorrido (la práctica había navegado a una página suya): vuelve al recorrido sin arrancar la
+// app (src/tour/reload.ts).
+if (!backToTour()) createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Lo que se escape de las barreras de adentro: una pantalla con *Reload*, nunca en blanco (ErrorBarrier.tsx). */}
     <AppBarrier>

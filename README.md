@@ -211,10 +211,13 @@ In development. What works today:
   without a connection and keeps it up to date. *Storage on this device* (account menu) shows what the app keeps,
   with a limit you choose (2 GB by default): past it, the app asks before removing copies of files already in Drive.
   Without a connection the app says *Offline* with what is waiting to upload.
-- Help and a guided tour: the "?" at the bottom of the sidebar (or *Help and shortcuts* in the account menu)
-  explains every feature and lists every keyboard shortcut, with a search box. The first time someone signs in,
-  a two-minute tour with Next walks through the app on a practice page that is never saved or synced; it can be
-  replayed, and the practice page reopened, from the help. *Show me* on an entry opens the practice page at just
+- Help and guided tours: the "?" at the bottom of the sidebar (or *Help and shortcuts* in the account menu) opens
+  the help, resizable, with *Tours* first, then *Topics* (every feature, folded, with a search box) and *Shortcuts*.
+  Tours come in chapters where you do each step for real. *Getting around* walks through the app on a practice page;
+  *A project from scratch* builds a short film from an empty project (scenes, their locations and sets, a scouting, the
+  day's plan and report, and how the Overview gathers it all for post) in a separate practice project with no
+  connection, never saved or synced. The first time someone signs in, *Getting around* starts by itself; the help
+  remembers where you left each tour. *Show me* on an entry opens the practice page at just
   that step and brings you back; a dot on the "?" means there is something new, listed under *What's new*.
 - Assistant (account menu → *Assistant…*): choose NVIDIA, Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service,
   paste your API key and pick a model from your provider's list. The key is stored encrypted on that device and sent
@@ -253,7 +256,14 @@ In development. What works today:
   location that day's plan names (or yesterday's) and yesterday's camera package, offline too, from the report folder's
   template; the title carries the place you typed or the plan's. *New day plan* (and *Plan
   tomorrow* in the day's header) creates the day's plan right above its report, with the same name and `| Plan`, so
-  plan and report sit next to each other, each row tagged PLAN or REPORT in the sidebar.
+  plan and report sit next to each other, each row tagged PLN (amber) or REP (green) in the sidebar. A new plan
+  already lists the scenes the breakdown plans for that date, linked, and proposes their location.
+- A new project starts with its stage folders, empty: *Preproduction* (*Scenes* and *Locations*), *Scouting reports*,
+  *Tests and previs*, *Shoot*, *References* and *Archive*. *Scenes* shows *New scene* (the next number, in gray, and
+  you type the name) and a table built from every scene page: photo, number, name, location and set; *Locations* does
+  the same. A set is a page inside its location (*New set* in the location's header, or *Create page* next to the set
+  a scene names), and moving a page never changes what it is. Every table the app builds lets you widen its columns
+  (drag or double-click a header edge) and keeps its header on top while you scroll.
 - Scenes, locations and shoot days: *Type* in a folder's menu sets what's created inside it, the folder shows a small
   SCENES, LOCATIONS or SHOOT DAYS label, and its pages are marked as such, with the scene number taken from the title
   (`101_074`). A scene's breakdown cards, a location's scouts and a day's plan count as part of it.

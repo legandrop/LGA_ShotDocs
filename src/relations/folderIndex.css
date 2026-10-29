@@ -1,0 +1,126 @@
+/* La página de una carpeta de escenas o de locaciones (FolderIndex.tsx, D818): el botón para crear y la tabla armada
+   sola, entre el título y el texto, con el ancho del texto. */
+.fi {
+  margin: 0 var(--gutter) 20px;
+  font-size: 13px;
+}
+
+.fi-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.fi-count {
+  flex: 1;
+  color: var(--faint);
+  font: 500 11px/1.4 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fi-name {
+  display: flex;
+  gap: 6px;
+}
+
+.fi-name input {
+  width: 220px;
+}
+
+.fi-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.fi-table th {
+  text-align: left;
+  font: 500 10px/1.4 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 0 8px 6px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.fi-table td {
+  padding: 5px 8px 5px 0;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fi-table tbody tr {
+  cursor: pointer;
+}
+
+.fi-table tbody tr:hover {
+  background: var(--active);
+}
+
+.fi-table a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.fi-table a:hover {
+  text-decoration: underline;
+}
+
+.fi-table td.fi-code {
+  font-family: var(--mono);
+  color: var(--scene-fg);
+}
+
+.fi-table .fi-loc a {
+  color: var(--loc-fg);
+}
+
+.fi-table .fi-set a {
+  color: var(--set-fg);
+}
+
+.fi-table .fi-scenes a {
+  color: var(--scene-fg);
+  font-family: var(--mono);
+}
+
+.fi-none {
+  color: var(--faint-2);
+}
+
+/* La foto llena el ancho de su columna: agrandar la columna agranda la foto (D821). */
+.fi-thumb {
+  display: block;
+  width: 100%;
+}
+
+.fi-thumb img,
+.fi-thumb .lh-ph {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--border-soft);
+}
+
+.fi-empty {
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+/* El encabezado queda arriba mientras se ve alguna fila de la tabla y se va con la última, como las carpetas de la barra
+   lateral (D821). */
+.fi-table thead th {
+  position: sticky;
+  /* Debajo de la barra de arriba de la página (`.topbar`, también pegada: 52 px y el borde del iPhone). */
+  top: calc(52px + env(safe-area-inset-top, 0px));
+  z-index: 2;
+  background: var(--bg);
+}

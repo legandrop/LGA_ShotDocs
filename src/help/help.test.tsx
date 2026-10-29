@@ -191,16 +191,35 @@ describe('el diálogo de la ayuda', () => {
     await until(() => dialog(), 'el diálogo');
     const d = dialog()!;
     expect(d.getAttribute('aria-modal')).toBe('true');
-    expect(d.querySelectorAll('[data-help-section]').length).toBe(16);
+    expect(d.getAttribute('aria-label')).toBe('Help and shortcuts');
+    // El encabezado de las apps LGA: el nombre con la versión, quién la hizo y su página (en otra pestaña).
+    expect(d.querySelector('h2')?.textContent).toBe(`LGA Shot Docsv${__APP_VERSION__}`);
+    expect(d.querySelector('.help-developed')?.textContent).toBe('Developed by Lega Pugliese');
+    const link = d.querySelector<HTMLAnchorElement>('a.help-link')!;
+    expect([link.textContent, link.getAttribute('href'), link.target]).toEqual(['lega.com.ar', 'https://lega.com.ar', '_blank']);
+    // Tres pestañas; abre en *Tours*, con los recorridos.
+    const tab = (id: string) => d.querySelector<HTMLButtonElement>(`[data-help-tab="${id}"]`)!;
+    expect([...d.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Tours', 'Topics', 'Shortcuts']);
+    expect(tab('tours').getAttribute('aria-selected')).toBe('true');
+    expect([...d.querySelectorAll('.help-tour strong')].map((t) => t.textContent)).toEqual(['Getting around', 'A project from scratch']);
+    // *Topics*: las secciones, con las entradas plegadas; un clic despliega una.
+    act(() => tab('topics').click());
+    expect(d.querySelectorAll('[data-help-section]').length).toBe(15);
+    expect(d.querySelector('[data-help-id="collapseEveryone"]')).not.toBeNull();
+    expect(d.querySelector('.help-entry-body')).toBeNull();
+    // El foco entró al campo de buscar.
+    expect(document.activeElement).toBe(d.querySelector('input[type="search"]'));
     // "Primeros pasos": ver la recorrida y practicar, con sus botones.
+    act(() => d.querySelector<HTMLButtonElement>('[data-help-id="tour"] .help-entry-toggle')!.click());
+    act(() => d.querySelector<HTMLButtonElement>('[data-help-id="practice"] .help-entry-toggle')!.click());
     expect(d.querySelector('[data-help-id="tour"] .help-action')?.textContent).toBe('Take the tour');
     expect(d.querySelector('[data-help-id="practice"] .help-action')?.textContent).toBe('Practice');
+    expect(d.querySelector('[data-help-id="tour"] .help-entry-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    // *Shortcuts*: la tabla.
+    act(() => tab('keys').click());
     expect(d.querySelector('[data-shortcut="find"] kbd')?.textContent).toBe('Ctrl+F');
     // Colapsar para todos (Doc_Colapsar.md, entrega 2): en la tabla, con su atajo.
     expect(d.querySelector('[data-shortcut="collapseEveryone"] kbd')?.textContent).toBe('Ctrl+Alt+Shift+Enter');
-    expect(d.querySelector('[data-help-id="collapseEveryone"]')).not.toBeNull();
-    // El foco entró al campo de buscar.
-    expect(document.activeElement).toBe(d.querySelector('input[type="search"]'));
     press({ key: 'Escape' }, document.activeElement!);
     await until(() => !dialog(), 'que se cierre');
     expect(document.activeElement).toBe(button);
@@ -215,8 +234,11 @@ describe('el diálogo de la ayuda', () => {
     expect(item).toBeTruthy();
     act(() => item.click());
     await until(() => dialog(), 'el diálogo');
+    act(() => dialog()!.querySelector<HTMLButtonElement>('[data-help-tab="topics"]')!.click());
     const input = dialog()!.querySelector<HTMLInputElement>('input[type="search"]')!;
     type(input, 'ctrl f');
+    // Lo que encuentra la búsqueda va desplegado.
+    expect(dialog()!.querySelector('.help-results .help-entry .help-entry-body')).not.toBeNull();
     expect(dialog()!.querySelector('.help-results .help-entry')?.getAttribute('data-help-id')).toBe('findPage');
     type(input, 'zzzqqq');
     expect(dialog()!.textContent).toContain('No results. Try another word.');
@@ -237,8 +259,11 @@ describe('el diálogo de la ayuda', () => {
     const host = await shell();
     act(() => host.querySelector<HTMLButtonElement>('.help-button')!.click());
     await until(() => dialog(), 'el diálogo');
-    expect(dialog()!.querySelector('h2')!.textContent).toBe('Ayuda y atajos');
-    expect(dialog()!.textContent).toContain('Atajos de teclado');
+    expect(dialog()!.getAttribute('aria-label')).toBe('Ayuda y atajos');
+    expect(dialog()!.querySelector('.help-developed')?.textContent).toBe('Desarrollado por Lega Pugliese');
+    expect([...dialog()!.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Recorridos', 'Temas', 'Atajos']);
+    expect(dialog()!.textContent).toContain('Un proyecto desde cero');
+    act(() => dialog()!.querySelector<HTMLButtonElement>('[data-help-tab="keys"]')!.click());
     expect(dialog()!.textContent).toContain('Inicio / Fin');
   });
 });

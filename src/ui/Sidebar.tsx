@@ -21,7 +21,7 @@ import { LinkHeader } from './LinkHeader';
 import { MentionTreeDot } from './mentionDots';
 import { OverviewNav } from '../relations/OverviewNav';
 import { HoldsTag } from '../relations/HoldsTag';
-import { kindReader } from '../relations/kind';
+import { holdsOf, kindReader } from '../relations/kind';
 import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { LinkTreeIcon } from './LinkTreeIcon';
 import { useLinkMode } from '../linkMode';
@@ -526,8 +526,13 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
         if (isPlan) stages.set(page.id, 'plan');
         else if (k.kind === 'day') stages.set(page.id, 'report');
       }
-      // Solo donde conviven: una semana sin planes (o una carpeta de planes) se ve como siempre.
-      if (new Set(stages.values()).size < 2) stages.clear();
+      // Donde hay planes: en Rodaje (la carpeta de días o una semana adentro) cada fila dice si es plan o reporte, aunque
+      // el reporte de ese plan todavía no exista; una semana sin planes, o una carpeta de planes fuera de Rodaje, se ve
+      // como siempre.
+      const both = new Set(stages.values());
+      let inShoot = false;
+      for (let id: string | null = parentId; id && !inShoot; id = tree.get(id)?.parent_id ?? null) inShoot = holdsOf(tree, id) === 'day';
+      if (!both.has('plan') || (both.size < 2 && !inShoot)) stages.clear();
     }
     const split = splitOn ? splitSiblings(pages.filter((p) => !dated.has(p.id))) : null;
     // La columna de la jornada mide lo que la más larga de la lista (`D05`, `D100`), así la fecha queda alineada.
@@ -631,6 +636,13 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             >
               {open ? <CollapseIcon size={14} /> : <ExpandIcon size={14} />}
             </button>
+          ) : stage ? (
+            // PLN o REP en el lugar del triángulo: queda alineado con el nombre de la semana (D816).
+            <span className="toggle leaf stage-slot">
+              <span className="tree-stage" data-stage={stage}>
+                {tr(stage === 'plan' ? 'sidebar.stagePlan' : 'sidebar.stageReport')}
+              </span>
+            </span>
           ) : (
             <span className="toggle leaf" aria-hidden="true" />
           )}
@@ -648,8 +660,12 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             <span className="label dated">
               {/* La fecha y la jornada en el color de los días; el lugar en el azul de las locaciones solo si la app
                   lo reconoce (D774); la fila elegida no cambia esos colores (D789). */}
-              {/* Plan o reporte, primero y en su color: en la semana van uno arriba del otro con el mismo nombre (D815). */}
-              {stage && <span className="tree-stage" data-stage={stage}>{tr(stage === 'plan' ? 'sidebar.stagePlan' : 'sidebar.stageReport')}</span>}
+              {/* Plan o reporte con subpáginas: la etiqueta va después del triángulo. */}
+              {stage && children.length > 0 && (
+                <span className="tree-stage" data-stage={stage}>
+                  {tr(stage === 'plan' ? 'sidebar.stagePlan' : 'sidebar.stageReport')}
+                </span>
+              )}
               {jornadas && <span className="code jornada">{dated.jornada ?? ''}</span>}
               <span className="code date">{dated.date}</span>
               {stage === 'plan' && dated.planNote ? (

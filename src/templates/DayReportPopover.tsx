@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/templates';
 import { navigate, pagePath } from '../router';
-import { usePermissions, useServices, useTree } from '../services';
+import { usePermissions, useServices, useTree, type Services } from '../services';
+import { existingRelationsSession } from '../ui/relationsUi';
 import { useFloating } from '../ui/menus';
 import { notify } from '../ui/notice';
 import { builtinTexts } from './builtin';
@@ -47,8 +48,29 @@ interface Props {
   fromId?: string;
 }
 
+/** Las escenas que el desglose planea para esa fecha, para escribirlas en el plan nuevo (sin el índice armado, ninguna). */
+async function plannedScenes(services: Services, projectId: string, date: string): Promise<{ code: string; pageId: string | null; name: string }[]> {
+  const snap = existingRelationsSession(services)?.relations.snapshot(projectId);
+  if (!snap) return [];
+  const { plannedSceneLines } = await import('../relations/dayLive');
+  return plannedSceneLines({ snap, title: (id) => services.tree.get(id)?.title }, date);
+}
+
+/**
+ * La locación que el desglose dice para esa fecha, si es una sola (`plannedPlace`, D709, como *Plan tomorrow*): la que
+ * propone el plan nuevo. Sin el índice armado, o con dudas, ninguna (D814: nada de lugares adivinados en el título).
+ */
+async function plannedPlaceOn(services: Services, projectId: string, date: string): Promise<string> {
+  const snap = existingRelationsSession(services)?.relations.snapshot(projectId);
+  // Con el índice a medio leer, un lugar que parece uno solo podría ser dos: mejor ninguno (D814).
+  if (!snap?.complete) return '';
+  const { plannedPlace } = await import('../relations/tomorrowNew');
+  return plannedPlace({ snap, title: (id) => services.tree.get(id)?.title, content: () => undefined }, date) ?? '';
+}
+
 export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'report', fromId }: Props) {
-  const { docs, engine } = useServices();
+  const services = useServices();
+  const { docs, engine } = services;
   const tree = useTree();
   const perms = usePermissions();
   const tr = useT();
@@ -118,6 +140,16 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
     // La locación: la del plan del que se abre o la del plan de esa fecha; si no hay, la de ayer.
     const planned = as === 'report' ? (fromPlan && chosen === fromPlan.date && fromPlan.location ? fromPlan.location : plannedLocation(next, chosen)) : '';
     if (!t.location) setLocation(as === 'plan' ? '' : planned || next.suggestion.location);
+    // El plan: la locación del desglose para esa fecha (D820), si llega antes de que la persona la toque.
+    if (as === 'plan' && !t.location) proposePlanPlace(next.projectId, chosen);
+  }
+
+  const planPlaceAsk = useRef(0);
+  function proposePlanPlace(projectId: string, on: string) {
+    const ask = ++planPlaceAsk.current;
+    void plannedPlaceOn(services, projectId, on).then((place) => {
+      if (ask === planPlaceAsk.current && kindNow.current === 'plan' && !touched.current.location && dateNow.current === on) setLocation(place);
+    });
   }
 
   const switchKind = (next: DayPageKind) => {
@@ -140,6 +172,7 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
       try {
         const id = await createDayPlan({ tree, docs, engine }, plan, { date, day: dayNumber, location: location.replace(/\s+/g, ' ').trim() }, tr.lang, {
           reuse: failedPlan.current,
+          scenes: await plannedScenes(services, plan.projectId, date),
         });
         onClose();
         navigate(pagePath(id));
@@ -251,6 +284,7 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
     <form
       ref={ref}
       className="day-report-popover"
+      data-tour="day-popover"
       role="dialog"
       aria-label={heading}
       // Los campos se validan acá (la fecha y el día): mientras se lee la carpeta el día está vacío y Enter se recuerda.
@@ -305,6 +339,10 @@ export function DayReportPopover({ folderId, anchor, onClose, initialKind = 'rep
               // propuesta de otra fecha quedaba y llegaba al título sin que nadie la escribiera (verificación de v0.306).
               if (plan && kind === 'report' && !touched.current.location && isValidDate(e.target.value))
                 setLocation(plannedLocation(plan, e.target.value) || plan.suggestion.location);
+              if (plan && kind === 'plan' && !touched.current.location && isValidDate(e.target.value)) {
+                setLocation('');
+                proposePlanPlace(plan.projectId, e.target.value);
+              }
             }}
           />
         </label>

@@ -7,6 +7,7 @@ import { usePermissions, useServices, useTree } from '../services';
 import { copyText } from '../ui/commentsUi';
 import { notify } from '../ui/notice';
 import { setDocumentTitle } from '../ui/titleBadge';
+import { useColumnWidths, type ColumnSpec } from '../ui/columnWidths';
 import { openExportPages } from '../ui/ExportHost';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession, useIndexProgress } from '../ui/relationsUi';
@@ -213,9 +214,9 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
     return list.length ? new Set(list.map((s) => s.code)) : null;
   }, [snap, filter, tree]);
   const tabs: { id: MapTab; icon: keyof typeof ICONS; label: string; n: number }[] = [
+    { id: 'scenes', icon: 'scene', label: tr('map.tabScenes'), n: counts.scenes },
     { id: 'locations', icon: 'loc', label: tr('map.tabLocations'), n: counts.locations },
     { id: 'sets', icon: 'set', label: tr('map.tabSets'), n: sets.length },
-    { id: 'scenes', icon: 'scene', label: tr('map.tabScenes'), n: counts.scenes },
     { id: 'scouting', icon: 'scout', label: tr('map.tabScouting'), n: counts.scoutings },
     { id: 'days', icon: 'day', label: tr('map.tabDays'), n: counts.days },
     // La tabla de planos (D813): reemplaza a la tabla `BD Main` que se mantenía a mano.
@@ -225,7 +226,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   const empty = !!data && complete && counts.scenes === 0 && counts.locations === 0 && counts.days === 0 && sets.length === 0;
 
   return (
-    <div className="mp">
+    <div className="mp" data-tour="map-view">
       <h1 className="mp-title">{tr('map.title')}</h1>
       <p className="mp-lede">
         {tr(partial ? 'map.ledePartial' : 'map.lede')}
@@ -318,8 +319,51 @@ function locFilter(l: MapLocation, days: Map<string, MapDay>): string {
   return fold(`${l.name} ${l.aliases.join(' ')} ${l.days.map((id) => `${days.get(id)?.date ?? ''} ${days.get(id)?.label ?? ''}`).join(' ')}`);
 }
 
+// Las columnas de cada vista se agrandan desde el borde de su encabezado, en porcentaje (D821). Los anchos de fábrica son
+// los de antes, pasados a porcentaje de una vista de unos 760 px.
+const LOC_COLS: readonly ColumnSpec[] = [
+  { id: 'location', width: 30 },
+  { id: 'count', width: 19 },
+  { id: 'timeline', width: 51 },
+];
+const SCENE_COLS: readonly ColumnSpec[] = [
+  { id: 'scene', width: 11 },
+  { id: 'title', width: 30 },
+  { id: 'where', width: 28 },
+  { id: 'days', width: 18 },
+  { id: 'pages', width: 13 },
+];
+const DAY_COLS: readonly ColumnSpec[] = [
+  { id: 'date', width: 13 },
+  { id: 'day', width: 29 },
+  { id: 'location', width: 29 },
+  { id: 'scenes', width: 29 },
+];
+const SCOUT_COLS: readonly ColumnSpec[] = [
+  { id: 'date', width: 13 },
+  { id: 'report', width: 47 },
+  { id: 'location', width: 32 },
+  { id: 'test', width: 8 },
+];
+const SET_COLS: readonly ColumnSpec[] = [
+  { id: 'set', width: 40 },
+  { id: 'scenes', width: 35 },
+  { id: 'shotAt', width: 25 },
+];
+
+/** Una vista en grilla con las columnas que se agrandan: la grilla toma `ref` y `style`; cada encabezado, su `handle`. */
+function useGridCols(key: string, specs: readonly ColumnSpec[]) {
+  const tr = useT();
+  const ref = useRef<HTMLDivElement>(null);
+  const cols = useColumnWidths(key, specs, ref);
+  const style = { '--cols': cols.template } as CSSProperties;
+  const handle = (i: number, column: string) => cols.handle(i, tr('folder.resize', { column }));
+  return { ref, style, handle };
+}
+
 function Locations({ data, fq, complete }: { data: ProjectMapData; fq: string; complete: boolean }) {
   const tr = useT();
+  const grid = useGridCols('map.locations', LOC_COLS);
   // El ancho de la línea de tiempo (la de la primera fila; todas miden lo mismo), para juntar los días que se tocarían.
   const [width, setWidth] = useState(0);
   const observer = useRef<ResizeObserver | null>(null);
@@ -375,11 +419,15 @@ function Locations({ data, fq, complete }: { data: ProjectMapData; fq: string; c
         </span>
       </div>
       {withDays.length > 0 && (
-        <div className="mp-grid mp-locs" role="table">
+        <div ref={grid.ref} className="mp-grid mp-locs cols" style={grid.style} role="table">
           <div className="mp-lrow head" role="row">
-            <span role="columnheader">{tr('map.colLocation')}</span>
+            <span role="columnheader">
+              {tr('map.colLocation')}
+              {grid.handle(0, tr('map.colLocation'))}
+            </span>
             <span role="columnheader" data-tip={tr('map.colFromPagesTip')}>
               {tr('map.colFromPages')}
+              {grid.handle(1, tr('map.colFromPages'))}
             </span>
             <span className="mp-months" role="columnheader">
               {months.map((mo) => (
@@ -485,6 +533,7 @@ function Scenes({
   links: SceneLinks | null;
 }) {
   const tr = useT();
+  const grid = useGridCols('map.scenes', SCENE_COLS);
   // Las escenas con «N pages» desplegado (la lista se arma recién al desplegar: lee los extractos).
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const toggle = (code: string) =>
@@ -498,14 +547,24 @@ function Scenes({
   for (const s of rows) groups.set(s.episode ?? '', [...(groups.get(s.episode ?? '') ?? []), s]);
   if (!rows.length) return <p className="mp-empty">{fq ? tr('map.noMatch') : complete ? tr('map.noReportSection') : tr('live.reading')}</p>;
   return (
-    <div className="mp-grid mp-scenes" role="table">
+    <div ref={grid.ref} className="mp-grid mp-scenes cols" style={grid.style} role="table">
       <div className="mp-srow head" role="row">
-        <span role="columnheader">{tr('map.colScene')}</span>
-        <span role="columnheader">{tr('map.colTitle')}</span>
+        <span role="columnheader">
+          {tr('map.colScene')}
+          {grid.handle(0, tr('map.colScene'))}
+        </span>
+        <span role="columnheader">
+          {tr('map.colTitle')}
+          {grid.handle(1, tr('map.colTitle'))}
+        </span>
         <span role="columnheader" data-tip={tr('map.colWhereTip')}>
           {tr('map.colWhere')}
+          {grid.handle(2, tr('map.colWhere'))}
         </span>
-        <span role="columnheader">{tr('map.colDays')}</span>
+        <span role="columnheader">
+          {tr('map.colDays')}
+          {grid.handle(3, tr('map.colDays'))}
+        </span>
         <span role="columnheader" data-tip={tr('map.colPagesTip')}>
           {tr('map.colPages')}
         </span>
@@ -800,6 +859,7 @@ function PageLinkTo({ href, children }: { href: string; children: ReactNode }) {
 
 function Days({ data, fq, codes, registry }: { data: ProjectMapData; fq: string; codes: Set<string> | null; registry: Registry | null }) {
   const tr = useT();
+  const grid = useGridCols('map.days', DAY_COLS);
   const rows = data.days.filter(
     (d) => !fq || (codes ? [...d.scenes, ...d.planned].some((c) => codes.has(c)) : fold(`${d.date ?? ''} ${d.title} ${d.locs.join(' ')} ${d.scenes.join(' ')}`).includes(fq)),
   );
@@ -813,11 +873,20 @@ function Days({ data, fq, codes, registry }: { data: ProjectMapData; fq: string;
     return x < y ? -1 : x > y ? 1 : a.kind === b.kind ? 0 : a.kind === 'day' ? -1 : 1;
   });
   return (
-    <div className="mp-grid mp-days" role="table">
+    <div ref={grid.ref} className="mp-grid mp-days cols" style={grid.style} role="table">
       <div className="mp-drow head" role="row">
-        <span role="columnheader">{tr('map.colDate')}</span>
-        <span role="columnheader">{tr('map.colDay')}</span>
-        <span role="columnheader">{tr('map.colLocation')}</span>
+        <span role="columnheader">
+          {tr('map.colDate')}
+          {grid.handle(0, tr('map.colDate'))}
+        </span>
+        <span role="columnheader">
+          {tr('map.colDay')}
+          {grid.handle(1, tr('map.colDay'))}
+        </span>
+        <span role="columnheader">
+          {tr('map.colLocation')}
+          {grid.handle(2, tr('map.colLocation'))}
+        </span>
         <span role="columnheader">{tr('map.colScenes')}</span>
       </div>
       {all.map((row) => {
@@ -893,15 +962,25 @@ function Days({ data, fq, codes, registry }: { data: ProjectMapData; fq: string;
 
 function Scoutings({ data, fq }: { data: ProjectMapData; fq: string }) {
   const tr = useT();
+  const grid = useGridCols('map.scouting', SCOUT_COLS);
   if (!data.scoutings.length) return <p className="mp-empty">{tr('map.noScoutings')}</p>;
   const rows = data.scoutings.filter((s) => !fq || fold(`${s.date ?? ''} ${s.title} ${s.locs.join(' ')}`).includes(fq));
   if (!rows.length) return <p className="mp-empty">{tr('map.noMatch')}</p>;
   return (
-    <div className="mp-grid mp-days mp-scouts" role="table">
+    <div ref={grid.ref} className="mp-grid mp-days mp-scouts cols" style={grid.style} role="table">
       <div className="mp-drow head" role="row">
-        <span role="columnheader">{tr('map.colDate')}</span>
-        <span role="columnheader">{tr('map.colReport')}</span>
-        <span role="columnheader">{tr('map.colLocation')}</span>
+        <span role="columnheader">
+          {tr('map.colDate')}
+          {grid.handle(0, tr('map.colDate'))}
+        </span>
+        <span role="columnheader">
+          {tr('map.colReport')}
+          {grid.handle(1, tr('map.colReport'))}
+        </span>
+        <span role="columnheader">
+          {tr('map.colLocation')}
+          {grid.handle(2, tr('map.colLocation'))}
+        </span>
         <span role="columnheader" />
       </div>
       {rows.map((s) => (
@@ -932,14 +1011,21 @@ function Scoutings({ data, fq }: { data: ProjectMapData; fq: string }) {
 function Sets({ rows, data, fq, complete }: { rows: SetRow[]; data: ProjectMapData; fq: string; complete: boolean }) {
   const tr = useT();
   const scenePage = useMemo(() => new Map(data.scenes.map((s) => [s.code, s.pageId])), [data]);
+  const grid = useGridCols('map.sets', SET_COLS);
   if (!rows.length) return <p className="mp-empty">{complete ? tr('map.noSets') : tr('live.reading')}</p>;
   const shown = rows.filter((s) => !fq || fold(`${s.name} ${s.aliases.join(' ')} ${s.scenes.join(' ')} ${s.locs.map((l) => l.name).join(' ')}`).includes(fq));
   if (!shown.length) return <p className="mp-empty">{tr('map.noMatch')}</p>;
   return (
-    <div className="mp-grid mp-sets" role="table">
+    <div ref={grid.ref} className="mp-grid mp-sets cols" style={grid.style} role="table">
       <div className="mp-drow head" role="row">
-        <span role="columnheader">{tr('map.colSet')}</span>
-        <span role="columnheader">{tr('map.colScenes')}</span>
+        <span role="columnheader">
+          {tr('map.colSet')}
+          {grid.handle(0, tr('map.colSet'))}
+        </span>
+        <span role="columnheader">
+          {tr('map.colScenes')}
+          {grid.handle(1, tr('map.colScenes'))}
+        </span>
         <span role="columnheader">{tr('map.colShotAt')}</span>
       </div>
       {shown.map((s) => (

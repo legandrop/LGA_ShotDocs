@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { language, useT, type Translate } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
+import { LEVEL_EDIT_PAGES, LEVEL_VIEW } from '../sync/access';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
@@ -18,6 +19,7 @@ import { sceneStageRows, type StageOptions } from './sceneStageRows';
 import { SceneStages } from './SceneStages';
 import { FoldShotsLine } from './FoldShots';
 import { dayTwins } from './projectMap';
+import { createEnv, runCreate } from './EntityActions';
 import './liveHeader.css';
 
 // La cabecera viva de una escena, una locación o un día de rodaje (Docs/Doc_Relaciones.md, secciones 10 y 11; diseño S4
@@ -93,15 +95,21 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   // see» (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
   if (view.kind === 'set') return <SetHeader v={view.data} pages={snap.pages.size} partial={partial} />;
+  // *New set* crea el decorado adentro de esta locación (D818): quien ve el proyecto entero (G1 de `createGuard`) y puede
+  // crear acá.
+  const newSetIn = view.kind === 'location' && perms.known && perms.projectLevel(projectId) >= LEVEL_VIEW && perms.canCreateIn(pageId, projectId) ? pageId : null;
   const photos = { gallery: view.gallery, unread: snap.unread, here: pageId };
-  const stageOpts = { title: (id: string) => tree.get(id)?.title ?? '', locPage: (name: string) => snap.registry.locations.get(name)?.pageId ?? null };
+  // *Create page* al lado de una locación o un decorado que la escena nombra y no existe: quien puede crear páginas en el
+  // proyecto (quien no, no ve el botón).
+  const canCreate = perms.known && perms.projectLevel(projectId) >= LEVEL_EDIT_PAGES;
+  const stageOpts = { title: (id: string) => tree.get(id)?.title ?? '', locPage: (name: string) => snap.registry.locations.get(name)?.pageId ?? null, canCreate };
   const header =
     view.kind === 'day' ? (
       <DayHeader v={view.data} src={view.src} pages={snap.pages.size} partial={partial} photos={photos} />
     ) : view.kind === 'scene' ? (
       <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} opts={stageOpts} />
     ) : (
-      <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} />
+      <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} newSetIn={newSetIn} />
     );
   if (!twin) return header;
   return (
@@ -370,7 +378,7 @@ export function Badge({ kind }: { kind: FoldKind }) {
 export function Line({ kind, children, onOpen, complete, lineRef }: { kind: FoldKind; children: ReactNode; onOpen: () => void; complete: boolean; lineRef: RefObject<HTMLButtonElement | null> }) {
   const tr = useT();
   return (
-    <section className="lh closed" aria-label={tr('live.aria')}>
+    <section className="lh closed" data-tour="live-header" aria-label={tr('live.aria')}>
       <button ref={lineRef} className="lh-line" onClick={onOpen} aria-expanded={false}>
         <Badge kind={kind} />
         <span className="lh-ll">{children}</span>
@@ -494,7 +502,7 @@ function AlsoRow({ also, index, tr }: { also: PageChip[]; index: PageChip[]; tr:
 
 // --- Escena -----------------------------------------------------------------------------------------------------
 
-function SceneHeader({ v, pages, partial, photos, opts }: { v: SceneLive; pages: number; partial: boolean; photos: HeaderPhotos; opts: Pick<StageOptions, 'title' | 'locPage'> }) {
+function SceneHeader({ v, pages, partial, photos, opts }: { v: SceneLive; pages: number; partial: boolean; photos: HeaderPhotos; opts: Pick<StageOptions, 'title' | 'locPage' | 'canCreate'> }) {
   const tr = useT();
   const [open, setOpenRaw] = useLiveOpen('scene');
   const focus = useFoldFocus(open);
@@ -506,7 +514,7 @@ function SceneHeader({ v, pages, partial, photos, opts }: { v: SceneLive; pages:
   const shotDays = v.days.filter((d) => d.sections.length);
   const shotLocs = [...new Set(shotDays.flatMap((d) => d.day.locs))];
   // Los renglones «Etapa | Tipo: links» (D784): los mismos de la vista de la escena en el Overview, sin *Desglose* (es esta página).
-  const rows = useMemo(() => sceneStageRows(v, { self: true, title: opts.title, locPage: opts.locPage, others: v.also, index: v.indexPages }), [v, opts]);
+  const rows = useMemo(() => sceneStageRows(v, { self: true, canCreate: opts.canCreate, title: opts.title, locPage: opts.locPage, others: v.also, index: v.indexPages }), [v, opts]);
 
   const noReportText = partial ? tr('live.noReportSeen') : tr('live.noReport');
   if (!open) {
@@ -531,7 +539,7 @@ function SceneHeader({ v, pages, partial, photos, opts }: { v: SceneLive; pages:
   }
 
   return (
-    <section className="lh" aria-label={tr('live.aria')}>
+    <section className="lh" data-tour="live-header" aria-label={tr('live.aria')}>
       <div className="lh-id">
         <Badge kind="scene" />
         <span className="lh-meta">
@@ -577,7 +585,55 @@ function SceneHeader({ v, pages, partial, photos, opts }: { v: SceneLive; pages:
 
 // --- Locación ---------------------------------------------------------------------------------------------------
 
-function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages: number; partial: boolean; photos: HeaderPhotos }) {
+/**
+ * *New set* (D818): pide el nombre y crea la página del decorado adentro de la locación `into`, marcada como decorado, con
+ * las guardas de `createEntity` (no repite un decorado que existe, ni con la red caída). Avisa con *Open* y *Undo*.
+ */
+function NewSetButton({ into, reading }: { into: string; reading: boolean }) {
+  const tr = useT();
+  const services = useServices();
+  const projectId = useCurrentProject();
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const close = () => {
+    setNaming(false);
+    setName('');
+  };
+  if (!naming) {
+    return (
+      <button className="lh-tbtn add" data-tour="location-new-set" data-tip={tr('live.newSetTip')} disabled={reading} onClick={() => setNaming(true)}>
+        <Ic name="plus" small />
+        {tr('live.newSet')}
+      </button>
+    );
+  }
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    const res = await runCreate(services, createEnv(services, projectId, tr.lang), { kind: 'set', name: name.trim(), in: into }, { tr });
+    setBusy(false);
+    if (res.ok) close();
+  };
+  return (
+    <form className="lh-newset" data-tour="location-new-set" onSubmit={(e) => void submit(e)}>
+      <input
+        autoFocus
+        value={name}
+        placeholder={tr('live.setName')}
+        aria-label={tr('live.setName')}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), close())}
+      />
+      <button className="lh-tbtn add" type="submit" disabled={busy || !name.trim()}>
+        {tr('common.create')}
+      </button>
+    </form>
+  );
+}
+
+function LocationHeader({ v, pages, partial, photos, newSetIn }: { v: LocationLive; pages: number; partial: boolean; photos: HeaderPhotos; newSetIn: string | null }) {
   const tr = useT();
   const go = useGo();
   const [openPref, setOpenRaw] = useLiveOpen('location');
@@ -616,7 +672,7 @@ function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages:
 
   const defs = [
     { key: 'breakdown' as const, name: tr('live.breakdown'), has: v.planned.length > 0, sum: v.planned.length ? tr('live.scenesPlanned', { count: v.planned.length }) : absent(tr('live.none')) },
-    { key: 'scouting' as const, name: tr('live.scouting'), has: v.scouts.length > 0, sum: v.scouts.length ? v.scouts.map((s) => s.title).join(' · ') : absent(tr('live.none')) },
+    { key: 'scouting' as const, name: tr('live.scouting'), has: v.scouts.length > 0, sum: v.scouts.length ? v.scouts.map((s) => s.title.trim() || tr('common.untitled')).join(' · ') : absent(tr('live.none')) },
     { key: 'shoot' as const, name: tr('live.shoot'), has: v.days.length > 0, sum: v.days.length ? `${tr('live.days', { count: v.days.length })} · ${tr('live.scenes', { count: shotScenes.size })}` : absent(tr('live.none')) },
   ];
 
@@ -658,7 +714,7 @@ function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages:
   }
 
   return (
-    <section className="lh" aria-label={tr('live.aria')}>
+    <section className="lh" data-tour="live-header" aria-label={tr('live.aria')}>
       <div className="lh-id">
         <Badge kind="location" />
         <span className="lh-meta">
@@ -687,13 +743,14 @@ function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages:
               )}
             </div>
           </div>
-          {v.sets.length > 0 && (
+          {(v.sets.length > 0 || newSetIn) && (
             <div className="lh-kv">
               <span>{tr('live.sets')}</span>
               <div>
                 {v.sets.map((s) => (
                   <SetChip key={s.pageId ?? s.title} set={s} />
                 ))}
+                {newSetIn && <NewSetButton key={newSetIn} into={newSetIn} reading={reading} />}
               </div>
             </div>
           )}
@@ -703,7 +760,7 @@ function LocationHeader({ v, pages, partial, photos }: { v: LocationLive; pages:
               {v.scouts.length ? (
                 v.scouts.map((s) => (
                   <Chip key={s.pageId} kind="scout" onClick={() => navigate(pagePath(s.pageId))}>
-                    {s.title} <span className="n">· {tr('live.photoCount', { count: s.photos })}</span>
+                    {s.title.trim() || tr('common.untitled')} <span className="n">· {tr('live.photoCount', { count: s.photos })}</span>
                   </Chip>
                 ))
               ) : (
@@ -812,7 +869,7 @@ function SetHeader({ v, pages, partial }: { v: SetLive; pages: number; partial: 
   }
 
   return (
-    <section className="lh" aria-label={tr('live.aria')}>
+    <section className="lh" data-tour="live-header" aria-label={tr('live.aria')}>
       <div className="lh-id">
         <Badge kind="set" />
         <span className="lh-meta">

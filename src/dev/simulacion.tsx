@@ -91,6 +91,6 @@ async function main() {
       <TooltipLayer />
     </>,
   );
-  (window as unknown as { __sim: unknown }).__sim = { listo: true, projectId, foto, tree: A.tree };
+  (window as unknown as { __sim: unknown }).__sim = { listo: true, projectId, foto, tree: A.tree, docs: A.docs, media: A.media };
 }
 void main();

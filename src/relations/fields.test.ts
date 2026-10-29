@@ -259,7 +259,8 @@ describe('los rótulos de la plantilla Scene (simulación de D813)', () => {
     const { builtinEs } = await import('../templates/builtin.es');
     for (const texts of [builtinEn, builtinEs]) {
       const labels = texts.scene.facts.map((row) => row[0]);
-      expect(labels.map(fieldName)).toEqual([null, 'set', 'location', 'intExt', 'shootDate', null]);
+      // La locación antes que el decorado: un decorado está en su locación (D818).
+      expect(labels.map(fieldName)).toEqual([null, 'location', 'set', 'intExt', 'shootDate', null]);
     }
   });
 });

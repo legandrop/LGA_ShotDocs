@@ -28,7 +28,9 @@
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12.5px;
-  min-width: 100%;
+  width: 100%;
+  /* Los anchos en porcentaje de cada columna (columnWidths.tsx, D821). */
+  table-layout: fixed;
 }
 
 .mp-shots th,
@@ -37,7 +39,6 @@
   border-bottom: 1px solid var(--border-soft);
   text-align: left;
   vertical-align: top;
-  max-width: 320px;
   overflow-wrap: anywhere;
 }
 
@@ -70,21 +71,20 @@
   position: sticky;
   background: var(--surface);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mp-shots th:nth-child(1),
 .mp-shots td:nth-child(1) {
   left: 0;
   z-index: 1;
-  box-sizing: border-box;
-  width: 88px;
-  min-width: 88px;
-  max-width: 88px;
 }
 
+/* Corrida lo que mide la columna de la escena, que se puede agrandar (ShotsView.tsx la mide: `--scene-w`). */
 .mp-shots th:nth-child(2),
 .mp-shots td:nth-child(2) {
-  left: 88px;
+  left: var(--scene-w, 88px);
   z-index: 1;
   box-shadow: inset -1px 0 0 var(--border-soft);
 }
@@ -105,18 +105,18 @@
   border-bottom: 0;
 }
 
-/* Las columnas de datos no se aprietan hasta una palabra por renglón: con muchas, la tabla se desplaza de costado. */
-.mp-shots th:nth-child(n + 3),
-.mp-shots td:nth-child(n + 3) {
-  min-width: 150px;
-}
 
 /* En una pantalla angosta, solo la escena queda fija: con el plano también, no quedaría lugar para lo demás. */
 @media (max-width: 640px) {
+  /* En el teléfono el plano no queda fijo a la izquierda (taparía la mitad de la tabla), pero su encabezado sigue pegado
+     arriba (y su borde para agrandar, adentro de la celda). */
   .mp-shots th:nth-child(2),
   .mp-shots td:nth-child(2) {
-    position: static;
+    left: auto;
     white-space: normal;
     min-width: 140px;
+  }
+  .mp-shots td:nth-child(2) {
+    position: static;
   }
 }

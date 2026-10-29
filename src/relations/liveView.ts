@@ -3,7 +3,7 @@ import type { IndexedContent } from '../search/projectIndex';
 import { dateAtStart, dayInTitle } from '../templates/dayReport';
 import { coordsIn, emptyValue, fieldValues, normLabel, openQuestionText, type FieldValue, type PageFields } from './fields';
 import { blocksOf, INDEX_PAGE_MIN, type Mention, type PageRelations, type Section } from './pageRelations';
-import { fold, scan, type Registry } from './reader';
+import { fold, scan, sceneCode as canonicalCode, type Registry } from './reader';
 import { entityRelations, type EntityPage, type RelationSnapshot } from './relationIndex';
 import { planDayOf } from './planDay';
 
@@ -130,7 +130,7 @@ export interface SceneLive {
   plans: { day: DayRef; items: Excerpt[] }[];
   /** Los documentos de prueba que la nombran (D778); `scoutPages` no los tiene. */
   testPages: PageChip[];
-  /** Locaciones que nombra su desglose (la escena y sus fichas). */
+  /** Locaciones que nombra su desglose (la escena y sus fichas) o que la nombran en el campo *Escenas* de su página (D818). */
   plannedAt: PageChip[];
   /** Páginas de scouting que la nombran. */
   scoutPages: PageChip[];
@@ -183,7 +183,10 @@ export interface LocationLive {
    * son el nombre de otra (`name`). Con las otras locaciones, para ir ahí.
    */
   aliasNotes: { alias: string; kind: 'shared' | 'name'; others: { name: string; pageId: string | null }[] }[];
-  /** Escenas cuyo desglose nombra esta locación, con los días en que tienen sección. */
+  /**
+   * Escenas cuyo desglose nombra esta locación, o que nombra el campo *Escenas* de su página (D818), con los días en que
+   * tienen sección.
+   */
   planned: { code: string; pageId: string | null; title: string; days: DayRef[] }[];
   /** Las páginas de adentro (scoutings), con su cantidad de fotos. */
   scouts: (PageChip & { photos: number })[];
@@ -191,7 +194,10 @@ export interface LocationLive {
   days: LocationDay[];
   /** Escenas planeadas acá sin sección en ningún reporte. */
   noReport: string[];
-  /** Sus decorados: el campo *Sets* de la locación y las páginas sueltas cuyo campo *Locacion Real* la nombra. */
+  /**
+   * Sus decorados: el campo *Sets* de la locación, las páginas sueltas cuyo campo *Locacion Real* la nombra y los
+   * decorados de adentro de su página (D818).
+   */
   sets: SetRef[];
   /** Dónde queda: las primeras coordenadas de la locación o de sus scoutings. */
   where: { text: string; place: Place; pageTitle: string } | null;
@@ -425,6 +431,76 @@ function setsOf(src: LiveSource, list: FieldValue[], into: SetRef[]): void {
   }
 }
 
+/**
+ * La locación escrita en el campo *Location* de una escena que todavía no es una locación del proyecto (ni su nombre ni
+ * otro de sus nombres, y sin página): va a `planned` sin página, como texto, para que la cabecera de la escena ofrezca
+ * crearla (D818). Se lee como el resto de la app lee el campo (`placesIn`): un valor que es o contiene una locación ya
+ * reconocida («Estación Vieja, andén 2», «Estudio | Autos» de «Estudio Autos») no se repite, un link lleva a su página y
+ * «N/A» o «—» no son un lugar. Solo el campo de la escena misma: el de sus fichas (planos importados de Coda) dice dónde
+ * se filmó cada plano, no una locación para crear.
+ */
+function unknownLocations(registry: Registry, fields: FieldValue[], planned: Map<string, PageChip>): void {
+  const seen = () => [...planned.values()].map((p) => fold(p.title).trim()).filter(Boolean);
+  for (const f of fields) {
+    for (const place of placesIn(registry, f, new Map())) {
+      if (place.known) continue;
+      const piece = place.name.trim();
+      const fp = fold(piece).trim();
+      if (!fp || planned.has(piece) || seen().some((k) => fp === k || fp.includes(k))) continue;
+      planned.set(piece, { pageId: '', title: piece, blockId: f.blockId });
+    }
+  }
+}
+
+/** Un pedazo del campo *Escenas* que empieza con un número: `027`, `27b`, `105_027`, `105-27`, `Escena 27 | El vuelco`. */
+const SCENE_PIECE = /^(?:(?:escenas?|esc|scenes?|sc)\.?\s*)?(\d{3}\s?[-_]\s?\d{1,3}[A-Za-z]?|\d{1,3}[A-Za-z]?)(?![\p{L}\p{N}])/iu;
+
+/**
+ * Las escenas que nombra el campo *Escenas* de una página (la de una locación, D818), con el bloque del campo: sus links a
+ * una escena y cada número que existe, también sin «Escena» delante («027, 031» en un largo). Uno con letra que no
+ * existe cuenta como su base. El texto suelto de la página no cuenta.
+ */
+function fieldScenes(src: LiveSource, pageId: string | null): Map<string, string> {
+  const R = src.snap.registry;
+  const roles = src.snap.registration.roles;
+  const out = new Map<string, string>();
+  for (const f of valued(fieldValues(fieldsOf(src, pageId), 'scenes'))) {
+    const add = (code: string | null) => {
+      const known = code && (R.scenes.has(code) ? code : R.scenes.has(code.replace(/[A-Z]+$/, '')) ? code.replace(/[A-Z]+$/, '') : null);
+      if (known && !out.has(known)) out.set(known, f.blockId);
+    };
+    for (const l of f.links) {
+      const e = roles.get(l.pageId)?.entity;
+      add(e?.kind === 'scene' ? e.ref : null);
+    }
+    // shortcut: un rango («027-029») no se abre en sus escenas; si hiciera falta, con `scan` y su contexto.
+    for (const piece of f.text.split(/\n|[,;·]|\s+(?:y|and|&)\s+/)) {
+      const m = SCENE_PIECE.exec(piece.trim());
+      add(m ? canonicalCode(m[1]) : null);
+    }
+  }
+  return out;
+}
+
+/** Lo de `scenesByLocation`, una vez por foto. */
+const fieldScenesMemo = new WeakMap<RelationSnapshot, Map<string, { name: string; pageId: string; blockId: string }[]>>();
+
+/** Por escena, las locaciones cuya página la nombra en su campo *Escenas* (D818). */
+function scenesByLocation(src: LiveSource): Map<string, { name: string; pageId: string; blockId: string }[]> {
+  let memo = fieldScenesMemo.get(src.snap);
+  if (memo) return memo;
+  fieldScenesMemo.set(src.snap, (memo = new Map()));
+  for (const l of src.snap.registry.locations.values()) {
+    if (!l.pageId || src.title(l.pageId) === undefined) continue;
+    for (const [code, blockId] of fieldScenes(src, l.pageId)) {
+      const list = memo.get(code) ?? [];
+      list.push({ name: l.name, pageId: l.pageId, blockId });
+      memo.set(code, list);
+    }
+  }
+  return memo;
+}
+
 /** Los nombres de las locaciones por `normLabel`, una vez por registro (`locationOf` se llama por cada título de sección). */
 const labelMemo = new WeakMap<Registry, Map<string, string>>();
 
@@ -562,8 +638,10 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
   const scenePb = rel.pageId ? pageBlocks(src.content(rel.pageId)) : null;
   const inPage = shotSections(scenePb);
 
-  // Locaciones que nombra su desglose; y si dice «No VFX» (la escena, o cada ficha con texto).
+  // Locaciones que nombra su desglose, y las que la nombran en el campo *Escenas* de su página (D818); y si dice «No VFX»
+  // (la escena, o cada ficha con texto).
   const planned = new Map<string, PageChip>();
+  const byField = scenesByLocation(src).get(code) ?? [];
   let sceneNoVfx = false;
   const noVfxCards = { no: 0, of: 0 };
   for (const id of ownIds) {
@@ -598,6 +676,7 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
       if (says) noVfxCards.no++;
     }
   }
+  for (const l of byField) if (!planned.has(l.name)) planned.set(l.name, { pageId: l.pageId, title: l.name, blockId: l.blockId });
   const noVfx = sceneNoVfx || (noVfxCards.of > 0 && noVfxCards.no === noVfxCards.of);
 
   const breakdown: Excerpt[] = [];
@@ -642,6 +721,7 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
       const v = firstLine(f.text).trim();
       if (v && !intExt.some((x) => normLabel(x) === normLabel(v))) intExt.push(v);
     }
+    if (!o.card) unknownLocations(snap.registry, valued(fieldValues(pf, 'location')), planned);
   }
   // Los decorados cuya página nombra la escena (o que la nombran desde otra ficha): también en su renglón (D804).
   for (const id of setIndex(src).ofScene.get(code) ?? []) if (!sets.some((s) => s.pageId === id)) sets.push({ title: title(id), pageId: id });
@@ -737,6 +817,8 @@ export function sceneLive(src: LiveSource, code: string): SceneLive {
     } else if (p.stage === 'breakdown') {
       for (const s of p.sections) breakdown.push(sectionEx(s, null, BREAKDOWN));
       for (const m of looseMentions(p)) breakdown.push(mentionEx(m, null));
+    } else if (byField.some((l) => l.pageId === p.pageId)) {
+      // La locación que la nombra en su campo *Escenas* ya está en su renglón *Location* (D818).
     } else if (!sets.some((s) => s.pageId === p.pageId || (roles.get(p.pageId)?.partOf?.kind === 'set' && roles.get(p.pageId)?.partOf?.pageId === s.pageId))) {
       // Un decorado que la nombra (o una página suya) ya está en su renglón *Set* (D804).
       const first = p.sections[0]?.blockId ?? p.mentions.find((m) => !m.hidden)?.blockId ?? p.mentions[0]?.blockId;
@@ -858,8 +940,9 @@ export function locationLive(src: LiveSource, name: string): LocationLive {
     if (row.locs.some((l) => l.name === name) && !sets.some((x) => x.pageId === row.pageId)) sets.push({ title: title(row.pageId), pageId: row.pageId });
   }
 
-  // Escenas cuyo desglose (la escena o sus fichas) la nombra.
+  // Escenas cuyo desglose (la escena o sus fichas) la nombra, y las que nombra el campo *Escenas* de su página (D818).
   const plannedCodes = new Map<string, true>();
+  for (const code of fieldScenes(src, locPage).keys()) plannedCodes.set(code, true);
   const also: PageChip[] = [];
   const indexPagesList: PageChip[] = [];
   for (const p of rel.pages) {
@@ -1000,7 +1083,10 @@ export interface SetRow {
   name: string;
   /** Lo escrito en su campo «Otros nombres» (sin su nombre). */
   aliases: string[];
-  /** Sus locaciones: con su página si es una locación del proyecto; si no, el texto del campo. */
+  /**
+   * Sus locaciones: la de arriba si está adentro de una (D818) y las de su campo *Locación*; con su página si es una
+   * locación del proyecto; si no, el texto del campo.
+   */
   locs: { name: string; pageId: string | null }[];
   scenes: string[];
   /** Las páginas que lo nombran en su campo y no son de una escena (un día, una nota). */
@@ -1034,7 +1120,7 @@ export function setIndex(src: LiveSource): SetIndex {
  * Las locaciones que dice un valor de un campo de lugar, como en D424: sus links a una locación; si no, el valor entero
  * (`locationOf`) o las locaciones que nombra enteras adentro («CENADE, Pista 2»). Lo que no es ninguna queda como texto.
  */
-function placesIn(R: Registry, f: FieldValue, locByPage: Map<string, string>): { name: string; known: boolean }[] {
+export function placesIn(R: Registry, f: FieldValue, locByPage: Map<string, string>): { name: string; known: boolean }[] {
   const linked = f.links.map((l) => locByPage.get(l.pageId)).filter((n): n is string => !!n);
   if (linked.length) return linked.map((name) => ({ name, known: true }));
   const out: { name: string; known: boolean }[] = [];
@@ -1134,6 +1220,16 @@ function readSetIndex(src: LiveSource): SetIndex {
   const locByPage = new Map<string, string>();
   for (const l of R.locations.values()) if (l.pageId) locByPage.set(l.pageId, l.name);
   for (const row of rows) {
+    // Adentro de una locación (la entidad más cercana arriba): se filma ahí (D818).
+    const seen = new Set<string>([row.pageId]);
+    for (let p = roles.get(row.pageId)?.parent; p && !seen.has(p); p = roles.get(p)?.parent) {
+      seen.add(p);
+      const up = roles.get(p)?.entity;
+      if (!up) continue;
+      const name = up.kind === 'location' ? locByPage.get(p) : undefined;
+      if (name) addLoc(row, name, p);
+      break;
+    }
     for (const id of [row.pageId, ...(inside.get(row.pageId) ?? [])]) {
       for (const f of valued(fieldValues(fieldsOf(src, id), 'location'))) {
         for (const p of placesIn(R, f, locByPage)) addLoc(row, p.name, p.known ? (R.locations.get(p.name)?.pageId ?? null) : null);

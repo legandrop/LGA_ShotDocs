@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#FBFAF8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#171716" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <title>LGA Shot Docs · Tour</title>
+    <script>
+      // El tema elegido se aplica antes de pintar (como en index.html).
+      var dark = matchMedia('(prefers-color-scheme: dark)').matches;
+      try {
+        var p = (JSON.parse(localStorage.getItem('shotdocs-prefs')) || {}).prefs || {};
+        if (p.theme === 'dark' || p.theme === 'light') dark = p.theme === 'dark';
+      } catch (e) {}
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    </script>
+  </head>
+  <body>
+    <!-- El documento de práctica de los recorridos (src/tour/practiceDoc.tsx): la app en memoria, sin red. -->
+    <div id="root"></div>
+    <script type="module" src="/src/tour/practiceDoc.tsx"></script>
+  </body>
+</html>

@@ -108,6 +108,7 @@ function DayReportControl({ pageId, folderId }: { pageId: string; folderId: stri
         ref={button}
         type="button"
         className="day-report-button"
+        data-tour="day-new"
         aria-expanded={!!open}
         aria-haspopup="dialog"
         data-tip={tipRows([{ shortcut: 'newDayReport', action: asAction(tr('dayReport.new')) }])}

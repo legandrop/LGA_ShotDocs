@@ -132,7 +132,8 @@ export function buildPrintView(
   const title = document.createElement('h1');
   title.className = 'page-title';
   title.textContent =
-    (titleField && 'value' in titleField ? titleField.value : titleField?.textContent)?.trim() || t('common.untitled');
+    (titleField?.dataset.fullTitle ?? (titleField && 'value' in titleField ? titleField.value : titleField?.textContent))?.trim() ||
+    t('common.untitled');
   page.append(title);
 
   // El contenido del editor: el documento en un contenedor vacío con las clases del de pantalla (sus

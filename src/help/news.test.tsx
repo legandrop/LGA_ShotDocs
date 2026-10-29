@@ -2,7 +2,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { t } from '../i18n';
+import { t, type Key } from '../i18n';
+import { cursorOf } from '../tour/progress';
 import '../i18n/lazy/tutorial';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
@@ -249,9 +250,13 @@ const bubble = () => document.querySelector<HTMLElement>('.tour-bubble');
 const click = (el: Element | null | undefined) => act(() => (el as HTMLElement).click());
 const press = (key: string) => act(() => void bubble()!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })));
 
+/** Abre la ayuda en *Topics* con todas las entradas desplegadas (están plegadas: se ve el título). */
 async function openHelp(host: HTMLElement) {
   click(host.querySelector('.help-button'));
-  await until(() => dialog()?.querySelector('[data-help-id="tour"]'), 'la ayuda');
+  await until(() => dialog(), 'la ayuda');
+  click(dialog()!.querySelector('[data-help-tab="topics"]'));
+  await until(() => dialog()?.querySelector('[data-help-id="tour"]'), 'la ayuda, en Topics');
+  for (const toggle of dialog()!.querySelectorAll<HTMLButtonElement>('.help-entry-toggle[aria-expanded="false"]')) click(toggle);
 }
 
 describe('las novedades en la ayuda', () => {
@@ -284,7 +289,8 @@ describe('las novedades en la ayuda', () => {
     // También marcadas en su sección, y nada viejo marcado.
     expect(dialog()!.querySelector('[data-help-section="writing"] [data-help-id="dictationShot"] .help-new')?.textContent).toBe('New');
     expect(dialog()!.querySelector('[data-help-id="findProject"] .help-new')).toBeNull();
-    expect(dialog()!.querySelector('.help-index .help-index-news')?.textContent).toBe("What's new");
+    // Con novedades abre en *Topics*, con un punto en la pestaña.
+    expect(dialog()!.querySelector('[data-help-tab="topics"] .help-tab-dot')).not.toBeNull();
     // Al abrirla quedaron vistas: el punto se fue (en el "?" y en el botón de menú).
     expect(button.classList.contains('has-dot')).toBe(false);
     expect(menu.classList.contains('has-dot')).toBe(false);
@@ -301,7 +307,8 @@ describe('las novedades en la ayuda', () => {
     await openHelp(host);
     expect(dialog()!.querySelector('[data-help-section="news"]')).toBeNull();
     expect(dialog()!.querySelector('.help-new')).toBeNull();
-    expect(dialog()!.querySelectorAll('[data-help-section]').length).toBe(16);
+    expect(dialog()!.querySelectorAll('[data-help-section]').length).toBe(15);
+    expect(dialog()!.querySelector('[data-help-tab="topics"] .help-tab-dot')).toBeNull();
   });
 
   it('en castellano', async () => {
@@ -330,15 +337,15 @@ describe('Mostrame', () => {
       expect(show?.textContent, entry.id).toBe('Show me');
       click(show);
       const step = TOUR_STEPS.find((s) => s.id === entry.showMe)!;
-      await until(() => path() === '/practice' && bubble()?.querySelector('h3')?.textContent === t(step.title), `el paso ${step.id} de ${entry.id}`);
+      await until(() => path() === '/practice' && bubble()?.querySelector('h3')?.textContent === t(step.title as Key), `el paso ${step.id} de ${entry.id}`);
       expect(dialog()).toBeNull();
       // Un solo paso: sin "1/10", sin Atrás ni Saltar recorrida.
       expect(bubble()!.querySelector('.mono-label')?.textContent).toBe('Show me');
       expect(bubble()!.querySelector('.tour-skip')).toBeNull();
       expect([...bubble()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Done']);
-      expect(document.querySelector('.tour-live')?.textContent).toBe(`Show me: ${t(step.title)}`);
-      // El foco en "Done" (Esc y Enter le llegan al globito), aunque se dibujó mientras se cerraba la ayuda.
-      if (!step.interactive) await until(() => document.activeElement?.textContent === 'Done', `el foco en Done (${entry.id})`);
+      expect(document.querySelector('.tour-live')?.textContent).toBe(`Show me: ${t(step.title as Key)}`);
+      // El globito no se lleva el foco: Esc, Enter y → se escuchan en la ventana.
+      expect(bubble()!.contains(document.activeElement)).toBe(false);
       click(bubble()!.querySelector('button.primary'));
       await until(() => !bubble() && path() === `/p/${page}`, `volver de ${entry.id}`);
     }
@@ -510,7 +517,9 @@ describe('Mostrame', () => {
   });
 
   it('la tarjeta de retomar la recorrida vuelve después de "Mostrame"', async () => {
-    localStorage.setItem('shotdocs-tour', JSON.stringify({ v: 1, done: false, step: 3 }));
+    localStorage.setItem('shotdocs-tour', JSON.stringify({ v: 1, done: false }));
+    const at = { chapter: 'around.editor', step: 'practice-photos' };
+    localStorage.setItem('shotdocs-tour-progress', JSON.stringify({ seen: {}, at: { 'getting-around': at } }));
     const { host, page } = await app();
     await until(() => document.querySelector('.tour-card'), 'la tarjeta');
     await openHelp(host);
@@ -520,7 +529,8 @@ describe('Mostrame', () => {
     click(bubble()!.querySelector('button.primary'));
     await until(() => !bubble() && path() === `/p/${page}`, 'volver');
     await until(() => document.querySelector('.tour-card')?.textContent?.includes('Continue the tour?'), 'la tarjeta de nuevo');
-    expect(readDeviceTour()).toMatchObject({ done: false, step: 3 });
+    expect(readDeviceTour()).toMatchObject({ done: false });
+    expect(cursorOf('getting-around')).toEqual(at);
   });
 
   it('desde la vista previa de una plantilla: el paso en la práctica y vuelta a la vista previa', async () => {

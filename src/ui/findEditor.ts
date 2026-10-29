@@ -607,8 +607,24 @@ function avoidBar(view: EditorView, el: HTMLElement): void {
 }
 
 /** Saca los resaltados (lo buscado quedó vacío), sin tocar la selección. */
+/**
+ * El elemento del editor, o `null` si todavía no se montó (o se está volviendo a montar): la vista de tiptap de un editor
+ * sin montar tira un error al leer `dom` (solo deja `state`, `dispatch` e `isDestroyed`). Sin esto, la página entera
+ * mostraba «This page can't be shown» (la barrera) al limpiar o cerrar la búsqueda en ese momento.
+ */
+export function viewDom(view: EditorView): HTMLElement | null {
+  try {
+    return view.isDestroyed ? null : view.dom;
+  } catch {
+    return null;
+  }
+}
+
 export function clearFind(view: EditorView): void {
-  stopKeepingInView(view.dom);
+  // Un editor sin montar no tiene nada que limpiar.
+  const dom = viewDom(view);
+  if (!dom) return;
+  stopKeepingInView(dom);
   if (getFindState(view.state).query) view.dispatch(view.state.tr.setMeta(findKey, { kind: 'clear' } satisfies FindMeta));
   anchors.set(view, null);
   syncExpansion(view, true);
@@ -619,7 +635,9 @@ export function clearFind(view: EditorView): void {
  * Code.
  */
 export function closeFind(view: EditorView, { select = true }: { select?: boolean } = {}): void {
-  stopKeepingInView(view.dom);
+  const dom = viewDom(view);
+  if (!dom) return;
+  stopKeepingInView(dom);
   const state = getFindState(view.state);
   const match = state.matches[state.current];
   const tr = view.state.tr.setMeta(findKey, { kind: 'clear' } satisfies FindMeta);

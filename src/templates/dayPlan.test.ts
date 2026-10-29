@@ -21,7 +21,9 @@ import {
   suggestedDay,
   suggestedPlanDate,
   suggestedPlanDay,
+  withPlanScenes,
 } from './dayReportCreate';
+import { builtinBlocks } from './builtin';
 import { suggestedTemplateName } from './ownCopy';
 import { stripKinds } from './stripKinds';
 
@@ -397,5 +399,38 @@ describe('el día con su lugar y en su semana (simulación de D813)', () => {
     expect(d.tree.get(id)?.title).toBe('2026-10-05 | Day 03 | Casa Rosada');
     plan = await planDayReport(deps(d), { parentId: folder, projectId: d.tree.workspaceId }, { now: at(2) });
     expect(planProposal(d.tree, planId, plan)).toBeNull();
+  });
+});
+
+describe('el plan nuevo trae las escenas planeadas para su fecha (D820)', () => {
+  it('una escena por renglón de la tabla Escenas, con el encabezado; sin escenas, la plantilla queda igual', () => {
+    const blocks = builtinBlocks('dayPlan', 'es');
+    const filled = withPlanScenes(blocks, ['001 | Andén de noche', '003 | Llega el tren'], 'es');
+    const at = filled.findIndex((b) => b.type === 'heading' && b.content === 'Escenas');
+    const rows = (filled[at + 1].content as { rows: { cells: string[] }[] }).rows;
+    expect(rows.map((r) => r.cells)).toEqual([
+      ['Escena', 'En set', 'En post', 'Notas'],
+      ['001 | Andén de noche', '', '', ''],
+      ['003 | Llega el tren', '', '', ''],
+    ]);
+    // La plantilla de fábrica no cambia (cada llamada da objetos nuevos).
+    expect(withPlanScenes(blocks, [], 'es')).toBe(blocks);
+    expect((blocks[at + 1].content as { rows: unknown[] }).rows).toHaveLength(3);
+  });
+
+  it('cada escena con su número como link a su página, para que el reporte de ese día lea el plan', () => {
+    const blocks = builtinBlocks('dayPlan', 'es');
+    const filled = withPlanScenes(blocks, [{ code: '001', pageId: 'p1', name: 'Andén de noche' }, { code: '002', pageId: null, name: 'Sala' }, { code: '003', pageId: 'p3', name: '' }], 'es');
+    const at = filled.findIndex((b) => b.type === 'heading' && b.content === 'Escenas');
+    const cells = (filled[at + 1].content as { rows: { cells: unknown[] }[] }).rows.slice(1).map((r) => r.cells[0]);
+    expect(cells).toEqual([
+      [
+        { type: 'link', href: '/p/p1', content: [{ type: 'text', text: '001', styles: {} }] },
+        { type: 'text', text: ' | Andén de noche', styles: {} },
+      ],
+      // Sin página (no debería pasar: el desglose la nombra), el texto como antes.
+      '002 | Sala',
+      [{ type: 'link', href: '/p/p3', content: [{ type: 'text', text: '003', styles: {} }] }],
+    ]);
   });
 });

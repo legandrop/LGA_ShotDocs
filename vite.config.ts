@@ -234,6 +234,10 @@ export default defineConfig(({ mode }) => {
           navigateFallback: '/index.html',
           // Los avisos y los textos de las licencias (`public/licenses/`) son archivos, no pantallas de la app.
           navigateFallbackDenylist: [/^\/licenses\//],
+          // El documento de práctica de los recorridos (tour.html, src/tour/practiceDoc.tsx) se abre con
+          // `?tour=…&chapter=…&back=…`: sin esto, la dirección con esos datos no coincidiría con la guardada y, sin red,
+          // el service worker devolvería la app en su lugar.
+          ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^(?:tour|chapter|back)$/],
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         },
       }),
@@ -242,6 +246,12 @@ export default defineConfig(({ mode }) => {
       // El editor se baja aparte (roadmap B.4) y pesa alrededor de 1 MB sin comprimir (300 KB comprimido).
       chunkSizeWarningLimit: 1200,
       rolldownOptions: {
+        // Dos páginas: la app y el documento de práctica de los recorridos (tour.html), que trae el servidor en memoria
+        // de las pruebas y no entra en lo que baja la app.
+        input: {
+          main: fileURLToPath(new URL('./index.html', import.meta.url)),
+          tour: fileURLToPath(new URL('./tour.html', import.meta.url)),
+        },
         output: {
           postBanner: (chunk: { name: string }) => (chunk.name === 'heicLib' ? LIBHEIF_BANNER : chunk.name === 'pdfLib' ? PDFJS_BANNER : ''),
         },

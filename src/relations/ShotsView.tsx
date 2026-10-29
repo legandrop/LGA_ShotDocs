@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { locale, useT } from '../i18n';
 import '../i18n/lazy/map';
 import { navigate, pagePath } from '../router';
@@ -10,6 +10,8 @@ import { goToPlace } from './goToPlace';
 import type { LiveSource } from './liveView';
 import { fold } from './reader';
 import { byScene, shotsTable, shotsTsv, type ShotRow } from './shotsTable';
+import { useColumnWidths, type ColumnSpec } from '../ui/columnWidths';
+import { useCurrentProject } from '../ui/project';
 import './shots.css';
 
 // *Overview › Shots* (D813, parte 3): la tabla de planos de todas las escenas, en lugar de `BD Main`. Solo lee: cada fila
@@ -31,6 +33,37 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
   const services = useServices();
   const [sort, setSort] = useState<Sort>(null);
   const table = useMemo(() => (src ? shotsTable(src) : null), [src]);
+  // El ancho de fábrica de cada columna sigue a lo que tiene escrito (lo largo de la mayoría de sus filas, entre 6 y 48
+  // letras), en porcentaje (D821); lo que la persona cambia se guarda por columna.
+  const specs = useMemo<ColumnSpec[]>(() => {
+    if (!table) return [];
+    const typical = (values: string[]) => {
+      const lens = values.filter(Boolean).map((v) => v.length).sort((x, y) => x - y);
+      return Math.min(48, Math.max(6, lens[Math.floor(lens.length * 0.8)] ?? 6));
+    };
+    return [
+      { id: ':scene', width: 7 },
+      { id: ':shot', width: typical(table.rows.map((r) => r.shot)) },
+      ...table.columns.map((c) => ({ id: c.key, width: typical(table.rows.map((r) => r.values.get(c.key) ?? '')) })),
+    ];
+  }, [table]);
+  /** Con muchas columnas no se aprietan de más: la tabla mide al menos lo de fábrica (unas 7 px por letra). */
+  const minTable = specs.reduce((n, c) => n + c.width * 7 + 20, 0);
+  const tableRef = useRef<HTMLTableElement>(null);
+  // Una clave por proyecto: cada uno tiene sus columnas (las de sus fichas).
+  const cols = useColumnWidths(`shots.${useCurrentProject()}`, specs, tableRef);
+  // La columna del plano queda fija a la izquierda corrida lo que mide la de la escena, que se puede agrandar.
+  const sceneWidth = cols.widths[0];
+  useLayoutEffect(() => {
+    const t = tableRef.current;
+    const th = t?.tHead?.rows[0]?.cells[0];
+    if (!t || !th) return;
+    const set = () => t.style.setProperty('--scene-w', `${th.getBoundingClientRect().width}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(th);
+    return () => ro.disconnect();
+  }, [sceneWidth, table]);
 
   const shown = useMemo(() => {
     if (!table) return [];
@@ -63,12 +96,13 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
     if (r.place.endBlockId !== undefined) goToPlace(services, r.place);
     else navigate(pagePath(r.place.pageId));
   };
-  const head = (key: string, label: string) => (
+  const head = (key: string, label: string, i: number) => (
     <th key={key} scope="col" aria-sort={sort?.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined}>
       <button type="button" onClick={() => setSort(sort?.key === key ? (sort.desc ? null : { key, desc: true }) : { key, desc: false })}>
         {label}
         {sort?.key === key && <span aria-hidden="true">{sort.desc ? ' ↓' : ' ↑'}</span>}
       </button>
+      {cols.handle(i, tr('folder.resize', { column: label }))}
     </th>
   );
 
@@ -91,12 +125,14 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
         <p className="mp-empty">{tr('map.noMatch')}</p>
       ) : (
         <div className="mp-shots-scroll">
-          <table aria-label={tr('map.tabShots')}>
+          {/* Con muchas columnas no se aprietan de más: la tabla se desplaza de costado adentro de su caja. */}
+          <table ref={tableRef} aria-label={tr('map.tabShots')} style={{ minWidth: `${minTable}px` }}>
+            {cols.colgroup}
             <thead>
               <tr>
-                {head(':scene', headers.scene)}
-                {head(':shot', headers.shot)}
-                {table.columns.map((c) => head(c.key, c.label))}
+                {head(':scene', headers.scene, 0)}
+                {head(':shot', headers.shot, 1)}
+                {table.columns.map((c, i) => head(c.key, c.label, i + 2))}
               </tr>
             </thead>
             <tbody>

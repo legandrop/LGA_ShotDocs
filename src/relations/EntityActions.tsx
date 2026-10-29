@@ -145,7 +145,20 @@ function useRelationsRevision(services: Services): void {
  * *Create scene 105_120* (o *Create location «…»*) con las guardas: si no pasan, un rótulo apagado con el motivo en el
  * tooltip. `onDone` corre al terminar (bien o mal).
  */
-export function CreateEntityButton({ want, projectId, className, onDone }: { want: CreateWant; projectId: string; className?: string; onDone?: (res: CreateResult) => void }) {
+export function CreateEntityButton({
+  want,
+  projectId,
+  className,
+  label: shortLabel,
+  onDone,
+}: {
+  want: CreateWant;
+  projectId: string;
+  className?: string;
+  /** Un rótulo corto («Create page») donde el nombre ya está a la vista; el largo queda en el tooltip. */
+  label?: string;
+  onDone?: (res: CreateResult) => void;
+}) {
   const tr = useT();
   const services = useServices();
   const tree = useTree();
@@ -154,7 +167,8 @@ export function CreateEntityButton({ want, projectId, className, onDone }: { wan
   const [busy, setBusy] = useState(false);
   const env = createEnv(services, projectId, tr.lang);
   const guard = env.guard(want);
-  const label = want.kind === 'scene' ? tr('create.scene', { code: want.code }) : tr('create.location', { name: want.name });
+  const full = want.kind === 'scene' ? tr('create.scene', { code: want.code }) : want.kind === 'set' ? tr('create.set', { name: want.name }) : tr('create.location', { name: want.name });
+  const label = shortLabel ?? full;
   if (!guard.ok) {
     const why = reasonText(tr, guard, want, (id) => tree.get(id)?.title);
     // En la papelera: el motivo a la vista y un link a la papelera para restaurarla (O4 de la auditoría de E7).
@@ -177,7 +191,7 @@ export function CreateEntityButton({ want, projectId, className, onDone }: { wan
     <button
       className={`rel-create ${className ?? ''}`}
       disabled={busy}
-      data-tip={guard.ok && guard.generic ? `${tr('create.in', { folder })} · ${tr('create.generic')}` : tr('create.in', { folder })}
+      data-tip={[shortLabel ? full : null, tr('create.in', { folder }), guard.ok && guard.generic ? tr('create.generic') : null].filter(Boolean).join(' · ')}
       onClick={() => {
         setBusy(true);
         void runCreate(services, env, want, { tr }).then((res) => {

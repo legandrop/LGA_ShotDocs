@@ -1,7 +1,7 @@
 import type { PageTree } from '../sync/tree';
 import { BUILTIN_CREATIVE_SCOUT, BUILTIN_LOCATION, BUILTIN_PLAN, BUILTIN_SCENE, BUILTIN_TECH_SCOUT, BUILTIN_TEST } from '../templates/builtinIds';
 import { dayReportsMark, isDayReportFolder } from '../templates/dayReport';
-import { docMark, entityMark, holdsDoc, holdsMark, holdsOf, kindReader, type DocKind, type EntityKind, type KindTree } from './kind';
+import { docMark, entityMark, holdsDoc, holdsMark, holdsOf, kindReader, type DocKind, type EntityKind, type KindTree, type PageKind } from './kind';
 
 // Las marcas de tipo (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): lo que escribe `settings.entity` en las páginas
 // y `settings.holds` / `settings.dayReports` en las carpetas. Lo que se lee está en `kind.ts`.
@@ -15,6 +15,10 @@ import { docMark, entityMark, holdsDoc, holdsMark, holdsOf, kindReader, type Doc
 // - Al marcar la carpeta: todo su primer nivel (y lo de adentro de sus grupos) que no tenga marca.
 // - Al moverla adentro de una carpeta con tipo, si no tiene marca. Al sacarla, la marca se queda: sigue siendo una
 //   escena; para cambiarla está *Type* en el menú.
+// - Mover no cambia el tipo (D818): lo que es una entidad por su carpeta (sin marca propia, como lo importado) recibe la
+//   marca ANTES de moverse, con el tipo del lugar de origen (`keepKindBeforeMove`). Así un decorado que entra en su
+//   locación sigue siendo decorado, no parte de ella. Lo que entra en una entidad del mismo tipo sí pasa a ser parte
+//   (una ficha suelta en el desglose que entra en su escena, D785).
 // - El código de una escena sigue al título: si el título (con el episodio de su carpeta) trae un número canónico
 //   distinto del guardado, se actualiza. Si el título deja de traer uno, el guardado se queda.
 // - Nunca se pisa una marca de otro tipo, ni `false` («no es nada de eso»), ni una de una versión más nueva.
@@ -93,6 +97,31 @@ export async function placedEntity(tree: SyncTree, id: string, how: 'create' | '
   for (const child of inside) await syncEntityMark(tree, child);
 }
 
+const isEntity = (k: PageKind): k is Extract<PageKind, { kind: EntityKind }> => k.kind === 'scene' || k.kind === 'location' || k.kind === 'day' || k.kind === 'set';
+
+/**
+ * Antes de mover `id` adentro de `parentId` (`PageTree.onBeforeMove`): la página, y lo de adentro si es un grupo (un
+ * episodio), que hoy es una entidad solo por su carpeta recibe la marca de lo que es acá. No se marca lo que entra en una
+ * entidad del mismo tipo (pasa a ser parte de ella: la ficha que entra en su escena, D785), lo que toma el tipo de la
+ * página movida (va con ella), lo que no tiene título ni lo que ya tiene una marca.
+ */
+export async function keepKindBeforeMove(tree: SyncTree, id: string, parentId: string | null): Promise<void> {
+  const reader = kindReader(tree);
+  const at = parentId ? reader.kindOf(parentId) : null;
+  const into = !at ? null : at.kind === 'part' ? at.ofKind : isEntity(at) ? at.kind : null;
+  const marks: [string, { kind: EntityKind; code?: string }][] = [];
+  for (const x of [id, ...tree.children(id).map((c) => c.id)]) {
+    const row = tree.get(x);
+    if (!row?.title.trim() || tree.isTrashed(x) || entityMark(row) !== null) continue;
+    const k = reader.kindOf(x);
+    if (!isEntity(k) || k.source !== 'folder' || k.folder === id || k.kind === into) continue;
+    // Una página sin número en Escenas («Notas» mal archivada) no se lleva la marca de escena: sacarla de ahí la arregla.
+    if (k.kind === 'scene' && !k.code) continue;
+    marks.push([x, k.code ? { kind: k.kind, code: k.code } : { kind: k.kind }]);
+  }
+  for (const [x, mark] of marks) await tree.setSetting(x, 'entity', mark);
+}
+
 /** Lo que contiene la carpeta, como lo ofrece el menú: escenas, locaciones, decorados, días o nada. */
 export function folderHolds(tree: KindTree, id: string): EntityKind | null {
   return holdsOf(tree, id);
@@ -145,9 +174,10 @@ export async function setPageType(tree: SyncTree, id: string, kind: EntityKind |
  * Lo que hace `services.ts` al arrancar: la marca de tipo al crear, renombrar o mover en este dispositivo. Con un link
  * público no: un link no cambia filas (su base lo rechazaría).
  */
-export function installEntityMarks(tree: Pick<PageTree, 'onPlaced'> & SyncTree, viaLink: boolean): void {
+export function installEntityMarks(tree: Pick<PageTree, 'onPlaced' | 'onBeforeMove'> & SyncTree, viaLink: boolean): void {
   if (viaLink) return;
   tree.onPlaced = (id, how) => placedEntity(tree, id, how);
+  tree.onBeforeMove = (id, parentId) => keepKindBeforeMove(tree, id, parentId);
 }
 
 /**

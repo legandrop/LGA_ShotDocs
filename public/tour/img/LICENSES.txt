@@ -1,0 +1,56 @@
+Images of the practice project in the tours (LGA Shot Docs)
+
+Photos from Wikimedia Commons, all in the public domain or under CC0 (no attribution required;
+credited here anyway). Resized to 1200 px and converted to WebP.
+
+These files are referenced by absolute URL from the practice pages: do not rename or remove them.
+
+calle-noche.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Street_corner_at_night_in_the_rain,_Rio_de_Janeiro.jpg
+  License: CC0
+  Author:  Wilfredor
+
+capilla.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Tolson%27s_Chapel_interior_(a7189dc2-1b75-45a3-ace6-59ed774172d1).jpg
+  License: Public domain
+  Author:  NPS
+
+estacion-anden.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Bayswater_railway_station_Platforms.jpg
+  License: CC0
+  Author:  Abesty
+
+estacion-espera.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Waiting_Room_-_Portland_Union_Station_-_Portland,_Oregon_-_DSC01168.jpg
+  License: CC0
+  Author:  Daderot
+
+estacion-hall.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Springfield,_Union_Station,_November_20,_2012_(8204193710).jpg
+  License: Public domain
+  Author:  MassDOT
+
+puente.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Big_Blue_bridge_(Butler_County)_from_S.JPG
+  License: Public domain
+  Author:  Ammodramus
+
+puente-detalle.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Big_Blue_bridge_(Butler_County)_E_truss.JPG
+  License: Public domain
+  Author:  Ammodramus
+
+referencia-1903.webp
+  Source:  https://commons.wikimedia.org/wiki/File:The-Great-Train-Robbery-1903.jpg
+  License: Public domain
+  Author:  Paramount Pictures (photo credit reads "Courtesy Paramount")
+
+rodaje.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Real_Strike_Studios_Film_crew_on_set_(2024).jpg
+  License: CC0
+  Author:  Cecimercy Wanza(Ceci)
+
+vagon.webp
+  Source:  https://commons.wikimedia.org/wiki/File:Railway_carriage_interior_showing_seats_,_number_55(GN10749).jpg
+  License: CC0
+  Author:  State Government Photographer

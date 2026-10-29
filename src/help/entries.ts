@@ -376,6 +376,24 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: SCENES_SECTION,
   },
   {
+    id: 'scenesPage',
+    section: 'pages',
+    title: 'help.scenesPage.title',
+    text: 'help.scenesPage.text',
+    words: ['new scene', 'nueva escena', 'new location', 'nueva locación', 'new set', 'nuevo decorado', 'create page', 'crear la página', 'scenes', 'escenas', 'locations', 'locaciones', 'set', 'decorado', 'table', 'tabla', 'new project', 'proyecto nuevo', 'number', 'número'],
+    // La carpeta de Escenas y de Locaciones, el título partido y los decorados adentro de su locación (D817, D818).
+    since: '0.308',
+  },
+  {
+    id: 'tableColumns',
+    section: 'pages',
+    title: 'help.tableColumns.title',
+    text: 'help.tableColumns.text',
+    words: ['column', 'columna', 'width', 'ancho', 'resize', 'agrandar', 'table', 'tabla', 'header', 'encabezado'],
+    // Las tablas que arma la app (D821).
+    since: '0.308',
+  },
+  {
     id: 'pageTypes',
     section: 'overview',
     title: 'help.pageTypes.title',

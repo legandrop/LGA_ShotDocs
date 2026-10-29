@@ -26,8 +26,8 @@ afterEach(() => {
   setAccountMarker(null);
 });
 
-const fresh: DeviceTour = { v: TOUR_VERSION, done: false, step: null };
-const facts = (over: Partial<StartFacts> = {}): StartFacts => ({ firstLoad: true, atHome: true, invite: false, device: fresh, accountSeen: false, ...over });
+const fresh: DeviceTour = { v: TOUR_VERSION, done: false };
+const facts = (over: Partial<StartFacts> = {}): StartFacts => ({ firstLoad: true, atHome: true, invite: false, device: fresh, halfway: false, accountSeen: false, ...over });
 
 describe('cuándo arranca', () => {
   it('nueva en todo, en su primera carga y en el inicio: arranca sola', () => {
@@ -52,11 +52,13 @@ describe('cuándo arranca', () => {
   });
 
   it('se recargó a mitad: se ofrece retomarla, también fuera de la primera carga', () => {
-    expect(decideStart(facts({ firstLoad: false, device: { ...fresh, step: 3 } }))).toBe('resume');
+    expect(decideStart(facts({ firstLoad: false, halfway: true }))).toBe('resume');
+    // Terminada en este dispositivo: lo que quedó guardado de dónde iba es para *Continue* en la ayuda, no para ofrecerla.
+    expect(decideStart(facts({ firstLoad: false, halfway: true, device: { ...fresh, done: true } }))).toBe('off');
   });
 
   it('una versión nueva de la recorrida cuenta como no vista; lo que no se entiende, como nuevo', () => {
-    localStorage.setItem('shotdocs-tour', JSON.stringify({ v: TOUR_VERSION - 1, done: true, step: null }));
+    localStorage.setItem('shotdocs-tour', JSON.stringify({ v: TOUR_VERSION - 1, done: true }));
     expect(readDeviceTour().done).toBe(false);
     localStorage.setItem('shotdocs-tour', '{roto');
     expect(readDeviceTour()).toEqual(fresh);
@@ -74,12 +76,12 @@ describe('"ya la vi"', () => {
     });
     startTour();
     expect(getTourUi().mode).toBe('running');
-    expect(readDeviceTour()).toMatchObject({ done: false, step: 0 });
+    expect(readDeviceTour()).toMatchObject({ done: false });
     endTour();
     expect(getTourUi().mode).toBe('off');
     await new Promise((r) => setTimeout(r, 0));
     expect(calls.length).toBe(1);
-    expect(readDeviceTour()).toEqual({ v: TOUR_VERSION, done: true, step: null, account: true });
+    expect(readDeviceTour()).toEqual({ v: TOUR_VERSION, done: true, account: true });
     // Nada en `user_settings.prefs` (corrección 12).
     expect(JSON.stringify(prefs.get())).toBe(before);
     expect(prefs.hasUnsynced()).toBe(unsynced);
@@ -101,7 +103,7 @@ describe('"ya la vi"', () => {
 
   it('la cuenta que responde con error no cuenta como anotada', async () => {
     setAccountMarker(async () => false);
-    writeDeviceTour({ v: TOUR_VERSION, done: true, step: null, account: false });
+    writeDeviceTour({ v: TOUR_VERSION, done: true, account: false });
     await syncAccountMark();
     expect(readDeviceTour().account).toBe(false);
   });

@@ -1,6 +1,6 @@
 # La lógica de LGA Shot Docs, de una sola lectura
 
-Cómo piensa la app (v0.307): qué es cada página, cómo se da cuenta sola de qué escena, locación, decorado o día nombra
+Cómo piensa la app (v0.308): qué es cada página, cómo se da cuenta sola de qué escena, locación, decorado o día nombra
 cada una y qué muestra con eso. El detalle técnico está en los documentos de la sección 8. Ante una duda, manda el
 código (`src/relations/`).
 
@@ -15,12 +15,14 @@ Lo que la app sabe de una página no se escribe en su texto: hay dos marcas en s
 la persona ve** y se rearma al escribir. *Leave out of relations*, en el menú ⋯, saca una rama del cálculo (D540).
 
 **Dónde se ve cada página (D815).** La barra tiene dos partes. *Pages* (*Páginas*) es **todo lo que se escribe**, por
-etapa: la preproducción (el desglose con una página por escena, las locaciones, los decorados, notas y reuniones), los
+etapa: la preproducción (`1.1 | Escenas`, una página por escena, y `1.2 | Locaciones`, con los decorados adentro de
+cada locación; notas y reuniones), los
 scoutings, las pruebas, cada semana de rodaje con el plan y el reporte de cada día, la referencia. El *Overview*
 (*Panorama*) **no tiene páginas propias y no se edita**: junta lo que dicen esas páginas, y cada escena, locación o
 decorado abre un resumen con links a cada página que habla de eso. Cada página vive en un solo lugar: *Pages*. (La v0.302
 había pasado las escenas, locaciones y decorados al *Overview*, D813 parte 1; Lega lo vio con VLLF y no tenía sentido:
-el Panorama tiene que armarse solo, D815.)
+el Panorama tiene que armarse solo, D815.) Un proyecto nuevo arranca con esas carpetas vacías (D817), y las carpetas
+de Escenas y Locaciones muestran arriba *New scene* / *New location* y una tabla armada sola (D818).
 
 **En términos simples:** no es una base de datos con columnas. Es un cuaderno que la app lee como una persona atenta, y
 con lo que lee arma índices que se actualizan solos.
@@ -32,7 +34,9 @@ con lo que lee arma índices que se actualizan solos.
 - **Escena** (*Scene*): una escena del guion con su número (`105_027` en una serie, `074` en un largo).
 - **Locación** (*Location*): el lugar físico donde se filma, el que se scoutea (`CENADE`, `Palomar`).
 - **Decorado** (*Set*): el lugar de la historia (`Ambulancia | Ruta INT`). Se puede filmar en varias locaciones y una
-  locación aloja varios (entidad desde v0.294, D804).
+  locación aloja varios (entidad desde v0.294, D804). Desde v0.308 (D818) su página vive **adentro de su locación** (*New
+  set* en la cabecera de la locación, o *Create page* desde la escena que lo nombra) y se filma ahí; mover una página
+  no le cambia el tipo (se marca antes de moverla).
 - **Día de rodaje** (*Shoot day*): una jornada, por su fecha (`2026-02-19 | Día 59`). Su página es el reporte del día.
 
 **Documentos**, lo que se escribe en una etapa: **scouting** (*Scouting report*), **prueba** (*Test report*, puede no
@@ -75,7 +79,7 @@ Rodaje, la decisión 3 de `Plan_Estructura_Etapas.md` (el tipo de documento sale
 |---|---|---|---|
 | Escena | Una escena, con su número | Carpeta *Scenes*, *Type › Scene* o plantilla *Scene* | Cabecera propia, *Overview › Scenes* |
 | Locación | El lugar físico | Carpeta *Locations*, *Type › Location* o plantilla *Location* | Cabecera, *Overview › Locations* |
-| Decorado | El lugar de la historia | Carpeta *Sets* o *Type › Set* | Cabecera, *Overview › Sets* |
+| Decorado | El lugar de la historia | Adentro de su locación (*New set*), carpeta *Sets* o *Type › Set* | Cabecera, *Overview › Sets* |
 | Día de rodaje | Una jornada: su reporte | Carpeta *Shoot days*, *On-Set Report* o *New day report* | Cabecera, *Overview › Shoot days* |
 | Scouting | Un recorrido | Carpeta *Scouting reports*, *Tech scout* o *Creative scout* | Sus locaciones y escenas, *Overview › Scouting* |
 | Prueba | Una prueba | Carpeta *Test reports* o plantilla *Test report* | Sus locaciones y escenas, *Overview › Scouting* |
@@ -117,7 +121,8 @@ Coda), un título como *Consultas* con su texto abajo o un renglón `Locación: 
 **Decorado: solo por campo o por link**, nunca por texto suelto. Lo nombra el valor entero de un campo *Decorado*,
 *Locación Guion* o *Set* igual a su título o a uno de sus *Otros nombres*, o un link a su página; «Comedor» en una
 oración chocaría con locaciones y palabras comunes. Sus escenas: las que lo nombran así (o sus fichas) y las que nombra
-su página. Dónde se filma: su campo *Locación*, o una locación que lo nombra en su campo *Decorado*.
+su página. Dónde se filma: la locación de arriba (si vive adentro de una), su campo *Locación*, o una locación que lo
+nombra en su campo *Decorado*.
 
 **Día y plan.**
 

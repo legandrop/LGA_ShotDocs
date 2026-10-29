@@ -17,6 +17,7 @@ import {
   stepFind,
   subscribeFind,
   undoReplace,
+  viewDom,
   type ReplaceResult,
 } from './findEditor';
 import { closeFindBar, dropFindTarget, getFindUi, hasFindTarget, takeFindTarget, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
@@ -118,7 +119,7 @@ export function FindBar({
     // editor se vuelve a montar, se busca como siempre).
     const timer = setTimeout(
       () => {
-        if (view.isDestroyed) return;
+        if (!viewDom(view)) return;
         if (ui.query.trim()) {
           setFind(view, ui.query, { matchCase: ui.matchCase, wholeWord: ui.wholeWord });
           // Con la página a medio bajar el pedido se guarda: al completarse el editor se vuelve a montar.
@@ -143,7 +144,8 @@ export function FindBar({
   // Al irse este editor (o la barra), deja de acomodar su coincidencia: sin escuchas ni observadores sueltos.
   useEffect(
     () => () => {
-      if (view) stopKeepingInView(view.dom);
+      const dom = view && viewDom(view);
+      if (dom) stopKeepingInView(dom);
     },
     [view],
   );

@@ -1,12 +1,25 @@
 import { useEffect, useState } from 'react';
 import { pendingInviteTarget } from '../invite';
 import { useServices } from '../services';
+import { takeLaunchIntent } from '../tour/reload';
 import { lazyPart, Part } from '../ui/lazyPart';
-import { ACCOUNT_MARK, decideStart, dismissTour, offerTour, readDeviceTour, setAccountMarker, startTour, syncAccountMark, useTourUi } from './tourState';
+import {
+  ACCOUNT_MARK,
+  appTourHalfway,
+  decideStart,
+  dismissTour,
+  inTourDocument,
+  offerTour,
+  readDeviceTour,
+  setAccountMarker,
+  startTour,
+  syncAccountMark,
+  useTourUi,
+} from './tourState';
 
 // Lo de la recorrida que va en la primera carga (Docs/Doc_Tutorial.md, sección 4): decide al abrir si arranca, si
 // ofrece retomarla o la tarjeta de primera vez, y anota en la cuenta que ya se vio. El motor se baja solo cuando
-// hay algo para mostrar.
+// hay algo para mostrar. En el documento de práctica (tour.html) no decide nada: el recorrido ya arrancó y no hay cuenta.
 
 const TourLayer = lazyPart(() => import('./TourLayer').then((m) => m.TourLayer));
 
@@ -23,6 +36,7 @@ export function TourHost() {
   // "Ya la vi" en la cuenta: en los metadatos del usuario de Supabase Auth del workspace (corrección 12). Sin red
   // queda para después: se vuelve a probar al abrir la app y al volver la red.
   useEffect(() => {
+    if (inTourDocument()) return;
     setAccountMarker(async () => {
       const { error } = await client.auth.updateUser({ data: { [ACCOUNT_MARK]: 1 } });
       return !error;
@@ -38,6 +52,13 @@ export function TourHost() {
 
   // Qué mostrar al abrir: una vez por instancia de servicios (cada workspace y cada sesión).
   useEffect(() => {
+    if (inTourDocument()) return;
+    // Desde el documento de práctica se pidió un recorrido de la app (la ayuda de allá): arranca acá.
+    const launch = takeLaunchIntent();
+    if (launch) {
+      startTour(launch.tour, launch.chapter);
+      return () => dismissTour();
+    }
     let live = true;
     void (async () => {
       let accountSeen = false;
@@ -49,7 +70,7 @@ export function TourHost() {
         // Sin sesión legible, solo cuenta el dispositivo.
       }
       if (!live) return;
-      const mode = decideStart({ firstLoad: !!services.firstLoad, ...opened, device: readDeviceTour(), accountSeen });
+      const mode = decideStart({ firstLoad: !!services.firstLoad, ...opened, device: readDeviceTour(), halfway: appTourHalfway(), accountSeen });
       if (mode === 'running') startTour();
       else if (mode !== 'off') offerTour(mode);
     })();

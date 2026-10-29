@@ -13,6 +13,8 @@ import { countsForSheets, isContentMutation } from './SheetBreaks';
 import {
   FIND_REPLACE_META,
   canUndoReplace,
+  clearFind,
+  viewDom,
   closeFind,
   findExtension,
   hiddenCount,
@@ -550,5 +552,20 @@ describe('lo que no se ve', () => {
     expect(replaceAll(editor, 'dos').replaced).toBe(2);
     expect(updates).toBe(1);
     expect(texts(editor)).toEqual(['toma dos', 'toma dos']);
+  });
+});
+
+describe('clearFind con el editor sin montar', () => {
+  it('no tira el error de la vista (antes la página mostraba «This page can’t be shown»)', () => {
+    // La vista de tiptap de un editor que todavía no se montó tira un error al leer `dom`.
+    const view = {
+      get dom(): HTMLElement {
+        throw new Error('[tiptap error]: The editor view is not available.');
+      },
+    };
+    expect(() => clearFind(view as never)).not.toThrow();
+    expect(() => closeFind(view as never)).not.toThrow();
+    expect(viewDom(view as never)).toBeNull();
+    expect(viewDom({ isDestroyed: true } as never)).toBeNull();
   });
 });

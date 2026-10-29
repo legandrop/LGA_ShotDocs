@@ -9,7 +9,8 @@ import { bareLocationName, locationFromTitle } from './register';
 // Crear una escena o una locación que el texto nombra y no existe (Docs/Doc_Relaciones.md, sección 15; E7, D512–D517,
 // D525). Una sola función de guardas (`createGuard`, pura) y una sola de crear (`createEntity`), usadas desde el `/`, el
 // adelanto de un pendiente, la cabecera del día, *Map › Pending* y el «+» de cada parte del *Overview* (D813), que
-// también crea decorados y deja elegir la carpeta cuando hay más de una (`in`).
+// también crea decorados y deja elegir la carpeta cuando hay más de una (`in`), y *New set* de la cabecera de una
+// locación, que crea el decorado adentro de ella (`in`, D818).
 //
 // Las guardas existen para no duplicar una escena (C8 B3): con dos páginas de la misma escena las relaciones se parten.
 // Se crea solo si:
@@ -192,10 +193,14 @@ function locationFolder(tree: GuardTree, projectId: string, registry: Registry):
   return folders.length === 1 ? { id: folders[0].id } : { reason: 'twoFolders' };
 }
 
-/** Dónde va un decorado nuevo: la carpeta de los otros decorados, o la única *Sets*. */
+/**
+ * Dónde va un decorado nuevo: la carpeta de los otros decorados, o la única *Sets*. Los que viven adentro de su locación
+ * (D818) no cuentan: un decorado nuevo sin lugar elegido no va a parar a la locación que más tiene.
+ */
 function setFolder(tree: GuardTree, projectId: string): { id: string } | { reason: 'noFolder' | 'twoFolders' } {
   const reader = kindReader(tree);
-  const sets = tree.allRowsOf(projectId).filter((r) => !tree.isTrashed(r.id) && !graphOff(tree, r) && reader.kindOf(r.id).kind === 'set');
+  const loose = (r: PageRow) => !r.parent_id || reader.kindOf(r.parent_id).kind === 'none';
+  const sets = tree.allRowsOf(projectId).filter((r) => !tree.isTrashed(r.id) && !graphOff(tree, r) && reader.kindOf(r.id).kind === 'set' && loose(r));
   const common = mostCommonParent(tree, sets.map((r) => r.id));
   if (common.id) return { id: common.id };
   if (common.tie) return { reason: 'twoFolders' };
@@ -217,7 +222,10 @@ export function folderChoices(tree: GuardTree, projectId: string, want: CreateWa
   return groups.length ? groups : folders;
 }
 
-/** La carpeta que eligió la persona, si se puede usar: está a la vista y no está fuera de las relaciones. */
+/**
+ * La carpeta que eligió la persona, si se puede usar: está a la vista y no está fuera de las relaciones. Puede ser una
+ * página con tipo: un decorado se crea adentro de su locación (*New set* de su cabecera, D818).
+ */
 function chosenFolder(tree: GuardTree, want: CreateWant): { id: string } | null {
   const row = want.in ? tree.get(want.in) : undefined;
   return row && !tree.isTrashed(row.id) && !graphOff(tree, row) ? { id: row.id } : null;

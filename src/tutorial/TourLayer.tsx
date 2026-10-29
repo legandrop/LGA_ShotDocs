@@ -1,29 +1,61 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { t, useT } from '../i18n';
+import { t, useT, type Key, type Translate } from '../i18n';
 import '../i18n/lazy/tutorial';
+import './tour.css';
 import { navigate, PRACTICE_PATH, useRoute } from '../router';
 import { useServices } from '../services';
 import { isPhoneLayout } from '../ui/commentsUi';
 import { placeNear, type Rect } from '../ui/floating';
+import { CloseIcon } from '../ui/icons';
 import { revealRow } from '../ui/treeNav';
 import { setNavOpen } from '../ui/navStore';
 import { notify } from '../ui/notice';
 import { shortcutLabel } from '../ui/shortcuts';
+import { chapterById, tourById, type ChapterDef, type Text, type TourDef } from '../tour/catalog';
+import { chapterAfter, chapterNumber, ensureNeeds, met, nextOf, placeOf, prevOf, type Place, type Target } from '../tour/engine';
+import { clearCursor, markSeen, setCursor } from '../tour/progress';
+import { practiceWorld } from '../tour/world';
 import { ShowMeBack } from './ShowMeBack';
-import { stepsFor, TOUR_STEPS, type TourAnchor, type TourStep } from './steps';
-import { continueTour, dismissTour, endShowStep, endTour, onTourSignal, practiceHooks, setTourStep, startTour, TOUR_ANCHOR_EVENT, useTourUi } from './tourState';
+import { TOUR_STEPS, type TourAnchor, type TourStep } from './steps';
+import {
+  continueTour,
+  dismissTour,
+  endShowStep,
+  endTour,
+  inTourDocument,
+  leaveTourDocument,
+  onTourSignal,
+  practiceHooks,
+  setTourAt,
+  startTour,
+  TOUR_ANCHOR_EVENT,
+  useTourUi,
+  type TourUi,
+} from './tourState';
 
-// El motor de la recorrida (Docs/Doc_Tutorial.md, sección 4): propio, sin librerías. Un foco de luz (un solo `div`
-// con una sombra enorme que oscurece el resto) que se desliza de un ancla a otra, y un globito con *Atrás*,
-// *Siguiente* y *Saltar recorrida*. Espera a que aparezca lo que señala (hasta 3 s; si no, el globito va centrado y
-// nunca se traba), no deja tocar lo señalado salvo en los pasos interactivos y se esconde si se abre un diálogo.
-// Se baja aparte (TourHost.tsx lo monta solo cuando hace falta).
+// El motor de los recorridos (Docs/Doc_Tutorial.md, sección 4; Docs/Plan_Proyecto_Desde_Cero.md, sección 6): propio,
+// sin librerías. Un foco de luz (un solo `div` con una sombra enorme que oscurece el resto, 27 %) con un aro verde que
+// pulsa, y un globito con el capítulo y el paso, *Back*, *Next*, *Skip chapter* y ×. Los pasos salen del catálogo
+// (src/tour/catalog.ts), por id:
+// - `info`: explica; la app queda tapada (un clic afuera hace pulsar el globito) y *Next* sigue.
+// - `do`: la persona hace la acción de verdad en la app, que queda a mano y sin oscurecer. Cuando la condición del paso
+//   se cumple, el globito dice «Done» medio segundo y avanza solo. *Next* queda gris: nunca hace la acción.
+// - `card`: tarjeta centrada.
+// *Back* no deshace: si el paso de antes ya está cumplido, dice «Already done» y no avanza solo. Esc dos veces sale (el
+// primero pregunta en el globito, con *Keep going*). El globito nunca le roba el foco a la app: las teclas (→, Enter, ←,
+// Esc) se escuchan en la ventana. Espera a que aparezca lo que señala (hasta 3 s; si no, va centrado y nunca se traba).
+// Antes de un capítulo deja listo lo que necesita (`needs`). Se baja aparte (TourHost.tsx lo monta solo cuando hace
+// falta; el documento de práctica, siempre).
 
 /** Cuánto se espera un ancla que todavía no está (una parte que se baja aparte, el editor, el cajón). */
 const ANCHOR_WAIT_MS = 3000;
 /** El aire entre el ancla y el borde del foco de luz. */
 const PAD = 6;
+/** Cuánto se ve «Done» antes de pasar solo al paso que sigue. */
+const DONE_MS = 500;
+/** Cada cuánto se mira si un paso de acción se cumplió (solo lee memoria). */
+const POLL_MS = 200;
 /** Lo que, abierto, tapa la página: la recorrida se esconde hasta que se cierra. */
 const MODAL = '[aria-modal="true"], .modal-backdrop, .carrete, dialog[open]';
 
@@ -31,10 +63,29 @@ export function TourLayer() {
   const ui = useTourUi();
   const route = useRoute();
   if (ui.mode === 'invite') return <InviteCard />;
-  if (ui.mode === 'resume') return <ResumeCard step={ui.step} />;
+  if (ui.mode === 'resume') return <ResumeCard ui={ui} />;
   if (ui.mode !== 'running') return null;
   if (ui.only) return <ShowMe key={ui.nonce} id={ui.only.id} onPractice={route.name === 'practice'} />;
-  return <Running key={ui.nonce} step={ui.step} onPractice={route.name === 'practice'} />;
+  const tour = tourById(ui.tour);
+  if (!tour) return <Unknown />;
+  return <Running key={ui.nonce} ui={ui} tour={tour} onPractice={route.name === 'practice'} />;
+}
+
+/** Un recorrido que ya no está en el catálogo (una ayuda vieja en otra pestaña): no se traba nada. */
+function Unknown() {
+  useEffect(() => dismissTour(), []);
+  return null;
+}
+
+/** Un texto del catálogo (clave del diccionario o `{ en, es }`) con sus `{valores}` y `**negritas**`. */
+function textOf(tr: Translate, text: Text, params: Record<string, string> = {}): string {
+  if (typeof text === 'string') return tr(text as Key, params);
+  return text[tr.lang].replace(/\{(\w+)\}/g, (all, name: string) => params[name] ?? all);
+}
+
+function rich(text: string): ReactNode {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.length === 1 ? text : parts.map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : part));
 }
 
 /**
@@ -76,7 +127,7 @@ function ShowMe({ id, onPractice }: { id: string; onPractice: boolean }) {
     if (!step) endShowStep();
   }, [step]);
   if (!step || !onPractice) return null;
-  return <StepView step={step} index={0} total={1} phone={phone} single />;
+  return <StepView step={step} phone={phone} />;
 }
 
 function Card({ text, sub, primary, onPrimary, secondary, onSecondary }: { text: string; sub?: string; primary: string; onPrimary: () => void; secondary: string; onSecondary: () => void }) {
@@ -105,20 +156,13 @@ function InviteCard() {
   return <Card text={tr('tour.invite')} primary={tr('tour.start')} onPrimary={() => startTour()} secondary={tr('tour.notNow')} onSecondary={dismissTour} />;
 }
 
-/** "¿Seguimos la recorrida? · Paso 4 de 10" (se recargó a mitad). */
-function ResumeCard({ step }: { step: number }) {
+/** "¿Seguimos la recorrida? · Cap. 2 · Escribir en una página" (se recargó a mitad). */
+function ResumeCard({ ui }: { ui: TourUi }) {
   const tr = useT();
-  const total = stepsFor(isPhoneLayout()).length;
-  return (
-    <Card
-      text={tr('tour.resume')}
-      sub={tr('tour.stepOf', { n: Math.min(step, total - 1) + 1, total })}
-      primary={tr('tour.continue')}
-      onPrimary={() => continueTour()}
-      secondary={tr('tour.end')}
-      onSecondary={endTour}
-    />
-  );
+  const tour = tourById(ui.tour);
+  const chapter = chapterById(ui.chapter);
+  const sub = tour && chapter ? tr('tour.resumeAt', { ch: chapterNumber(tour, chapter.id).n, title: chapter.title[tr.lang] }) : undefined;
+  return <Card text={tr('tour.resume')} sub={sub} primary={tr('tour.continue')} onPrimary={() => continueTour()} secondary={tr('tour.end')} onSecondary={endTour} />;
 }
 
 /** "Recorrida en pausa · Seguir" (la persona salió de la práctica a mitad). */
@@ -127,37 +171,127 @@ function PausedCard() {
   return <Card text={tr('tour.paused')} primary={tr('tour.continue')} onPrimary={() => continueTour()} secondary={tr('tour.end')} onSecondary={endTour} />;
 }
 
-function Running({ step, onPractice }: { step: number; onPractice: boolean }) {
-  // El diseño se elige al empezar: "3/10" no salta si cambia el ancho.
+/** Un recorrido en marcha: dónde está (por id), los requisitos del capítulo y, en la app, la práctica a la vista. */
+function Running({ ui, tour, onPractice }: { ui: TourUi; tour: TourDef; onPractice: boolean }) {
+  // El diseño se elige al empezar: la cuenta de pasos no salta si cambia el ancho.
   const [phone] = useState(isPhoneLayout);
-  const steps = useMemo(() => stepsFor(phone), [phone]);
-  const index = Math.min(Math.max(0, step), steps.length - 1);
-  const current = steps[index];
+  const place = useMemo(() => placeOf(tour, ui.chapter, ui.step, phone), [tour, ui.chapter, ui.step, phone]);
+  const inApp = tour.where === 'app';
   const [entered, setEntered] = useState(onPractice);
+  const prep = usePrepared(place?.chapter ?? null);
 
-  // Al empezar (o seguir), a la práctica; si después la persona se va a otra página, la recorrida queda en pausa.
+  // Un recorrido de la app va a la práctica; si después la persona se va a otra página, queda en pausa.
   useEffect(() => {
-    if (!onPractice) navigate(PRACTICE_PATH);
+    if (inApp && !onPractice) navigate(PRACTICE_PATH);
   }, []);
   useEffect(() => {
     if (onPractice) setEntered(true);
   }, [onPractice]);
+  // Lo que se ve queda guardado por id (un id vacío o que ya no existe se resuelve al primero).
+  useEffect(() => {
+    if (!place) {
+      dismissTour();
+      return;
+    }
+    const step = place.steps[place.index].id;
+    if (place.chapter.id !== ui.chapter || step !== ui.step) setTourAt(place.chapter.id, step, ui.via);
+    else setCursor(tour.id, { chapter: ui.chapter, step });
+  }, [place]);
 
-  if (!onPractice) return entered ? <PausedCard /> : null;
-  return <StepView key={current.id} step={current} index={index} total={steps.length} phone={phone} />;
+  if (!place) return null;
+  if (inApp && !onPractice) return entered ? <PausedCard /> : null;
+  if (prep.state !== 'ready') return <Preparing failed={prep.state === 'failed' ? prep.error : null} retry={prep.retry} onExit={() => exitTour(tour)} phone={phone} />;
+  const step = place.steps[place.index];
+  return <StepView key={step.id} step={step} phone={phone} nav={{ tour, place, via: ui.via }} />;
 }
 
-function go(index: number, total: number) {
-  if (index >= total) {
-    setNavOpen(false);
-    endTour();
-  } else setTourStep(Math.max(0, index));
+/** Los requisitos del capítulo (`needs`): listos, preparándose, o qué falló. */
+function usePrepared(chapter: ChapterDef | null): { state: 'ready' | 'preparing' | 'failed'; error: string; retry: () => void } {
+  const [done, setDone] = useState<{ id: string; error: string | null } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const id = chapter?.id ?? '';
+  const needsSome = !!chapter?.needs?.length;
+  useEffect(() => {
+    if (!chapter || !needsSome) return;
+    let live = true;
+    setDone(null);
+    ensureNeeds(chapter).then(
+      () => live && setDone({ id, error: null }),
+      (e: unknown) => live && setDone({ id, error: e instanceof Error ? e.message : String(e) }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [id, attempt]);
+  const retry = () => setAttempt((n) => n + 1);
+  if (!needsSome) return { state: 'ready', error: '', retry };
+  if (done?.id !== id) return { state: 'preparing', error: '', retry };
+  return done.error === null ? { state: 'ready', error: '', retry } : { state: 'failed', error: done.error, retry };
 }
 
-function skip() {
+/** Mientras se prepara un capítulo, la capa tapa todo; si falla, el porqué con *Try again* y salir. */
+function Preparing({ failed, retry, onExit, phone }: { failed: string | null; retry: () => void; onExit: () => void; phone: boolean }) {
+  const tr = useT();
+  return createPortal(
+    <>
+      <div className="tour-blocker" aria-hidden="true" />
+      <div className="tour-dim" aria-hidden="true" />
+      <div className={`tour-bubble tour-center${failed ? '' : ' tour-wait'}${phone ? ' sheet' : ''}`} role="dialog" aria-modal="false" aria-live="polite">
+        <p>{failed ? tr('tour.prepFailed', { error: failed }) : tr('tour.preparing')}</p>
+        {failed && (
+          <div className="tour-actions">
+            <button className="secondary" onClick={onExit}>
+              {tr('tour.exit')}
+            </button>
+            <button className="primary" onClick={retry}>
+              {tr('tour.tryAgain')}
+            </button>
+          </div>
+        )}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+// --- Moverse por el recorrido ----------------------------------------------------------------------------
+
+/** Ir al paso `to` (o terminar): el capítulo que se deja atrás queda visto. */
+function advance(tour: TourDef, place: Place, to: Target | 'end') {
+  if (to === 'end' || to.chapter !== place.chapter.id) markSeen(tour.id, place.chapter.id, place.chapter.version);
+  if (to === 'end') finishTour(tour);
+  else setTourAt(to.chapter, to.step);
+}
+
+/** *Skip chapter*: al primer paso del capítulo que sigue, sin darlo por visto (sus requisitos se preparan solos). */
+function skipChapter(tour: TourDef, place: Place, phone: boolean) {
+  const to = chapterAfter(tour, place.chapter.id, phone);
+  if (to === 'end') finishTour(tour);
+  else setTourAt(to.chapter, to.step);
+}
+
+/** Terminó: no queda nada para seguir. En el documento de práctica, se vuelve a donde estaba la persona. */
+function finishTour(tour: TourDef) {
+  clearCursor(tour.id);
   setNavOpen(false);
+  if (tour.where === 'app') endTour();
+  else leaveDocument();
+}
+
+/** Salir a mitad (Esc dos veces, ×): lo de dónde quedó se guarda para *Continue* en la ayuda. */
+function exitTour(tour: TourDef) {
+  setNavOpen(false);
+  if (tour.where === 'doc') {
+    leaveDocument();
+    return;
+  }
   endTour();
   notify(t('tour.replay'));
+}
+
+function leaveDocument() {
+  if (inTourDocument()) leaveTourDocument();
+  else dismissTour();
 }
 
 /**
@@ -174,16 +308,28 @@ function escTakenElsewhere(target: EventTarget | null): boolean {
   return isPhoneLayout() && !!document.querySelector('.comments-panel');
 }
 
+/** Donde se escribe (o un botón, que hace lo suyo con Enter): las flechas y Enter no son de la recorrida. */
+function typingIn(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest('input, textarea, select, button, [contenteditable="true"]');
+}
+
 /** Termina "Mostrame": el cajón del teléfono se cierra y se vuelve a donde estaba la persona. */
 function finishShowMe() {
   setNavOpen(false);
   endShowStep();
 }
 
-function StepView({ step, index, total, phone, single = false }: { step: TourStep; index: number; total: number; phone: boolean; single?: boolean }) {
+interface Nav {
+  tour: TourDef;
+  place: Place;
+  via?: 'back';
+}
+
+/** Un paso a la vista. Sin `nav`, es «Show me» (un solo paso, *Done* y vuelta). */
+function StepView({ step, phone, nav }: { step: TourStep; phone: boolean; nav?: Nav }) {
   const tr = useT();
   const { media } = useServices();
-  const next = useRef<HTMLButtonElement>(null);
+  const single = !nav;
   const bubble = useRef<HTMLDivElement>(null);
   const modal = useModalOpen();
   const rect = useAnchorRect(step.anchor, phone && !!step.drawer);
@@ -192,8 +338,22 @@ function StepView({ step, index, total, phone, single = false }: { step: TourSte
   // (otro relleno, el notch): decidir con la medida de la hoja donde está la hacía saltar de abajo a arriba sin parar
   // cuando lo señalado quedaba justo en el borde (pasaba en inglés, en el paso del menú "/").
   const sheetBelow = useRef<{ step: string; height: number } | null>(null);
-  const interactive = !!step.interactive;
+  // Un paso de acción deja la app a mano (sin bloquear ni oscurecer); los demás la tapan.
+  const acting = step.mode === 'do';
   const [, redraw] = useState(0);
+  const [phase, setPhase] = useState<'todo' | 'done' | 'already'>(() =>
+    nav && acting && nav.via === 'back' && step.until && met(step.until) ? 'already' : 'todo',
+  );
+  const [confirm, setConfirm] = useState(false);
+  const [nudge, setNudge] = useState(0);
+  const card = step.mode === 'card';
+  const to = nav ? nextOf(nav.tour, nav.place, phone) : 'end';
+  const from = nav ? prevOf(nav.tour, nav.place, phone) : null;
+  const canNext = !acting || phase === 'already';
+
+  // Lo de ahora, para las teclas (se escuchan en la ventana una sola vez por paso).
+  const now = useRef({ canNext, to, from, confirm });
+  now.current = { canNext, to, from, confirm };
 
   // Mientras se ve un paso, sin tooltips (styles.css); en pausa vuelven.
   useEffect(() => {
@@ -206,11 +366,11 @@ function StepView({ step, index, total, phone, single = false }: { step: TourSte
   // En un paso que no se toca, la app tampoco se alcanza con el teclado (Tab hasta el "+" crearía una página real):
   // `inert` en la app; el globito va aparte, en `body`.
   useEffect(() => {
-    if (interactive) return;
+    if (acting) return;
     const shell = document.querySelector('.shell');
     shell?.setAttribute('inert', '');
     return () => shell?.removeAttribute('inert');
-  }, [interactive]);
+  }, [acting]);
 
   // El teclado del teléfono cambia lo que se ve sin un `resize` de la ventana: la hoja se vuelve a ubicar.
   useEffect(() => {
@@ -228,37 +388,85 @@ function StepView({ step, index, total, phone, single = false }: { step: TourSte
   // Lo de antes de cada paso: el cajón del teléfono, el cursor en el renglón vacío, y que se vea lo que señala (*Pages*
   // plegada se despliega: `TOUR_ANCHOR_EVENT`, lo escucha la barra lateral).
   useEffect(() => {
-    if (step.anchor && 'tour' in step.anchor) window.dispatchEvent(new CustomEvent(TOUR_ANCHOR_EVENT, { detail: step.anchor.tour }));
+    const anchor = step.anchor;
+    if (anchor && ('tour' in anchor || 'page' in anchor)) window.dispatchEvent(new CustomEvent(TOUR_ANCHOR_EVENT, { detail: 'tour' in anchor ? anchor.tour : 'pages' }));
     // En el cuadro siguiente: al seguir desde otra página, el Shell cierra el cajón al cambiar de dirección (en el
     // mismo dibujo, después de este efecto).
     const frame = phone ? requestAnimationFrame(() => setNavOpen(!!step.drawer)) : 0;
-    if (step.interactive === 'slash') {
-      // El editor de la práctica puede no estar todavía ("Mostrame" o retomar justo en este paso): se espera hasta 3 s.
-      let tries = 0;
-      let wait = 0;
-      const focusLine = () => {
-        if (practiceHooks.focusEmptyLine) practiceHooks.focusEmptyLine();
-        else if (tries++ < ANCHOR_WAIT_MS / 100) wait = window.setTimeout(focusLine, 100);
-      };
-      focusLine();
-      // En "Mostrame" el paso queda a la vista después de elegir (para ver lo que pasó): termina con Listo.
-      const off = onTourSignal((s) => {
-        if (s === 'slash' && !single) go(index + 1, total);
-      });
-      return () => {
-        cancelAnimationFrame(frame);
-        clearTimeout(wait);
-        off();
-      };
-    }
-    return () => cancelAnimationFrame(frame);
-  }, [step, phone, index, total, single]);
+    if (step.interactive !== 'slash') return () => cancelAnimationFrame(frame);
+    // El editor de la práctica puede no estar todavía ("Mostrame" o retomar justo en este paso): se espera hasta 3 s.
+    let tries = 0;
+    let wait = 0;
+    const focusLine = () => {
+      if (practiceHooks.focusEmptyLine) practiceHooks.focusEmptyLine();
+      else if (tries++ < ANCHOR_WAIT_MS / 100) wait = window.setTimeout(focusLine, 100);
+    };
+    focusLine();
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(wait);
+    };
+  }, [step, phone]);
 
-  // El foco va al globito (la app quedó `inert`: lo que tenía el foco, como el editor, lo pierde). También cuando el
-  // globito aparece después, al irse un diálogo que lo tapaba ("Mostrame" cierra la ayuda en el mismo cambio).
+  // Un paso de acción: se mira si se cumplió (al usar el menú "/", enseguida; lo demás, cada `POLL_MS`). En «Show me»
+  // no: el paso queda a la vista para ver lo que pasó, y termina con *Done*.
   useEffect(() => {
-    if (!modal && !step.interactive) next.current?.focus({ preventScroll: true });
-  }, [step, modal]);
+    if (!nav || !acting || phase !== 'todo' || !step.until) return;
+    const until = step.until;
+    const tick = () => {
+      if (met(until)) setPhase('done');
+    };
+    tick();
+    const timer = setInterval(tick, POLL_MS);
+    const off = onTourSignal(tick);
+    return () => {
+      clearInterval(timer);
+      off();
+    };
+  }, [phase, step]);
+  // Cumplido: «Done» medio segundo y al paso que sigue.
+  useEffect(() => {
+    if (phase !== 'done' || !nav) return;
+    const timer = setTimeout(() => advance(nav.tour, nav.place, nextOf(nav.tour, nav.place, phone)), DONE_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  // Las teclas, en la ventana (el globito no se lleva el foco): → y Enter siguen (si *Next* está prendido), ← vuelve, y
+  // Esc pregunta y, la segunda vez, sale. Un Esc de otro (un menú, un diálogo) no cuenta.
+  useEffect(() => {
+    let taken = false;
+    const before = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') taken = escTakenElsewhere(e.target);
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const { canNext, to, from, confirm } = now.current;
+      if (e.key === 'Escape') {
+        // En «Show me», Esc lo atiende `ShowMe` (también con el foco en el renglón del menú "/").
+        const inEditor = e.target instanceof Element && !!e.target.closest('.bn-editor');
+        if (single || taken || (e.defaultPrevented && !inEditor)) return;
+        e.preventDefault();
+        if (confirm) exitTour(nav!.tour);
+        else setConfirm(true);
+        return;
+      }
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || typingIn(e.target) || confirm) return;
+      if (e.key === 'ArrowRight' || e.key === 'Enter') {
+        if (single) finishShowMe();
+        else if (canNext) advance(nav!.tour, nav!.place, to);
+        else return;
+        e.preventDefault();
+      } else if (e.key === 'ArrowLeft' && from) {
+        e.preventDefault();
+        setTourAt(from.chapter, from.step, 'back');
+      }
+    };
+    window.addEventListener('keydown', before, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', before, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [step]);
 
   useLayoutEffect(() => {
     const el = bubble.current;
@@ -272,28 +480,13 @@ function StepView({ step, index, total, phone, single = false }: { step: TourSte
 
   const textKey = phone && step.textPhone ? step.textPhone : step.textDrive && media.enabled ? step.textDrive : step.text;
   const params = Object.fromEntries(Object.entries(step.keys ?? {}).map(([name, id]) => [name, shortcutLabel(id, undefined, tr.lang)]));
-  const title = tr(step.title);
-  const last = index === total - 1;
+  const title = textOf(tr, step.title);
+  const where = nav ? whereLabel(tr, nav) : null;
 
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      if (single) finishShowMe();
-      else skip();
-    } else if (e.key === 'ArrowRight' || (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement))) {
-      e.preventDefault();
-      if (single) finishShowMe();
-      else go(index + 1, total);
-    } else if (e.key === 'ArrowLeft' && index > 0 && !single) {
-      e.preventDefault();
-      go(index - 1, total);
-    }
-  };
-
-  // El globito: en el teléfono, una hoja abajo de todo el ancho; en la computadora, al lado del ancla.
+  // El globito: en el teléfono, una hoja abajo de todo el ancho; en la computadora, al lado del ancla (una tarjeta, al
+  // centro).
   const viewport = { width: window.innerWidth, height: window.innerHeight };
-  const spot = rect ? { left: rect.left - PAD, top: rect.top - PAD, width: rect.width + 2 * PAD, height: rect.height + 2 * PAD } : null;
+  const spot = rect && !card ? { left: rect.left - PAD, top: rect.top - PAD, width: rect.width + 2 * PAD, height: rect.height + 2 * PAD } : null;
   let bubbleStyle: CSSProperties;
   // En el teléfono, la hoja va abajo; si taparía lo señalado (el "?" del pie del cajón), arriba.
   const belowHeight = sheetBelow.current?.step === step.id ? sheetBelow.current.height : size.height;
@@ -304,70 +497,100 @@ function StepView({ step, index, total, phone, single = false }: { step: TourSte
     bubbleStyle = { left: place.left, top: place.top };
   } else bubbleStyle = { left: (viewport.width - size.width) / 2, top: (viewport.height - size.height) / 2 };
 
+  const back = () => from && setTourAt(from.chapter, from.step, 'back');
+  const next = () => nav && advance(nav.tour, nav.place, to);
+  // Un clic en lo tapado: el globito pulsa (dónde seguir).
+  const poke = () => setNudge((n) => n + 1);
+
   return createPortal(
     <>
       {/* Lo que no se puede tocar mientras tanto (un clic en el "+" de verdad crearía una página real). */}
-      {!interactive && <div className="tour-blocker" aria-hidden="true" />}
+      {!acting && <div className="tour-blocker" aria-hidden="true" onClick={poke} />}
       {spot ? (
-        <div
-          className={`tour-spot${interactive ? ' interactive' : ''}`}
-          aria-hidden="true"
-          style={{ left: spot.left, top: spot.top, width: spot.width, height: spot.height }}
-        />
+        <div className={`tour-spot${acting ? ' interactive' : ''}`} aria-hidden="true" style={{ left: spot.left, top: spot.top, width: spot.width, height: spot.height }} />
       ) : (
-        <div className="tour-dim" aria-hidden="true" />
+        !acting && <div className="tour-dim" aria-hidden="true" />
       )}
       <div
         ref={bubble}
-        className={`tour-bubble${phone ? ' sheet' : ''}${sheetOnTop ? ' top' : ''}`}
+        key={nudge ? `n${nudge}` : 'b'}
+        className={`tour-bubble${card ? ' tour-card-step' : ''}${phone ? ' sheet' : ''}${sheetOnTop ? ' top' : ''}${nudge ? ' nudge' : ''}${phase === 'done' ? ' is-done' : ''}`}
         role="dialog"
         aria-modal="false"
         aria-labelledby="tour-title"
         aria-describedby="tour-text"
         style={bubbleStyle}
-        onKeyDown={onKeyDown}
+        // El globito no se lleva el foco: un clic en sus botones deja el foco donde estaba (en la app, en un paso de acción).
+        onMouseDown={(e) => e.preventDefault()}
       >
         <div className="tour-head">
-          {single ? (
-            <span className="mono-label">{tr('tour.showMe')}</span>
-          ) : (
-            <>
-              <span className="mono-label">
-                {index + 1}/{total}
-              </span>
-              <button className="link tour-skip" onClick={skip}>
-                {tr('tour.skip')}
+          <span className="mono-label">{single ? tr('tour.showMe') : where}</span>
+          {nav && (
+            <span className="tour-head-actions">
+              <button className="link tour-skip" onClick={() => skipChapter(nav.tour, nav.place, phone)}>
+                {tr('tour.skipChapter')}
               </button>
-            </>
+              <button className="icon-button tour-close" aria-label={tr('tour.exit')} onClick={() => setConfirm(true)}>
+                <CloseIcon size={16} />
+              </button>
+            </span>
           )}
         </div>
         <h3 id="tour-title">{title}</h3>
-        <p id="tour-text">{tr(textKey, params)}</p>
-        <div className="tour-actions">
-          {index > 0 && !single && (
-            <button className="secondary" onClick={() => go(index - 1, total)}>
-              {tr('tour.back')}
-            </button>
-          )}
-          {single ? (
-            <button ref={next} className="primary" onClick={finishShowMe}>
-              {tr('tour.done')}
-            </button>
-          ) : (
-            <button ref={next} className="primary" onClick={() => go(index + 1, total)}>
-              {last ? tr('tour.finish') : tr('tour.next')}
-            </button>
-          )}
-        </div>
+        {confirm ? (
+          <>
+            <p id="tour-text">{tr('tour.exitAsk')}</p>
+            <div className="tour-actions">
+              <button className="secondary" onClick={() => exitTour(nav!.tour)}>
+                {tr('tour.exit')}
+              </button>
+              <button className="primary" onClick={() => setConfirm(false)}>
+                {tr('tour.keepGoing')}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p id="tour-text">{rich(textOf(tr, textKey, params))}</p>
+            {acting && step.turn && phase === 'todo' && (
+              <p className="tour-turn">
+                <span className="tour-turn-label">{tr('tour.doThis')}</span> {rich(textOf(tr, step.turn, params))}
+              </p>
+            )}
+            {phase !== 'todo' && <p className={`tour-status${phase === 'done' ? ' done' : ''}`}>✓ {phase === 'done' ? tr('tour.done') : tr('tour.alreadyDone')}</p>}
+            <div className="tour-actions">
+              {from && (
+                <button className="secondary" onClick={back}>
+                  {tr('tour.back')}
+                </button>
+              )}
+              {single ? (
+                <button className="primary" onClick={finishShowMe}>
+                  {tr('tour.done')}
+                </button>
+              ) : (
+                <button className="primary" onClick={next} disabled={!canNext}>
+                  {to === 'end' ? tr('tour.finish') : tr('tour.next')}
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
       {/* «Show me»: el ‹ de la barra queda tapado por el bloqueador; una copia encima, si ahí se vería (ShowMeBack.tsx). */}
       {single && <ShowMeBack bubble={bubble} />}
       <div className="tour-live" aria-live="polite">
-        {single ? tr('tour.liveShowMe', { title }) : tr('tour.live', { n: index + 1, total, title })}
+        {single ? tr('tour.liveShowMe', { title }) : `${where}: ${title}${phase === 'done' ? ` · ${tr('tour.done')}` : ''}`}
       </div>
     </>,
     document.body,
   );
+}
+
+/** «Cap. 1/9 · Paso 2/7». */
+function whereLabel(tr: Translate, nav: Nav): string {
+  const { n, total } = chapterNumber(nav.tour, nav.place.chapter.id);
+  return tr('tour.where', { ch: n, chapters: total, n: nav.place.index + 1, total: nav.place.steps.length });
 }
 
 /** En el teléfono, lo que tapa el teclado (la hoja va arriba de él). */
@@ -393,13 +616,23 @@ function useModalOpen(): boolean {
 
 /** Los elementos del ancla que se ven (en el teléfono, el cajón cerrado queda fuera de la pantalla). */
 function anchorElements(anchor: TourAnchor): HTMLElement[] {
-  const found =
-    'tour' in anchor
-      ? [...document.querySelectorAll<HTMLElement>(`[data-tour="${anchor.tour}"]`)]
-      : anchor.blocks.flatMap((id) => {
-          const el = document.querySelector<HTMLElement>(`.bn-editor [data-id="${id}"]`);
-          return el ? [el] : [];
-        });
+  let found: HTMLElement[];
+  if ('tour' in anchor) found = [...document.querySelectorAll<HTMLElement>(`[data-tour="${anchor.tour}"]`)];
+  else if ('page' in anchor) {
+    // Las filas del árbol de las carpetas de esas etapas, en el proyecto de práctica.
+    const stages = practiceWorld()?.stages;
+    found = stages ? anchor.page.flatMap((s) => [...document.querySelectorAll<HTMLElement>(`.tree-row[data-page="${stages[s]}"]`)]) : [];
+  } else if ('fields' in anchor) {
+    // La primera tabla de la página abierta (la ficha de la plantilla).
+    const block = document.querySelector<HTMLElement>('.page .bn-editor [data-content-type="table"]');
+    // La tabla misma (el bloque ocupa todo el ancho de la página).
+    const table = block?.querySelector<HTMLElement>('table') ?? block;
+    found = table ? [table] : [];
+  } else
+    found = anchor.blocks.flatMap((id) => {
+      const el = document.querySelector<HTMLElement>(`.bn-editor [data-id="${id}"]`);
+      return el ? [el] : [];
+    });
   const visible = found.filter((el) => {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.right > 0 && r.left < window.innerWidth;
@@ -443,7 +676,10 @@ function useAnchorRect(anchor: TourAnchor | null, inDrawer: boolean): Rect | nul
         scrolled = true;
         // El cajón del teléfono se desliza: `scrollIntoView` movería también la página. Adentro del cajón solo se desplaza
         // el árbol (`.sidebar-scroll`, donde está *All synced* desde D802), y ahí se lleva lo señalado a la vista.
-        if (!inDrawer) els[0].scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+        // Un ancla más alta que la ventana (el Overview entero) va con su principio arriba: centrada, lo primero (la fila 001)
+        // quedaba fuera de la vista justo cuando el paso pide tocarlo.
+        const tall = els[0].getBoundingClientRect().height > window.innerHeight * 0.8;
+        if (!inDrawer) els[0].scrollIntoView({ block: tall ? 'start' : 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
         else {
           const tree = els[0].closest<HTMLElement>('.sidebar-scroll');
           if (tree) revealRow(els[0], tree);

@@ -7,6 +7,34 @@ respondió las preguntas el 2026-09-30** ("Decisiones"). Las fotos del ejemplo q
 pidió Lega el 2026-09-30 ("sí o sí lo tenemos que tener"). Sale de leer el código de `main` (v0.051) y el
 diseño de colapsar (`Doc_Colapsar.md`, rama `lega/colapsar`).
 
+## 0. Desde v0.308: la ayuda nueva y los recorridos por capítulos (D819, D820)
+
+Manda sobre lo que sigue donde choquen. Plan completo: `Docs/Plan_Proyecto_Desde_Cero.md`, secciones 5 y 6.
+
+- **La ayuda** (`src/help/HelpDialog.tsx`, `ToursTab.tsx`, `help.css`): arriba `LGA Shot Docs` con la versión,
+  *Developed by Lega Pugliese* y `lega.com.ar`, como las demás apps LGA. Tres pestañas: **Tours** (primero), **Topics**
+  (las entradas de antes, plegadas, con la búsqueda) y **Shortcuts**. Se agranda desde la esquina y recuerda su tamaño;
+  la barra de desplazamiento es la fina de la barra lateral (`thinScroll.ts`). En el teléfono, pantalla completa.
+- **Los recorridos** son capítulos con pasos (`src/tour/catalog.ts`; cómo se agrega uno está en su encabezado). Un paso
+  es `info` (explica), `do` (la persona hace la acción de verdad; se cumple por una condición de
+  `src/tour/conditions.ts`, en lista blanca, y *Next* nunca la hace) o `card`. El progreso se guarda en el dispositivo
+  por id y versión de capítulo (`progress.ts`). Esc dos veces sale; *Back* no deshace; *Skip chapter* y entrar por un
+  capítulo del medio arman solos lo que el capítulo necesita (`needs` → `STATES`, con las funciones de la app).
+- **Lo básico** (*Getting around*): la recorrida de siempre, ahora en tres capítulos, sobre la página de práctica.
+- **Un proyecto desde cero** corre en un documento aparte (`tour.html`, `src/tour/practiceDoc.tsx`): la app de verdad
+  sobre el servidor en memoria de las pruebas, sin login, sin red y sin tocar la base del dispositivo. Si se recarga a
+  mitad, vuelve al principio del capítulo. Nueve capítulos sobre un corto inventado, «El último tren» (20 escenas en 5
+  locaciones, fotos libres en `public/tour/img/` con `LICENSES.txt`; `src/tour/scratchData.ts`): el proyecto vacío, la
+  primera escena (*New scene*, el número en gris), su locación (*Create page* desde la escena), el decorado (adentro de
+  la locación), «veinte escenas después» (las tablas llenas), el scouting (la locación lo junta sola), el plan del día
+  (PLN, con sus escenas como link), el reporte (REP, una sección por escena) y el *Overview* para postproducción (la
+  cabecera de la escena junta locación, decorado, scouting, plan y reporte). Las fechas de rodaje del corto se cuentan
+  desde hoy, así el plan y el reporte se crean con la fecha que propone la app.
+- **Prueba:** cada capítulo se recorrió con clics de verdad, también entrando por el medio. Lo que el recorrido mostró que
+  no cerraba se arregló en la app: la cabecera de la escena muestra una locación escrita que todavía no tiene página,
+  con *Create page*; el plan propone la locación del desglose y escribe sus escenas como link (si no, el reporte no leía
+  el plan); y un error que dejaba la página en blanco al volver a montarse el editor (`clearFind`).
+
 ## Qué se pide
 
 1. **La primera vez que alguien entra**, aparece un documento de ejemplo ya armado y una **recorrida con

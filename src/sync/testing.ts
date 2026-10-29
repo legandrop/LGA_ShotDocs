@@ -858,6 +858,8 @@ export class FakeServer {
   heicTimeoutMs?: number;
   /** Lo que el navegador saca de un archivo (por defecto `fakeProbe`; las pruebas lo cambian). */
   probe: (file: Blob, mime: string) => Promise<Probe> = fakeProbe;
+  /** La imagen nítida de una foto (por defecto `fakeViewImage`; el proyecto de práctica, en un navegador, usa la de verdad). */
+  viewImage: (file: Blob, mime: string, side?: number) => Promise<Blob | null> = fakeViewImage;
   /**
    * La vista previa de un adjunto (Docs/Doc_Adjuntos.md, entrega 2). Por defecto ninguna (node no tiene canvas);
    * las pruebas ponen `fakePreview` o una que tira `PreviewUnavailable`.
@@ -3869,7 +3871,7 @@ export async function makeDevice(
     probe: (file, mime) => server.probe(file, mime),
     preview: (file, mime, name, onStart) => server.preview(file, mime, name, onStart),
     playMark: async (thumb) => thumb,
-    viewImage: fakeViewImage,
+    viewImage: (file, mime, side) => server.viewImage(file, mime, side),
     convertHeic: (file) => server.convertHeic(file),
     heicTimeoutMs: server.heicTimeoutMs,
     // Sin red, el dispositivo lo sabe (como `navigator.onLine` en false).

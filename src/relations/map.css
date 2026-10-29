@@ -213,8 +213,19 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
-  overflow: hidden;
+  /* `clip` y no `hidden`: con `hidden` la grilla sería la caja que se desplaza y el encabezado no quedaría pegado. */
+  overflow: clip;
   min-width: 0;
+}
+
+/* El encabezado queda arriba mientras se ve alguna fila y se va con la última, como las carpetas de la barra lateral
+   (D821). Pegado debajo de la barra de arriba (`.topbar`: 52 px y el borde del iPhone). */
+.mp-grid > .head {
+  position: sticky;
+  top: calc(52px + env(safe-area-inset-top, 0px));
+  z-index: 2;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 1px 0 var(--border-soft);
 }
 
 .mp-grid .head {
@@ -222,7 +233,21 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--faint);
-  background: none;
+  background: var(--surface);
+}
+
+.mp-grid .head [role='columnheader'] {
+  position: relative;
+}
+
+/* Cada columna mide lo que diga `--cols` (las vistas que se agrandan, `useGridCols` de MapView.tsx). En el teléfono las
+   filas se acomodan en dos renglones y no hay encabezado: ahí no. */
+@media (min-width: 761px) {
+  .mp-grid.cols .mp-srow,
+  .mp-grid.cols .mp-drow,
+  .mp-grid.cols .mp-lrow {
+    grid-template-columns: var(--cols);
+  }
 }
 
 .mp-link:hover {

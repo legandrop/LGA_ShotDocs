@@ -17,6 +17,7 @@ import { searchSession, type ResultRequest } from './projectSearchUi';
 import { existingRelationsSession } from './relationsUi';
 import { redoReplace, undoReplace, useReplaceSession } from './replaceUi';
 import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
+import { createStageFolders } from '../relations/projectStructure';
 
 // El panel de buscar en el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, y "Cómo quedó (entrega 2)"). Se abre
 // con la lupa de la barra lateral o con Ctrl/⌘+K; en la computadora es una ventana arriba al centro y en el
@@ -225,7 +226,10 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     onGo?.();
     onClose();
     try {
-      switchTo(await tree.createProject(name));
+      const id = await tree.createProject(name);
+      // Todo proyecto nuevo arranca con las carpetas de las etapas, vacías (D817).
+      await createStageFolders(tree, id, t.lang);
+      switchTo(id);
     } catch {
       notify(t('project.saveFailed'));
     }

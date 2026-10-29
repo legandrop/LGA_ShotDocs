@@ -186,6 +186,12 @@ describe('el título escrito en la página con pausas', () => {
     await markFolderHolds(device.tree, desglose, 'scene');
     const esc = await device.tree.create(desglose, '101_074 | Llegan');
     const title = await open(device, esc);
+    // El título de una escena se ve partido (D818): el campo tiene solo el nombre; un clic en el número gris pone el
+    // título entero en el campo, para cambiar el número.
+    expect(title.value).toBe('Llegan');
+    act(() => title.parentElement!.querySelector<HTMLButtonElement>('.page-title-code')!.click());
+    await wait(30);
+    expect(title.value).toBe('101_074 | Llegan');
     typeTitle(title, '101_0');
     await pause();
     typeTitle(title, '101_07');
@@ -198,5 +204,8 @@ describe('el título escrito en la página con pausas', () => {
     act(() => title.blur());
     await wait(100);
     expect(device.tree.get(esc)?.settings?.entity).toEqual({ kind: 'scene', code: '101_075' });
+    // Al salir, vuelve a partirse con el número nuevo.
+    expect(title.value).toBe('Llegan');
+    expect(title.parentElement!.querySelector('.page-title-code')!.textContent).toBe('101_075');
   });
 });

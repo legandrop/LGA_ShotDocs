@@ -21,11 +21,25 @@ export const tutorial = {
 
   // --- La recorrida ---
   'tour.label': { en: "Tour", es: "Recorrida" },
-  'tour.live': { en: "Step {n} of {total}: {title}", es: "Paso {n} de {total}: {title}" },
+  // «Cap. 1/9 · Paso 2/7»: arriba del globito, y lo que dice el lector de pantalla con el título.
+  'tour.where': { en: "Ch. {ch}/{chapters} · Step {n}/{total}", es: "Cap. {ch}/{chapters} · Paso {n}/{total}" },
   'tour.next': { en: "Next", es: "Siguiente" },
   'tour.back': { en: "Back", es: "Atrás" },
   'tour.finish': { en: "Finish", es: "Terminar" },
-  'tour.skip': { en: "Skip tour", es: "Saltar recorrida" },
+  'tour.skipChapter': { en: "Skip chapter", es: "Saltear capítulo" },
+  'tour.exit': { en: "Exit tour", es: "Salir del recorrido" },
+  'tour.exitAsk': {
+    en: "Exit the tour? You can pick it up again from the help (?).",
+    es: "¿Salís del recorrido? Lo retomás cuando quieras desde la ayuda (?).",
+  },
+  'tour.keepGoing': { en: "Keep going", es: "Seguir" },
+  // Un paso de acción: lo que hay que hacer en la app (Next no lo hace), y cuando se hizo.
+  'tour.doThis': { en: "Do this:", es: "Hacé esto:" },
+  'tour.alreadyDone': { en: "Already done", es: "Ya está hecho" },
+  // Antes de un capítulo se prepara lo que necesita del anterior (Skip chapter, o entrar por el medio).
+  'tour.preparing': { en: "Getting this chapter ready…", es: "Preparando el capítulo…" },
+  'tour.prepFailed': { en: "This chapter couldn't be prepared: {error}", es: "No se pudo preparar el capítulo: {error}" },
+  'tour.tryAgain': { en: "Try again", es: "Probar de nuevo" },
   'tour.replay': {
     en: "You can take the tour again from the help (?).",
     es: "Podés volver a verla desde la ayuda (?).",
@@ -33,7 +47,7 @@ export const tutorial = {
   'tour.paused': { en: "Tour paused", es: "Recorrida en pausa" },
   'tour.continue': { en: "Continue", es: "Seguir" },
   'tour.resume': { en: "Continue the tour?", es: "¿Seguimos la recorrida?" },
-  'tour.stepOf': { en: "Step {n} of {total}", es: "Paso {n} de {total}" },
+  'tour.resumeAt': { en: "Ch. {ch} · {title}", es: "Cap. {ch} · {title}" },
   'tour.end': { en: "End", es: "Terminar" },
   'tour.invite': { en: "First time here? A two-minute tour", es: "¿Primera vez? Recorrida de 2 minutos" },
   'tour.start': { en: "Start", es: "Empezar" },
@@ -68,6 +82,7 @@ export const tutorial = {
     en: "Type / on an empty line: headings, lists, tables, script, questions and images. Drag a block by its ⋮⋮ handle.",
     es: "Escribí / en un renglón vacío: títulos, listas, tablas, guion, preguntas y fotos. Con ⋮⋮, al costado, arrastrás un bloque.",
   },
+  'tour.slash.turn': { en: "type **/** on the empty line and pick something", es: "escribí **/** en el renglón vacío y elegí algo" },
   'tour.photos.title': { en: "Images", es: "Fotos" },
   'tour.photos.text': {
     en: "Photos go in the line, like letters: you can write right next to them. One click selects one, another opens it full screen; its bar sets the size or arranges them in rows.",

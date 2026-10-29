@@ -1,0 +1,746 @@
+/* La ayuda (Docs/Doc_Tutorial.md, sección 5; Docs/Plan_Proyecto_Desde_Cero.md, sección 5). Se baja con el diálogo
+   (HelpDialog.tsx): no va en la primera carga. El botón "?" de la barra sigue en styles.css. */
+
+.help-backdrop {
+  padding-top: 8vh;
+}
+
+.help-dialog {
+  /* El tamaño lo pone HelpDialog.tsx (el guardado en el dispositivo, dentro de la ventana). */
+  width: min(760px, 100%);
+  height: min(640px, 84vh);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--menu-border);
+  border-radius: 14px;
+  background: var(--menu-bg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  outline: none;
+}
+
+/* --- El encabezado, como en las demás apps LGA: el nombre en violeta, la versión, quién la hizo y su página. --- */
+
+.help-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 14px 12px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.help-brand {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.help-app {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: rgb(127, 98, 170);
+}
+
+.help-version {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.help-developed {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* El link a lega.com.ar es el mismo en todas las apps: #8C7ED9 y sin subrayar. */
+.help-link {
+  align-self: flex-start;
+  font-size: 14px;
+  color: #8c7ed9;
+  text-decoration: none;
+}
+
+.help-link:hover {
+  color: #b3a8ec;
+  text-decoration: none;
+}
+
+/* En el tema claro, el violeta del nombre y el del link no contrastan con el fondo: unos más oscuros. */
+:root:not([data-theme='dark']) .help-app {
+  color: rgb(104, 76, 148);
+}
+
+:root:not([data-theme='dark']) .help-link {
+  color: #5f4fc0;
+}
+
+:root:not([data-theme='dark']) .help-link:hover {
+  color: #7d6fd6;
+}
+
+.help-close {
+  flex: none;
+  margin-top: -2px;
+}
+
+/* --- Las pestañas ------------------------------------------------------------------------------------------- */
+
+.help-tabs {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.help-tab {
+  position: relative;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 10px 10px 9px;
+  font-size: 14px;
+  color: var(--muted);
+  box-shadow: inset 0 -2px 0 transparent;
+}
+
+.help-tab:hover {
+  color: var(--text);
+  background: none;
+}
+
+.help-tab.selected {
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* Hay novedades en *Topics*. */
+.help-tab-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 2px;
+}
+
+.help-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* --- La barra de desplazamiento fina de la barra lateral (styles.css, `.sidebar-scroll`; thinScroll.ts). ----- */
+
+.help-scroll {
+  scrollbar-gutter: stable;
+}
+
+.help-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.help-scroll::-webkit-scrollbar-track,
+.help-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.help-scroll::-webkit-scrollbar-button {
+  display: none;
+}
+
+.help-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: transparent padding-box;
+  transition: background-color 0.2s;
+}
+
+.help-scroll.show-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+.help-scroll::-webkit-scrollbar-thumb:hover,
+.help-scroll::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--text) 30%, transparent);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .help-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .help-scroll.show-scrollbar {
+    scrollbar-color: color-mix(in srgb, var(--text) 18%, transparent) transparent;
+  }
+}
+
+/* --- La esquina para agrandarla (en la computadora). --------------------------------------------------------- */
+
+.help-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  touch-action: none;
+  /* Dos rayitas en diagonal, como la esquina de una ventana. */
+  background:
+    linear-gradient(135deg, transparent 0 55%, var(--muted-2) 55% 61%, transparent 61% 72%, var(--muted-2) 72% 78%, transparent 78%);
+  opacity: 0.7;
+}
+
+.help-resize:hover {
+  opacity: 1;
+}
+
+/* --- Topics ------------------------------------------------------------------------------------------------- */
+
+.help-topics {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.help-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 24px 4px;
+  padding: 0 10px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.help-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  padding: 0;
+}
+
+.help-search input:focus,
+.help-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border: none;
+}
+
+.help-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.help-content {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 6px 16px 40px 24px;
+}
+
+.help-section h3 {
+  margin: 20px 0 4px;
+  font-size: 15px;
+}
+
+.help-entry {
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.help-entry h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Una entrada plegada: el título es el botón que la despliega. */
+.help-entry-toggle {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 7px 0;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.help-entry-toggle:hover {
+  background: none;
+  color: var(--accent);
+}
+
+.help-chevron {
+  flex: none;
+  display: inline-flex;
+  margin-top: 2px;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.help-entry.open .help-chevron {
+  transform: rotate(90deg);
+}
+
+.help-entry h4:not(:has(button)) {
+  padding: 7px 0 3px;
+}
+
+.help-entry-body {
+  padding: 0 0 10px 20px;
+}
+
+.help-entry:not(:has(.help-entry-toggle)) .help-entry-body {
+  padding-left: 0;
+}
+
+.help-entry p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.help-entry.off h4,
+.help-entry.off .help-entry-body > p:not(.help-reason) {
+  opacity: 0.6;
+}
+
+.help-entry .help-reason {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Los botones de una entrada: su acción (la recorrida, practicar, instalar) y "Mostrame" (entrega 3). */
+.help-entry .help-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Las novedades (entrega 3): la marca "Nuevo" al lado del título y la sección de arriba. */
+.help-new {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: 1px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.help-news-intro {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.help-entry-section {
+  display: block;
+  margin-top: 8px;
+}
+
+.help-results {
+  padding-top: 4px;
+}
+
+.help-empty {
+  padding-top: 24px;
+}
+
+.help-dialog kbd {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.help-dialog code {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  margin-right: 4px;
+  border-radius: 4px;
+  background: var(--hover);
+}
+
+/* --- Shortcuts ---------------------------------------------------------------------------------------------- */
+
+.help-keys-group h4 {
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.help-keys table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.help-keys td {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+  color: var(--text-2);
+}
+
+.help-keys .help-keys-label {
+  width: 42%;
+  padding-right: 12px;
+}
+
+/* --- Tours -------------------------------------------------------------------------------------------------- */
+
+.help-tours {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.help-tour-list {
+  flex: none;
+  width: 230px;
+  margin: 0;
+  padding: 12px 8px;
+  list-style: none;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.help-tour {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+
+.help-tour strong {
+  grid-column: 1 / -1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.help-tour-meta {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.help-tour:hover {
+  background: var(--hover);
+}
+
+.help-tour.selected {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.help-tour-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.help-tour-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.help-tour-bar.done > span {
+  background: #5fd38a;
+}
+
+.help-tour-seen {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.help-tour-detail {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px 16px 28px 24px;
+}
+
+.help-tour-detail h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.help-tour-summary {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.help-chapters {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-soft);
+}
+
+.help-chapters > li {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.help-chapter {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+
+.help-chapter:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.help-chapter.chosen {
+  background: var(--hover);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* «Acá quedaste»: la fila resaltada. */
+.help-chapter.here {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.help-chapter.soon {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.help-chapter-n {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* Visto: el círculo verde con la tilde. */
+.help-chapter-n.seen {
+  border-color: #5fd38a;
+  background: #5fd38a;
+  color: #10301c;
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.help-chapter-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.help-chapter-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.help-chapter-summary {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.help-chapter-state {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.help-chapter.here .help-chapter-state {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.help-chapter.updated .help-chapter-state {
+  color: var(--warn);
+}
+
+.help-chapter-min {
+  flex: none;
+  width: 44px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Al pie de la columna, siempre a la vista: con muchos capítulos el índice se desplaza y *Continue* quedaba abajo. */
+.help-tour-actions {
+  position: sticky;
+  bottom: -28px;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -16px 0 -24px;
+  padding: 10px 16px 10px 24px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--menu-bg);
+}
+
+.help-tour-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* --- En el teléfono: pantalla completa, los recorridos arriba. ---------------------------------------------- */
+
+@media (max-width: 760px) {
+  .help-backdrop {
+    padding: 0;
+  }
+
+  .help-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .help-head {
+    padding: calc(12px + env(safe-area-inset-top)) 8px 10px 16px;
+  }
+
+  .help-app {
+    font-size: 18px;
+  }
+
+  .help-tabs {
+    padding: 0 8px;
+  }
+
+  .help-search {
+    margin: 10px 16px 4px;
+    height: 40px;
+  }
+
+  .help-content {
+    padding: 4px 16px 32px;
+  }
+
+  .help-keys .help-keys-label {
+    width: 46%;
+  }
+
+  .help-tours {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .help-tour-list {
+    width: auto;
+    flex-direction: row;
+    overflow: visible;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .help-tour-list > li {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .help-tour {
+    height: 100%;
+    border-color: var(--border);
+  }
+
+  .help-tour.selected {
+    border-color: var(--accent);
+  }
+
+  .help-tour-detail {
+    overflow: visible;
+    padding: 14px 16px 28px;
+  }
+
+  /* Acá se desplaza todo junto (`.help-tours`, sin relleno abajo). */
+  .help-tour-actions {
+    bottom: 0;
+    margin: 0 -16px;
+    padding: 10px 16px;
+  }
+
+  .help-chapter-summary {
+    white-space: normal;
+  }
+}

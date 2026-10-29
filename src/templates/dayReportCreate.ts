@@ -11,7 +11,7 @@ import { editorSchemaOptions, schema } from '../ui/editorSchema';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { findUnknownContent } from '../ui/unknownContent';
 import { isEmptyPage } from './apply';
-import { builtinBlocks, type TemplateBlock } from './builtin';
+import { builtinBlocks, builtinTexts, type TemplateBlock } from './builtin';
 import { BUILTIN_ONSET, BUILTIN_PLAN } from './builtinIds';
 import { dateAtStart, dayInTitle, dayReportsMark, isReusableReport, localDate, newDayTitle, planTitleFor, weekOf } from './dayReport';
 import { fillReport, readFacts, type ReportFacts } from './dayReportFacts';
@@ -312,11 +312,15 @@ export async function createDayPlan(
   plan: DayReportPlan,
   input: DayReportInput,
   lang: string,
-  /** `title`: el de *Plan tomorrow*; `reuse`: la página de un intento que no pudo escribir el contenido (no se crea otra). */
-  options: { title?: string; reuse?: string } = {},
+  /**
+   * `title`: el de *Plan tomorrow*; `reuse`: la página de un intento que no pudo escribir el contenido (no se crea otra);
+   * `scenes`: las escenas que el desglose planea para esa fecha (`PlanScene`: el número con link y el nombre), una por renglón de la tabla
+   * *Scenes* (D820): así el plan nace unido a ellas.
+   */
+  options: { title?: string; reuse?: string; scenes?: (string | PlanScene)[] } = {},
 ): Promise<string> {
   const { tree } = deps;
-  const blocks = fillReport(builtinBlocks('dayPlan', lang), { ...input, previous: null }, lang);
+  const blocks = withPlanScenes(fillReport(builtinBlocks('dayPlan', lang), { ...input, previous: null }, lang), options.scenes ?? [], lang);
   const reports = plan.reports.filter((r) => r.date === input.date && tree.get(r.id) && !tree.isTrashed(r.id));
   const title = options.title || dayPlanTitle(plan, input, lang);
   const old = options.reuse ? tree.get(options.reuse) : undefined;
@@ -338,6 +342,42 @@ export async function createDayPlan(
     throw new DayReportWriteError(id, err);
   }
   return id;
+}
+
+/** Una escena del plan nuevo: su número, su página (el link) y su nombre. */
+export interface PlanScene {
+  code: string;
+  pageId: string | null;
+  name: string;
+}
+
+/**
+ * La tabla *Scenes* de la plantilla del plan con una escena por renglón (sin escenas, queda como está). Cada escena va
+ * con su número como link a su página, como las secciones del reporte: así la cabecera del reporte de ese día lee las
+ * escenas del plan (un número suelto en una tabla no se reconoce como escena).
+ */
+export function withPlanScenes(blocks: TemplateBlock[], scenes: (string | PlanScene)[], lang: string): TemplateBlock[] {
+  if (!scenes.length) return blocks;
+  const heading = builtinTexts(lang).dayPlan.scenes;
+  const at = blocks.findIndex((b) => b.type === 'heading' && b.content === heading);
+  const table = blocks[at + 1];
+  if (at < 0 || table?.type !== 'table') return blocks;
+  const content = table.content as { rows: { cells: unknown[] }[] };
+  // Los renglones vacíos de la plantilla dejan su lugar a las escenas.
+  const [header] = content.rows;
+  const rows = scenes.map((s) => ({ cells: header.cells.map((_, i) => (i === 0 ? planSceneCell(s) : '')) }));
+  const out = [...blocks];
+  out[at + 1] = { ...table, content: { ...content, rows: [header, ...rows] } };
+  return out;
+}
+
+function planSceneCell(s: string | PlanScene): unknown {
+  if (typeof s === 'string') return s;
+  if (!s.pageId) return s.name ? `${s.code} | ${s.name}` : s.code;
+  return [
+    { type: 'link', href: `/p/${s.pageId}`, content: [{ type: 'text', text: s.code, styles: {} }] },
+    ...(s.name ? [{ type: 'text', text: ` | ${s.name}`, styles: {} }] : []),
+  ];
 }
 
 /**

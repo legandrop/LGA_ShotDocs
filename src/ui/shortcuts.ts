@@ -231,6 +231,8 @@ export const SHORTCUTS: Shortcut[] = [
   // Las pestañas de una ventana (Install app: iPhone, Android, computadora) y las del globito del día (*New day report* /
   // *New day plan*).
   { id: 'tabsMove', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'menus', context: 'tabs', owner: 'app', source: 'dom' },
+  // Con el foco en el borde de una columna de una tabla que arma la app (D821): más angosta, más ancha.
+  { id: 'columnResize', keys: ['ArrowLeft', 'ArrowRight'], place: 'menus', context: 'column', owner: 'app', source: 'dom' },
 
   // --- La recorrida (con el foco en el globito) ---
   { id: 'tourNext', keys: ['ArrowRight', 'Enter'], place: 'tour', owner: 'app', source: 'dom' },

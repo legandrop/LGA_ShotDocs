@@ -137,7 +137,8 @@ describe('Overview y Scenes en la barra lateral', () => {
     const nav = host.querySelector('.sidebar')!;
     const order = [...nav.querySelectorAll('.ov-nav, .section-title')].map((x) => (x.classList.contains('ov-nav') ? 'overview' : 'pages'));
     expect(order).toEqual(['overview', 'pages']);
-    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Locations', 'Scenes', 'Shoot days', 'Shots']);
+    // Las escenas primero, como en Pages (D818).
+    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Scenes', 'Locations', 'Shoot days', 'Shots']);
     expect(eps(host).map((b) => [b.textContent, b.getAttribute('aria-expanded')])).toEqual([
       ['Episode 10118', 'false'],
       ['Episode 1042', 'false'],
@@ -169,8 +170,8 @@ describe('Overview y Scenes en la barra lateral', () => {
     // Un renglón por tipo, «Etapa | Tipo» y sus links; vacío, lo dice (ya leyó todo).
     expect([...view.querySelectorAll('.ss-row')].map((r) => r.textContent)).toEqual([
       'Preproduction | Breakdown027 | La ambulancia empieza a zigzaguear · 3 shots',
-      'Preproduction | SetAmbulancia | Ruta INT',
       'Preproduction | LocationLa Arenera (estudio), CENADE',
+      'Preproduction | SetAmbulancia | Ruta INT',
       'Preproduction | Open questions? ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1',
       'Scouting | ReportsTech scout 06/01',
       'Planning | Day planNo day plan names it',
@@ -321,13 +322,13 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(document.activeElement).toBe(part('Locations').querySelector('.ov-part-name'));
     click(part('Locations').querySelector('.toggle'));
     // El título pliega el bloque entero (y se recuerda); tocar el nombre lo vuelve a abrir en la parte desplegada o, sin
-    // ninguna, en *Locations*.
+    // ninguna, en la primera, *Scenes* (D818).
     click(host.querySelector('.ov-fold'));
     expect(host.querySelector('.ov-parts')).toBeNull();
     expect(JSON.parse(localStorage.getItem('shotdocs-overview-nav')!)[built.projectId]).toMatchObject({ closed: true });
     click(host.querySelector('.ov-head'));
     await shown(() => expect(host.querySelector('.ov-parts')).toBeTruthy());
-    expect(location.pathname).toBe('/map');
+    expect(location.pathname).toBe('/map/scenes');
   });
 
   it('el número de una escena en el árbol lleva su color (D773); el de su episodio, no', async () => {
@@ -377,8 +378,8 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(btn.getAttribute('aria-expanded')).toBe('true');
     expect([...row.querySelectorAll('.mp-sexp .ss-row')].map((r) => r.textContent)).toEqual([
       'Preproduction | Breakdown027 | La ambulancia empieza a zigzaguear · 3 shots',
-      'Preproduction | SetAmbulancia | Ruta INT',
       'Preproduction | LocationLa Arenera (estudio), CENADE',
+      'Preproduction | SetAmbulancia | Ruta INT',
       'Preproduction | Open questions? ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1',
       'Scouting | ReportsTech scout 06/01',
       'Planning | Day planNo day plan names it',
@@ -599,11 +600,11 @@ describe('el Overview de solo lectura (D815)', () => {
     // La página del día vive en Pages: ahí queda marcada, en su carpeta, y Shoot days sigue abierta.
     await shown(() => expect(host.querySelector('.pages-section .tree-row.active')?.getAttribute('data-page')).toBe(built.ids.d59));
     expect(day().classList.contains('active')).toBe(true);
-    // PLAN y REPORT, primero en la fila: el mismo nombre ya no confunde.
+    // PLN y REP, en el lugar del triángulo: el mismo nombre ya no confunde.
     const stage = (id: string) => host.querySelector(`.pages-section .tree-row[data-page="${id}"] .tree-stage`);
-    await shown(() => expect(stage(plan)?.textContent).toBe('Plan'));
+    await shown(() => expect(stage(plan)?.textContent).toBe('PLN'));
     expect(stage(plan)!.getAttribute('data-stage')).toBe('plan');
-    expect(stage(built.ids.d59)!.textContent).toBe('Report');
+    expect(stage(built.ids.d59)!.textContent).toBe('REP');
     expect(stage(built.ids.d58)!.getAttribute('data-stage')).toBe('report');
     const order = pagesRows(host).map((r) => r.getAttribute('data-page'));
     expect(order.indexOf(plan)).toBe(order.indexOf(built.ids.d59) - 1);
@@ -614,6 +615,17 @@ describe('el Overview de solo lectura (D815)', () => {
     expect(row(other)!.querySelector('.place')).toBeNull();
     expect(row(plan)!.querySelector('.place')?.textContent).toBe('CENADE');
     expect(row(built.ids.d59)!.querySelector('.place')?.textContent).toBe('CENADE');
+  });
+
+  it('en Rodaje, un plan que todavía no tiene su reporte ya lleva PLN', async () => {
+    const { d, built } = await owner();
+    const rodaje = await d.tree.create(null, '4 | Rodaje nuevo', built.projectId);
+    await d.tree.setSetting(rodaje, 'holds', 'day');
+    const plan = await d.tree.create(rodaje, '2026-11-16 | Día 01 | Estación Vieja | Plan', built.projectId);
+    await d.tree.setSetting(plan, 'entity', { kind: 'plan' });
+    const { host } = mount(d, pagePath(plan));
+    await shown(() => expect(host.querySelector('.pages-section .tree-row.active')?.getAttribute('data-page')).toBe(plan));
+    await shown(() => expect(host.querySelector(`.pages-section .tree-row[data-page="${plan}"] .tree-stage`)?.getAttribute('data-stage')).toBe('plan'));
   });
 
   it('una semana sin planes no lleva etiquetas', async () => {

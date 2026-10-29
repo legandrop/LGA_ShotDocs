@@ -263,6 +263,12 @@ export class PageTree {
   onPlaced?: (id: string, how: 'create' | 'title' | 'move') => Promise<void>;
 
   /**
+   * Se llama antes de mover una página a otro lugar en este dispositivo, con el lugar de origen todavía a la vista: mover
+   * no le cambia el tipo (`keepKindBeforeMove` en `src/relations/entitySync.ts`). Si falla, se mueve igual.
+   */
+  onBeforeMove?: (id: string, parentId: string | null) => Promise<void>;
+
+  /**
    * Si a este dispositivo la página le llega como base limpia y no como filas (Docs/Doc_Privacidad_Borrado.md): lo
    * pone la sincronización según el interruptor del workspace y los permisos. Sin él, todas llegan como filas.
    */
@@ -655,6 +661,16 @@ export class PageTree {
     }
   }
 
+  /** Avisa `onBeforeMove`; un error ahí no frena el movimiento. */
+  private async beforeMove(id: string, parentId: string | null): Promise<void> {
+    if (!this.onBeforeMove) return;
+    try {
+      await this.onBeforeMove(id, parentId);
+    } catch (err) {
+      console.warn('[árbol] no se pudo fijar la marca de tipo antes de mover', id, err);
+    }
+  }
+
   pendingTitleDraft(id: string): PendingTitleDraft | undefined {
     const draft = this.titleDrafts.get(id);
     return draft && (!draft.durable || draft.attempt) ? { fullText: draft.fullText, head: draft.head, rest: draft.rest, busy: !!draft.attempt } : undefined;
@@ -702,6 +718,7 @@ export class PageTree {
     if (found >= 0) at = position.before ? found : found + 1;
     const sortKey = await this.keyAt(siblings, at);
     if (page.parent_id === parentId && page.sort_key === sortKey) return;
+    if (page.parent_id !== parentId) await this.beforeMove(id, parentId);
     await this.enqueue({ kind: 'update', id, patch: { parent_id: parentId, sort_key: sortKey } });
     if (page.parent_id !== parentId) await this.placed(id, 'move');
   }
@@ -726,6 +743,7 @@ export class PageTree {
   }
 
   async setPatch(id: string, patch: PagePatch): Promise<void> {
+    if (patch.parent_id !== undefined && patch.parent_id !== this.view.get(id)?.parent_id) await this.beforeMove(id, patch.parent_id);
     await this.enqueue({ kind: 'update', id, patch });
     if (patch.parent_id !== undefined) await this.placed(id, 'move');
     else if (patch.title !== undefined) await this.placed(id, 'title');

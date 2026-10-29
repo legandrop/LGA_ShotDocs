@@ -6,6 +6,7 @@ import { useLinkMode } from '../linkMode';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION } from '../sync/accessRequests';
 import { LiveHeader } from '../relations/LiveHeader';
+import { FolderIndex } from '../relations/FolderIndex';
 import { mergedTarget, readPointer, restorePage } from '../relations/merge';
 import { searchSession } from './projectSearchUi';
 import { sameTitle } from '../relations/twinNames';
@@ -27,6 +28,8 @@ import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
 import { setDocumentTitle } from './titleBadge';
+import { kindReader } from '../relations/kind';
+import { sceneTitleJoin, sceneTitleName } from './sceneTitle';
 
 export interface TitlePreparation {
   id: string;
@@ -150,9 +153,11 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
       <LinkAsideNotice pageId={id} />
       <LinkVisitorAsideNotice pageId={id} />
       <PageHeader id={id} editable={perms.canEditRow(id)} />
-      <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} registerTitle={registerTitle} />
+      <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} registerTitle={registerTitle} code={sceneCodeOf(tree, id)} />
       {/* La cabecera viva de una escena o una locación (Docs/Doc_Relaciones.md, 10): interfaz, fuera del documento. */}
       <LiveHeader pageId={id} />
+      {/* La página de una carpeta de escenas o de locaciones: crear una y la tabla armada sola (D818). */}
+      <FolderIndex pageId={id} />
       {/* Si el editor tira un error con lo que tiene la página, falla solo la página (ErrorBarrier.tsx). */}
       <PageBarrier pageId={id}>
         <Part fallback={<EditorSkeleton />}>
@@ -222,7 +227,29 @@ function CommentsSlot({ pageId }: { pageId: string }) {
   );
 }
 
-function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title: string; readOnly: boolean; registerTitle?: RegisterTitle }) {
+/**
+ * El número de la escena, si la página es una (el título se ve partido, D818): `null` si es una escena todavía sin número
+ * (una página nueva en una carpeta de escenas), `undefined` si no es una escena.
+ */
+function sceneCodeOf(tree: ReturnType<typeof useTree>, id: string): string | null | undefined {
+  const kind = kindReader(tree).kindOf(id);
+  return kind.kind === 'scene' ? kind.code : undefined;
+}
+
+function TitleInput({
+  id,
+  title,
+  readOnly,
+  registerTitle,
+  code,
+}: {
+  id: string;
+  title: string;
+  readOnly: boolean;
+  registerTitle?: RegisterTitle;
+  /** El número de la escena: se ve en gris adelante y el campo tiene solo el nombre (`null`: escena sin número todavía). */
+  code?: string | null;
+}) {
   const tree = useTree();
   const tr = useT();
   const [value, setValue] = useState(() => tree.pendingTitleDraft(id)?.fullText ?? title);
@@ -236,6 +263,8 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
   const bulk = useRef(false);
   const localTitle = useRef<string | null>(tree.pendingTitleDraft(id)?.fullText ?? null);
   const titleStamp = useRef<object>({});
+  /** Un clic en el número muestra el título entero, para cambiar el número; al salir del campo vuelve a partirse. */
+  const [whole, setWhole] = useState(false);
 
   // Si el título cambia desde otro lado (otro dispositivo, la barra lateral), se muestra salvo que se
   // esté escribiendo acá.
@@ -348,19 +377,32 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
     };
   }, [tree, id, readOnly, scope]);
 
-  return (
+  // Partido o entero: se decide afuera del campo y no cambia mientras se escribe. Cambiar la forma vuelve a crear el
+  // campo, y se perdería el foco a mitad de un número (`029` en una carpeta de escenas ya es una escena).
+  const canSplit = !!code && sceneTitleName(value, code) !== null;
+  const [split, setSplit] = useState(canSplit);
+  useEffect(() => {
+    if (!focused.current) setSplit(canSplit);
+  }, [canSplit]);
+  const name = split && code && !whole ? sceneTitleName(value, code) : null;
+  const field = (
     <textarea
       ref={ref}
       className="page-title"
       rows={1}
-      value={value}
-      placeholder={tr('common.untitled')}
-      aria-label={tr('page.title')}
+      value={name ?? value}
+      // La impresión lee el título del campo: partido, el campo tiene solo el nombre.
+      data-full-title={name !== null ? value : undefined}
+      data-tour={name !== null ? 'scene-title-name' : undefined}
+      placeholder={name !== null ? tr('page.sceneName') : tr('common.untitled')}
+      aria-label={name !== null ? tr('page.sceneName') : tr('page.title')}
       readOnly={readOnly || busy}
       aria-busy={busy || undefined}
       onFocus={() => (focused.current = true)}
       onBlur={() => {
         focused.current = false;
+        setWhole(false);
+        setSplit(canSplit);
         disarmTitleUndo(id);
         // Salir del campo confirma el título (la pausa de 300 ms no: src/relations/entitySync.ts).
         if (!readOnly) void commit(value).then(() => tree.titleConfirmed(id)).catch(() => undefined);
@@ -370,7 +412,7 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
       onChange={(e) => {
         if (readOnly || attempt.current?.scope === scope || tree.pendingTitleDraft(id)?.busy) return;
         disarmTitleUndo(id);
-        const next = e.target.value;
+        const next = name !== null && code ? sceneTitleJoin(code, e.target.value) : e.target.value;
         const pasted = bulk.current;
         bulk.current = false;
         // El tope de la base (500 caracteres, `pages_title_check`): sin él, el cambio quedaba rechazado para siempre.
@@ -421,6 +463,33 @@ function TitleInput({ id, title, readOnly, registerTitle }: { id: string; title:
         }
       }}
     />
+  );
+  // El campo va siempre en el mismo contenedor (en una página que no es escena, sin caja: `display: contents`): así no se
+  // vuelve a crear al tocar el número ni cuando la página pasa a ser una escena mientras se escribe su número (perdería el
+  // foco y lo que se está escribiendo).
+  return (
+    <div className={code === undefined ? 'page-title-wrap' : 'page-title-row'}>
+      {name !== null && (
+        <button
+          type="button"
+          className="page-title-code"
+          data-tour="scene-title-code"
+          disabled={readOnly}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            // El título entero en el campo, con el número elegido: se cambia como cualquier texto.
+            setWhole(true);
+            requestAnimationFrame(() => {
+              ref.current?.focus();
+              ref.current?.setSelectionRange(0, code!.length);
+            });
+          }}
+        >
+          {code}
+        </button>
+      )}
+      {field}
+    </div>
   );
 }
 

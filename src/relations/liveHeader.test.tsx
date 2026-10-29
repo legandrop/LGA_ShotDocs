@@ -161,10 +161,10 @@ describe('la cabecera viva en la app', () => {
     expect(lh.querySelector('.lh-id')!.textContent).toMatch(/^Scene/);
     expect(lh.querySelector('.lh-id')!.textContent).not.toContain('105_027 ');
     expect(lh.querySelector('.lh-id')!.textContent).not.toContain('Desglose');
-    // Los renglones «Etapa | Tipo: links» (D784), sin *Desglose* (es esta página).
+    // Los renglones «Etapa | Tipo: links» (D784), sin *Desglose* (es esta página); la locación antes que el decorado (D818).
     expect([...lh.querySelectorAll('.ss-row')].map((r) => r.textContent)).toEqual([
-      'Preproduction | SetAmbulancia | Ruta INT',
       'Preproduction | LocationLa Arenera (estudio), CENADE',
+      'Preproduction | SetAmbulancia | Ruta INT',
       'Preproduction | Open questions? ¿Todo el interior de la ambulancia se filma en estudio o solo el vuelco? · in 2 cards · +1',
       'Scouting | ReportsTech scout 06/01',
       'Planning | Day planDía 60 · 20 Feb › Plan | Día 60',
@@ -693,5 +693,39 @@ describe('traer los planos a la página de la escena (D785)', () => {
     await wait();
     await wait();
     expect(location.pathname).toBe(pagePath(built.ids.s027_020));
+  });
+});
+
+describe('New set en la cabecera de una locación (D818)', () => {
+  it('pide el nombre y crea la página del decorado adentro de la locación, marcada; aparece en el renglón Sets', async () => {
+    // Con equipo, los permisos se conocen: el dueño ve el proyecto entero (sin eso, el botón no está: G1).
+    const { d, built, host } = await app('cenade', true);
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
+    await act(() => d.engine.syncNow());
+    const button = () => header(host)!.querySelector<HTMLButtonElement>('button[data-tour="location-new-set"]');
+    await until(() => button() && !button()!.disabled, 'el botón New set');
+    expect(button()!.textContent).toBe('New set');
+    expect(button()!.dataset.tip).toBe("Creates the set's page inside this location");
+    click(button());
+    const input = header(host)!.querySelector<HTMLInputElement>('form[data-tour="location-new-set"] input')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    act(() => {
+      setter.call(input, 'Banquina | Noche');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => input.form!.requestSubmit());
+    const created = () => d.tree.children(built.ids.cenade).find((r) => r.title === 'Banquina | Noche');
+    await until(created, 'la página del decorado');
+    expect(created()!.settings?.entity).toEqual({ kind: 'set' });
+    await until(() => byText(header(host)!, '.lh-chip.set', 'Banquina | Noche'), 'el decorado en Sets');
+    // Se cierra el campo y vuelve el botón.
+    await until(() => button(), 'el botón otra vez');
+  });
+
+  it('sin saber si la persona ve el proyecto entero (permisos desconocidos), no se ofrece', async () => {
+    const { host } = await app('cenade');
+    await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera');
+    await wait(100);
+    expect(header(host)!.querySelector('[data-tour="location-new-set"]')).toBeNull();
   });
 });

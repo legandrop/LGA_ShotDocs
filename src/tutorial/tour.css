@@ -1,0 +1,167 @@
+/* Los recorridos con capítulos (Docs/Plan_Proyecto_Desde_Cero.md, sección 6). Se baja con el motor (TourLayer.tsx) y
+   completa la base de styles.css («La recorrida (P.13)»): el aro verde de las apps LGA que pulsa, el oscurecido de 27 %,
+   la tarjeta centrada, «Do this:», «Done», y el × y *Skip chapter* del globito. */
+
+:root {
+  /* El verde de resaltado de las apps LGA (decisión de Lega, 2026-10-17): aro, punto y borde que pide atención. */
+  --tour-ring: #5fd38a;
+  --tour-scrim: rgba(0, 0, 0, 0.27);
+}
+
+:root[data-theme='dark'] {
+  --tour-scrim: rgba(0, 0, 0, 0.27);
+}
+
+.tour-spot {
+  outline: 2px solid var(--tour-ring);
+  border-radius: 7px;
+  animation: tour-ring 1.6s ease-in-out infinite;
+}
+
+/* Ciclo de 1,6 s, del 100 % al 35 % (como en las apps de escritorio). */
+@keyframes tour-ring {
+  0%,
+  100% {
+    outline-color: var(--tour-ring);
+  }
+  50% {
+    outline-color: color-mix(in srgb, var(--tour-ring) 35%, transparent);
+  }
+}
+
+/* En el tema claro el verde contrasta poco con el fondo (y en un paso de acción no hay oscurecido): pulsa menos. */
+:root:not([data-theme='dark']) .tour-spot {
+  animation-name: tour-ring-light;
+}
+
+@keyframes tour-ring-light {
+  0%,
+  100% {
+    outline-color: var(--tour-ring);
+  }
+  50% {
+    outline-color: color-mix(in srgb, var(--tour-ring) 65%, transparent);
+  }
+}
+
+/* Como en las apps de escritorio: globo de 348 px, tarjeta de 440. Sin deslizarse: cada paso es un globito nuevo, y lo
+   único que lo movería es la primera medida de su tamaño (se veía saltar la tarjeta al aparecer). */
+.tour-bubble {
+  width: 348px;
+  transition: none;
+}
+
+.tour-bubble.tour-card-step {
+  width: 440px;
+}
+
+/* En el teléfono, la hoja de todo el ancho (styles.css) también para la tarjeta. */
+.tour-bubble.sheet,
+.tour-bubble.sheet.tour-card-step {
+  width: auto;
+}
+
+.tour-head .tour-skip {
+  white-space: nowrap;
+}
+
+.tour-head {
+  gap: 8px;
+  min-height: 24px;
+}
+
+.tour-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: -6px;
+}
+
+.tour-head .tour-close {
+  width: 26px;
+  height: 26px;
+  color: var(--muted);
+}
+
+.tour-turn {
+  margin-top: 10px !important;
+  color: var(--text) !important;
+}
+
+.tour-turn-label {
+  font-weight: 600;
+  color: var(--tour-ring);
+}
+
+:root:not([data-theme='dark']) .tour-turn-label,
+:root:not([data-theme='dark']) .tour-status.done {
+  /* En el tema claro, el verde del aro no contrasta como texto: uno más oscuro. */
+  color: #23864a;
+}
+
+.tour-status {
+  margin-top: 10px !important;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.tour-status.done {
+  color: var(--tour-ring);
+}
+
+.tour-bubble.is-done {
+  border-color: var(--tour-ring);
+}
+
+.tour-actions button.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Un clic en lo tapado: el globito pulsa una vez (dónde seguir). */
+.tour-bubble.nudge {
+  animation: tour-nudge 0.4s ease-in-out;
+}
+
+@keyframes tour-nudge {
+  0%,
+  100% {
+    box-shadow: var(--shadow);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--tour-ring), var(--shadow);
+  }
+}
+
+/* Preparando un capítulo: el aviso aparece solo si tarda (casi siempre es un instante). */
+.tour-bubble.tour-wait {
+  animation: tour-late 0.6s steps(1, end);
+}
+
+@keyframes tour-late {
+  0% {
+    visibility: hidden;
+  }
+  100% {
+    visibility: visible;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-bubble.nudge {
+    animation: none;
+  }
+}
+
+/* El aviso de preparar un capítulo, sin ancla: al centro (en el teléfono, la hoja de abajo). */
+.tour-bubble.tour-center:not(.sheet) {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tour-bubble.tour-center.sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+}

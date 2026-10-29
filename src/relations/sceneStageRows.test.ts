@@ -50,6 +50,17 @@ describe('sceneStageRows', () => {
     expect(sceneStageRows(live(), opts({ self: true })).some((r) => r.id === 'breakdown')).toBe(false);
   });
 
+  it('una locación escrita sin página: *Create page* solo en la página de la escena y para quien puede crear', () => {
+    const v = live({ plannedAt: [{ title: 'Estación Vieja', pageId: '' }] } as unknown as Partial<SceneLive>);
+    const create = (o: Parameters<typeof opts>[0]) => {
+      const line = sceneStageRows(v, opts(o)).find((r) => r.id === 'location')!.lines[0];
+      return line.kind === 'links' ? line.links[0].create : undefined;
+    };
+    expect(create({ self: true, canCreate: true })).toEqual({ kind: 'location', name: 'Estación Vieja' });
+    expect(create({ self: true, canCreate: false })).toBeUndefined();
+    expect(create({ canCreate: true })).toBeUndefined();
+  });
+
   it('desglose con sus planos, locaciones sin repetir (la del desglose y la del día), días con sus secciones y fotos', () => {
     const d73 = day(73, '2026-03-11', ['Inquilinato']);
     const v = live({
