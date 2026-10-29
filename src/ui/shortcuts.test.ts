@@ -24,6 +24,7 @@ import { isSearchShortcut } from './projectSearchUi';
 import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
 import { SHORTCUT_FILES, SHORTCUT_RULES } from './shortcutSources';
 import { isNavBackShortcut, isNavForwardShortcut } from '../navHistory';
+import { isBackToTableShortcut } from './tableReturn';
 import { keyLabel, platformKeys, shortcut, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS, slashBadge, type Shortcut } from './shortcuts';
 
 // El registro único de atajos (Docs/Doc_Tutorial.md, sección 6) contra lo que hace la app de verdad: el editor
@@ -230,6 +231,8 @@ const FUNCTIONS: Record<string, { fn: Fn; id: string; keys?: string[] }> = {
   // Atrás y adelante (navHistory.ts): Alt+← / Alt+→ fuera de la Mac, ⌘[ / ⌘] en la Mac (la prueba de abajo).
   isNavBackShortcut: { fn: isNavBackShortcut as Fn, id: 'navBack' },
   isNavForwardShortcut: { fn: isNavForwardShortcut as Fn, id: 'navForward' },
+  // Esc vuelve a la tabla (tableReturn.ts, D822).
+  isBackToTableShortcut: { fn: isBackToTableShortcut as Fn, id: 'backToTable' },
   // Los tabs de la app instalada (TabStrip.tsx): pasar de tab es Ctrl+Tab fuera de la Mac y ⌘⇧] en la Mac.
   isNewTabShortcut: { fn: isNewTabShortcut as Fn, id: 'newTab' },
   isCloseTabShortcut: { fn: isCloseTabShortcut as Fn, id: 'closeTab' },

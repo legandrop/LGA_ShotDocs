@@ -138,7 +138,8 @@ describe('Overview y Scenes en la barra lateral', () => {
     const order = [...nav.querySelectorAll('.ov-nav, .section-title')].map((x) => (x.classList.contains('ov-nav') ? 'overview' : 'pages'));
     expect(order).toEqual(['overview', 'pages']);
     // Las escenas primero, como en Pages (D818).
-    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Scenes', 'Locations', 'Shoot days', 'Shots']);
+    // Todas las partes, siempre (D825).
+    expect([...nav.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Scenes', 'Locations', 'Sets', 'Shoot days', 'Shots', 'Pending']);
     expect(eps(host).map((b) => [b.textContent, b.getAttribute('aria-expanded')])).toEqual([
       ['Episode 10118', 'false'],
       ['Episode 1042', 'false'],
@@ -354,7 +355,19 @@ describe('Overview y Scenes en la barra lateral', () => {
     await d.engine.syncNow();
     const { host } = mount(d, pagePath(folder));
     await shown(() => expect(scenesPart(host)).toBeTruthy());
-    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Scenes', 'Shots']);
+    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Scenes', 'Locations', 'Sets', 'Shoot days', 'Shots', 'Pending']);
+    // Una parte vacía está, con su 0 apagado (cuando terminó de leer: mientras lee, un cero no se afirma, D402) y sin
+    // flecha para desplegar (no hay nada adentro).
+    const locations = host.querySelector('[data-tour="overview-locations"]')!;
+    await shown(() => expect(locations.querySelector('.scene-nav-n')?.textContent).toBe('0'));
+    expect(locations.querySelector('.scene-nav-n')!.className).toBe('scene-nav-n zero');
+    expect(locations.querySelector('.toggle')).toBeNull();
+    // Un clic en la parte vacía abre su vista y no pliega Scenes, que estaba desplegada.
+    const before = scenesPart(host)!.querySelector('.toggle')!.getAttribute('aria-expanded');
+    click(locations.querySelector('.ov-part-name'));
+    await wait();
+    expect(location.pathname).toBe(mapPath('locations'));
+    expect(scenesPart(host)!.querySelector('.toggle')!.getAttribute('aria-expanded')).toBe(before);
     act(() => navigate(mapPath()));
     await wait();
     expect(scenesPart(host)!.querySelector('.toggle')!.getAttribute('aria-expanded')).toBe('true');
@@ -457,16 +470,17 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(host.textContent).not.toMatch(/isn’t a scene|doesn.t exist/);
   });
 
-  it('un proyecto sin escenas no tiene la sección; un link público tampoco (sin sesión de relaciones)', async () => {
+  it('un proyecto sin escenas tiene el Panorama igual, con todas sus partes en 0 (D825)', async () => {
     const d = await makeDevice(new FakeServer());
     devices.push(d);
     const projectId = await d.tree.createProject('Notas sueltas');
     const page = await d.tree.create(null, 'Brief', projectId);
     await d.engine.syncNow();
     const { host } = mount(d, pagePath(page));
-    await shown(() => expect(host.querySelector('.page-title')).toBeTruthy());
-    await wait(300);
-    expect(host.querySelector('.ov-nav')).toBeNull();
+    await shown(() => expect(host.querySelector('.ov-nav')).toBeTruthy());
+    expect([...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent)).toEqual(['Scenes', 'Locations', 'Sets', 'Shoot days', 'Shots', 'Pending']);
+    await shown(() => expect([...host.querySelectorAll('.ov-part .scene-nav-n')].map((n) => n.textContent)).toEqual(['0', '0', '0', '0']));
+    expect(host.querySelectorAll('.ov-part .toggle').length).toBe(0);
   });
 
   it('226 escenas sin episodios: dibuja de a tandas, la abierta siempre se ve, y es rápido', async () => {

@@ -76,14 +76,19 @@
   color: var(--scene-fg);
 }
 
-.fi-table .fi-loc a {
+/* La locación en su azul y el decorado en su violeta, siempre (D823): con página (el link) o solo escrito. */
+.fi-table .fi-loc,
+.fi-table .fi-loc a,
+.fi-table .fi-name-cell.loc a {
   color: var(--loc-fg);
 }
 
+.fi-table .fi-set,
 .fi-table .fi-set a {
   color: var(--set-fg);
 }
 
+.fi-table .fi-scenes,
 .fi-table .fi-scenes a {
   color: var(--scene-fg);
   font-family: var(--mono);

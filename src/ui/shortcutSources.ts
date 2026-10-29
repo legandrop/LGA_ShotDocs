@@ -14,6 +14,8 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   // Atrás y adelante (Docs/Doc_Navegacion.md): los botones de la barra escuchan el atajo en `window`.
   navBack: ['NavButtons.tsx', 'navHistory.ts'],
   navForward: ['NavButtons.tsx', 'navHistory.ts'],
+  // Esc vuelve a la tabla (D822): la página lo escucha en `window`.
+  backToTable: ['PageView.tsx', 'tableReturn.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
   // Los tabs de la app instalada (tabs.ts): la barra de tabs escucha sus atajos en `window`.
   newTab: ['TabStrip.tsx'],

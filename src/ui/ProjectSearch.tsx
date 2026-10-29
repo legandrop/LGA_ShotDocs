@@ -18,6 +18,7 @@ import { existingRelationsSession } from './relationsUi';
 import { redoReplace, undoReplace, useReplaceSession } from './replaceUi';
 import { isRedoShortcut, isUndoShortcut } from './undoTimelineUi';
 import { createStageFolders } from '../relations/projectStructure';
+import { kindReader } from '../relations/kind';
 
 // El panel de buscar en el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, y "Cómo quedó (entrega 2)"). Se abre
 // con la lupa de la barra lateral o con Ctrl/⌘+K; en la computadora es una ventana arriba al centro y en el
@@ -79,6 +80,12 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
   const projectId = useCurrentProject();
   const switchTo = useSwitchProject();
   const tr = useT();
+  // Una locación en su azul y un decorado en su violeta, también en los resultados y en su ruta (D823).
+  const kinds = kindReader(tree);
+  const placeOf = (id: string) => {
+    const kind = kinds.kindOf(id).kind;
+    return kind === 'location' ? ' loc' : kind === 'set' ? ' set' : '';
+  };
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState('');
   const [limit, setLimit] = useState(PAGE_LIMIT);
@@ -468,11 +475,18 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
                     <>
                       <PageIcon size={16} />
                       <span className="search-page-text">
-                        <span className="search-title">
+                        <span className={`search-title${placeOf(hit.page.id)}`}>
                           {hit.page.title ? <Highlight text={hit.page.title} ranges={hit.titleRanges} /> : tr('common.untitled')}
                         </span>
                         {hit.path.length > 0 && (
-                          <span className="search-path">{hit.path.map((p) => p.title || tr('common.untitled')).join(' › ')}</span>
+                          <span className="search-path">
+                            {hit.path.map((p, i) => (
+                              <span key={p.id}>
+                                {i > 0 && ' › '}
+                                <span className={placeOf(p.id).trim() || undefined}>{p.title || tr('common.untitled')}</span>
+                              </span>
+                            ))}
+                          </span>
                         )}
                       </span>
                     </>,

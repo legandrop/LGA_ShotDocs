@@ -302,6 +302,12 @@
   min-width: 0;
 }
 
+/* Al pasar el mouse sigue en su azul (subrayado), como un decorado en su violeta: el turquesa de `.mp-link:hover` no le
+   gana (D823). */
+.mp-nm a:hover {
+  color: inherit;
+}
+
 .mp-sc {
   display: inline-flex;
   color: var(--muted-2);
@@ -543,6 +549,11 @@
   min-width: 0;
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+
+/* La locación de un decorado («Shot at»), en su azul (D823). */
+.mp-dd .mp-locname {
+  color: var(--lh-loc-fg);
 }
 
 .mp-tag {

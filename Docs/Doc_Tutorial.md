@@ -18,7 +18,8 @@ Manda sobre lo que sigue donde choquen. Plan completo: `Docs/Plan_Proyecto_Desde
 - **Los recorridos** son capítulos con pasos (`src/tour/catalog.ts`; cómo se agrega uno está en su encabezado). Un paso
   es `info` (explica), `do` (la persona hace la acción de verdad; se cumple por una condición de
   `src/tour/conditions.ts`, en lista blanca, y *Next* nunca la hace) o `card`. El progreso se guarda en el dispositivo
-  por id y versión de capítulo (`progress.ts`). Esc dos veces sale; *Back* no deshace; *Skip chapter* y entrar por un
+  por id y versión de capítulo (`progress.ts`). Esc dos veces sale (en una página abierta desde una tabla, Esc vuelve a
+  la tabla, D822; con la pregunta de salir a la vista, es de ella); *Back* no deshace; *Skip chapter* y entrar por un
   capítulo del medio arman solos lo que el capítulo necesita (`needs` → `STATES`, con las funciones de la app).
 - **Lo básico** (*Getting around*): la recorrida de siempre, ahora en tres capítulos, sobre la página de práctica.
 - **Un proyecto desde cero** corre en un documento aparte (`tour.html`, `src/tour/practiceDoc.tsx`): la app de verdad
@@ -26,7 +27,8 @@ Manda sobre lo que sigue donde choquen. Plan completo: `Docs/Plan_Proyecto_Desde
   mitad, vuelve al principio del capítulo. Nueve capítulos sobre un corto inventado, «El último tren» (20 escenas en 5
   locaciones, fotos libres en `public/tour/img/` con `LICENSES.txt`; `src/tour/scratchData.ts`): el proyecto vacío, la
   primera escena (*New scene*, el número en gris), su locación (*Create page* desde la escena), el decorado (adentro de
-  la locación), «veinte escenas después» (las tablas llenas), el scouting (la locación lo junta sola), el plan del día
+  la locación), «veinte escenas después» (las tablas llenas, las locaciones en azul y los decorados en violeta, y desde
+  v0.309 Esc para volver de la locación a su tabla, solo en la computadora), el scouting (la locación lo junta sola), el plan del día
   (PLN, con sus escenas como link), el reporte (REP, una sección por escena) y el *Overview* para postproducción (la
   cabecera de la escena junta locación, decorado, scouting, plan y reporte). Las fechas de rodaje del corto se cuentan
   desde hoy, así el plan y el reporte se crean con la fecha que propone la app.

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent } from 'react';
 import { useT } from '../i18n';
 import { useLinkMode } from '../linkMode';
-import { navigate, pagePath } from '../router';
+import { navigate, nextFromTable, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import { notify } from '../ui/notice';
 import { useCurrentProject } from '../ui/project';
@@ -210,7 +210,10 @@ function FolderIndexFor({
 
   const open = (e: MouseEvent, id: string | null) => {
     e.stopPropagation();
-    if (id) navigate(pagePath(id));
+    if (!id) return;
+    // Esc, en la página abierta, vuelve a esta tabla (D822).
+    nextFromTable();
+    navigate(pagePath(id));
   };
   const chips = (list: Row['first']) =>
     list.length ? (
@@ -288,12 +291,13 @@ function FolderIndexFor({
                   </td>
                 )}
                 {scenes && <td className="fi-code">{r.code}</td>}
-                <td className="fi-name-cell">
+                <td className={scenes ? 'fi-name-cell' : 'fi-name-cell loc'}>
                   <a href={pagePath(r.pageId)} onClick={(e) => (e.preventDefault(), open(e, r.pageId))}>
                     {r.name || (scenes ? '' : tr('common.untitled'))}
                   </a>
                 </td>
-                <td className="fi-loc">{chips(r.first)}</td>
+                {/* Escenas: locación (azul) y decorado (violeta); Locaciones: decorados (violeta) y escenas (D823). */}
+                <td className={scenes ? 'fi-loc' : 'fi-set'}>{chips(r.first)}</td>
                 <td className={scenes ? 'fi-set' : 'fi-scenes'}>{chips(r.second)}</td>
               </tr>
             ))}

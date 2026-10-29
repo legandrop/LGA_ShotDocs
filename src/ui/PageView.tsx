@@ -30,6 +30,7 @@ import { headerLevels, headerPages, ownHeader } from './titles';
 import { setDocumentTitle } from './titleBadge';
 import { kindReader } from '../relations/kind';
 import { sceneTitleJoin, sceneTitleName } from './sceneTitle';
+import { listenBackToTable } from './tableReturn';
 
 export interface TitlePreparation {
   id: string;
@@ -70,6 +71,9 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
     // Con el número de menciones sin leer adelante, si hay (titleBadge.ts).
     setDocumentTitle(page ? `${page.title || tr('common.untitled')} · Shot Docs` : 'LGA Shot Docs');
   }, [page, tr]);
+
+  // Abierta desde una fila de una tabla, Esc vuelve a la tabla (D822).
+  useEffect(() => listenBackToTable(), []);
 
   // Una ficha que entró como plano en la página de su escena (D785): un link a ella lleva al plano, en lugar de la ficha en
   // la papelera. Reemplaza la dirección (volver atrás no vuelve a pasar por acá). Restaurada, se abre como siempre. Se abre

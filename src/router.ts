@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { readNavTag } from './navHistory';
 import { pageLink, qualifyPageLink, type PageLinkOrigin } from './pageLink';
 import { validLocalKey } from './workspaces';
 
@@ -91,6 +92,29 @@ export function pagePath(id: string): string {
   return `/p/${id}`;
 }
 
+// Esc vuelve a la tabla (D822, src/ui/tableReturn.ts): la página que se abre desde una fila de una tabla (Escenas,
+// Locaciones, las tablas del Panorama) recuerda la tabla. Va por entrada del historial, con su marca `sdNav` (que
+// sobrevive a los `replaceState` que limpian la dirección), no en el `state`; en memoria, por pestaña.
+let tableNext: { from: string; until: number } | null = null;
+const tableReturns = new Map<string, string>();
+function navKey(state: unknown): string | null {
+  const tag = readNavTag(state);
+  return tag ? `${tag.s}:${tag.i}` : null;
+}
+
+/** La próxima página que se abra (en los próximos segundos: `goToPlace` navega después de leer) viene de esta tabla. */
+export function nextFromTable(from = location.pathname + location.search): void {
+  tableNext = { from, until: Date.now() + 3000 };
+}
+
+/** La tabla desde la que se abrió la página de ahora, o `null` (también en la tabla misma). */
+export function tableReturnPath(): string | null {
+  const key = navKey(history.state);
+  const from = key ? tableReturns.get(key) : undefined;
+  if (!from || new URL(from, location.origin).pathname === location.pathname) return null;
+  return from;
+}
+
 /** Desde dónde se abrió adentro de la app la dirección de un archivo (O7): *Close* vuelve ahí. */
 let fileReturn: string | null = null;
 
@@ -109,12 +133,20 @@ export function navigate(path: string, replace = false): void {
       path = url.pathname + url.search + url.hash;
     }
   }
+  const fromTable = !replace && tableNext && Date.now() <= tableNext.until ? tableNext.from : null;
+  tableNext = null;
   if (path === location.pathname || path === location.pathname + location.search) return;
   if (path.startsWith('/f/')) {
     if (!location.pathname.startsWith('/f/')) fileReturn = location.pathname + location.search;
   } else fileReturn = null;
   if (replace) history.replaceState(null, '', path);
   else history.pushState(null, '', path);
+  // La entrada nueva recuerda la tabla solo si viene de ella (en el documento de práctica, que tiene una sola entrada,
+  // es siempre la misma: así no queda la marca vieja). Reemplazar la dirección la conserva: una ficha abierta desde la
+  // tabla que se redirige a su plano (D785) sigue volviendo a la tabla.
+  const key = navKey(history.state);
+  if (key && fromTable) tableReturns.set(key, fromTable);
+  else if (key && !replace) tableReturns.delete(key);
   window.dispatchEvent(new Event(EVENT));
 }
 

@@ -65,6 +65,8 @@ export const SHORTCUTS: Shortcut[] = [
   // ⌘[ y ⌘] (⌘← y ⌘→ mueven el cursor al principio y al final del renglón); el anotador abierto los toma para el grosor.
   { id: 'navBack', keys: ['Alt-ArrowLeft'], macKeys: ['Mod-['], place: 'global', owner: 'app', source: 'window' },
   { id: 'navForward', keys: ['Alt-ArrowRight'], macKeys: ['Mod-]'], place: 'global', owner: 'app', source: 'window' },
+  // En una página abierta desde una fila de una tabla (Escenas, Locaciones, las del Panorama), volver a la tabla (D822).
+  { id: 'backToTable', keys: ['Escape'], place: 'global', context: 'fromTable', owner: 'app', source: 'window' },
   { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },
   // Los tabs de la app instalada (Docs/Doc_Navegacion.md, «Tabs», D811): los de los navegadores. En el navegador son
   // del navegador (la app no los recibe); en la app instalada, de la app. Pasar de tab en la Mac: ⌘⇧] y ⌘⇧[ (nunca ⌃Tab).

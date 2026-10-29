@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { MAP_TABS, pagePath, type MapTab } from '../router';
+import { MAP_TABS, navigate, nextFromTable, pagePath, type MapTab } from '../router';
 import { ServicesContext } from '../services';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { TourLayer } from '../tutorial/TourLayer';
@@ -16,6 +16,7 @@ import { chapterAfter, ensureNeeds, nextOf, placeOf, prevOf } from './engine';
 import { chapterState, clearCursor, cursorOf, markSeen, readProgress, setCursor } from './progress';
 import { safeBack, tourDocHref, TOUR_DOC_PATH } from './reload';
 import { setPracticeWorld } from './world';
+import { installNavHistory } from '../navHistory';
 
 // El motor de los recorridos con capítulos (Docs/Plan_Proyecto_Desde_Cero.md, sección 6): el catálogo y su validación,
 // el progreso por id y versión, el recorrido por ids, los requisitos de un capítulo, y el globito de verdad: *Next*
@@ -270,6 +271,28 @@ describe('los requisitos (`needs`)', () => {
     expect(evaluate({ what: 'childIn', stage: 'locations' }, ctxOf(world))).toBe(true);
     expect(evaluate({ what: 'overview', part: 'scenes' }, { ...ctxOf(world), route: { name: 'map', tab: 'scenes' } as never })).toBe(true);
     expect(evaluate({ what: 'overview', part: 'days' }, { ...ctxOf(world), route: { name: 'map', tab: 'scenes' } as never })).toBe(false);
+  });
+
+  it('una locación abierta desde la tabla (`fromTable`): abierta de otra forma no cumple el paso de volver con Esc', async () => {
+    const world = await practiceWorld();
+    const loc = await world.tree.create(world.stages.locations, 'Train station', world.projectId);
+    const at: ConditionContext = { ...ctxOf(world), route: { name: 'page', id: loc } as never };
+    expect(conditionErrors({ what: 'openKind', kind: 'location', fromTable: true }, 'x')).toEqual([]);
+    expect(conditionErrors({ what: 'openKind', kind: 'location', fromTable: 1 }, 'x')).toHaveLength(1);
+    expect(evaluate({ what: 'openKind', kind: 'location' }, at)).toBe(true);
+    // La marca de la tabla va por entrada del historial (D822): hace falta el historial de la app.
+    const uninstall = installNavHistory();
+    try {
+      navigate(pagePath(world.stages.locations));
+      navigate(pagePath(loc));
+      expect(evaluate({ what: 'openKind', kind: 'location', fromTable: true }, at)).toBe(false);
+      navigate(pagePath(world.stages.locations));
+      nextFromTable();
+      navigate(pagePath(loc));
+      expect(evaluate({ what: 'openKind', kind: 'location', fromTable: true }, at)).toBe(true);
+    } finally {
+      uninstall();
+    }
   });
 
   it('un documento con su marca (su plantilla), un documento abierto, y lo que juntan las relaciones', async () => {

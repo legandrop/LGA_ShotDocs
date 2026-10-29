@@ -919,6 +919,17 @@ code {
   background: none;
 }
 
+/* Una locación en su azul y un decorado en su violeta, también en el breadcrumb (D823). */
+.crumb.loc,
+.crumb.current.loc {
+  color: var(--loc-fg);
+}
+
+.crumb.set,
+.crumb.current.set {
+  color: var(--set-fg);
+}
+
 /* --- Barra lateral ------------------------------------------------------------------------------- */
 
 .sidebar-header {
@@ -1285,6 +1296,16 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Una locación en su azul y un decorado en su violeta, siempre (Lega, 2026-10-29, D823): también en la fila elegida, que
+   no cambia esos colores (D789). */
+.tree-row .title.loc {
+  color: var(--loc-fg);
+}
+
+.tree-row .title.set {
+  color: var(--set-fg);
 }
 
 /* La fila de un día, un scouting, una prueba o un plan (D789): fecha y jornada en el color de los días, el lugar en
@@ -7439,6 +7460,17 @@ th > .col-resize:focus-visible,
   white-space: nowrap;
   color: var(--muted-2);
   font-size: 12px;
+}
+
+/* Una locación en su azul y un decorado en su violeta, en el resultado y en su ruta (D823). */
+.search-title.loc,
+.search-path .loc {
+  color: var(--loc-fg);
+}
+
+.search-title.set,
+.search-path .set {
+  color: var(--set-fg);
 }
 
 .search-snippet {

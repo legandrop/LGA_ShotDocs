@@ -4,6 +4,7 @@ import { t, useT, type Key, type Translate } from '../i18n';
 import '../i18n/lazy/tutorial';
 import './tour.css';
 import { navigate, PRACTICE_PATH, useRoute } from '../router';
+import { escTableTarget } from '../ui/tableReturn';
 import { useServices } from '../services';
 import { isPhoneLayout } from '../ui/commentsUi';
 import { placeNear, type Rect } from '../ui/floating';
@@ -435,15 +436,20 @@ function StepView({ step, phone, nav }: { step: TourStep; phone: boolean; nav?: 
   // Esc pregunta y, la segunda vez, sale. Un Esc de otro (un menú, un diálogo) no cuenta.
   useEffect(() => {
     let taken = false;
+    let toTable = false;
     const before = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') taken = escTakenElsewhere(e.target);
+      if (e.key !== 'Escape') return;
+      taken = escTakenElsewhere(e.target);
+      // En una página abierta desde una tabla, Esc vuelve a la tabla (D822, src/ui/tableReturn.ts), también durante el
+      // recorrido; con la pregunta de salir a la vista, es de la pregunta. La misma decisión, antes de que nada cambie.
+      toTable = !now.current.confirm && escTableTarget(e) !== null;
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
       const { canNext, to, from, confirm } = now.current;
       if (e.key === 'Escape') {
         // En «Show me», Esc lo atiende `ShowMe` (también con el foco en el renglón del menú "/").
         const inEditor = e.target instanceof Element && !!e.target.closest('.bn-editor');
-        if (single || taken || (e.defaultPrevented && !inEditor)) return;
+        if (single || taken || toTable || (e.defaultPrevented && !inEditor)) return;
         e.preventDefault();
         if (confirm) exitTour(nav!.tour);
         else setConfirm(true);
@@ -515,6 +521,8 @@ function StepView({ step, phone, nav }: { step: TourStep; phone: boolean; nav?: 
         ref={bubble}
         key={nudge ? `n${nudge}` : 'b'}
         className={`tour-bubble${card ? ' tour-card-step' : ''}${phone ? ' sheet' : ''}${sheetOnTop ? ' top' : ''}${nudge ? ' nudge' : ''}${phase === 'done' ? ' is-done' : ''}`}
+        // Con la pregunta de salir a la vista, Esc es de ella y no vuelve a la tabla (src/ui/tableReturn.ts).
+        data-asking={confirm ? '' : undefined}
         role="dialog"
         aria-modal="false"
         aria-labelledby="tour-title"

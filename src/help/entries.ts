@@ -380,9 +380,12 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'pages',
     title: 'help.scenesPage.title',
     text: 'help.scenesPage.text',
-    words: ['new scene', 'nueva escena', 'new location', 'nueva locación', 'new set', 'nuevo decorado', 'create page', 'crear la página', 'scenes', 'escenas', 'locations', 'locaciones', 'set', 'decorado', 'table', 'tabla', 'new project', 'proyecto nuevo', 'number', 'número'],
-    // La carpeta de Escenas y de Locaciones, el título partido y los decorados adentro de su locación (D817, D818).
-    since: '0.308',
+    textTouch: 'help.scenesPage.textTouch',
+    keys: { esc: 'backToTable' },
+    words: ['new scene', 'nueva escena', 'new location', 'nueva locación', 'new set', 'nuevo decorado', 'create page', 'crear la página', 'scenes', 'escenas', 'locations', 'locaciones', 'set', 'decorado', 'table', 'tabla', 'new project', 'proyecto nuevo', 'number', 'número', 'escape', 'esc', 'volver'],
+    // La carpeta de Escenas y de Locaciones, el título partido y los decorados adentro de su locación (D817, D818); Esc
+    // vuelve a la tabla (D822).
+    since: '0.309',
   },
   {
     id: 'tableColumns',

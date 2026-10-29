@@ -51,6 +51,11 @@
   color: var(--faint);
 }
 
+/* Una parte vacía del Panorama (D825): está, con su 0 más apagado. */
+.scene-nav-n.zero {
+  color: var(--faint-2);
+}
+
 .scene-nav-eps,
 .scene-nav-list {
   list-style: none;

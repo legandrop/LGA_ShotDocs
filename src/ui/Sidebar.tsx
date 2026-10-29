@@ -55,6 +55,11 @@ const showRow = AUTO_COLLAPSE ? centerRow : revealRow;
 /** Un diálogo abierto (como `navHistory.ts`): ahí las flechas no son del árbol. */
 const MODAL = '[aria-modal="true"], .modal-backdrop, .carrete, dialog[open]';
 
+/** La clase del nombre de una locación (azul) o un decorado (violeta) en el árbol (D823); el resto, ninguna. */
+function placeClass(kind: string): string {
+  return kind === 'location' ? ' loc' : kind === 'set' ? ' set' : '';
+}
+
 const EXPANDED_KEY = 'shotdocs-expanded';
 
 function readExpanded(): Set<string> {
@@ -682,12 +687,13 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             <span className="label">
               {/* El número de una escena va en el color de las escenas (D773); el de un episodio o una carpeta, no. */}
               <span className={kinds.kindOf(page.id).kind === 'scene' ? 'code scene' : 'code'}>{split.code}</span>
-              <span className="title">{split.name}</span>
+              <span className={`title${placeClass(kinds.kindOf(page.id).kind)}`}>{split.name}</span>
             </span>
           ) : (
             <span className="label">
-              {/* Sin tooltip: el nombre ya se ve en la fila (D794). */}
-              <span className={`title${page.title ? '' : ' untitled'}`}>{page.title || tr('common.untitled')}</span>
+              {/* Sin tooltip: el nombre ya se ve en la fila (D794). Una locación en su azul y un decorado en su violeta
+                  (D823). */}
+              <span className={`title${page.title ? placeClass(kinds.kindOf(page.id).kind) : ' untitled'}`}>{page.title || tr('common.untitled')}</span>
             </span>
           )}
           <HoldsTag pageId={page.id} />

@@ -171,3 +171,8 @@ a.map-nav-count:focus-visible {
 .ov-locs .scene-nav-row .title {
   color: var(--loc-fg);
 }
+
+/* Y el de un decorado en violeta, siempre (D823). */
+.ov-sets .scene-nav-row .title {
+  color: var(--set-fg);
+}

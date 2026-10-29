@@ -37,6 +37,27 @@ El navegador no dice si la entrada de atrás es de la app o del sitio de antes. 
 - Después de un atrás o adelante, otro no se acepta hasta que llegó su vuelta y pasaron 500 ms desde el clic (D742):
   un doble clic va una sola página.
 
+## Esc vuelve a la tabla (v0.309, D822)
+
+- Una página abierta desde una fila de una tabla (la de Escenas o Locaciones, `FolderIndex.tsx`; *Shots*,
+  `ShotsView.tsx`; las tablas del *Panorama*, `PageLink` de `MapView.tsx`) vuelve a la tabla con **Esc**.
+- La tabla llama a `nextFromTable()` (`src/router.ts`) antes de navegar; el próximo `navigate` (en 3 s) guarda la tabla
+  en un mapa por la marca `sdNav` de la entrada nueva. No va en el `state`: los `replaceState(null, …)` que limpian la
+  dirección lo borrarían; la marca `sdNav`, en cambio, se conserva. Un `navigate(…, true)` (una ficha que se redirige a
+  su plano, D785) la conserva; una página nueva sin tabla la borra. Vive en memoria, por pestaña: después de recargar, o
+  cuando la app instalada rearma el historial (`rebuildHistory`), Esc ya no vuelve. No hace nada indebido.
+- `listenBackToTable()` (`src/ui/tableReturn.ts`, montado en `PageView.tsx`) decide en la **fase de captura** de
+  `window` (`escTableTarget`), antes que nadie: muchos menús y diálogos se cierran con Esc desde `document` sin frenar el
+  evento y React los saca de la página en una microtarea que corre antes de la burbuja de `window`; mirado ahí, Esc
+  cerraría el menú y además volvería (auditoría de v0.309). Actúa en burbuja con lo decidido. No hace nada con la
+  tecla mantenida, con otra tecla además de Esc, con el Esc de un IME (`isComposing`, `keyCode 229`), con algo visible
+  encima (diálogo, menú, lista, carrete, comentarios, el adelanto de un subrayado, la pregunta de salir del recorrido)
+  ni con el foco en un campo de texto que no sea el título (el título se guarda igual al salir de la página). En el
+  texto de la página, un solo Esc vuelve: BlockNote lo usa para soltar el foco (y lo frena), y eso no cuenta. El
+  recorrido usa la misma decisión (`TourLayer.tsx`).
+- Vuelve con atrás (la entrada anterior es la tabla); si no (el documento de práctica tiene una sola entrada), abre la
+  tabla. Atajo `backToTable` del registro; en la ayuda, la entrada `scenesPage`.
+
 ## Atajos y el editor
 
 - Ni BlockNote ni Tiptap usan ⌘[ / ⌘] ni Alt+← / Alt+→ (lo revisa `shortcuts.test.ts` contra el editor real). ⌘← y

@@ -183,8 +183,12 @@ export const help = {
   },
   'help.scenesPage.title': { en: "Scenes and locations, one page each", es: "Escenas y locaciones, una página por cada una" },
   'help.scenesPage.text': {
-    en: "A new project starts with its stage folders, empty. In Preproduction › Scenes, New scene creates the next number: the number shows in gray (click it to change it) and you type the name. The folder shows a table of its scenes, made by itself from each page: photo, number, location and set. Locations does the same, with New location. In a scene, write its location and its set in its fields: if one has no page yet, Create page next to it creates it (a set, inside its location).",
-    es: "Un proyecto nuevo arranca con las carpetas de sus etapas, vacías. En Preproducción › Escenas, Nueva escena crea el número siguiente: el número se ve en gris (un clic para cambiarlo) y escribís el nombre. La carpeta muestra una tabla de sus escenas, armada sola con cada página: foto, número, locación y decorado. Locaciones hace lo mismo, con Nueva locación. En una escena, escribí su locación y su decorado en sus campos: si alguno todavía no tiene página, Crear la página, al lado, la crea (un decorado, adentro de su locación).",
+    en: "A new project starts with its stage folders, empty. In Preproduction › Scenes, New scene creates the next number: the number shows in gray (click it to change it) and you type the name. The folder shows a table of its scenes, made by itself from each page: photo, number, location and set. Locations does the same, with New location. In a scene, write its location and its set in its fields: if one has no page yet, Create page next to it creates it (a set, inside its location). A page you open from a row of a table goes back to the table with {esc}.",
+    es: "Un proyecto nuevo arranca con las carpetas de sus etapas, vacías. En Preproducción › Escenas, Nueva escena crea el número siguiente: el número se ve en gris (un clic para cambiarlo) y escribís el nombre. La carpeta muestra una tabla de sus escenas, armada sola con cada página: foto, número, locación y decorado. Locaciones hace lo mismo, con Nueva locación. En una escena, escribí su locación y su decorado en sus campos: si alguno todavía no tiene página, Crear la página, al lado, la crea (un decorado, adentro de su locación). Una página que abrís desde una fila de una tabla vuelve a la tabla con {esc}.",
+  },
+  'help.scenesPage.textTouch': {
+    en: "A new project starts with its stage folders, empty. In Preproduction › Scenes, New scene creates the next number: the number shows in gray (tap it to change it) and you type the name. The folder shows a table of its scenes, made by itself from each page: photo, number, location and set. Locations does the same, with New location. In a scene, write its location and its set in its fields: if one has no page yet, Create page next to it creates it (a set, inside its location).",
+    es: "Un proyecto nuevo arranca con las carpetas de sus etapas, vacías. En Preproducción › Escenas, Nueva escena crea el número siguiente: el número se ve en gris (tocalo para cambiarlo) y escribís el nombre. La carpeta muestra una tabla de sus escenas, armada sola con cada página: foto, número, locación y decorado. Locaciones hace lo mismo, con Nueva locación. En una escena, escribí su locación y su decorado en sus campos: si alguno todavía no tiene página, Crear la página, al lado, la crea (un decorado, adentro de su locación).",
   },
   'help.tableColumns.title': { en: "Widen a column", es: "Agrandar una columna" },
   'help.tableColumns.text': {
@@ -827,6 +831,7 @@ export const help = {
   'shortcut.find': { en: "Find and replace in the page", es: "Buscar y reemplazar en la página" },
   'shortcut.navBack': { en: "Back to the page you were on", es: "Volver a la página anterior" },
   'shortcut.navForward': { en: "Forward again, after going back", es: "Adelante otra vez, después de volver" },
+  'shortcut.backToTable': { en: "Back to the table the page was opened from", es: "Volver a la tabla desde la que abriste la página" },
   'shortcut.newTab': { en: "New tab with this page (installed app)", es: "Tab nuevo con esta página (app instalada)" },
   'shortcut.closeTab': { en: "Close the tab (installed app)", es: "Cerrar el tab (app instalada)" },
   'shortcut.nextTab': { en: "Next tab (installed app)", es: "Tab siguiente (app instalada)" },

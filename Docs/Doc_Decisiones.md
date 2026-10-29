@@ -2565,3 +2565,31 @@ público y CC0; Lega dio permiso para bajarlas).
 agrandar sus columnas arrastrando el borde del encabezado o con doble clic (se ajusta al contenido), en porcentaje del
 ancho para que siga siendo responsive, y su encabezado queda pegado arriba mientras se ve alguna fila, como las carpetas
 de la barra lateral. Las tablas que se escriben en una página no entran (el editor ya deja arrastrar sus bordes).
+
+### D822 · Esc vuelve a la tabla (2026-10-29)
+**Elegimos (Lega):** en una página abierta desde una fila de una tabla (Escenas, Locaciones, *Shots* y las tablas del
+*Panorama*), Esc vuelve a la tabla. Si hay algo abierto encima (un menú, un diálogo, el carrete, el adelanto de un
+subrayado, el recorrido) o el foco está en un campo de texto que no es el título, el Esc es de eso. La marca va por
+entrada del historial: atrás y adelante la conservan, y una página abierta después desde la escena no vuelve a la tabla.
+Detalle: [Doc_Navegacion.md](Doc_Navegacion.md), «Esc vuelve a la tabla».
+
+### D823 · Locaciones y decorados, siempre en su color (2026-10-29)
+**Elegimos (Lega):** el nombre de una locación va siempre en su azul y el de un decorado en su violeta (D774, D803):
+también en la barra lateral (*Pages*, también en la fila elegida, y las listas del *Panorama*), en el breadcrumb, en las
+tablas de Escenas y Locaciones (con página o solo escrito), en las tablas del *Panorama* (también al pasar el mouse y
+en «Shot at» de Decorados), en las columnas de lugar de *Shots* (con cualquiera de sus rótulos: «Locación real»,
+«Decorado»…) y en los resultados de la búsqueda y su ruta.
+
+### D825 · El Panorama está siempre (2026-10-29)
+**Elegimos (Lega):** el *Panorama* se ve en la barra lateral en todo proyecto, también en uno vacío, con todas sus
+partes: Escenas, Locaciones, Decorados, Días de rodaje, *Shots* y *Pending*. Una parte vacía dice 0 (más apagado) y no
+se despliega (un clic abre su vista sin plegar las otras); su vista dice dónde se escribe (*Nueva escena* en Escenas,
+*Nueva locación* en Locaciones, los planes y reportes en Rodaje, o *Tipo* en el menú de otra carpeta). Mientras lee, el
+0 no se muestra (D402). Quien ve solo una parte del proyecto (un invitado a una rama) ve solo las partes con algo, y sin
+nada no tiene *Panorama* (D401). Antes se escondía hasta que hubiera algo, y un proyecto nuevo parecía no tenerlo.
+
+### D824 · La miniatura de una fila se elige en el carrete (2026-10-29)
+**Elegimos (Lega, del canvas «Carrete y miniatura de la fila»):** en la tabla de Escenas o Locaciones, un clic en la foto
+de una fila abre el carrete con las fotos de esa fila. Arriba, *Use as thumbnail* (opción A); abajo, la tira de todas
+las fotos del carrete, más chica que en la opción B, con la miniatura de la fila marcada. La miniatura elegida se guarda
+en la página de la escena o la locación, para todos.

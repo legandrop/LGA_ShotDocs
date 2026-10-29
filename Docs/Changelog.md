@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.309 :
+
+Lega pidió volver a la tabla con Esc después de abrir una fila, ver las locaciones y los decorados siempre en su color
+y el *Panorama* también en un proyecto vacío. Esc, en una página abierta desde una fila de Escenas, Locaciones, *Shots*
+o una tabla del *Panorama*, vuelve a la tabla (D822): la marca va por entrada del historial (`nextFromTable`) y
+`src/ui/tableReturn.ts` decide en la captura de `window`, porque la auditoría vio que un menú cerrado desde `document`
+ya no estaba en la burbuja y Esc cerraba el menú y además volvía. Locaciones en azul y decorados en violeta en la barra,
+el *Panorama*, el breadcrumb, las tablas, la búsqueda y *Shots*, que solo los pintaba con rótulos en inglés (D823). El
+*Panorama* muestra siempre todas sus partes, las vacías en 0 (D825). El capítulo 5 suma «Back to the table».
+
+[ v0.309: Esc vuelve a la tabla, locaciones y decorados siempre en su color, y el Panorama siempre ]
+
 v0.308 :
 
 Lega no entendía para qué había locaciones y decorados en *Pages* y en el *Overview*, ni cómo se arma un proyecto, y la

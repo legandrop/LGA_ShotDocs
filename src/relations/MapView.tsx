@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { locale, useT, type Key } from '../i18n';
 import '../i18n/lazy/map';
-import { mapPath, navigate, pagePath, useSearchParam, type MapTab } from '../router';
+import { mapPath, navigate, nextFromTable, pagePath, useSearchParam, type MapTab } from '../router';
 import { SEPARATOR } from '../search/extract';
 import { usePermissions, useServices, useTree } from '../services';
 import { copyText } from '../ui/commentsUi';
@@ -104,6 +104,8 @@ function PageLink({ pageId, className, children, tip, style }: { pageId: string;
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
         e.preventDefault();
         e.stopPropagation();
+        // Las tablas del Panorama: Esc, en la página abierta, vuelve acá (D822).
+        nextFromTable();
         navigate(pagePath(pageId));
       }}
     >
@@ -1057,7 +1059,8 @@ function Sets({ rows, data, fq, complete }: { rows: SetRow[]; data: ProjectMapDa
             )}
           </span>
           <span className="mp-dd" role="cell">
-            {s.locs.length ? s.locs.map((l) => l.name).join(', ') : <span className="mp-none">{tr('map.noLocationNamed')}</span>}
+            {/* La locación en su azul, siempre (D823). */}
+            {s.locs.length ? <span className="mp-locname">{s.locs.map((l) => l.name).join(', ')}</span> : <span className="mp-none">{tr('map.noLocationNamed')}</span>}
           </span>
         </div>
       ))}

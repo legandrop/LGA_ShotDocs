@@ -1,6 +1,6 @@
 import { DOC_KINDS, pageKind, type DocKind, type EntityKind } from '../relations/kind';
 import type { Stage } from '../relations/projectStructure';
-import { MAP_TABS, type MapTab, type Route } from '../router';
+import { MAP_TABS, tableReturnPath, type MapTab, type Route } from '../router';
 import type { PageTree } from '../sync/tree';
 
 // Las condiciones de los pasos de acción y de los requisitos de un capítulo (Docs/Plan_Proyecto_Desde_Cero.md,
@@ -21,8 +21,11 @@ export type Condition =
   | { what: 'stageFolders' }
   /** La página abierta es la carpeta de esa etapa (por ejemplo, la de Escenas). */
   | { what: 'open'; stage: Stage }
-  /** La página abierta es una página de ese tipo (una escena, una locación). */
-  | { what: 'openKind'; kind: EntityKind }
+  /**
+   * La página abierta es una página de ese tipo (una escena, una locación); con `fromTable`, abierta desde una fila de una
+   * tabla (Esc vuelve a ella, D822).
+   */
+  | { what: 'openKind'; kind: EntityKind; fromTable?: true }
   /** La página abierta es un documento de ese tipo (un plan, un scouting). */
   | { what: 'openDoc'; doc: DocKind }
   /** El *Overview* está abierto (en esa parte, si se dice). */
@@ -66,12 +69,12 @@ export interface ConditionContext {
 }
 
 /** Los datos que acepta cada condición: su tipo, y si son obligatorios. */
-type Param = 'stage' | 'kind' | 'part' | 'count' | 'anchor' | 'doc' | 'link';
+type Param = 'stage' | 'kind' | 'part' | 'count' | 'anchor' | 'doc' | 'link' | 'flag';
 const VOCABULARY: Record<Condition['what'], { required: Partial<Record<string, Param>>; optional: Partial<Record<string, Param>> }> = {
   slashUsed: { required: {}, optional: {} },
   stageFolders: { required: {}, optional: {} },
   open: { required: { stage: 'stage' }, optional: {} },
-  openKind: { required: { kind: 'kind' }, optional: {} },
+  openKind: { required: { kind: 'kind' }, optional: { fromTable: 'flag' } },
   openDoc: { required: { doc: 'doc' }, optional: {} },
   overview: { required: {}, optional: { part: 'part' } },
   pages: { required: { kind: 'kind' }, optional: { min: 'count' } },
@@ -90,6 +93,7 @@ function validParam(type: Param, value: unknown): boolean {
   if (type === 'anchor') return typeof value === 'string' && /^[a-z0-9-]+$/.test(value);
   if (type === 'doc') return DOC_KINDS.includes(value as DocKind);
   if (type === 'link') return LINKS.includes(value as RelatedLink);
+  if (type === 'flag') return value === true;
   return Number.isInteger(value) && (value as number) >= 1;
 }
 
@@ -133,7 +137,7 @@ export function evaluate(c: Condition, ctx: ConditionContext): boolean {
     case 'open':
       return route.name === 'page' && route.id === stages[c.stage];
     case 'openKind':
-      return route.name === 'page' && live(route.id) && pageKind(tree, route.id).kind === c.kind;
+      return route.name === 'page' && live(route.id) && pageKind(tree, route.id).kind === c.kind && (!c.fromTable || tableReturnPath() !== null);
     case 'openDoc': {
       if (route.name !== 'page' || !live(route.id)) return false;
       const k = pageKind(tree, route.id);

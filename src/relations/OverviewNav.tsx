@@ -3,7 +3,7 @@ import { locale, useT } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { usePrefs } from '../prefs';
 import { mapPath, navigate, pagePath, useRoute, useSearchParam, type MapTab } from '../router';
-import { useServices, useTree } from '../services';
+import { usePermissions, useServices, useTree } from '../services';
 import { CollapseIcon, ExpandIcon } from '../ui/icons';
 import { setNavOpen, useNavOpen } from '../ui/navStore';
 import { useCurrentProject } from '../ui/project';
@@ -98,6 +98,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   // Un clic en una parte la despliega solo con *Expand subpages: On click*, como una carpeta de *Pages* (D737).
   const { expandSubpages } = usePrefs();
   const tree = useTree();
+  const perms = usePermissions();
   const revision = useSyncExternalStore(session.relations.subscribe, session.relations.getRevision);
   // Lo que se tipea en el menú `/` de escenas no cuenta mientras el menú está abierto (D568).
   useSlashDraft();
@@ -135,7 +136,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   const activePage = route.name === 'page' ? route.id : null;
   const activeEp = activeScene && lists ? (lists.scenes.find((g) => g.scenes.some((s) => s.code === activeScene))?.ep ?? null) : null;
 
-  /** Cuántas tiene cada parte: una parte vacía no se dibuja. */
+  /** Cuántas tiene cada parte: una parte vacía no se despliega. */
   const sizes: Record<Part, number> = {
     locations: lists?.locations.length ?? 0,
     sets: lists?.sets.length ?? 0,
@@ -217,7 +218,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     const part = from.dataset.part as Part | ViewPart | undefined;
     const ep = from.dataset.ep;
     if (part) {
-      if (isViewPart(part)) return;
+      // Una parte vacía (D825) no tiene nada que desplegar: las flechas no cambian lo plegado.
+      if (isViewPart(part) || sizes[part] === 0) return;
       const open = fold.part === part;
       if (right) {
         if (open) toChild();
@@ -270,13 +272,11 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     revealRow(row, nav);
   }, [activeScene, activeEntity, navOpen, fold.part, fold.eps.join(), fold.closed]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // El Panorama está siempre, con todas sus partes, también en un proyecto vacío (Lega, 2026-10-29, D825): cada parte se
+  // llena sola a medida que se escribe en las páginas. Quien no ve el proyecto entero (un invitado a una rama) no puede
+  // saber qué falta (D401): ve solo las partes con algo, y sin nada, no tiene Panorama.
   if (!snap || !lists) return null;
-  const typed =
-    snap.registry.scenes.size > 0 ||
-    snap.registry.locations.size > 0 ||
-    snap.registration.sets.length > 0 ||
-    [...snap.registration.roles.values()].some((r) => r.entity?.kind === 'day' && !r.excluded);
-  if (!typed) return null;
+  const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
   // El mismo número que la pestaña *Pending*: números que no existen, duplicadas, secciones sin número y lo que llegó
   // tarde a una página unida (E16).
   const pending = pendingSummary({ snap, title: (id) => tree.get(id)?.title }).total + mergeRows(tree, projectId).length;
@@ -495,6 +495,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
           e.preventDefault();
           e.stopPropagation();
           if (isViewPart(part)) openView(part);
+          // Una parte vacía (D825) abre su vista sin tocar lo plegado: no tiene nada que desplegar.
+          else if (!body) go(part);
           else if (clickedByKeys() || expandSubpages !== 'onClick') browsePart(part);
           else openPart(part);
         }}
@@ -514,6 +516,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
             // El foco queda en la parte, como en una fila de *Pages*: las flechas siguen desde acá.
             e.currentTarget.querySelector<HTMLElement>('a.ov-part-name')?.focus({ preventScroll: true });
             if (isViewPart(part)) openView(part);
+            else if (!body) go(part);
             else if (expandSubpages !== 'onClick') browsePart(part);
             else openPart(part);
           }}
@@ -544,14 +547,22 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   };
 
   const codeWidth = Math.max(0, ...lists.scenes.flatMap((g) => g.scenes.map((s) => s.code.length)));
+  // Todas las partes, siempre (D825); una vacía dice 0 y no se despliega (no hay nada adentro). Mientras lee, un cero no
+  // se afirma (D402): sin número hasta terminar. Con una vista parcial, solo las partes con algo (D401).
   const parts: ReactNode[] = [];
-  if (counts.scenes) parts.push(partRow('scenes', tr('sidebar.scenes'), <span className="scene-nav-n">{counts.scenes}</span>, scenesBody));
-  if (counts.locations) parts.push(partRow('locations', tr('sidebar.locations'), <span className="scene-nav-n">{counts.locations}</span>, locationsBody));
-  if (counts.sets) parts.push(partRow('sets', tr('sidebar.sets'), <span className="scene-nav-n">{counts.sets}</span>, setsBody));
-  if (counts.days) parts.push(partRow('days', tr('sidebar.days'), <span className="scene-nav-n">{counts.days}</span>, daysBody));
+  const n = (count: number) => (count || snap.complete ? <span className={`scene-nav-n${count ? '' : ' zero'}`}>{count}</span> : null);
+  const part = (id: Part, label: string, body: () => ReactNode) => {
+    if (counts[id] || !partial) parts.push(partRow(id, label, n(counts[id]), counts[id] ? body : null));
+  };
+  part('scenes', tr('sidebar.scenes'), scenesBody);
+  part('locations', tr('sidebar.locations'), locationsBody);
+  part('sets', tr('sidebar.sets'), setsBody);
+  part('days', tr('sidebar.days'), daysBody);
   // La tabla de planos (D813): solo la vista del centro, como *Pending* (la barra no tiene el contenido de las páginas).
-  if (counts.scenes) parts.push(partRow('shots', tr('sidebar.shots'), null, null));
-  if (pending > 0) parts.push(partRow('pending', tr('sidebar.pending'), <span className="map-nav-count">{pending}</span>, null));
+  if (counts.scenes || !partial) parts.push(partRow('shots', tr('sidebar.shots'), null, null));
+  if (pending > 0 || !partial) parts.push(partRow('pending', tr('sidebar.pending'), pending > 0 ? <span className="map-nav-count">{pending}</span> : null, null));
+  // Con una vista parcial y nada a la vista, no hay Panorama (D401, D825).
+  if (parts.length === 0) return null;
 
   return (
     <div className="scene-nav ov-nav" data-tour="overview" style={{ '--code-w': `${codeWidth}ch` } as CSSProperties} onKeyDown={onRowsKey} onClickCapture={onRowsClick}>

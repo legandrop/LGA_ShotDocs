@@ -1,11 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { locale, useT } from '../i18n';
 import '../i18n/lazy/map';
-import { navigate, pagePath } from '../router';
+import { navigate, nextFromTable, pagePath } from '../router';
 import { useServices } from '../services';
 import { copyText } from '../ui/commentsUi';
 import { notify } from '../ui/notice';
-import { fieldDate } from './fields';
+import { fieldDate, fieldName } from './fields';
 import { goToPlace } from './goToPlace';
 import type { LiveSource } from './liveView';
 import { fold } from './reader';
@@ -26,6 +26,12 @@ function compareValues(a: string, b: string): number {
   const db = fieldDate(b);
   if (da && db) return da < db ? -1 : da > db ? 1 : 0;
   return a.localeCompare(b, locale(), { numeric: true, sensitivity: 'base' });
+}
+
+/** La clase de color de una columna de lugar: `loc` para la locación, `set` para el decorado (D823). */
+export function placeClass(label: string): 'loc' | 'set' | undefined {
+  const name = fieldName(label);
+  return name === 'location' ? 'loc' : name === 'set' ? 'set' : undefined;
 }
 
 export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null; fq: string; codes: Set<string> | null; complete: boolean }) {
@@ -92,6 +98,8 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
   const open = (e: MouseEvent, r: ShotRow) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault();
+    // Esc, en la página abierta, vuelve a la tabla (D822).
+    nextFromTable();
     // Un plano adentro de la escena: su sección, resaltada; una ficha: su página.
     if (r.place.endBlockId !== undefined) goToPlace(services, r.place);
     else navigate(pagePath(r.place.pageId));
@@ -145,7 +153,11 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
                     </a>
                   </td>
                   {table.columns.map((c) => (
-                    <td key={c.key}>{r.values.get(c.key) ?? ''}</td>
+                    // La locación en su azul y el decorado en su violeta (D823), con cualquiera de sus rótulos
+                    // («Locación real», «Decorado», «Locación guion»…).
+                    <td key={c.key} className={placeClass(c.key)}>
+                      {r.values.get(c.key) ?? ''}
+                    </td>
                   ))}
                 </tr>
               ))}

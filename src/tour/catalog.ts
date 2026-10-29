@@ -255,8 +255,8 @@ const SCRATCH: ChapterDef[] = [
         },
       },
       {
-        // En un proyecto vacío el Overview todavía no se ve en la barra (aparece con la primera escena, locación,
-        // decorado o día): por eso se explica acá y se abre en un capítulo que siga.
+        // El Overview está siempre, también en un proyecto vacío, con sus partes en 0 (D825): se señala acá y se abre en
+        // un capítulo que siga, cuando ya tiene algo.
         id: 'scratch.empty.overview',
         mode: 'info',
         anchor: { tour: 'overview' },
@@ -265,8 +265,8 @@ const SCRATCH: ChapterDef[] = [
         sides: [...SIDEBAR],
         title: { en: 'The Overview builds itself', es: 'El Panorama se arma solo' },
         text: {
-          en: "Pages is what you write. Below it, the **Overview** gathers what all your pages say about each scene, location, set and shoot day, each part in a table. It shows up with your first scene, and you don't edit it.",
-          es: 'Páginas es lo que escribís. Debajo, el **Panorama** junta lo que dicen todas tus páginas de cada escena, locación, decorado y día de rodaje, cada parte en una tabla. Aparece con tu primera escena, y no se edita.',
+          en: "Pages is what you write. Above it, the **Overview** gathers what all your pages say about each scene, location, set and shoot day, each part in a table. Here it's all at 0: it fills in by itself, and you don't edit it.",
+          es: 'Páginas es lo que escribís. Arriba, el **Panorama** junta lo que dicen todas tus páginas de cada escena, locación, decorado y día de rodaje, cada parte en una tabla. Acá está todo en 0: se llena solo, y no se edita.',
         },
       },
       {
@@ -575,7 +575,7 @@ const SCRATCH: ChapterDef[] = [
   },
   {
     id: 'scratch.jump',
-    version: 1,
+    version: 2,
     title: { en: 'Twenty scenes later', es: 'Veinte escenas después' },
     summary: { en: 'The Scenes and Locations tables, full.', es: 'Las tablas de Escenas y Locaciones, llenas.' },
     minutes: 2,
@@ -636,8 +636,8 @@ const SCRATCH: ChapterDef[] = [
         sides: ['above', 'left', 'below'],
         title: { en: 'Each place, with its sets and scenes', es: 'Cada lugar, con sus decorados y escenas' },
         text: {
-          en: 'Nobody typed this table: the sets come from the pages inside each location, the scenes from what each scene says.',
-          es: 'Esta tabla no la escribió nadie: los decorados salen de las páginas adentro de cada locación; las escenas, de lo que dice cada escena.',
+          en: 'Nobody typed this table: the sets come from the pages inside each location, the scenes from what each scene says. Locations always show in blue and sets in violet, here and in the sidebar.',
+          es: 'Esta tabla no la escribió nadie: los decorados salen de las páginas adentro de cada locación; las escenas, de lo que dice cada escena. Las locaciones van siempre en azul y los decorados en violeta, acá y en la barra lateral.',
         },
       },
       {
@@ -649,7 +649,8 @@ const SCRATCH: ChapterDef[] = [
         title: { en: 'One location', es: 'Una locación' },
         text: { en: 'Open one to see its header.', es: 'Abrí una para ver su cabecera.' },
         turn: { en: 'click **Old Station** in the table', es: 'un clic en **Estación Vieja** en la tabla' },
-        until: { what: 'openKind', kind: 'location' },
+        // Desde la tabla: el paso que sigue vuelve a ella con Esc (abierta desde la barra, Esc no tendría a dónde volver).
+        until: { what: 'openKind', kind: 'location', fromTable: true },
       },
       {
         id: 'scratch.jump.header',
@@ -662,6 +663,21 @@ const SCRATCH: ChapterDef[] = [
           en: 'The scenes planned here, its sets, its scoutings and its shoot days, with the photos. It updates as you write anywhere.',
           es: 'Las escenas planeadas acá, sus decorados, sus scoutings y sus días de rodaje, con las fotos. Se actualiza al escribir en cualquier página.',
         },
+      },
+      {
+        // Esc vuelve a la tabla (D822): solo en la computadora (en el teléfono no hay Esc).
+        id: 'scratch.jump.back',
+        mode: 'do',
+        anchor: null,
+        layout: 'desktop',
+        title: { en: 'Back to the table', es: 'De vuelta a la tabla' },
+        text: {
+          en: 'You opened it from a row of the table, so {esc} takes you back to the table.',
+          es: 'La abriste desde una fila de la tabla, así que {esc} te devuelve a la tabla.',
+        },
+        turn: { en: 'press {esc}', es: 'apretá {esc}' },
+        keys: { esc: 'backToTable' },
+        until: { what: 'open', stage: 'locations' },
       },
     ],
   },

@@ -97,6 +97,15 @@
   color: var(--scene-fg);
 }
 
+/* La locación en su azul y el decorado en su violeta, siempre (D823). */
+.mp-shots td.loc {
+  color: var(--loc-fg);
+}
+
+.mp-shots td.set {
+  color: var(--set-fg);
+}
+
 .mp-shots tbody tr:hover td {
   background: linear-gradient(var(--hover), var(--hover)) var(--surface);
 }

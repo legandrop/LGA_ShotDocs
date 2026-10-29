@@ -313,6 +313,11 @@ export function historyStack(win: Window = window): TabHistory {
   return { stack: stack.slice(cut), at: Math.max(0, at - cut) };
 }
 
+/** La dirección de la entrada de atrás en el tramo, si se sabe (Esc vuelve a la tabla solo si es ella, D822). */
+export function previousPath(): string | null {
+  return idx > 0 ? (paths[idx - 1] ?? null) : null;
+}
+
 /** Va `delta` posiciones en el historial y espera la vuelta (o un segundo, si no llega). */
 function travel(win: Window, delta: number): Promise<void> {
   return new Promise((resolve) => {

@@ -153,8 +153,8 @@ export const map = {
   'map.nothingPendingSeen': { en: "Nothing pending in the pages you can see.", es: "Nada pendiente en las páginas que ves." },
   'map.noMatch': { en: "Nothing matches the filter.", es: "Nada coincide con el filtro." },
   'map.empty': {
-    en: "This project has no scenes, locations or shoot days yet. In a folder’s menu, Type › Pages created inside are: Scenes, Locations or Shoot days. The overview fills in by itself.",
-    es: "Este proyecto todavía no tiene escenas, locaciones ni días de rodaje. En el menú de una carpeta, Tipo › Lo que se crea adentro es: Escenas, Locaciones o Días de rodaje. El panorama se llena solo.",
+    en: "This project has no scenes, locations or shoot days yet. Write them in Pages: New scene in Scenes, New location in Locations, and the day plans and reports in Shoot. In a project with other folders, set what's created inside one with Type in its ⋯ menu. The overview fills in by itself.",
+    es: "Este proyecto todavía no tiene escenas, locaciones ni días de rodaje. Escribilos en Páginas: Nueva escena en Escenas, Nueva locación en Locaciones, y los planes y reportes del día en Rodaje. En un proyecto con otras carpetas, en el menú ⋯ de una carpeta, Tipo dice qué se crea adentro. El panorama se llena solo.",
   },
   'map.unavailable': { en: "The overview isn’t available here.", es: "El panorama no está disponible acá." },
   // Las páginas que hablan de una escena (Docs/Doc_Relaciones.md, sección 21): la vista de una escena y «N pages».

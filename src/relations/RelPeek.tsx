@@ -117,7 +117,10 @@ export function RelPeek({ eventsRef, view, pageId, editable }: { eventsRef: Muta
       close();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
+      if (e.key !== 'Escape') return;
+      // El Esc es del adelanto: no vuelve además a la tabla (D822).
+      e.preventDefault();
+      close();
     };
     document.addEventListener('pointerdown', outside, true);
     window.addEventListener('scroll', onScroll, true);

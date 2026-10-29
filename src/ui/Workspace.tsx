@@ -6,6 +6,7 @@ import { importingElsewhere, importJobFor, useImportJob } from '../import/import
 import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
+import { kindReader } from '../relations/kind';
 import { useLinkMode } from '../linkMode';
 import {
   ServicesContext,
@@ -480,6 +481,12 @@ export function Shell() {
   const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
   const crumbs = pageId ? tree.ancestors(pageId) : [];
   const current = pageId ? tree.get(pageId) : undefined;
+  // Una locación en su azul y un decorado en su violeta, también en el breadcrumb (D823).
+  const kinds = kindReader(tree);
+  const placeOf = (id: string) => {
+    const kind = kinds.kindOf(id).kind;
+    return kind === 'location' ? ' loc' : kind === 'set' ? ' set' : '';
+  };
 
   return (
     <div className={`shell${navOpen ? ' nav-open' : ''}`}>
@@ -507,7 +514,7 @@ export function Shell() {
               <nav className="breadcrumbs" aria-label={tr('shell.location')}>
                 {crumbs.map((p) => (
                   <span key={p.id}>
-                    <button className="crumb" onClick={() => navigate(pagePath(p.id))}>
+                    <button className={`crumb${placeOf(p.id)}`} onClick={() => navigate(pagePath(p.id))}>
                       {p.title || tr('common.untitled')}
                     </button>
                     <span className="sep" aria-hidden="true">
@@ -516,7 +523,7 @@ export function Shell() {
                   </span>
                 ))}
                 {current && (
-                  <span className="crumb current" aria-current="page">
+                  <span className={`crumb current${placeOf(current.id)}`} aria-current="page">
                     {current.title || tr('common.untitled')}
                   </span>
                 )}

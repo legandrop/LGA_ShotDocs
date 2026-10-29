@@ -486,7 +486,7 @@ describe('el mapa en la app', () => {
     d.docs.close(built.ids.d59);
   });
 
-  it('un proyecto sin escenas, locaciones ni días no tiene Overview', async () => {
+  it('un proyecto sin escenas, locaciones ni días tiene Overview igual: vacío, dice dónde se escribe (D825)', async () => {
     const d = await makeDevice(new FakeServer());
     devices.push(d);
     const projectId = await d.tree.createProject('Notas sueltas');
@@ -494,9 +494,10 @@ describe('el mapa en la app', () => {
     await writeBlocks(d, page, [{ p: 'La Escena 27 y la 5027.' }]);
     await d.engine.syncNow();
     const host = mount(d, pagePath(page));
-    await until(() => host.querySelector('.page-title'), 'la página');
-    await wait(300);
-    expect(host.querySelector('.ov-nav')).toBeNull();
+    await until(() => host.querySelector('.ov-nav'), 'el Overview');
+    act(() => navigate(mapPath('scenes')));
+    // Primero puede decir «Reading…»: el texto llega cuando terminó de leer.
+    await until(() => host.querySelector('.mp-empty')?.textContent?.includes('New scene in Scenes'), 'el Overview vacío');
   });
 
   it('un invitado que ve solo una escena: su Overview tiene solo esa escena', async () => {
@@ -518,6 +519,11 @@ describe('el mapa en la app', () => {
     expect(host.querySelector('.mp-lede')!.textContent).toContain('from the pages you can see');
     expect(rows(host, '.mp-srow')[0].querySelector('.mp-dd')!.textContent).toBe('No report section you can see');
     for (const k of ['d59', 'cenade', 'scout', 'notas']) expect(host.textContent).not.toContain(owner.tree.get(built.ids[k])!.title);
+    // En la barra, solo las partes con algo: quien ve una parte no sabe qué falta (D401), así que no hay ceros (D825).
+    const parts = [...host.querySelectorAll('.ov-part-name')].map((a) => a.textContent);
+    expect(parts).toContain('Scenes');
+    expect(parts).not.toContain('Locations');
+    expect(host.querySelector('.scene-nav-n.zero')).toBeNull();
   });
 
   it('un invitado nunca lee «no existe» de una escena que no ve: «isn’t in the pages you can see» (mapa, día y lupa)', async () => {

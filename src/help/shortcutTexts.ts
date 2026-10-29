@@ -15,6 +15,7 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   dictate: 'shortcut.dictate',
   navBack: 'shortcut.navBack',
   navForward: 'shortcut.navForward',
+  backToTable: 'shortcut.backToTable',
   newTab: 'shortcut.newTab',
   closeTab: 'shortcut.closeTab',
   nextTab: 'shortcut.nextTab',
