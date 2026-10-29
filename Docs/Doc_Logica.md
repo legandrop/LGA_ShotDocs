@@ -22,7 +22,9 @@ scoutings, las pruebas, cada semana de rodaje con el plan y el reporte de cada d
 decorado abre un resumen con links a cada página que habla de eso. Cada página vive en un solo lugar: *Pages*. (La v0.302
 había pasado las escenas, locaciones y decorados al *Overview*, D813 parte 1; Lega lo vio con VLLF y no tenía sentido:
 el Panorama tiene que armarse solo, D815.) Un proyecto nuevo arranca con esas carpetas vacías (D817), y las carpetas
-de Escenas y Locaciones muestran arriba *New scene* / *New location* y una tabla armada sola (D818).
+de Escenas y Locaciones muestran arriba *New scene* / *New location* y una tabla armada sola (D818). Un clic en la
+foto de una fila abre sus fotos, y ahí *Use as thumbnail* elige la que muestra la tabla (D824); una página abierta desde
+una fila vuelve a la tabla con Esc (D822). Las locaciones van siempre en azul y los decorados en violeta (D823).
 
 **En términos simples:** no es una base de datos con columnas. Es un cuaderno que la app lee como una persona atenta, y
 con lo que lee arma índices que se actualizan solos.
@@ -173,12 +175,13 @@ el teléfono arranca así). Los documentos no tienen cabecera: aparecen en las d
 El *Overview* (*Panorama*) es el mapa del proyecto, armado con lo que la persona ve; **no se edita** (D815). Está en la
 barra lateral, arriba de *Pages* (*Páginas*), y en una vista grande en el centro. Sus partes:
 
+- ***Scenes*** (primero desde v0.308, como en *Pages*): por episodio, con sus locaciones y sus días; abrir una muestra
+  todas las páginas que hablan de ella, con los renglones por etapa de la cabecera (desglose, scouting, plan, rodaje,
+  otras).
 - ***Locations***: cada locación en el tiempo, un punto por día cuyo título la nombra (lleno si el reporte tiene algo).
   En la barra, cada una abre su resumen: la cabecera de su página (planeada acá, scoutings, días de rodaje), con links,
   y su nombre arriba abre la página en *Pages*.
 - ***Sets***: los decorados por nombre, con sus escenas y dónde se filman; cada uno abre su resumen, igual.
-- ***Scenes***: por episodio, con sus locaciones y sus días; abrir una muestra todas las páginas que hablan de ella, con
-  los renglones por etapa de la cabecera (desglose, scouting, plan, rodaje, otras).
 - ***Shoot days***: cada día con su locación, sus escenas y su plan; una fecha con solo plan figura como planeada. En la
   barra, cada día abre su página, que se ve en *Pages*, en su semana.
 - ***Shots*** (D813, v0.304): una fila por plano de todas las escenas con los campos de su desglose, ordenable y para
@@ -187,7 +190,9 @@ barra lateral, arriba de *Pages* (*Páginas*), y en una vista grande en el centr
 - *Scouting* (cada scouting y prueba por fecha) sigue como pestaña del centro; en la barra ya no está, porque repetía
   `2 | Scouting Reports`.
 
-En la barra, una parte vacía no aparece y se despliega una a la vez. La barra es **un solo árbol** (D805 a D807): ↑ y
+En la barra, el *Overview* está siempre, también en un proyecto vacío: todas sus partes, las vacías en 0, y la vista
+vacía dice dónde se escribe cada cosa (D825; quien ve solo una rama ve solo las partes con algo). Se despliega una
+parte a la vez. La barra es **un solo árbol** (D805 a D807): ↑ y
 ↓ recorren el *Overview* y siguen en *Pages*, con partes y episodios como carpetas y filas como páginas. Al abrir una
 página queda abierto solo el camino hasta ella, con su fila centrada; una vista del *Overview* pliega *Pages*, y un día
 abierto desde *Shoot days* se ve en su semana. Las escenas, locaciones y decorados se crean en *Pages* (el «+» de su

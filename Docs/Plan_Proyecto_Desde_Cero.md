@@ -1,8 +1,10 @@
 # Plan: un proyecto desde cero, y la ayuda con recorridos (D816–D821)
 
 **Estado (v0.308):** hecho todo lo de las secciones 2 a 6 en el código, con los nueve capítulos de *A project from
-scratch* recorridos con clics. La mudanza de los decorados de VLLF y ERSO (sección 3) se aplica después de publicar el
-código, con su copia. Quedan para Lega: una carpeta de Scouting con botón propio y tabla (hoy se crea con el «+» de la
+scratch* recorridos con clics. La mudanza de los decorados de VLLF y ERSO (sección 3) quedó aplicada y verificada el
+2026-10-29 (202 operaciones, ninguna otra página tocada), con su copia y su deshacer. Lo que Lega pidió después de
+probarla (Esc vuelve a la tabla, los colores, el *Panorama* siempre y la miniatura en el carrete) está en D822–D825,
+v0.309 y v0.310. Quedan para Lega: una carpeta de Scouting con botón propio y tabla (hoy se crea con el «+» de la
 fila), y si las listas desplegables del *Overview* (D806, D807) se quedan.
 
 Pedido de Lega (2026-10-28, a la noche, antes de dormir). Las etiquetas de la semana de Rodaje cambian a PLN y REP,

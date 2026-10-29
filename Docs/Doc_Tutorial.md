@@ -52,6 +52,10 @@ La ayuda de Version history también explica Recover drawing: recupera campos fa
 
 ## Reglas que no se rompen
 
+- **Todo cambio de una función se revisa en el recorrido** (Lega, 2026-10-29). Si un recorrido la muestra, se ajusta su
+  paso; si alguien que arma un proyecto la tiene que conocer y ningún recorrido la muestra, se le suma un paso (o se dice
+  por qué no va). Con el mismo nombre que en la interfaz, en inglés y en castellano, y probado con clics en el documento
+  de práctica, en la misma tanda que la función. La auditoría de la tanda lo revisa.
 - **La práctica no toca nada real.** El documento de ejemplo no es una página del árbol, no se guarda en la
   base local de páginas, no sube a Supabase ni al Drive, no cuenta en "cambios sin subir" ni frena el cierre
   de sesión, y no lo ve nadie más. Cada workspace sigue siendo una isla: el ejemplo viene con la app, no de un

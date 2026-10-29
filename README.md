@@ -261,20 +261,23 @@ In development. What works today:
 - A new project starts with its stage folders, empty: *Preproduction* (*Scenes* and *Locations*), *Scouting reports*,
   *Tests and previs*, *Shoot*, *References* and *Archive*. *Scenes* shows *New scene* (the next number, in gray, and
   you type the name) and a table built from every scene page: photo, number, name, location and set; *Locations* does
-  the same. A set is a page inside its location (*New set* in the location's header, or *Create page* next to the set
-  a scene names), and moving a page never changes what it is. Every table the app builds lets you widen its columns
-  (drag or double-click a header edge) and keeps its header on top while you scroll.
+  the same. Click a row's photo to see that row's photos; *Use as thumbnail* picks the one the table shows, for
+  everyone. A page opened from a row goes back to the table with Esc. Locations are always blue and sets violet, in
+  the sidebar and everywhere else. A set is a page inside its location (*New set* in the location's header, or
+  *Create page* next to the set a scene names), and moving a page never changes what it is. Every table the app
+  builds lets you widen its columns (drag or double-click a header edge) and keeps its header on top while you scroll.
 - Scenes, locations and shoot days: *Type* in a folder's menu sets what's created inside it, the folder shows a small
   SCENES, LOCATIONS or SHOOT DAYS label, and its pages are marked as such, with the scene number taken from the title
   (`101_074`). A scene's breakdown cards, a location's scouts and a day's plan count as part of it.
-- *Overview*, above the pages: every location in time, every scene with where a report has a section of it, the shoot
-  days, every shot of every scene in one table (sortable, to copy into a spreadsheet) and what's still pending, built
-  from what the pages say. It's read-only: you write in *Pages*, stage by stage, and a scene, location or set in the
-  overview opens a summary with links to every page that talks about it. In the sidebar it lists its locations, sets,
-  scenes and shoot days, one part open at a time. *Copy overview* and *Copy JSON*
+- *Overview*, above the pages, in every project (an empty part shows 0 and says where to write it): every scene with
+  where a report has a section of it, every location in time, the shoot days, every shot of every scene in one table
+  (sortable, to copy into a spreadsheet) and what's still pending, built from what the pages say. It's read-only: you
+  write in *Pages*, stage by stage, and a scene, location or set in the overview opens a summary with links to every
+  page that talks about it. In the sidebar it lists its scenes, locations,
+  sets and shoot days, one part open at a time. *Copy overview* and *Copy JSON*
   hand it to an assistant, and the search finds a scene by any form of its number (`101-074`, `1074`, `5027b`) or a
   location by name, first.
-- *Scenes*, inside *Overview* in the sidebar, appears by itself in every project with scenes: scenes by episode with their
+- *Scenes*, first in *Overview* in the sidebar: scenes by episode with their
   live titles, and each one says where everything about it is, one line per stage (*Preproduction | Breakdown*,
   *Scouting | Reports*, *Planning | Day plan*, *Shoot | Reports*…), each link to the page or the exact section; index
   pages stay folded. The scene's own page shows the same lines above its text, and its shots can live inside it, one

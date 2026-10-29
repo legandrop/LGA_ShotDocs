@@ -50,6 +50,19 @@ Ordenados en cuatro grupos: el plan de workspaces (primero), los pedidos de Lega
 ya, en orden), lo que se puede hacer sin que Lega decida nada, y lo que espera una decisión o una acción de
 Lega.
 
+### E. Proyecto desde cero, tablas y recorrido (v0.308–v0.310, D816–D825): lo que queda
+
+1. **En el teléfono no se elige la miniatura de una fila** (D824): la tabla de Escenas y Locaciones no tiene la columna
+   de la foto por debajo de 760 px. Decide Lega si hace falta otro camino (por ejemplo, desde la cabecera de la página).
+2. **En un iPad el recorrido nombra Esc** (`scratch.jump.back`, `scratch.jump.thumb`): el recorrido toma como
+   computadora cualquier pantalla de más de 760 px, aunque sea táctil y sin teclado. Hay que distinguir el teclado, no
+   el ancho, en todo el recorrido.
+3. **La carpeta de Scouting no tiene botón propio ni tabla** (se crea con el «+» de la fila), y *Overview › Scenes* no
+   muestra el decorado. Propuestas para Lega.
+4. **Menores de la auditoría de v0.308:** *Add planned sections* aparece en días viejos de VLLF y ERSO; los requisitos
+   `scouting` y `dayReport` del recorrido se cumplen con poco; entrar directo al capítulo 9 tarda 20 a 28 s en el
+   teléfono, con un cartel genérico.
+
 ### T. Tabs y pestañas (v0.300, D811-D812): lo que queda
 
 1. **Cambiar de tab vuelve a armar la página** (un tab por vez): es lo mismo que abrirla, 63-77 ms en la web en un día
