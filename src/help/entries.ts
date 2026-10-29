@@ -295,7 +295,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     // de rodaje que se abre en *Pages* desde el *Overview* (D815).
     since: '0.307',
   },
-  { id: 'pagesExpand', section: 'pages', title: 'help.pagesExpand.title', text: 'help.pagesExpand.text', words: ['expand', 'subpages', 'click', 'manual', 'account', 'expandir', 'subpáginas', 'clic', 'cuenta'], since: '0.258' },
+  { id: 'pagesExpand', section: 'pages', title: 'help.pagesExpand.title', text: 'help.pagesExpand.text', words: ['expand', 'subpages', 'click', 'manual', 'account', 'expandir', 'subpáginas', 'clic', 'cuenta'], since: '0.311' },
   { id: 'pagesArrange', section: 'pages', title: 'help.pagesArrange.title', text: 'help.pagesArrange.text', showMe: 'pages', since: BEFORE_HELP },
   {
     id: 'pagesKeys',
@@ -364,8 +364,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.relationsMap.title',
     text: 'help.relationsMap.text',
     words: ['overview', 'panorama', 'map', 'mapa', 'locations', 'locaciones', 'sets', 'decorados', 'timeline', 'scenes', 'escenas', 'scouting', 'tests', 'pruebas', 'shoot days', 'días', 'shots', 'planos', 'bd main', 'breakdown table', 'tabla', 'pending', 'pendientes', 'copy map', 'copy overview', 'json', 'assistant', 'asistente', 'ai', 'ia'],
-    // Subió con *Sets* (D804), con *Shots*, la tabla de planos (D813), y con el Overview de solo lectura (D815).
-    since: '0.307',
+    // Subió con *Sets* (D804), con *Shots*, la tabla de planos (D813), con el Overview de solo lectura (D815) y con
+    // otro clic que pliega la parte abierta (D826).
+    since: '0.311',
   },
   {
     id: 'scenesSection',

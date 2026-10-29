@@ -611,7 +611,13 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             if (modPressed(e) && !e.altKey && !e.shiftKey && openInNewTab(pagePath(page.id))) return;
             // El foco queda en la fila (Safari no lo da solo): las flechas siguen desde acá.
             e.currentTarget.focus({ preventScroll: true });
-            openPage(page.id);
+            // Con «On click», otro clic en la página abierta y desplegada la pliega (pedido de Lega, D826). El segundo
+            // clic de un doble clic no cuenta (`detail` 2: abrir y plegar de un saque parecería una falla), ni un clic
+            // sin mouse (`detail` 0). Lo que las flechas iban a abrir se cancela, como al abrir: el clic se queda acá.
+            if (expandSubpages === 'onClick' && page.id === activeId && open && children.length > 0 && e.detail === 1) {
+              opener.cancel();
+              collapse(page.id);
+            } else openPage(page.id);
           }}
           onMouseDown={(e) => {
             // La rueda no desplaza la barra con el autoscroll del navegador: abre la página aparte.

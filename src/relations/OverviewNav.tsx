@@ -498,6 +498,9 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
           // Una parte vacía (D825) abre su vista sin tocar lo plegado: no tiene nada que desplegar.
           else if (!body) go(part);
           else if (clickedByKeys() || expandSubpages !== 'onClick') browsePart(part);
+          // Otro clic en la parte abierta y desplegada la pliega, como una página de *Pages* (D826). Solo un clic del
+          // mouse (`detail` 1): Enter y Espacio llegan como un clic con 0 y siguen solo abriendo; un doble clic, con 2.
+          else if (on && open && e.detail === 1) togglePart(part as Part);
           else openPart(part);
         }}
         data-part={part}
@@ -518,6 +521,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
             if (isViewPart(part)) openView(part);
             else if (!body) go(part);
             else if (expandSubpages !== 'onClick') browsePart(part);
+            else if (on && open && e.detail === 1) togglePart(part as Part);
             else openPart(part);
           }}
         >

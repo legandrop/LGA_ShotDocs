@@ -188,7 +188,8 @@ function clickRow(title: string) {
   act(() => {
     el.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    (el as HTMLElement).click();
+    // `detail` 1, como un clic del mouse (un `click()` sin mouse llega con 0).
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
   });
 }
 
@@ -243,6 +244,33 @@ describe('al abrir una página quedan abiertas solo sus madres', () => {
     clickRow('Tres');
     expect(path()).toBe(pagePath(ids.tres));
     expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
+  });
+
+  it('con «On click», otro clic en la página abierta la pliega y el siguiente la despliega (D826)', async () => {
+    const { ids } = await app({ expandSubpages: 'onClick' });
+    clickRow('Tres');
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
+    clickRow('Tres');
+    expect(path()).toBe(pagePath(ids.tres));
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres']);
+    clickRow('Tres');
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
+    // El segundo clic de un doble clic no la pliega.
+    act(() => row('Tres').querySelector('.title')!.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 })));
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
+    // Una madre desplegada que no es la abierta: el clic la abre y la deja desplegada.
+    clickRow('Uno');
+    clickRow('Uno.A');
+    clickRow('Uno');
+    expect(path()).toBe(pagePath(ids.uno));
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
+  });
+
+  it('con «Manual», otro clic en la página abierta no la pliega', async () => {
+    const { ids } = await app();
+    go(pagePath(ids.uno));
+    clickRow('Uno');
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Dos', 'Tres']);
   });
 
   it('con las flechas, salir de una rama no la pliega; desplegar la siguiente, sí (Lega, D809)', async () => {

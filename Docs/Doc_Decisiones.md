@@ -2596,3 +2596,10 @@ en la página de la escena o la locación, para todos.
 Está desde v0.310: si esa foto deja de estar entre las de la fila, la tabla vuelve a la primera; la tarjeta de un link a
 la escena o la locación muestra la misma miniatura. Elegirla es de quien puede editar la fila. Detalle en
 `Doc_Carrete.md`, «La miniatura de una fila».
+
+### D826 · Otro clic en la página abierta la pliega (2026-10-29)
+**Pedido de Lega:** si un clic en una página con subpáginas la despliega, otro clic tiene que plegarla.
+**Elegimos:** con *Expand subpages: On click*, un clic en la página que ya está abierta y desplegada la pliega, y el
+siguiente la despliega (reemplaza el «otro clic la despliega de nuevo» de D737). Un clic en una madre desplegada que no
+es la abierta la abre y la deja desplegada. Las partes del *Panorama* hacen lo mismo: otro clic en la abierta la pliega
+sin cambiar de vista. El segundo clic de un doble clic no pliega. Enter y Espacio solo abren; con *Manual*, nada cambia.

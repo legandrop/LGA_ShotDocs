@@ -300,6 +300,18 @@ describe('Overview y Scenes en la barra lateral', () => {
     await shown(() => expect(location.pathname).toBe('/map/days'));
     expect(open()).toEqual(['Shoot days']);
     expect(part('Shoot days').classList.contains('on')).toBe(true);
+    // Otro clic del mouse en la parte abierta la pliega, sin cambiar de vista; el siguiente la despliega (D826). Enter
+    // (un clic sin mouse, `detail` 0) y el segundo clic de un doble clic no la pliegan.
+    const mouse = (el: Element | null, detail = 1) => act(() => void el!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail })));
+    click(part('Shoot days').querySelector('.ov-part-name'));
+    expect(open()).toEqual(['Shoot days']);
+    mouse(part('Shoot days').querySelector('.ov-part-name'), 2);
+    expect(open()).toEqual(['Shoot days']);
+    mouse(part('Shoot days').querySelector('.ov-part-name'));
+    expect(open()).toEqual([]);
+    expect(location.pathname).toBe('/map/days');
+    mouse(part('Shoot days'));
+    expect(open()).toEqual(['Shoot days']);
     const day = host.querySelector<HTMLAnchorElement>(`.ov-list a[href="${pagePath(built.ids.d59)}"]`)!;
     expect(day.querySelector('.code')!.textContent).toBe('Día 59');
     // Sin tooltip: la fila ya muestra las locaciones del día (D794).

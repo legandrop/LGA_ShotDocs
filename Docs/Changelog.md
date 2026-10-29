@@ -1,5 +1,20 @@
 # Changelog — LGA Shot Docs
 
+v0.311 :
+
+Lega pidió que un clic en una página que se desplegó con otro clic la vuelva a plegar: con *Expand subpages: On click*,
+el clic en la fila de *Pages* siempre llamaba a `openPage`, que solo despliega, así que la única forma de plegarla era
+la flecha (D737 decía «otro clic la despliega de nuevo»). Ahora, si la página ya es la abierta y está desplegada, el
+clic la pliega (`collapse`), y el siguiente la vuelve a desplegar (D826). Lo mismo en las partes del *Panorama*: otro
+clic en la parte abierta la pliega sin cambiar de vista. Solo cuenta un clic del mouse (`detail === 1`): la auditoría
+vio que Enter y Espacio en el *Panorama* llegan como un clic con 0 y plegaban la parte; el segundo clic de un doble clic
+(2) tampoco pliega. Con *Manual* no cambia nada. Ayuda al día en los dos idiomas (sube a 0.311, sale en las novedades) y
+README. El recorrido no suma paso: no es algo que haga falta para armar un proyecto, y en el flujo normal ningún paso
+toca una carpeta que ya esté abierta (si la persona abrió Escenas antes, el clic en la fila resaltada la pliega y otro
+la despliega).
+
+[ v0.311: otro clic en la página abierta de la barra la pliega ]
+
 v0.310 :
 
 Lega pidió poder cambiar la foto de una fila de una tabla desde el carrete, y eligió la opción A del canvas (D824). En
