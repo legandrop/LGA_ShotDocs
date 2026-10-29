@@ -611,10 +611,11 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             if (modPressed(e) && !e.altKey && !e.shiftKey && openInNewTab(pagePath(page.id))) return;
             // El foco queda en la fila (Safari no lo da solo): las flechas siguen desde acá.
             e.currentTarget.focus({ preventScroll: true });
-            // Con «On click», otro clic en la página abierta y desplegada la pliega (pedido de Lega, D826). El segundo
-            // clic de un doble clic no cuenta (`detail` 2: abrir y plegar de un saque parecería una falla), ni un clic
-            // sin mouse (`detail` 0). Lo que las flechas iban a abrir se cancela, como al abrir: el clic se queda acá.
-            if (expandSubpages === 'onClick' && page.id === activeId && open && children.length > 0 && e.detail === 1) {
+            // Con «On click», otro clic en la página abierta y desplegada la pliega (pedido de Lega, D826). Cualquier clic
+            // del mouse, también el segundo de un doble clic: en la Mac de Lega el doble clic dura 1,8 s, y dos clics en
+            // el mismo lugar no plegaban (v0.311). Un clic sin mouse (`detail` 0) solo abre. Lo que las flechas iban a
+            // abrir se cancela, como al abrir: el clic se queda acá.
+            if (expandSubpages === 'onClick' && page.id === activeId && open && children.length > 0 && e.detail > 0) {
               opener.cancel();
               collapse(page.id);
             } else openPage(page.id);

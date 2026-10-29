@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.312 :
+
+Lega probó la 0.311 y dos clics en el mismo lugar no plegaban la página: hacía falta esperar y mover un poco el mouse.
+La causa era el filtro de doble clic de la 0.311 (`detail === 1`): en su Mac el doble clic dura 1,8 s, así que el
+segundo clic en el mismo lugar llegaba como doble clic (`detail` 2) y se ignoraba; mover el mouse reinicia la cuenta.
+Desplegar sí andaba porque ese clic llega con `detail` 3 y va a `openPage`. Ahora pliega cualquier clic del mouse
+(`detail > 0`), en *Pages* y en las partes del *Panorama*; Enter y Espacio, que llegan como un clic con 0, siguen solo
+abriendo. Los tests prueban el segundo y el tercer clic como doble clic. Probado con clics seguidos en el documento de
+práctica.
+
+[ v0.312: dos clics seguidos en la página abierta la pliegan y la despliegan ]
+
 v0.311 :
 
 Lega pidió que un clic en una página que se desplegó con otro clic la vuelva a plegar: con *Expand subpages: On click*,

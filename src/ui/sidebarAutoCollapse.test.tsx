@@ -255,8 +255,15 @@ describe('al abrir una página quedan abiertas solo sus madres', () => {
     expect(titles()).toEqual(['Uno', 'Dos', 'Tres']);
     clickRow('Tres');
     expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
-    // El segundo clic de un doble clic no la pliega.
-    act(() => row('Tres').querySelector('.title')!.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 })));
+    // Dos clics en el mismo lugar llegan como doble clic (`detail` 2 y 3; en la Mac de Lega, durante 1,8 s): igual
+    // pliegan y despliegan.
+    const again = (detail: number) => act(() => void row('Tres').querySelector('.title')!.dispatchEvent(new MouseEvent('click', { bubbles: true, detail })));
+    again(2);
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres']);
+    again(3);
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
+    // Un clic sin mouse (`detail` 0) solo abre.
+    again(0);
     expect(titles()).toEqual(['Uno', 'Dos', 'Tres', 'Tres.C']);
     // Una madre desplegada que no es la abierta: el clic la abre y la deja desplegada.
     clickRow('Uno');

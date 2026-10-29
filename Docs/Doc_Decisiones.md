@@ -2602,4 +2602,5 @@ la escena o la locación muestra la misma miniatura. Elegirla es de quien puede 
 **Elegimos:** con *Expand subpages: On click*, un clic en la página que ya está abierta y desplegada la pliega, y el
 siguiente la despliega (reemplaza el «otro clic la despliega de nuevo» de D737). Un clic en una madre desplegada que no
 es la abierta la abre y la deja desplegada. Las partes del *Panorama* hacen lo mismo: otro clic en la abierta la pliega
-sin cambiar de vista. El segundo clic de un doble clic no pliega. Enter y Espacio solo abren; con *Manual*, nada cambia.
+sin cambiar de vista. Vale cualquier clic del mouse, también si el sistema lo cuenta como doble clic (en la Mac
+de Lega dura 1,8 s; v0.312). Enter y Espacio solo abren; con *Manual*, nada cambia.
