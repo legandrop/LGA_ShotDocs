@@ -6,11 +6,13 @@ import { usePermissions, useServices, useTree } from '../services';
 import { notify } from '../ui/notice';
 import { useCurrentProject } from '../ui/project';
 import { existingRelationsSession } from '../ui/relationsUi';
+import { lazyPart, Part } from '../ui/lazyPart';
+import type { CarreteEntry } from '../ui/carreteModel';
 import { createEnv, reasonText } from './EntityActions';
 import type { CreateWant } from './createEntity';
 import { holdsOf } from './kind';
 import { Thumb } from './LiveHeader';
-import { locationLive, sceneLive, type LiveSource, type PhotoRef } from './liveView';
+import { locationLive, rowPhoto, sceneLive, type LiveSource, type PhotoRef } from './liveView';
 import type { Registry } from './reader';
 import { sceneTitleName } from '../ui/sceneTitle';
 import { useColumnWidths, type ColumnSpec } from '../ui/columnWidths';
@@ -31,13 +33,11 @@ export function nextSceneCodes(registry: Pick<Registry, 'scenes' | 'eps' | 'flat
   return out;
 }
 
-/** La foto de la fila: la primera de la página misma; si no tiene, la primera de lo de adentro. */
-function firstPhoto(photos: PhotoRef[], pageId: string | null): string | null {
-  return (photos.find((p) => p.place.pageId === pageId) ?? photos[0])?.id ?? null;
-}
+// El carrete de las fotos de la fila (D824): se baja aparte, como el de la cabecera viva.
+const GalleryCarrete = lazyPart(() => import('./GalleryCarrete').then((m) => m.GalleryCarrete));
 
 /** La miniatura recién cuando la fila se acerca a la vista: una carpeta de 140 escenas no pide 140 fotos de golpe. */
-function LazyThumb({ id }: { id: string | null }) {
+function LazyThumb({ id, onOpen, label }: { id: string | null; onOpen?: () => void; label?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [near, setNear] = useState(false);
   useEffect(() => {
@@ -48,7 +48,27 @@ function LazyThumb({ id }: { id: string | null }) {
     io.observe(el);
     return () => io.disconnect();
   }, [id, near]);
-  return <span ref={ref} className="fi-thumb">{id && near ? <Thumb id={id} /> : <span className="lh-ph" aria-hidden="true" />}</span>;
+  const img = id && near ? <Thumb id={id} /> : <span className="lh-ph" aria-hidden="true" />;
+  // Con fotos, un clic abre el carrete de la fila (D824), no la página.
+  if (id && onOpen)
+    return (
+      <button
+        ref={ref as unknown as React.Ref<HTMLButtonElement>}
+        className="fi-thumb fi-thumb-btn"
+        aria-label={label}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+      >
+        {img}
+      </button>
+    );
+  return (
+    <span ref={ref} className="fi-thumb">
+      {img}
+    </span>
+  );
 }
 
 export function FolderIndex({ pageId }: { pageId: string }) {
@@ -91,6 +111,8 @@ interface Row {
   code: string | null;
   name: string;
   photo: string | null;
+  /** Las fotos de la fila, las que muestra su carrete (D824). */
+  photos: PhotoRef[];
   /** Locación (escenas) o decorados (locaciones). */
   first: { title: string; pageId: string | null }[];
   /** Decorado (escenas) o escenas (locaciones). */
@@ -112,11 +134,14 @@ function FolderIndexFor({
   const perms = usePermissions();
   const projectId = useCurrentProject();
   const revision = useSyncExternalStore(session.relations.subscribe, session.relations.getRevision);
+  const treeRevision = tree.getRevision();
   const snap = session.relations.snapshot(projectId);
   const [busy, setBusy] = useState(false);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
   const tableRef = useRef<HTMLTableElement>(null);
+  // El carrete de las fotos de una fila (D824): qué fila, y desde qué foto.
+  const [viewing, setViewing] = useState<string | null>(null);
   // En una pantalla angosta, sin la columna de la foto (sacarla de las columnas, no esconderla: si no, el resto queda con
   // los anchos de una tabla de cinco).
   const narrow = useSyncExternalStore(subscribeNarrow, isNarrow);
@@ -133,11 +158,13 @@ function FolderIndexFor({
         if (!inside(s.pageId)) continue;
         const v = sceneLive(src, s.code);
         const title = tree.get(s.pageId)?.title ?? '';
+        const photos = v.photos.filter((p) => p.sourceKind === 'breakdown');
         out.push({
           pageId: s.pageId,
           code: s.code,
           name: (sceneTitleName(title, s.code) ?? title).trim(),
-          photo: firstPhoto(v.photos.filter((p) => p.sourceKind === 'breakdown'), s.pageId),
+          photo: rowPhoto(photos, s.pageId, tree.get(s.pageId)?.settings?.thumb),
+          photos,
           first: v.plannedAt.map((l) => ({ title: l.title, pageId: l.pageId })),
           second: v.sets.map((x) => ({ title: x.title, pageId: x.pageId })),
         });
@@ -151,7 +178,8 @@ function FolderIndexFor({
           pageId: l.pageId,
           code: null,
           name: tree.get(l.pageId)?.title || l.name,
-          photo: firstPhoto(v.photos, l.pageId),
+          photo: rowPhoto(v.photos, l.pageId, tree.get(l.pageId)?.settings?.thumb),
+          photos: v.photos,
           first: v.sets.map((x) => ({ title: x.title, pageId: x.pageId })),
           second: v.planned.map((s) => ({ title: s.code, pageId: s.pageId })),
         });
@@ -159,8 +187,33 @@ function FolderIndexFor({
       out.sort((a, b) => a.name.localeCompare(b.name));
     }
     return out;
-    // La foto del índice cambia con cada revisión; el árbol (títulos, papelera) se lee de esa misma revisión.
-  }, [snap, revision, kind, pageId, tree, session]); // eslint-disable-line react-hooks/exhaustive-deps
+    // La foto del índice cambia con cada revisión; el árbol (títulos, papelera, la miniatura elegida) también.
+  }, [snap, revision, kind, pageId, tree, session, treeRevision]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // El carrete de la fila abierta (D824): sus fotos (sin carpetas, que tienen su visor), desde la miniatura. La lista es
+  // la misma mientras no cambien sus fotos (si no, el carrete se rearmaría en cada revisión).
+  const viewedRow = viewing ? rows?.find((r) => r.pageId === viewing) : undefined;
+  const viewedPhotos = viewedRow ? viewedRow.photos.filter((p) => !services.media.isFolder(p.id)) : [];
+  const viewedKey = viewedPhotos.map((p) => `${p.id}|${p.place.pageId}|${p.place.blockId}`).join(' ');
+  const viewedEntries = useMemo<CarreteEntry[]>(
+    () =>
+      viewedPhotos.map((p) => {
+        const title = tree.get(p.place.pageId)?.title || tr('common.untitled');
+        return { mediaId: p.id, origin: { pageId: p.place.pageId, pageTitle: title, label: title, blockId: p.place.blockId } };
+      }),
+    [viewedKey], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const viewed =
+    viewedRow && viewedEntries.length > 0
+      ? { row: viewedRow, entries: viewedEntries, start: Math.max(0, viewedEntries.findIndex((e) => e.mediaId === viewedRow.photo)) }
+      : null;
+  // Si a la fila abierta no le queda nada que mostrar (se borraron sus fotos), el carrete se cierra y la fila deja de
+  // estar abierta: si después llega una foto, no se abre solo.
+  useEffect(() => {
+    if (viewing && !viewed) setViewing(null);
+  }, [viewing, viewed]);
+  // Las fotos que el carrete puede mostrar (sin carpetas de Drive): sin ninguna, la foto de la fila no es un botón.
+  const viewable = (r: Row) => r.photos.filter((p) => !services.media.isFolder(p.id)).length;
 
   const canCreate = perms.canCreateIn(pageId, projectId);
   const env = () => createEnv(services, projectId, tr.lang);
@@ -287,7 +340,11 @@ function FolderIndexFor({
               <tr key={r.pageId} onClick={(e) => open(e, r.pageId)}>
                 {!narrow && (
                   <td>
-                    <LazyThumb id={r.photo} />
+                    <LazyThumb
+                      id={r.photo}
+                      onOpen={viewable(r) > 0 ? () => setViewing(r.pageId) : undefined}
+                      label={tr('folder.photos', { count: viewable(r) })}
+                    />
                   </td>
                 )}
                 {scenes && <td className="fi-code">{r.code}</td>}
@@ -305,6 +362,26 @@ function FolderIndexFor({
         </table>
       )}
       {rows && rows.length === 0 && <p className="fi-empty">{tr(scenes ? 'folder.emptyScenes' : 'folder.emptyLocations')}</p>}
+      {viewed && (
+        <Part onClose={() => setViewing(null)}>
+          <GalleryCarrete
+            entries={viewed.entries}
+            start={viewed.start}
+            onClose={() => setViewing(null)}
+            thumbnail={{
+              current: viewed.row.photo,
+              // Elegir la miniatura cambia los ajustes de la página de la fila: quien puede editarla (D824). Sin aviso al
+              // elegir (la estrella pasa a esa foto, y un aviso quedaría debajo del carrete): solo si no se pudo guardar.
+              onChoose: perms.canEditRow(viewed.row.pageId)
+                ? (id) => {
+                    const name = viewed.row.code ?? viewed.row.name;
+                    tree.setSetting(viewed.row.pageId, 'thumb', id).catch(() => notify(tr('folder.thumbFailed', { name })));
+                  }
+                : undefined,
+            }}
+          />
+        </Part>
+      )}
     </section>
   );
 }

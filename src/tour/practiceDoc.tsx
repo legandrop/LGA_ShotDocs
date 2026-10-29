@@ -4,8 +4,9 @@
 // - `isolate` (lo primero) deja `localStorage` y `sessionStorage` en memoria, y `fake-indexeddb/auto` pisa IndexedDB;
 // - no se crea ningún cliente de Supabase (el de los servicios es un objeto vacío) y la dirección del workspace es una
 //   que no existe (`.invalid`): ningún pedido puede llegar a la base ni al portero;
-// - el historial queda en una sola entrada (cada `pushState` pasa a `replaceState`): Atrás del navegador sale del
-//   recorrido a la página de donde se vino, y al salir no quedan direcciones de práctica en el historial;
+// - el historial queda en una sola entrada (cada `pushState` pasa a `replaceState`; una capa, como el carrete, se cierra
+//   sin salir): Atrás del navegador sale del recorrido a la página de donde se vino, y al salir no quedan direcciones de
+//   práctica en el historial;
 // - si se recarga a mitad, la app real vuelve acá (src/tour/reload.ts), al principio del capítulo, y sus requisitos se
 //   preparan solos.
 // Se abre con `/tour.html?tour=<id>&chapter=<id>&back=<dirección de la app>`.
@@ -21,7 +22,7 @@ import '@fontsource/courier-prime/latin-700.css';
 import '../styles.css';
 import { createRoot } from 'react-dom/client';
 import { language } from '../i18n';
-import { installNavHistory } from '../navHistory';
+import { installNavHistory, isOverlayState } from '../navHistory';
 import { prefs } from '../prefs';
 import { probeMedia, viewImage } from '../media/probe';
 import { setLiveOpen } from '../relations/liveFold';
@@ -99,9 +100,23 @@ async function main() {
   installNavHistory();
   const replace = history.replaceState.bind(history);
   const remember = () => markTourDoc(tourDocHref(tour, getTourUi().chapter || params.get('chapter'), back), location.pathname + location.search);
+  // Una capa (el carrete) suma una entrada al historial y se cierra con `history.back()`. Con una sola entrada, ese atrás
+  // sacaba la pestaña del recorrido: se recuerda lo que había debajo de cada capa, y su `back()` lo vuelve a poner y avisa
+  // (`popstate`), como el navegador. Sin una capa abierta, atrás sale del recorrido, como siempre.
+  const under: { state: unknown; url: string }[] = [];
+  const realBack = history.back.bind(history);
   history.pushState = (state, unused, url) => {
+    if (isOverlayState(state)) under.push({ state: history.state, url: location.pathname + location.search + location.hash });
+    else under.length = 0;
     replace(state, unused, url);
     remember();
+  };
+  history.back = () => {
+    const prev = under.pop();
+    if (!prev) return realBack();
+    replace(prev.state, '', prev.url);
+    remember();
+    window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
   };
   history.replaceState = (state, unused, url) => {
     replace(state, unused, url);

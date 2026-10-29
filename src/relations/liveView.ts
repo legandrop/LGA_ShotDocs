@@ -44,6 +44,16 @@ export interface PhotoRef {
   sourceKind: 'breakdown' | 'location' | 'title';
 }
 
+/**
+ * La miniatura de una escena o una locación (D824): la elegida con *Use as thumbnail* (`settings.thumb`) si sigue entre
+ * sus fotos; si no, la primera de la página misma; si no tiene, la primera de lo de adentro. La usan la tabla de su
+ * carpeta y la tarjeta de un link.
+ */
+export function rowPhoto(photos: PhotoRef[], pageId: string | null, chosen?: string): string | null {
+  if (chosen && photos.some((p) => p.id === chosen)) return chosen;
+  return (photos.find((p) => p.place.pageId === pageId) ?? photos[0])?.id ?? null;
+}
+
 export interface DayRef {
   pageId: string;
   /** «Día 59» (del título) o el título. */

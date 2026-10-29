@@ -382,10 +382,10 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.scenesPage.text',
     textTouch: 'help.scenesPage.textTouch',
     keys: { esc: 'backToTable' },
-    words: ['new scene', 'nueva escena', 'new location', 'nueva locación', 'new set', 'nuevo decorado', 'create page', 'crear la página', 'scenes', 'escenas', 'locations', 'locaciones', 'set', 'decorado', 'table', 'tabla', 'new project', 'proyecto nuevo', 'number', 'número', 'escape', 'esc', 'volver'],
+    words: ['new scene', 'nueva escena', 'new location', 'nueva locación', 'new set', 'nuevo decorado', 'create page', 'crear la página', 'scenes', 'escenas', 'locations', 'locaciones', 'set', 'decorado', 'table', 'tabla', 'new project', 'proyecto nuevo', 'number', 'número', 'escape', 'esc', 'volver', 'thumbnail', 'miniatura', 'photo', 'foto'],
     // La carpeta de Escenas y de Locaciones, el título partido y los decorados adentro de su locación (D817, D818); Esc
-    // vuelve a la tabla (D822).
-    since: '0.309',
+    // vuelve a la tabla (D822); la miniatura de la fila se elige en su carrete (D824).
+    since: '0.310',
   },
   {
     id: 'tableColumns',

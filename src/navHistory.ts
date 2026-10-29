@@ -90,6 +90,9 @@ function isOverlay(state: unknown): boolean {
   return isPlainObject(state) && state[OVERLAY] === true;
 }
 
+/** El `state` es el de una capa (`overlayState`): el documento de práctica la cierra sin salir del recorrido. */
+export const isOverlayState = isOverlay;
+
 /**
  * El `state` de una entrada que abre una capa encima de la página (el carrete, «Show me»): atrás la cierra, y al
  * volver de ella adelante no la reabre.

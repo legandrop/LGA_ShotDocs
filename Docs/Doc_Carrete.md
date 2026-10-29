@@ -153,6 +153,28 @@ galería**, de varias páginas, en el orden de la galería. Es el mismo carrete,
 Sin red: la miniatura o la versión grande guardada, con el aviso de siempre. Cerrar por dos caminos a la vez (la vuelta
 del historial y la espera de respaldo) avisa una sola vez.
 
+## La miniatura de una fila (v0.310, D824)
+
+En la tabla de Escenas o de Locaciones (`src/relations/FolderIndex.tsx`), un clic en la foto de una fila abre el carrete
+de varias páginas con **las fotos de esa fila** (en una escena, las de su desglose: la página y lo de adentro; en una
+locación, todas las de su cabecera), empezando por la miniatura. El resto de la fila sigue abriendo la página. Es la
+opción A del canvas «Carrete y miniatura de la fila», con la tira de la B más chica:
+
+- Arriba, al lado de *Download*, **Use as thumbnail** (estrella vacía). En la foto que ya es la miniatura, la estrella
+  está llena, dice *Thumbnail* y no hace nada (`aria-disabled`, no `disabled`: el foco y el tooltip quedan). Solo para
+  quien puede editar la fila de la página (`canEditRow`; un link público no ve la tabla).
+- Abajo, la tira de todas las fotos de la fila, chicas (44 px; 40 en el teléfono), con la que se ve marcada y la
+  miniatura con su estrella; un toque muestra esa foto. Acompaña a la foto que se ve (`scrollIntoView`). Cada
+  miniatura de la tira se baja recién cuando se acerca a su vista (`StripThumb`), como las filas de la tabla.
+- Elegir guarda el id del archivo en los ajustes de la página de la fila (`settings.thumb`), para todos, sin aviso (la
+  estrella pasa a esa foto); solo si no se pudo guardar, avisa. Si esa foto deja de estar entre las de la fila, la
+  tabla vuelve a la primera (`rowPhoto`, en `liveView.ts`; la tarjeta de un link a la escena o la locación usa la
+  misma). Una versión vieja no lee la clave y la conserva (los ajustes se escriben por clave).
+- Una fila cuyas fotos son todas carpetas de Drive no tiene carrete: su foto no es un botón. En el teléfono la tabla no
+  tiene la columna de la foto, así que ahí no se elige la miniatura.
+- El carrete sigue siendo uno solo (`src/ui/Carrete.tsx`, prop `thumbnail`): no sabe de tablas ni de páginas; la
+  miniatura de cada foto de la tira la dibuja quien lo abre (`GalleryCarrete`, con `Thumb`).
+
 ## Pantalla
 
 - A pantalla completa, fondo oscuro en los dos temas (como cualquier visor de fotos), respetando la

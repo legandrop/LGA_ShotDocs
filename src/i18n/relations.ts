@@ -781,6 +781,9 @@ export const relations = {
   'cols.dragTip': { en: "change the width", es: "cambiar el ancho" },
   'cols.fitTip': { en: "fit to the longest text (the photo column: back to the default widths)", es: "ajustar a lo más largo (la de la foto: volver a los anchos de fábrica)" },
   'folder.emptyScenes': { en: "No scenes yet: create the first one with New scene.", es: "Todavía no hay escenas: creá la primera con Nueva escena." },
+  // La foto de una fila abre su carrete, y ahí se elige la miniatura (D824).
+  'folder.photos': { en: { one: "{count} photo", other: "{count} photos" }, es: { one: "{count} foto", other: "{count} fotos" } },
+  'folder.thumbFailed': { en: "Couldn't save the thumbnail of {name}", es: "No se pudo guardar la miniatura de {name}" },
   'folder.emptyLocations': { en: "No locations yet: create one with New location, or from a scene's Location field.", es: "Todavía no hay locaciones: creá una con Nueva locación, o desde el campo Locación de una escena." },
   // La cabecera de una locación: los decorados se crean adentro de ella y lo que dice su campo Escenas (D818).
   'live.newSet': { en: "New set", es: "Nuevo decorado" },

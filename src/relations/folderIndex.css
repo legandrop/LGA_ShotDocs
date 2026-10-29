@@ -115,6 +115,24 @@
   background: var(--border-soft);
 }
 
+/* Con fotos, la miniatura es un botón que abre el carrete de la fila (D824): sin marco de botón, con cursor de lupa. */
+.fi-thumb-btn {
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  cursor: zoom-in;
+}
+
+.fi-thumb-btn:hover img {
+  filter: brightness(1.08);
+}
+
+.fi-thumb-btn:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
 .fi-empty {
   color: var(--muted);
   margin: 4px 0 0;

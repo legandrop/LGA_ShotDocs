@@ -19,6 +19,8 @@ export interface SeedLocation {
   key: string;
   name: Bi;
   photo: string;
+  /** Más fotos de la página de la locación (D824: su fila de la tabla abre el carrete con la tira, para elegir la miniatura). */
+  more?: string[];
   address: Bi;
   sets: { key: string; name: Bi; photo: string }[];
 }
@@ -43,6 +45,7 @@ export const SCRATCH_LOCATIONS: SeedLocation[] = [
     key: 'station',
     name: { en: 'Old Station', es: 'Estación Vieja' },
     photo: 'estacion-hall',
+    more: ['estacion-anden', 'estacion-espera'],
     address: { en: 'End of the line, by the freight yard', es: 'Fin de la línea, junto a la playa de cargas' },
     sets: [
       { key: 'platform', name: { en: 'Platform', es: 'Andén' }, photo: 'estacion-anden' },
@@ -173,10 +176,14 @@ export async function seedLocation(d: SeedDeps, key: string, opts: { sets?: bool
     id = await d.tree.create(d.stages.locations, name, d.projectId, { templateId: BUILTIN_LOCATION });
     await d.tree.setSetting(id, 'entity', { kind: 'location' });
     const scenes = SCRATCH_SCENES.filter((s) => s.loc === key).map((s) => s.code).join(', ');
-    const url = await d.photo(id, loc.photo);
+    const urls: string[] = [];
+    for (const name of [loc.photo, ...(loc.more ?? [])]) {
+      const url = await d.photo(id, name);
+      if (url) urls.push(url);
+    }
     // Ficha: Also known as, Scenes, Address, …; las fotos al final, debajo de su título.
     const blocks = fill(builtinBlocks('location', d.lang), [undefined, scenes, loc.address[d.lang]]);
-    await d.write(id, url ? [...blocks, image(url)] : blocks);
+    await d.write(id, [...blocks, ...urls.map(image)]);
   }
   if (opts.sets !== false) for (const s of loc.sets) await seedSet(d, key, s.key);
   return id;

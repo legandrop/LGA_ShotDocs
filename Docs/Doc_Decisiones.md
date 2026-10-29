@@ -2593,3 +2593,6 @@ nada no tiene *Panorama* (D401). Antes se escondía hasta que hubiera algo, y un
 de una fila abre el carrete con las fotos de esa fila. Arriba, *Use as thumbnail* (opción A); abajo, la tira de todas
 las fotos del carrete, más chica que en la opción B, con la miniatura de la fila marcada. La miniatura elegida se guarda
 en la página de la escena o la locación, para todos.
+Está desde v0.310: si esa foto deja de estar entre las de la fila, la tabla vuelve a la primera; la tarjeta de un link a
+la escena o la locación muestra la misma miniatura. Elegirla es de quien puede editar la fila. Detalle en
+`Doc_Carrete.md`, «La miniatura de una fila».

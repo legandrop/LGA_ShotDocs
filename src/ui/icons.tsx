@@ -125,6 +125,10 @@ export const CloseIcon = icon('M5 5l10 10M15 5L5 15', { strokeWidth: 1.7 });
 export const ChevronLeftIcon = icon('M12 4.5L6.5 10l5.5 5.5', { strokeWidth: 1.8 });
 export const ChevronRightIcon = icon('M8 4.5l5.5 5.5L8 15.5', { strokeWidth: 1.8 });
 export const DownloadIcon = icon('M10 3.5v9M6.25 9L10 12.75 13.75 9M4 16.25h12', { strokeWidth: 1.6 });
+// La miniatura de una fila de una tabla (D824): una estrella; llena, ya es la miniatura.
+const STAR = 'M10 2.9l2.2 4.5 4.9.7-3.55 3.45.85 4.9L10 14.15 5.6 16.45l.85-4.9L2.9 8.1l4.9-.7z';
+export const StarIcon = icon(STAR);
+export const StarFilledIcon = icon(STAR, { fill: 'currentColor' });
 /** Abrir en otra pestaña (un adjunto en el carrete). */
 export const OpenIcon = icon('M11 3.75h5.25V9M16 4l-6.5 6.5M14.25 11.5v3.75a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-8.5a1 1 0 0 1 1-1H8.5', { strokeWidth: 1.6 });
 export const HeaderIcon = icon('M4 6h12M4 10h7M4 14h9');

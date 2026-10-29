@@ -28,7 +28,8 @@ Manda sobre lo que sigue donde choquen. Plan completo: `Docs/Plan_Proyecto_Desde
   locaciones, fotos libres en `public/tour/img/` con `LICENSES.txt`; `src/tour/scratchData.ts`): el proyecto vacío, la
   primera escena (*New scene*, el número en gris), su locación (*Create page* desde la escena), el decorado (adentro de
   la locación), «veinte escenas después» (las tablas llenas, las locaciones en azul y los decorados en violeta, y desde
-  v0.309 Esc para volver de la locación a su tabla, solo en la computadora), el scouting (la locación lo junta sola), el plan del día
+  v0.309 Esc para volver de la locación a su tabla, y desde v0.310 elegir la miniatura de Old Station en su carrete,
+  los dos solo en la computadora), el scouting (la locación lo junta sola), el plan del día
   (PLN, con sus escenas como link), el reporte (REP, una sección por escena) y el *Overview* para postproducción (la
   cabecera de la escena junta locación, decorado, scouting, plan y reporte). Las fechas de rodaje del corto se cuentan
   desde hoy, así el plan y el reporte se crean con la fecha que propone la app.

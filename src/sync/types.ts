@@ -95,6 +95,13 @@ export interface PageSettings {
    * `into` vive (`mergedTarget`, `src/relations/merge.ts`). No se hereda.
    */
   merged?: { into: string; seq: number; at: string; kids?: string[]; block?: string };
+  /**
+   * La miniatura de la página en la tabla de su carpeta (Escenas, Locaciones; D824): el id del archivo (`sdmedia://<id>`)
+   * elegido con *Use as thumbnail* en el carrete. Solo una preferencia: si esa foto ya no está entre las de la fila, la
+   * tabla usa la primera, como siempre. No se hereda. Una versión vieja no la lee y la conserva (los ajustes se escriben
+   * por clave).
+   */
+  thumb?: string;
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;

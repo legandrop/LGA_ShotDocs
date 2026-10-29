@@ -160,3 +160,47 @@ describe('carrete de varias páginas', () => {
     expect(document.querySelector('.carrete-markup-toggle')).toBeNull();
   });
 });
+
+describe('la miniatura de la fila de una tabla (D824)', () => {
+  const render = (it: CarreteItem) => <img alt="" src={`blob:thumb-${it.mediaId}`} />;
+
+  it('arriba, *Use as thumbnail*; en la que ya es la miniatura, la estrella llena; abajo, la tira de las fotos de la fila', async () => {
+    const onChoose = vi.fn();
+    await open({ thumbnail: { current: B, onChoose, render } });
+    const strip = () => [...document.querySelectorAll<HTMLButtonElement>('.carrete-strip-item')];
+    expect(strip().length).toBe(3);
+    expect(strip()[0].getAttribute('aria-current')).toBe('true');
+    // La miniatura de la fila, marcada en la tira.
+    expect(strip()[1].querySelector('.carrete-strip-star')).not.toBeNull();
+    expect(strip()[1].getAttribute('aria-label')).toBe('Photo 2 of 3, the thumbnail');
+    const thumbBtn = () => document.querySelector<HTMLButtonElement>('.carrete-thumb-btn')!;
+    expect(thumbBtn().textContent).toBe('Use as thumbnail');
+    expect(thumbBtn().getAttribute('aria-pressed')).toBe('false');
+    await act(async () => thumbBtn().click());
+    expect(onChoose).toHaveBeenCalledWith(expect.objectContaining({ mediaId: A }));
+    // Un toque en la tira muestra esa foto; en la miniatura, el botón dice que ya lo es y no se aprieta.
+    await act(async () => strip()[1].click());
+    await settle();
+    expect(counter()).toBe('2 / 3');
+    expect(strip()[1].getAttribute('aria-current')).toBe('true');
+    expect(thumbBtn().textContent).toBe('Thumbnail');
+    // `aria-disabled`, no `disabled`: el foco no se cae al fondo de la página. Apretarlo no hace nada.
+    expect(thumbBtn().getAttribute('aria-disabled')).toBe('true');
+    await act(async () => thumbBtn().click());
+    expect(onChoose).toHaveBeenCalledTimes(1);
+    // Las miniaturas de la tira se dibujan (en jsdom, sin IntersectionObserver, todas enseguida).
+    expect(strip()[2].querySelector('img')?.getAttribute('src')).toBe(`blob:thumb-${C}`);
+  });
+
+  it('quien solo ve: la tira está y el botón no; sin `thumbnail`, ninguno de los dos', async () => {
+    await open({ thumbnail: { current: B, render } });
+    expect(document.querySelectorAll('.carrete-strip-item').length).toBe(3);
+    expect(document.querySelector('.carrete-thumb-btn')).toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    document.body.innerHTML = '';
+    await open();
+    expect(document.querySelector('.carrete-strip')).toBeNull();
+    expect(document.querySelector('.carrete-thumb-btn')).toBeNull();
+  });
+});

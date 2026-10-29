@@ -1,0 +1,83 @@
+/* La tira del carrete abierto desde la foto de una fila de una tabla (D824, opción A del canvas «Carrete y miniatura de
+   la fila»): todas las fotos de la fila, chicas, abajo; la que se ve, con borde; la miniatura de la fila, con su estrella.
+   El carrete es siempre oscuro: usa sus propios colores (`--carrete-*`). */
+.carrete-strip {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: safe center;
+  gap: 6px;
+  padding: 4px 16px 14px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  opacity: var(--carrete-fade, 1);
+}
+
+.carrete-strip-item {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--carrete-btn);
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0.55;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+.carrete-strip-item:hover {
+  opacity: 0.85;
+}
+
+.carrete-strip-item[aria-current='true'] {
+  opacity: 1;
+  outline-color: var(--carrete-text);
+}
+
+.carrete-strip-item:focus-visible {
+  opacity: 1;
+  outline-color: var(--accent-text);
+}
+
+.carrete-strip-img,
+.carrete-strip-item img,
+.carrete-strip-item .lh-ph,
+.carrete-strip-ph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.carrete-strip-star {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+}
+
+/* El botón de la miniatura, ya elegida: se ve prendido, no apagado. */
+.carrete-thumb-btn[aria-disabled='true'] {
+  cursor: default;
+}
+
+@media (max-width: 520px) {
+  .carrete-strip {
+    justify-content: flex-start;
+    padding-bottom: 10px;
+  }
+
+  .carrete-strip-item {
+    width: 40px;
+    height: 40px;
+  }
+}

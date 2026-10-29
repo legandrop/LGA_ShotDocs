@@ -6,6 +6,7 @@ import { Carrete } from '../ui/Carrete';
 import { createCarreteLoader } from '../ui/carreteLoader';
 import { carreteItemsOfEntries, itemsOfEntries, type CarreteEntry, type CarreteItem } from '../ui/carreteModel';
 import { goToPlace } from './goToPlace';
+import { Thumb } from './LiveHeader';
 
 // El carrete de las fotos por fuente de la cabecera viva (Docs/Doc_Carrete.md, «Varias páginas»): todas las fotos de la
 // galería, de varias páginas, en el orden de la galería, empezando por la tocada. Se baja aparte (con el carrete): la
@@ -22,9 +23,14 @@ export interface GalleryCarreteProps {
   /** El índice de la foto tocada en `entries`. */
   start: number;
   onClose: () => void;
+  /**
+   * Abierto desde la foto de una fila de una tabla (D824): la miniatura de la fila y, para quien edita, elegir otra
+   * (*Use as thumbnail*). Con esto el carrete muestra la tira de las fotos de la fila.
+   */
+  thumbnail?: { current: string | null; onChoose?: (mediaId: string) => void };
 }
 
-export function GalleryCarrete({ entries, start, onClose }: GalleryCarreteProps) {
+export function GalleryCarrete({ entries, start, onClose, thumbnail }: GalleryCarreteProps) {
   const services = useServices();
   const { media, files, docs } = services;
   const { online } = useSyncStatus();
@@ -107,6 +113,13 @@ export function GalleryCarrete({ entries, start, onClose }: GalleryCarreteProps)
       markupOf={(it) => (it.origin ? (maps.get(it.origin.pageId) ?? null) : null)}
       onShow={onShow}
       onGoTo={(it) => it.origin && goToPlace(services, { pageId: it.origin.pageId, blockId: it.origin.blockId }, it.mediaId ?? undefined)}
+      thumbnail={
+        thumbnail && {
+          current: thumbnail.current,
+          onChoose: thumbnail.onChoose && ((it) => it.mediaId && thumbnail.onChoose?.(it.mediaId)),
+          render: (it) => (it.mediaId ? <Thumb id={it.mediaId} /> : <span className="lh-ph" aria-hidden="true" />),
+        }
+      }
     />
   );
 }

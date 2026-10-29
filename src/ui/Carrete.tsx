@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type * as Y from 'yjs';
 import { t as current, useT, type Translate } from '../i18n';
@@ -36,8 +36,9 @@ import { downloadProps, isOffline, type AttachmentView, type CarreteLoader, type
 import { CarreteMarkup, useHasMarkup } from './CarreteMarkup';
 import { AnnotatedDownload } from './AnnotatedDownload';
 import { AnnotatedCopy } from './AnnotatedCopy';
-import { AnnotateIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, EyeIcon, EyeOffIcon, OpenIcon } from './icons';
+import { AnnotateIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, EyeIcon, EyeOffIcon, OpenIcon, StarFilledIcon, StarIcon } from './icons';
 import { isLetter } from './findUi';
+import './carreteStrip.css';
 import { asAction, tipRows } from './tipRows';
 
 // El carrete (paso 7 de Docs/Plan_Workspaces.md; Docs/Doc_Carrete.md): todas las fotos y videos de la
@@ -140,9 +141,37 @@ export interface CarreteProps {
    * del historial que abrió sacada), avisa.
    */
   onGoTo?: (item: CarreteItem) => void;
+  /**
+   * La miniatura de la fila de una tabla (D824): con esto, la barra suma *Use as thumbnail* (la estrella llena dice que
+   * la que se ve ya lo es) y abajo va la tira de todas las fotos, chicas, con la miniatura marcada; un toque en una la
+   * muestra. Sin `onChoose` (quien solo ve), la tira está y el botón no.
+   */
+  thumbnail?: { current: string | null; onChoose?: (item: CarreteItem) => void; render: (item: CarreteItem) => ReactNode };
 }
 
-export function Carrete({ items, start, loader, online, onClose, markup = null, onAnnotate, markupOf, onShow, onGoTo }: CarreteProps) {
+/**
+ * Una foto de la tira (D824): su miniatura recién cuando se acerca a la vista de la tira. Una locación con decenas de
+ * fotos no las pide todas al abrir el carrete (cada una que no está en el dispositivo se baja de la base).
+ */
+function StripThumb({ root, children }: { root: { current: HTMLElement | null }; children: () => ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    if (typeof IntersectionObserver === 'undefined') return setNear(true);
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && setNear(true), { root: root.current, rootMargin: '0px 200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near, root]);
+  return (
+    <span ref={ref} className="carrete-strip-img">
+      {near ? children() : <span className="carrete-strip-ph" aria-hidden="true" />}
+    </span>
+  );
+}
+
+export function Carrete({ items, start, loader, online, onClose, markup = null, onAnnotate, markupOf, onShow, onGoTo, thumbnail }: CarreteProps) {
   const count = items.length;
   const tr = useT();
   const [index, setIndex] = useState(() => stepIndex(start, 0, count));
@@ -159,6 +188,12 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  // La tira de la miniatura (D824) acompaña a la foto que se ve.
+  const stripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stripRef.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [index]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const viewsRef = useRef(views);
   viewsRef.current = views;
@@ -853,6 +888,21 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
           ? <AnnotatedDownload key={item.url} item={item} map={itemMarkup} loader={loader} original={downloadLink('carrete-btn', true)} />
           : downloadLink('carrete-btn', true)}
         {itemMarkup && item.mediaId && view.kind === 'image' && !view.file && <AnnotatedCopy key={`copy:${item.url}`} item={item} map={itemMarkup} loader={loader} original={downloadLink('carrete-btn', true)} />}
+        {thumbnail?.onChoose && item.mediaId && (
+          // Ya elegida, `aria-disabled` y no `disabled`: al elegirla el foco queda en el botón (con `disabled` caía al
+          // fondo de la página) y el tooltip se sigue viendo.
+          <button
+            className="carrete-btn carrete-thumb-btn"
+            aria-pressed={thumbnail.current === item.mediaId}
+            aria-disabled={thumbnail.current === item.mediaId}
+            data-tip={tr('carrete.thumbTip')}
+            data-tip-plain
+            onClick={() => thumbnail.current !== item.mediaId && thumbnail.onChoose?.(item)}
+          >
+            {thumbnail.current === item.mediaId ? <StarFilledIcon size={20} /> : <StarIcon size={20} />}
+            <span className="carrete-btn-label">{tr(thumbnail.current === item.mediaId ? 'carrete.isThumb' : 'carrete.useAsThumb')}</span>
+          </button>
+        )}
         <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tipRows([{ shortcut: 'carreteClose', action: asAction(tr('common.close')) }])} onClick={requestClose}>
           <CloseIcon size={22} />
         </button>
@@ -930,6 +980,26 @@ export function Carrete({ items, start, loader, online, onClose, markup = null, 
               <OpenIcon size={16} />
             </button>
           )}
+        </div>
+      )}
+      {thumbnail && count > 1 && (
+        <div ref={stripRef} className="carrete-strip" role="group" aria-label={tr('carrete.strip')}>
+          {items.map((it, i) => (
+            <button
+              key={it.key}
+              className="carrete-strip-item"
+              aria-current={i === index ? 'true' : undefined}
+              aria-label={tr(it.mediaId && it.mediaId === thumbnail.current ? 'carrete.stripThumb' : 'carrete.stripItem', { n: i + 1, count })}
+              onClick={() => goTo(i)}
+            >
+              <StripThumb root={stripRef}>{() => thumbnail.render(it)}</StripThumb>
+              {it.mediaId && it.mediaId === thumbnail.current && (
+                <span className="carrete-strip-star" aria-hidden="true">
+                  <StarFilledIcon size={12} />
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       )}
     </div>,

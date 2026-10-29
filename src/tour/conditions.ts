@@ -41,6 +41,8 @@ export type Condition =
   | { what: 'named'; kind: EntityKind }
   /** Algo con ese `data-tour` está en la pantalla (por ejemplo, *Create page* al lado de la locación que nombra la escena). */
   | { what: 'shown'; anchor: string }
+  /** Alguna página del proyecto tiene la miniatura elegida con *Use as thumbnail* (D824). */
+  | { what: 'thumbChosen' }
   /** Hay al menos `min` (1) documentos de ese tipo en el proyecto: un scouting, una prueba, un plan. */
   | { what: 'docs'; doc: DocKind; min?: number }
   /** Hay un documento de ese tipo con su marca (se le aplicó su plantilla: *Creative scout*, *Day plan*). */
@@ -81,6 +83,7 @@ const VOCABULARY: Record<Condition['what'], { required: Partial<Record<string, P
   childIn: { required: { stage: 'stage' }, optional: { min: 'count' } },
   named: { required: { kind: 'kind' }, optional: {} },
   shown: { required: { anchor: 'anchor' }, optional: {} },
+  thumbChosen: { required: {}, optional: {} },
   docs: { required: { doc: 'doc' }, optional: { min: 'count' } },
   marked: { required: { doc: 'doc' }, optional: {} },
   related: { required: { link: 'link' }, optional: {} },
@@ -143,6 +146,8 @@ export function evaluate(c: Condition, ctx: ConditionContext): boolean {
       const k = pageKind(tree, route.id);
       return k.kind === 'doc' && k.doc === c.doc;
     }
+    case 'thumbChosen':
+      return tree.allRowsOf(projectId).some((row) => live(row.id) && !!row.settings?.thumb);
     case 'pages': {
       let n = 0;
       for (const row of tree.allRowsOf(projectId)) {

@@ -37,6 +37,13 @@ export const carrete = {
   // El carrete de varias páginas (las fotos por fuente de la cabecera viva).
   'carrete.from': { en: "From {source}", es: "De {source}" },
   'carrete.goToPlace': { en: "Go to place", es: "Ir al lugar" },
+  // La miniatura de la fila de una tabla (D824).
+  'carrete.useAsThumb': { en: "Use as thumbnail", es: "Usar de miniatura" },
+  'carrete.isThumb': { en: "Thumbnail", es: "Miniatura" },
+  'carrete.thumbTip': { en: "Shown in the table, for everyone", es: "Se ve en la tabla, para todos" },
+  'carrete.strip': { en: "Photos", es: "Fotos" },
+  'carrete.stripItem': { en: "Photo {n} of {count}", es: "Foto {n} de {count}" },
+  'carrete.stripThumb': { en: "Photo {n} of {count}, the thumbnail", es: "Foto {n} de {count}, la miniatura" },
   'carrete.offlineMissing': {
     en: "You're offline, and this file isn't on this device yet.",
     es: "Estás sin conexión, y este archivo todavía no está en este dispositivo.",

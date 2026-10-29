@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.310 :
+
+Lega pidió poder cambiar la foto de una fila de una tabla desde el carrete, y eligió la opción A del canvas (D824). En
+Escenas y Locaciones, la foto de la fila es un botón que abre el carrete con las fotos de esa fila (`GalleryCarrete`,
+bajado aparte), no la página. El carrete suma *Use as thumbnail* al lado de *Download* y abajo la tira de las fotos, con
+la miniatura marcada; elegir guarda `settings.thumb` en la escena o la locación, para todos (solo quien edita la fila).
+Si esa foto ya no está, la tabla vuelve a la primera (`rowPhoto`, ahora en `liveView.ts`), y la tarjeta de un link usa
+la misma. En el documento de práctica una capa cierra sin salir del recorrido, y el capítulo 5 suma elegir la
+miniatura de Old Station. Sin un tipo de bloque nuevo: una versión vieja ignora la clave y la conserva.
+
+[ v0.310: la foto de una fila abre su carrete, con Use as thumbnail y la tira de fotos ]
+
 v0.309 :
 
 Lega pidió volver a la tabla con Esc después de abrir una fila, ver las locaciones y los decorados siempre en su color

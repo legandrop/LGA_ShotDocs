@@ -575,7 +575,7 @@ const SCRATCH: ChapterDef[] = [
   },
   {
     id: 'scratch.jump',
-    version: 2,
+    version: 3,
     title: { en: 'Twenty scenes later', es: 'Veinte escenas después' },
     summary: { en: 'The Scenes and Locations tables, full.', es: 'Las tablas de Escenas y Locaciones, llenas.' },
     minutes: 2,
@@ -639,6 +639,23 @@ const SCRATCH: ChapterDef[] = [
           en: 'Nobody typed this table: the sets come from the pages inside each location, the scenes from what each scene says. Locations always show in blue and sets in violet, here and in the sidebar.',
           es: 'Esta tabla no la escribió nadie: los decorados salen de las páginas adentro de cada locación; las escenas, de lo que dice cada escena. Las locaciones van siempre en azul y los decorados en violeta, acá y en la barra lateral.',
         },
+      },
+      {
+        // La miniatura de la fila (D824). El globito queda debajo del carrete: todo lo que hay que hacer se dice antes.
+        // En el teléfono la tabla no tiene la columna de la foto.
+        id: 'scratch.jump.thumb',
+        mode: 'do',
+        anchor: { tour: 'locations-table' },
+        layout: 'desktop',
+        sides: ['above', 'left', 'below'],
+        title: { en: 'The photo of a row', es: 'La foto de una fila' },
+        text: {
+          en: "Click the photo of **Old Station**: you see all its photos, with a strip below. Move to another one (→ or the strip) and **Use as thumbnail** (the star) makes it the one the table shows, for everyone. Then close it with {esc}.",
+          es: 'Un clic en la foto de **Estación Vieja**: ves todas sus fotos, con una tira abajo. Pasá a otra (→ o la tira) y **Usar de miniatura** (la estrella) la vuelve la que muestra la tabla, para todos. Después lo cerrás con {esc}.',
+        },
+        turn: { en: 'pick a thumbnail for **Old Station**', es: 'elegí una miniatura para **Estación Vieja**' },
+        keys: { esc: 'carreteClose' },
+        until: { what: 'thumbChosen' },
       },
       {
         id: 'scratch.jump.openLocation',

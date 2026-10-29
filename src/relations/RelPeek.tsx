@@ -10,7 +10,7 @@ import { keyLabel, shortcut } from '../ui/shortcuts';
 import { touchDevice } from '../ui/camera';
 import { sceneTitleOf } from './dayLive';
 import { Chip, DayChip, Ic, Thumb } from './LiveHeader';
-import { locationLive, sceneLive, type LiveSource, type PhotoRef } from './liveView';
+import { locationLive, rowPhoto, sceneLive, type LiveSource, type PhotoRef } from './liveView';
 import { anchorOf, locateUnderline, makeLinkAt, type UnderlineAnchor } from './relLink';
 import { CreateEntityButton, ScenePicker, undoAction } from './EntityActions';
 import { notify } from '../ui/notice';
@@ -256,6 +256,8 @@ function PeekCard({
   const reading = !!data && !data.v.complete;
   const title = target.pageId ? tree.get(target.pageId)?.title : undefined;
   const photos: PhotoRef[] = data ? data.v.photos : [];
+  // La foto de arriba es la miniatura de la página, la misma de la tabla de su carpeta (D824).
+  const photo = rowPhoto(photos, target.pageId ?? null, target.pageId ? tree.get(target.pageId)?.settings?.thumb : undefined);
 
   let rows: ReactNode = null;
   if (target.kind === 'pending') {
@@ -345,7 +347,7 @@ function PeekCard({
   const label = target.kind === 'loc' ? target.ref : `${target.ref}${target.part ? target.part.toLowerCase() : ''}`;
   const head = (
     <>
-      {photos[0] && <Thumb id={photos[0].id} className="rp-img" />}
+      {photo && <Thumb id={photo} className="rp-img" />}
       <span className="rp-ht">
         <span className={`rp-k ${target.kind}`}>
           {target.kind === 'loc' ? tr('live.location') : label}
