@@ -2604,3 +2604,14 @@ siguiente la despliega (reemplaza el «otro clic la despliega de nuevo» de D737
 es la abierta la abre y la deja desplegada. Las partes del *Panorama* hacen lo mismo: otro clic en la abierta la pliega
 sin cambiar de vista. Vale cualquier clic del mouse, también si el sistema lo cuenta como doble clic (en la Mac
 de Lega dura 1,8 s; v0.312). Enter y Espacio solo abren; con *Manual*, nada cambia.
+
+### D827 · El encabezado pegado también en las tablas de una página, y la paleta de colores de la app (2026-10-29)
+**Pedido de Lega:** en *Preproducción › Decorados* (una tabla importada de Coda) el encabezado se iba al bajar, y en las
+tablas del *Panorama* no; un texto de un color sobre un fondo del mismo color tiene que leerse, como en Coda; y el verde
+de la app era celeste.
+**Elegimos:** el renglón de encabezado de toda tabla escrita en una página queda pegado debajo de la barra de arriba
+mientras se ve alguna fila, y se va con la última, igual que en las tablas que arma la app (D821; amplía lo que D821
+dejaba afuera). Solo las filas de encabezado: una columna de encabezado no se mueve. La impresión y el PDF no se tocan.
+Los nueve colores de texto y de fondo son de la app (`Doc_Contraste.md`, sección 5): cada color se lee sobre su propio
+fondo, sobre la página y con el texto por defecto encima, a 4,5:1 o más en claro y en oscuro; el verde es verde y el azul,
+azul. El documento guarda el nombre del color: lo ya escrito cambia solo, sin migrar nada.

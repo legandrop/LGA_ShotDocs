@@ -91,8 +91,9 @@ Toda tabla que arma la app (la de Escenas y la de Locaciones de su carpeta, las 
   anchos de fábrica. Se recuerda por tabla en el dispositivo.
 - **El encabezado queda pegado** debajo de la barra de arriba mientras se ve alguna fila, y se va con la última, como
   las carpetas de la barra lateral. *Shots*, que se desplaza también de costado, lo pega dentro de su caja.
-- Las tablas que se escriben en una página (las del editor) no entran: se agrandan arrastrando, como siempre, y su
-  encabezado no queda pegado (la caja que las desplaza de costado no lo deja).
+- Las tablas que se escriben en una página (las del editor) se agrandan arrastrando, como siempre. Su encabezado
+  también queda pegado desde v0.313 (D827): como la caja que las desplaza de costado no deja usar `position: sticky`,
+  `src/ui/tableStickyHead.ts` corre las celdas del renglón de encabezado lo que la tabla se metió debajo de la barra.
 
 ## 4. Rodaje (D816, hecho)
 

@@ -192,8 +192,8 @@ export const help = {
   },
   'help.tableColumns.title': { en: "Widen a column", es: "Agrandar una columna" },
   'help.tableColumns.text': {
-    en: "In the tables the app makes (Scenes, Locations, the Overview, Shots), drag the edge of a header to widen a column, or double-click it to fit the longest text. The header stays on top while you scroll. Each table remembers it on this device.",
-    es: "En las tablas que arma la app (Escenas, Locaciones, el Panorama, Planos), arrastrá el borde de un encabezado para agrandar una columna, o doble clic para ajustarla al texto más largo. El encabezado queda arriba mientras bajás. Cada tabla lo recuerda en este dispositivo.",
+    en: "In the tables the app makes (Scenes, Locations, the Overview, Shots), drag the edge of a header to widen a column, or double-click it to fit the longest text. The header stays on top while you scroll. Each table remembers it on this device. In a table you write in a page, the header row also stays on top while you scroll through it.",
+    es: "En las tablas que arma la app (Escenas, Locaciones, el Panorama, Planos), arrastrá el borde de un encabezado para agrandar una columna, o doble clic para ajustarla al texto más largo. El encabezado queda arriba mientras bajás. Cada tabla lo recuerda en este dispositivo. En una tabla que escribís en una página, el renglón de encabezado también queda arriba mientras la recorrés.",
   },
   'help.pageTypes.title': { en: "Scenes, locations, sets and shoot days", es: "Escenas, locaciones, decorados y días de rodaje" },
   'help.pageTypes.text': {
@@ -254,8 +254,8 @@ export const help = {
   },
   'help.format.title': { en: "Formatting text", es: "Dar formato al texto" },
   'help.format.text': {
-    en: "Select text to get the formatting bar: bold, italic, colors, links. {bold} bold, {italic} italic, {underline} underline, {strike} strikethrough, {code} code, {link} link.",
-    es: "Elegí texto y aparece la barra de formato: negrita, cursiva, colores, links. {bold} negrita, {italic} cursiva, {underline} subrayado, {strike} tachado, {code} código, {link} link.",
+    en: "Select text to get the formatting bar: bold, italic, colors, links. A text color on a background of the same color is still readable. {bold} bold, {italic} italic, {underline} underline, {strike} strikethrough, {code} code, {link} link.",
+    es: "Elegí texto y aparece la barra de formato: negrita, cursiva, colores, links. Un color de texto sobre un fondo del mismo color se sigue leyendo. {bold} negrita, {italic} cursiva, {underline} subrayado, {strike} tachado, {code} código, {link} link.",
   },
   'help.tablePhone.title': { en: "Wide tables on a phone or tablet", es: "Tablas anchas en el teléfono o la tablet" },
   'help.tablePhone.text': {

@@ -394,8 +394,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.tableColumns.title',
     text: 'help.tableColumns.text',
     words: ['column', 'columna', 'width', 'ancho', 'resize', 'agrandar', 'table', 'tabla', 'header', 'encabezado'],
-    // Las tablas que arma la app (D821).
-    since: '0.308',
+    // Las tablas que arma la app (D821) y, desde D827, el encabezado pegado de las tablas de una página.
+    since: '0.313',
   },
   {
     id: 'pageTypes',
@@ -541,7 +541,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.format.text',
     keys: { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', code: 'code', link: 'link' },
     more: ['lineBreak'],
-    since: BEFORE_HELP,
+    // La paleta de colores de la app (D827).
+    since: '0.313',
   },
   {
     id: 'tablePhone',

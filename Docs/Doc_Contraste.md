@@ -67,31 +67,49 @@ guarda y marca el documento, los rótulos en castellano, el alto del panel, y en
 renglones a la izquierda) y `src/prefs.test.ts` (de fábrica, valores
 desconocidos, guardar y subir, una cuenta sin la clave).
 
-## 5. Los resaltados en oscuro (v0.165)
+## 5. La paleta de colores (v0.313, D827; antes, los resaltados en oscuro de v0.165)
 
-El texto por defecto sobre un resaltado va con la tinta plena del encabezado en los tres niveles (`#ece9e2` en oscuro).
-Con los fondos de BlockNote tres no llegaban a 4,5:1; medido en Chromium sobre la página real (el texto «fondo …» de cada
-color) y calculado con WCAG 2.x:
+Los nueve colores de texto y de fondo del editor son de la app, no los de BlockNote. Lega (2026-10-29) migró de Coda,
+donde un texto verde sobre un fondo verde se leía, y acá no: en oscuro BlockNote pinta el fondo con el tono del texto
+apagado (verde `#6b8b87` sobre `#4d6461`, 1,6:1; rojo `#ec4040` sobre `#be3434`, 1,4:1). Además su «verde» era un gris
+azulado (`#4d6461`, matiz 172°), que se veía celeste.
 
-| Resaltado (oscuro) | Fondo de BlockNote | Razón antes | Fondo ahora | Razón ahora |
-|---|---|---|---|---|
-| gris | `#9b9a97` | 2,32 | `#676663` | 4,74 |
-| amarillo | `#b58b00` | 2,60 | `#806200` | 4,73 |
-| naranja | `#b7600a` | 3,69 | `#9d5209` | 4,75 |
+`src/styles.css` redefine las 18 variables `--bn-colors-highlights-<color>-{text,background}` en
+`.bn-container[data-color-scheme='light']` y en `[data-color-scheme='dark']`. Cada fondo es un tinte apagado del color
+(claro en el modo claro, oscuro en el oscuro) y cada texto, el mismo matiz con la luz justa para leerse en los tres
+lugares donde va, todo a 4,5:1 o más (WCAG AA, con margen por el redondeo):
 
-Los otros seis (marrón 6,92; rojo 4,64; verde 5,23; azul 4,68; violeta 6,02; rosa 5,47) ya llegaban y no se tocan. Cada
-tono nuevo es el de BlockNote con **la misma tonalidad y saturación y menos luz** (HSL), buscando el más claro que pase
-4,5:1 con margen (4,7 en vez de 4,5 por el redondeo), así el gris sigue gris, el amarillo mostaza y el naranja anaranjado, y
-cada uno se distingue de la página (3,1:1 contra `#171716`). El cambio está en `src/styles.css`
-(`.bn-container[data-color-scheme='dark']` redefine `--bn-colors-highlights-{gray,yellow,orange}-background`): vale en los
-tres niveles de contraste (el texto resaltado no depende del nivel) y **solo en el esquema oscuro**: el modo claro y el PDF
-(que arma siempre el claro) conservan los fondos de BlockNote. También cambia el color de esas muestras en el selector de
-colores del modo oscuro (usa las mismas variables).
+| Color | Claro: texto / fondo | Oscuro: texto / fondo | Texto sobre su fondo (claro · oscuro) |
+|---|---|---|---|
+| gris | `#64635f` / `#ebeae6` | `#a9a8a3` / `#3b3a37` | 5,00 · 4,78 |
+| marrón | `#7d5640` / `#f0e6df` | `#c9a085` / `#4a3628` | 5,21 · 4,79 |
+| rojo | `#b82b2b` / `#fbe3e1` | `#f3867e` / `#5e2524` | 5,02 · 4,83 |
+| naranja | `#a14e08` / `#fae8d6` | `#ee9a50` / `#5b3716` | 4,87 · 4,68 |
+| amarillo | `#836500` / `#faf0c8` | `#e2c04a` / `#514010` | 4,80 · 5,68 |
+| verde | `#1a7236` / `#dcf1e1` | `#62c682` / `#1d4a2b` | 5,05 · 4,80 |
+| azul | `#1662a8` / `#dde9f8` | `#66acec` / `#1c3c5f` | 5,11 · 4,66 |
+| violeta | `#7340b0` / `#ece3f7` | `#b892ec` / `#3f2c60` | 5,47 · 4,80 |
+| rosa | `#b0226f` / `#f9e0ec` | `#ea82bd` / `#5b2346` | 5,11 · 4,75 |
 
-Queda sin cambio, a propósito: un texto con un color elegido **y** un resaltado a la vez (rojo sobre amarillo: 1,24 antes y
-1,47 ahora en oscuro; 3,84 en claro) es una combinación que elige la persona, y la cita con un resaltado dentro (1,48), que
-ya estaba así en `main`. Pruebas: dos en `src/contrast.test.ts` (los nueve resaltados de BlockNote en oscuro a 4,5:1 o más
-con los tres niveles, solo esos tres tocados, y que ninguna regla de resaltados cuelga del modo claro ni de `.print-view`).
+- **Un color sobre el fondo del mismo color** (lo que traía Coda): la tabla de arriba.
+- **Un color sobre la página** (`--bg` y `--surface` de cada tema): 4,8:1 o más en claro (el amarillo es el más bajo,
+  5,26) y 6,2:1 o más en oscuro. El amarillo y el gris de BlockNote en claro no llegaban (`#dfab01`: 1,9:1).
+- **El texto por defecto sobre un fondo** (la tinta del encabezado, `#1b1a17` / `#ece9e2`, igual en los tres niveles):
+  14:1 o más en claro, 8,2:1 o más en oscuro. Reemplaza el arreglo de v0.165, que oscurecía solo el gris, el amarillo y el
+  naranja del oscuro.
+- **El verde es verde** (matiz entre 110° y 160°) y el azul, azul (entre 195° y 225°).
+
+El modo claro vale también para el PDF, la impresión y las páginas HTML del zip (la vista de impresión arma siempre el
+claro; ninguna regla de la paleta cuelga de `.print-view`). El selector de colores muestra las mismas muestras (usa las
+mismas variables). No cambia el documento: se guarda el nombre del color (`green`), así que lo ya escrito y lo importado
+de Coda se ven con la paleta nueva, y una versión vieja de la app lo sigue mostrando con la de BlockNote.
+
+Queda sin cambio, a propósito: un texto de un color sobre un fondo de **otro** color (rojo sobre amarillo) es una
+combinación que elige la persona, y la cita con un resaltado dentro.
+
+Pruebas: tres en `src/contrast.test.ts` (cada color sobre su fondo, sobre la página y el texto por defecto sobre cada
+fondo, a 4,5:1 o más en los dos esquemas y los tres niveles; el matiz del verde y del azul; y que la paleta cuelga solo
+del esquema, nunca de `.print-view`).
 
 ## 6. Links, botón principal y foco (v0.281, D787)
 

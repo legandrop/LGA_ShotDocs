@@ -105,6 +105,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { undoTimelineFor } from './undoTimeline';
 import { revealChange, revealPhoto } from './undoReveal';
 import { revealSelectionCell } from './tableScroll';
+import { watchHeads } from './tableStickyHead';
 import { liveView, trackSpot, takeSpot, spotsOf } from './inlinePhotoCreate';
 import type { ReplacePick } from './photoReplaceIntent';
 import { startPhotoReplacement } from './photoReplace';
@@ -844,6 +845,9 @@ export function BlockEditor({
 
   // Una tabla que se desplaza de costado (pantalla angosta): la celda con el cursor entra entera (tableScroll.ts).
   useEffect(() => editor.onSelectionChange(() => void revealSelectionCell()), [editor]);
+
+  // El encabezado de cada tabla queda pegado arriba al bajar (tableStickyHead.ts, D827).
+  useEffect(() => (host.current ? watchHeads(host.current) : undefined), []);
 
   useEffect(() => {
     const focus = () => editor.focus();

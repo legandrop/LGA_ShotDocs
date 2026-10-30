@@ -57,6 +57,8 @@ const STATE_CLASSES = [
   'ProseMirror-yjs-selection',
   'sd-collapsed',
   'sd-collapsed-hidden',
+  // El encabezado de una tabla corrido mientras se baja (tableStickyHead.ts).
+  'sd-head-stuck',
   // Lo resaltado por la búsqueda en la página (findEditor.ts).
   'sd-find-hit',
   'sd-find-current',

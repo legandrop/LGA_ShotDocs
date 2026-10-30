@@ -2310,14 +2310,55 @@ code {
   --bn-font-family: var(--font);
 }
 
-/* Los fondos de los resaltados en oscuro: el gris, el amarillo y el naranja de BlockNote (#9b9a97, #b58b00, #b7600a) son
-   tan claros que el texto por defecto (#ece9e2, la tinta plena de un resaltado en los tres niveles de contraste) daba
-   2,32:1, 2,60:1 y 3,69:1. Los mismos tonos más oscuros (mismo matiz y saturación, solo menos luz) llegan a 4,7:1 o
-   más. Solo con el esquema oscuro: el claro y el PDF (siempre claro) conservan los de BlockNote. Doc_Contraste.md. */
-.bn-container[data-color-scheme='dark'] {
-  --bn-colors-highlights-gray-background: #676663;
-  --bn-colors-highlights-yellow-background: #806200;
-  --bn-colors-highlights-orange-background: #9d5209;
+/* La paleta de colores de texto y de fondo (D827, Doc_Contraste.md sección 5), la de la app y no la de BlockNote: su
+   «verde» era un gris azulado (#4d6461), y en oscuro un texto de un color sobre el fondo del mismo color no se leía
+   (verde 1,6:1, rojo 1,4:1), como sí se leía en Coda. Acá cada color tiene un fondo apagado y un texto que se lee
+   sobre ese fondo, sobre la página y con el texto por defecto encima del fondo: todo a 4,5:1 o más. El claro vale
+   también para el PDF (la vista de impresión arma siempre el claro). El selector de colores muestra estas mismas
+   muestras (usa las mismas variables); en el teléfono BlockNote lo dibuja en otra raíz (`.bn-root` sin `.bn-container`,
+   en `body`), por eso los dos selectores. */
+.bn-container[data-color-scheme='light'],
+.bn-root[data-color-scheme='light'] {
+  --bn-colors-highlights-gray-text: #64635f;
+  --bn-colors-highlights-gray-background: #ebeae6;
+  --bn-colors-highlights-brown-text: #7d5640;
+  --bn-colors-highlights-brown-background: #f0e6df;
+  --bn-colors-highlights-red-text: #b82b2b;
+  --bn-colors-highlights-red-background: #fbe3e1;
+  --bn-colors-highlights-orange-text: #a14e08;
+  --bn-colors-highlights-orange-background: #fae8d6;
+  --bn-colors-highlights-yellow-text: #836500;
+  --bn-colors-highlights-yellow-background: #faf0c8;
+  --bn-colors-highlights-green-text: #1a7236;
+  --bn-colors-highlights-green-background: #dcf1e1;
+  --bn-colors-highlights-blue-text: #1662a8;
+  --bn-colors-highlights-blue-background: #dde9f8;
+  --bn-colors-highlights-purple-text: #7340b0;
+  --bn-colors-highlights-purple-background: #ece3f7;
+  --bn-colors-highlights-pink-text: #b0226f;
+  --bn-colors-highlights-pink-background: #f9e0ec;
+}
+
+.bn-container[data-color-scheme='dark'],
+.bn-root[data-color-scheme='dark'] {
+  --bn-colors-highlights-gray-text: #a9a8a3;
+  --bn-colors-highlights-gray-background: #3b3a37;
+  --bn-colors-highlights-brown-text: #c9a085;
+  --bn-colors-highlights-brown-background: #4a3628;
+  --bn-colors-highlights-red-text: #f3867e;
+  --bn-colors-highlights-red-background: #5e2524;
+  --bn-colors-highlights-orange-text: #ee9a50;
+  --bn-colors-highlights-orange-background: #5b3716;
+  --bn-colors-highlights-yellow-text: #e2c04a;
+  --bn-colors-highlights-yellow-background: #514010;
+  --bn-colors-highlights-green-text: #62c682;
+  --bn-colors-highlights-green-background: #1d4a2b;
+  --bn-colors-highlights-blue-text: #66acec;
+  --bn-colors-highlights-blue-background: #1c3c5f;
+  --bn-colors-highlights-purple-text: #b892ec;
+  --bn-colors-highlights-purple-background: #3f2c60;
+  --bn-colors-highlights-pink-text: #ea82bd;
+  --bn-colors-highlights-pink-background: #5b2346;
 }
 
 .bn-container .bn-default-styles {
@@ -2385,8 +2426,8 @@ code {
 }
 
 /* Un resaltado (color de fondo elegido, en unas letras o en un bloque y sus hijos) queda afuera de la jerarquía: su
-   texto por defecto y su negrita van con la tinta plena del encabezado, como siempre. En oscuro los fondos de BlockNote
-   son claros o saturados y un tono más apagado bajaba de 4,5:1 (rojo 3,20, amarillo 1,38 con More). Lo que además
+   texto por defecto y su negrita van con la tinta plena del encabezado, como siempre: un tono más apagado bajaba de
+   4,5:1 sobre algunos fondos (con la paleta de BlockNote, rojo 3,20 y amarillo 1,38 con More en oscuro). Lo que además
    tiene un color de texto elegido no se toca. */
 :root:not([data-contrast='none'])
   .bn-container
@@ -3926,6 +3967,21 @@ code {
 
 .bn-editor [data-content-type='table'] tr:last-child > :is(td, th) {
   border-bottom: 0;
+}
+
+/* El encabezado queda pegado debajo de la barra de arriba mientras se ve alguna fila, y se va con la última (D827,
+   tableStickyHead.ts): se corren sus celdas lo que la tabla se metió debajo de la barra. Las filas de abajo pasan por
+   detrás, así que la celda lleva fondo (la que tiene un color elegido conserva el suyo). Solo la primera fila, y solo
+   si es de encabezado (BlockNote tiene 0 o 1): una columna de encabezado no se mueve, ni una fila de abajo que quedó
+   solo con celdas de encabezado (unida con la columna de encabezado). */
+.bn-editor .tableWrapper.sd-head-stuck tr:first-child:not(:has(> td)) > th {
+  z-index: 3;
+  transform: translateY(var(--sd-head-shift, 0px));
+  box-shadow: 0 1px 0 var(--border);
+}
+
+.bn-editor .tableWrapper.sd-head-stuck tr:first-child:not(:has(> td)) > th:not([data-background-color]) {
+  background-color: var(--surface);
 }
 
 /* Las tablas sin el lugar de los botones de filas y columnas (y sin recorte, así se parten entre hojas). */

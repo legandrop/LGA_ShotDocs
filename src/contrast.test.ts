@@ -278,57 +278,70 @@ describe('reglas del editor', () => {
     }
   });
 
-  it('sobre cada resaltado de BlockNote el texto da lo mismo que antes en los tres niveles, y 4,5:1 donde antes llegaba', () => {
-    const palettes: Record<Mode, Record<string, { background: string }>> = { light: COLORS_DEFAULT, dark: COLORS_DARK_MODE_DEFAULT };
+  // La paleta de la app (D827): un bloque por esquema que redefine las 18 variables de BlockNote (texto y fondo de cada
+  // uno de los nueve colores).
+  const NAMES = ['gray', 'brown', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink'];
+  const palette = (mode: Mode) => {
+    const rule = ruleAt(`.bn-root[data-color-scheme='${mode}'] {`);
+    const read = (name: string, kind: 'text' | 'background') =>
+      new RegExp(`--bn-colors-highlights-${name}-${kind}: (#[0-9a-f]{6});`, 'i').exec(rule)?.[1].toLowerCase();
+    return Object.fromEntries(NAMES.map((n) => [n, { text: read(n, 'text'), background: read(n, 'background') }]));
+  };
+
+  it('cada color se lee sobre el fondo del mismo color, sobre la página, y el texto por defecto sobre cada fondo (D827)', () => {
     for (const mode of ['light', 'dark'] as Mode[]) {
-      const text = mode === 'light' ? '#1b1a17' : '#ece9e2';
-      const bgs = Object.values(palettes[mode]).map((c) => c.background);
-      expect(bgs).toHaveLength(9);
-      for (const level of LEVELS) {
-        // El resaltado pinta con el tono del encabezado (y su negrita también).
-        const ink = resolveInks('root', attrsOf(mode, level))['--ink-heading'];
-        expect(ink).toBe(text);
-        for (const bg of bgs) {
-          const before = contrastRatio(text, bg);
-          expect(contrastRatio(ink, bg)).toBeCloseTo(before, 6);
-          if (before >= 4.5) expect(contrastRatio(ink, bg)).toBeGreaterThanOrEqual(4.5);
+      const colors = palette(mode);
+      for (const name of NAMES) {
+        const { text, background } = colors[name];
+        expect(text, `${mode} ${name}`).toMatch(/^#[0-9a-f]{6}$/);
+        expect(background, `${mode} ${name}`).toMatch(/^#[0-9a-f]{6}$/);
+        // Un texto verde sobre un fondo verde (lo que traía Coda): se lee.
+        expect(contrastRatio(text!, background!), `${mode} ${name} sobre su fondo`).toBeGreaterThanOrEqual(4.5);
+        expect(worst(text!, mode), `${mode} ${name} sobre la página`).toBeGreaterThanOrEqual(4.5);
+        // El texto por defecto sobre un resaltado va con la tinta del encabezado, igual en los tres niveles.
+        for (const level of LEVELS) {
+          const ink = resolveInks('root', attrsOf(mode, level))['--ink-heading'];
+          expect(contrastRatio(ink, background!), `${mode} ${level} tinta sobre ${name}`).toBeGreaterThanOrEqual(4.5);
         }
       }
     }
   });
 
-  it('en oscuro, los nueve resaltados llegan a 4,5:1 con el texto por defecto en los tres niveles (el gris, el amarillo y el naranja de BlockNote no llegaban)', () => {
-    const rule = ruleAt(".bn-container[data-color-scheme='dark'] {");
-    const override = (name: string) => new RegExp(`--bn-colors-highlights-${name}-background: (#[0-9a-f]{6});`, 'i').exec(rule)?.[1].toLowerCase();
-    // Solo se tocan los tres que no llegaban: los demás siguen siendo los de BlockNote.
-    expect(['gray', 'yellow', 'orange'].map(override)).toEqual(['#676663', '#806200', '#9d5209']);
-    for (const other of ['brown', 'red', 'green', 'blue', 'purple', 'pink']) expect(override(other), other).toBeUndefined();
-    const text = '#ece9e2';
-    const palette = COLORS_DARK_MODE_DEFAULT as Record<string, { background: string }>;
-    for (const level of LEVELS) {
-      // La tinta de un resaltado es la del encabezado, igual en los tres niveles.
-      expect(resolveInks('root', attrsOf('dark', level))['--ink-heading']).toBe(text);
-      for (const [name, c] of Object.entries(palette)) {
-        const bg = override(name) ?? c.background;
-        expect(contrastRatio(text, bg), `${level} ${name} ${bg}`).toBeGreaterThanOrEqual(4.5);
+  it('el verde es verde y el azul es azul: el matiz de cada uno, no el gris azulado de BlockNote (D827)', () => {
+    const hue = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+      if (d === 0) return -1;
+      const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      return (h * 60 + 360) % 360;
+    };
+    for (const mode of ['light', 'dark'] as Mode[]) {
+      const colors = palette(mode);
+      for (const kind of ['text', 'background'] as const) {
+        expect(hue(colors.green[kind]!), `${mode} verde ${kind}`).toBeGreaterThan(110);
+        expect(hue(colors.green[kind]!), `${mode} verde ${kind}`).toBeLessThan(160);
+        expect(hue(colors.blue[kind]!), `${mode} azul ${kind}`).toBeGreaterThan(195);
+        expect(hue(colors.blue[kind]!), `${mode} azul ${kind}`).toBeLessThan(225);
       }
     }
-    // Sigue siendo el mismo matiz: más oscuro, no otro color (el rojo del gris sigue gris: R, G y B casi iguales).
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(override('gray')!.slice(i, i + 2), 16));
-    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(10);
+    // Ya no es el de BlockNote.
+    expect(palette('light').green.text).not.toBe(COLORS_DEFAULT.green.text);
+    expect(palette('dark').green.background).not.toBe(COLORS_DARK_MODE_DEFAULT.green.background);
   });
 
-  it('el modo claro y el PDF (siempre claro) conservan los fondos de BlockNote: el cambio es solo del esquema oscuro', () => {
-    // Todo lo que define un fondo de resaltado en styles.css cuelga del esquema oscuro; ninguna regla lo toca en claro.
+  it('la paleta cuelga solo del esquema (claro u oscuro), nunca de la vista de impresión: el PDF usa la del claro', () => {
     const re = /([^{}]+)\{([^{}]*)\}/g;
     let m: RegExpExecArray | null;
     let found = 0;
     while ((m = re.exec(CSS))) {
-      if (!/--bn-colors-highlights-[a-z]+-background/.test(m[2])) continue;
+      if (!/--bn-colors-highlights-[a-z]+-(background|text)/.test(m[2])) continue;
       found++;
-      for (const sel of topLevel(m[1])) expect(sel, sel).toContain("[data-color-scheme='dark']");
+      const sels = topLevel(m[1]);
+      for (const sel of sels) expect(sel, sel).toMatch(/\[data-color-scheme='(light|dark)'\]/);
+      // También la raíz donde BlockNote dibuja la barra de formato del teléfono (sin `.bn-container`).
+      expect(sels.some((sel) => sel.startsWith('.bn-root['))).toBe(true);
     }
-    expect(found).toBe(1);
+    expect(found).toBe(2);
     expect(CSS).not.toMatch(/\.print-view[^{}]*--bn-colors-highlights/);
   });
 });

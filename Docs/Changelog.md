@@ -1,5 +1,21 @@
 # Changelog — LGA Shot Docs
 
+v0.313 :
+
+Lega vio que en *Preproducción › Decorados* (una tabla escrita en la página, importada de Coda) el encabezado se iba al
+bajar, mientras que en las tablas del *Panorama* quedaba pegado. La diferencia: las del *Panorama* las arma la app (D821)
+y usan `position: sticky`; las del editor viven dentro de `.tableWrapper`, que las desplaza de costado
+(`overflow-x: auto`) y por eso es la caja contra la que se pega el encabezado, y esa caja no baja. Ahora
+`tableStickyHead.ts` mide al desplazar cuánto se metió la tabla debajo de la barra y corre las celdas del renglón de
+encabezado esa distancia, hasta la última fila (D827); la impresión saca la marca. También pidió que un color sobre un fondo
+del mismo color se lea (en oscuro, verde sobre verde daba 1,6:1) y un verde que no sea celeste: la paleta de los nueve
+colores pasa a ser de la app, todo a 4,5:1 o más (`Doc_Contraste.md`, sección 5). La auditoría encontró que una fila de
+abajo unida con la columna de encabezado se corría con él (ahora solo la primera fila) y que el selector de colores del
+teléfono, que BlockNote dibuja en otra raíz, seguía con la paleta vieja (ahora también `.bn-root`). Ayuda al día. El
+recorrido no cambia: no muestra tablas escritas ni colores.
+
+[ v0.313: el encabezado de las tablas de una página queda pegado, y una paleta de colores que se lee sobre su propio fondo ]
+
 v0.312 :
 
 Lega probó la 0.311 y dos clics en el mismo lugar no plegaban la página: hacía falta esperar y mover un poco el mouse.
