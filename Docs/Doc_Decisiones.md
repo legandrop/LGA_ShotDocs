@@ -2631,3 +2631,14 @@ como los decorados y las locaciones, para no confundirlos con un texto subrayado
 del texto que lo rodea o el que se le eligió, y debajo puntitos de ese mismo color; al pasar el mouse, la línea llena.
 Reemplaza la raya turquesa de D787. Lo que la app reconoce (escena, locación, decorado) se distingue de un link común por
 su color. Al imprimir y en el PDF, también con puntitos.
+
+### D830 · El nombre de una escena es el de los planes de rodaje (2026-10-30)
+**Pregunta:** cómo se titulan las escenas de VLLF (pregunta 1 de `Plan_Fichas_Cuaderno.md`): hasta acá eran el comienzo
+de la descripción del primer plano, del Coda.
+**Eligió Lega:** el nombre corto que él les pone en los planes de rodaje, de lo que pasa en la escena («004 | Camina por
+la calle a su casa», «037 | Rubio va al baño»), no el decorado (que se repite: siete serían «Esma | Salon Dorado»). Para
+las escenas sin nombre en ningún plan, uno en el mismo estilo armado de su descripción, que revisó y aprobó. Aplicado en
+VLLF: 130 renombres (solo el título; el contenido no se toca), 12 escenas sin descripción quedan como estaban. En la
+misma charla aprobó que la columna *Breakdown* de *Preproducción › Decorados* (los planos, `VLLF_180_010_Aeroparque`)
+pase a llamarse **Planos**, con cada link acortado a su código, y que ERSO se revise para lo mismo (su columna *BD Main*);
+queda por hacer desde la app.

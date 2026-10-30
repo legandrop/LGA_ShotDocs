@@ -9,8 +9,8 @@ base; la simulación de punta a punta dio v0.305 y la auditoría final del plan,
 v0.307 (D815):** al verla con VLLF, Lega no encontraba su preproducción y planteó lo correcto: se escribe en las
 páginas y el Panorama se arma solo. Todas las páginas volvieron a *Pages* y el *Overview* es de solo lectura (una
 locación o un decorado abre un resumen; su nombre, la página). Lo que sigue en las secciones 2 a 4 sobre «fichas en el
-Panorama» queda como historia. Siguen valiendo las partes 2, 3 y 4. Queda la pregunta 1 (sección 10) y las propuestas
-de la sección 12.
+Panorama» queda como historia. Siguen valiendo las partes 2, 3 y 4. La pregunta 1 (sección 10) quedó respondida el
+2026-10-30 (D830); quedan las propuestas de la sección 12.
 
 ## 1. Por qué
 
@@ -218,7 +218,7 @@ Después: copia de seguridad, mover, esperar la sincronización y repetir la com
    VLLF: `3 | Pruebas` → `3 | Pruebas y previs`. ERSO no tiene pruebas: se crea `3 | Pruebas y previs` y entra
    `Previs Ambulancia` (hoy en Tablas); `2 | Scouting` → `2 | Scouting Reports`, como en VLLF. Renombrar no rompe
    nada: los punteros y los links son por id, y los títulos de carpeta solo se leen para episodios y grupos de días.
-4. Los títulos de las escenas de VLLF, según lo que diga Lega (pregunta 1).
+4. Los títulos de las escenas de VLLF: hecho el 2026-10-30 (D830).
 
 ## 8. Parte 5 — Ayuda, tutorial, documentos y versión
 
@@ -253,13 +253,16 @@ Cada parte sale entera (código, ayuda, pruebas), auditada por alguien que no la
    locación, una prueba, consultas por departamento, plan y reporte de dos días y la mirada de post desde la escena.
    Desde la escena se llega con un clic a su desglose, sus scoutings, su plan y la sección exacta del reporte. Lo que
    cortaba la cadena se arregló en v0.305 (sección 12).
-6. Los títulos de las escenas de VLLF (parte 4, punto 4).
+6. Los títulos de las escenas de VLLF (parte 4, punto 4): hecho (D830).
 
 ## 10. Preguntas que decide Lega
 
 1. **Los títulos de las escenas de VLLF.** Hoy son el comienzo de la descripción del primer plano. Opciones: (a) armados
    solos con el decorado y el INT/EXT de sus planos (`059 | Puente Larralde · EXT`); (b) un nombre corto que escribe
-   Lega; (c) dejarlos. Recomendada: a, y después cada uno lo cambia si quiere.
+   Lega; (c) dejarlos. Recomendada: a, y después cada uno lo cambia si quiere. **Respondida (Lega, 2026-10-30, D830):
+   ni a ni c.** El nombre de una escena no es su decorado: es el que Lega le pone en los planes de rodaje («Escena 004 |
+   EXT Día | 03 planos | Camina por la calle a su casa | Cleanup»). 66 escenas tomaron ese nombre; para 64 se escribió
+   uno en el mismo estilo a partir de la descripción, que Lega aprobó; las 12 sin descripción quedaron igual.
 2. **¿Se saca *Overview › Scouting*?** Recomendado: sí (sección 4, punto 6). **Respondida: sí** (Lega, 2026-10-27).
    Hecho en v0.302.
 
