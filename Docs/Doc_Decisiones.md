@@ -2615,3 +2615,11 @@ dejaba afuera). Solo las filas de encabezado: una columna de encabezado no se mu
 Los nueve colores de texto y de fondo son de la app (`Doc_Contraste.md`, sección 5): cada color se lee sobre su propio
 fondo, sobre la página y con el texto por defecto encima, a 4,5:1 o más en claro y en oscuro; el verde es verde y el azul,
 azul. El documento guarda el nombre del color: lo ya escrito cambia solo, sin migrar nada.
+
+### D828 · Un link a un decorado, en su violeta (2026-10-29)
+**Pedido de Lega:** en la tabla de *Preproducción › Decorados* (importada de Coda) la columna Decorado tiene que ir en el
+color de los decorados, como la de Locación va en azul.
+**Elegimos:** en el texto de una página, un link a la página de un decorado se escribe en su violeta (D803) con el
+subrayado punteado de una locación reconocida; sin ficha con caja ni ícono, que en una columna angosta se partía, y sin
+adelanto (un decorado todavía no tiene). Sigue D804: el nombre de un decorado escrito sin link no se marca. Es solo vista:
+no se guarda en la página ni sale en el PDF.

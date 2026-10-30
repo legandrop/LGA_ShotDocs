@@ -143,14 +143,17 @@ export function makeLinkAt(view: EditorView, pos?: number, ref?: string, to?: { 
 
 /**
  * Por qué no hay nada para volver link donde está el cursor: un pendiente (no tiene página), algo que ya es link (una
- * ficha) o nada reconocido.
+ * ficha, o el link a un decorado, D828) o nada reconocido.
  */
 export function noLinkReason(state: EditorState): { kind: 'pending'; ref: string } | { kind: 'link' } | { kind: 'nothing' } {
   const found = underlineAt(state);
   if (found?.spec.kind === 'pending') return { kind: 'pending', ref: found.spec.ref };
   const st = underlineKey.getState(state);
   const { from, to } = state.selection;
-  const chip = st?.set.find(Math.max(0, from - 1), to + 1).some((d) => (d.spec as { chip?: unknown }).chip && d.from <= from && d.to >= to);
+  const chip = st?.set.find(Math.max(0, from - 1), to + 1).some((d) => {
+    const spec = d.spec as { chip?: unknown; set?: unknown };
+    return (spec.chip || spec.set) && d.from <= from && d.to >= to;
+  });
   return chip ? { kind: 'link' } : { kind: 'nothing' };
 }
 

@@ -307,6 +307,18 @@ describe('reglas del editor', () => {
     }
   });
 
+  it('una escena, una locación o un decorado reconocidos se leen sobre cada fondo de la paleta (D828)', () => {
+    // Los tonos de las entidades (styles.css): el primero de cada uno es el del claro, el segundo el del oscuro.
+    const entity = (name: string) => [...CSS.matchAll(new RegExp(`^  --${name}-fg: (#[0-9a-f]{6});`, 'gim'))].map((m) => m[1]);
+    for (const name of ['scene', 'loc', 'set']) {
+      const [light, dark] = entity(name);
+      expect(dark, name).toBeDefined();
+      for (const [mode, fg] of [['light', light], ['dark', dark]] as [Mode, string][]) {
+        for (const c of NAMES) expect(contrastRatio(fg, palette(mode)[c].background!), `${mode} ${name} sobre ${c}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('el verde es verde y el azul es azul: el matiz de cada uno, no el gris azulado de BlockNote (D827)', () => {
     const hue = (hex: string) => {
       const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);

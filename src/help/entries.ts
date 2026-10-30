@@ -178,9 +178,10 @@ const LIVE_MAP = '0.269';
 const SCENES_SECTION = '0.279';
 /**
  * El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6): llegó en
- * v0.244, sube con el texto en el color de cada cosa (D774) y con «Escena» dibujada junto a su número (D776).
+ * v0.244, sube con el texto en el color de cada cosa (D774), con «Escena» dibujada junto a su número (D776) y con el link
+ * a un decorado en violeta (D828).
  */
-const LIVE_UNDERLINE = '0.273';
+const LIVE_UNDERLINE = '0.314';
 /** Otros nombres de una locación y Dejar fuera de las relaciones (D526–D545). */
 const LOCATION_NAMES = '0.247';
 /**
@@ -470,7 +471,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     textTouch: 'help.liveUnderline.textTouch',
     keys: { link: 'relLink' },
     more: ['peekClose'],
-    words: ['underline', 'subrayado', 'subrayada', 'preview', 'adelanto', 'make it a link', 'volverlo link', 'link', 'today', 'hoy', 'pending', 'pendiente', 'chip', 'ficha'],
+    words: ['underline', 'subrayado', 'subrayada', 'preview', 'adelanto', 'make it a link', 'volverlo link', 'link', 'today', 'hoy', 'pending', 'pendiente', 'chip', 'ficha', 'set', 'decorado', 'violet', 'violeta'],
     since: LIVE_UNDERLINE,
   },
   {

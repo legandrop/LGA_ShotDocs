@@ -285,7 +285,7 @@ In development. What works today:
   subpages, as imported from Coda, into the scene.
 - While you write, scene numbers and location names that exist in the project are written in their color with a subtle
   dotted underline (nothing pops up). Hover one, or tap it with the keyboard closed, for a preview with *Open* and *Make it a link*
-  (Ctrl+Alt+K / ⌘⌥K); links to scenes and locations show as chips. On a phone, a shoot day report has a *Today* bar above
+  (Ctrl+Alt+K / ⌘⌥K); links to scenes and locations show as chips, and a link to a set page is written in violet. On a phone, a shoot day report has a *Today* bar above
   the keyboard with the day's scenes, its location, the camera and dictation.
 - Type `/e 027` or `/l cen` to link a scene or a location (it shows as a chip). A number that doesn't exist yet can be
   created right there, in its folder, only when it's safe (you see the whole project, you're online and it isn't

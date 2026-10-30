@@ -85,8 +85,8 @@ lugares donde va, todo a 4,5:1 o más (WCAG AA, con margen por el redondeo):
 | marrón | `#7d5640` / `#f0e6df` | `#c9a085` / `#4a3628` | 5,21 · 4,79 |
 | rojo | `#b82b2b` / `#fbe3e1` | `#f3867e` / `#5e2524` | 5,02 · 4,83 |
 | naranja | `#a14e08` / `#fae8d6` | `#ee9a50` / `#5b3716` | 4,87 · 4,68 |
-| amarillo | `#836500` / `#faf0c8` | `#e2c04a` / `#514010` | 4,80 · 5,68 |
-| verde | `#1a7236` / `#dcf1e1` | `#62c682` / `#1d4a2b` | 5,05 · 4,80 |
+| amarillo | `#836500` / `#faf0c8` | `#e2c04a` / `#4a3a0e` | 4,80 · 6,24 |
+| verde | `#1a7236` / `#dcf1e1` | `#62c682` / `#1a4427` | 5,05 · 5,22 |
 | azul | `#1662a8` / `#dde9f8` | `#66acec` / `#1c3c5f` | 5,11 · 4,66 |
 | violeta | `#7340b0` / `#ece3f7` | `#b892ec` / `#3f2c60` | 5,47 · 4,80 |
 | rosa | `#b0226f` / `#f9e0ec` | `#ea82bd` / `#5b2346` | 5,11 · 4,75 |
@@ -97,6 +97,9 @@ lugares donde va, todo a 4,5:1 o más (WCAG AA, con margen por el redondeo):
 - **El texto por defecto sobre un fondo** (la tinta del encabezado, `#1b1a17` / `#ece9e2`, igual en los tres niveles):
   14:1 o más en claro, 8,2:1 o más en oscuro. Reemplaza el arreglo de v0.165, que oscurecía solo el gris, el amarillo y el
   naranja del oscuro.
+- **Una escena, una locación o un decorado reconocidos** (frambuesa, azul y violeta) sobre cada fondo: 4,5:1 o más. El
+  violeta del decorado (`#b99cff`) daba 4,43 sobre el amarillo y 4,48 sobre el verde oscuros de v0.313; en v0.314 (D828)
+  esos dos fondos bajaron un poco (`#514010` → `#4a3a0e`, `#1d4a2b` → `#1a4427`) y llegan a 4,87.
 - **El verde es verde** (matiz entre 110° y 160°) y el azul, azul (entre 195° y 225°).
 
 El modo claro vale también para el PDF, la impresión y las páginas HTML del zip (la vista de impresión arma siempre el
@@ -107,9 +110,9 @@ de Coda se ven con la paleta nueva, y una versión vieja de la app lo sigue most
 Queda sin cambio, a propósito: un texto de un color sobre un fondo de **otro** color (rojo sobre amarillo) es una
 combinación que elige la persona, y la cita con un resaltado dentro.
 
-Pruebas: tres en `src/contrast.test.ts` (cada color sobre su fondo, sobre la página y el texto por defecto sobre cada
-fondo, a 4,5:1 o más en los dos esquemas y los tres niveles; el matiz del verde y del azul; y que la paleta cuelga solo
-del esquema, nunca de `.print-view`).
+Pruebas: cuatro en `src/contrast.test.ts` (cada color sobre su fondo, sobre la página y el texto por defecto sobre cada
+fondo, a 4,5:1 o más en los dos esquemas y los tres niveles; los tonos de escena, locación y decorado sobre cada fondo; el
+matiz del verde y del azul; y que la paleta cuelga solo del esquema, nunca de `.print-view`).
 
 ## 6. Links, botón principal y foco (v0.281, D787)
 

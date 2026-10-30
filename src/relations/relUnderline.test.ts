@@ -3,14 +3,16 @@ import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from '@blocknote/
 import { withCollaboration } from '@blocknote/core/yjs';
 import { TextSelection } from '@tiptap/pm/state';
 import { DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { yUndoPluginKey } from 'y-prosemirror';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from '../ui/editorSchema';
 import { buildRegistry } from './reader';
-import { anchorOf, linkTextInBlock, locateUnderline, makeLinkAt, relLinkKeyExtension, underlineAt, underlineKey } from './relLink';
-import { buildUnderlines, mapThroughReplace, relUnderlineExtension, UNDERLINE_WAIT_MS, type PeekEvents, type UnderlineInfo } from './relUnderline';
+import { anchorOf, linkTextInBlock, locateUnderline, makeLinkAt, noLinkReason, relLinkKeyExtension, underlineAt, underlineKey } from './relLink';
+import { buildUnderlines, mapThroughReplace, relUnderlineExtension, underlineInfo, UNDERLINE_WAIT_MS, type PeekEvents, type UnderlineInfo } from './relUnderline';
 import { captureNewLinks, undoAssignInDoc } from './assign';
 import { setSlashDraft } from './slashDraft';
 
@@ -24,16 +26,18 @@ const PAGES = {
   '105_027': '27272727-2727-4727-8727-272727272727',
   '105_029': '29292929-2929-4929-8929-292929292929',
   CENADE: 'cececece-cece-4ece-8ece-cececececece',
+  AEROPARQUE: 'aeaeaeae-aeae-4eae-8eae-aeaeaeaeaeae',
 };
 const R = buildRegistry({
   scenes: (['105_026', '105_027', '105_029'] as const).map((code) => ({ code, pageId: PAGES[code] })),
   locations: [{ name: 'CENADE', pageId: PAGES.CENADE }],
 });
-const byPage = new Map<string, { kind: 'scene' | 'loc'; ref: string }>([
+const byPage = new Map<string, { kind: 'scene' | 'loc' | 'set'; ref: string }>([
   [PAGES['105_026'], { kind: 'scene', ref: '105_026' }],
   [PAGES['105_027'], { kind: 'scene', ref: '105_027' }],
   [PAGES['105_029'], { kind: 'scene', ref: '105_029' }],
   [PAGES.CENADE, { kind: 'loc', ref: 'CENADE' }],
+  [PAGES.AEROPARQUE, { kind: 'set', ref: 'Aeroparque' }],
 ]);
 const TITLES: Record<string, string> = { [PAGES['105_027']]: '027 | La ambulancia empieza a zigzaguear' };
 const info: UnderlineInfo = {
@@ -472,6 +476,75 @@ describe('la ficha de un link a una escena', () => {
     // Y en la versión vieja el link es un link común: ni ficha ni subrayado.
     expect(view(old).dom.querySelector('.rel-chip, .rel-u')).toBeNull();
     expect(view(old).dom.querySelector(`a[href="/p/${PAGES['105_026']}"]`)!.textContent).toBe('105_026');
+  });
+});
+
+describe('el link a un decorado, en su violeta (D828)', () => {
+  it('un link a la página de un decorado va en violeta, sin adelanto; el nombre suelto no se subraya (D804)', async () => {
+    const doc = new Y.Doc();
+    const hover = vi.fn();
+    const events: PeekEvents = { hover, open: vi.fn(), isOpen: () => false, close: vi.fn(), select: vi.fn() };
+    const e = mount(doc, { events });
+    e.replaceBlocks(e.document, [
+      { type: 'paragraph', content: [link('Aeroparque', `/p/${PAGES.AEROPARQUE}`), ' y Aeroparque sin link.'] },
+    ] as never);
+    await tick(UNDERLINE_WAIT_MS + 80);
+    expect(drawn(e)).toEqual(['Aeroparque:rel-set']);
+    const chip = view(e).dom.querySelector<HTMLElement>('.rel-set')!;
+    expect(chip.textContent).toBe('Aeroparque');
+    expect(chip.dataset.rel).toBe('set');
+    expect(chip.closest('a')!.getAttribute('href')).toBe(`/p/${PAGES.AEROPARQUE}`);
+    // No es una ficha con adelanto: ni la clase ni lo que la busca. Pasar el mouse de verdad por encima no lo abre.
+    expect(chip.classList.contains('rel-chip')).toBe(false);
+    const mouse = (type: string, x: number) => {
+      const m = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 12, buttons: 0 });
+      Object.defineProperty(m, 'pointerType', { value: 'mouse' });
+      chip.dispatchEvent(m);
+    };
+    for (const x of [10, 30, 50]) mouse('pointermove', x);
+    expect(hover).not.toHaveBeenCalledWith(expect.anything());
+    // El atajo de volverlo link dice que ya es un link.
+    const v = view(e);
+    const at = v.posAtDOM(chip.firstChild!, 2);
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, at)));
+    expect(noLinkReason(v.state)).toEqual({ kind: 'link' });
+    // Nada entra al documento.
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).not.toContain('rel-set');
+  });
+
+  it('una versión con el esquema anterior ve el link de siempre, sin ficha y sin perder nada', async () => {
+    const doc = new Y.Doc();
+    const e = mount(doc);
+    e.replaceBlocks(e.document, [{ type: 'paragraph', content: ['Decorado: ', link('Aeroparque', `/p/${PAGES.AEROPARQUE}`)] }] as never);
+    await tick(UNDERLINE_WAIT_MS + 80);
+    expect(view(e).dom.querySelector('.rel-set')).not.toBeNull();
+    const xml = doc.getXmlFragment(CONTENT_FRAGMENT).toString();
+    e.unmount();
+    editors.splice(editors.indexOf(e), 1);
+    const { audio: _a, file: _f, video: _v, ...oldSpecs } = defaultBlockSpecs;
+    const old = mount(doc, { underline: false, withSchema: BlockNoteSchema.create({ blockSpecs: oldSpecs }) });
+    await tick();
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toBe(xml);
+    expect(view(old).dom.querySelector('.rel-set')).toBeNull();
+    expect(view(old).dom.querySelector(`a[href="/p/${PAGES.AEROPARQUE}"]`)!.textContent).toBe('Aeroparque');
+  });
+
+  it('la foto del índice: un link a la página de un decorado lleva a ese decorado; las escenas y locaciones, como siempre', () => {
+    const roles = new Map([['abierta', { entity: null, partOf: null, doc: null, ep: null, excluded: false, stage: 'breakdown' }]]);
+    const snap = { registration: { roles, sets: [{ name: 'Aeroparque', pageId: PAGES.AEROPARQUE }] }, registry: R };
+    const got = underlineInfo({ snap, title: () => undefined } as never, 'abierta')!;
+    expect(got.target(PAGES.AEROPARQUE)).toEqual({ kind: 'set', ref: 'Aeroparque' });
+    expect(got.target(PAGES.CENADE)).toEqual({ kind: 'loc', ref: 'CENADE' });
+    expect(got.target(PAGES['105_027'])).toEqual({ kind: 'scene', ref: '105_027' });
+    expect(got.target('otra')).toBeNull();
+  });
+
+  it('el CSS: violeta del decorado con el punteado, sin el subrayado del link, y al imprimir el link de siempre', () => {
+    const css = readFileSync(resolve(__dirname, 'liveHeader.css'), 'utf8');
+    expect(css).toMatch(/\.editor \.rel-set \{[^}]*color: var\(--set-fg\);[^}]*text-decoration-style: dotted;/);
+    expect(css).toContain('.editor a:has(> .rel-set) {\n  text-decoration: none;');
+    const print = css.slice(css.indexOf('@media print'));
+    expect(print).toMatch(/\.editor \.rel-set \{\s*color: inherit;\s*text-decoration: none;/);
   });
 });
 

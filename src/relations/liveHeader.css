@@ -1641,6 +1641,21 @@
   mask-image: var(--rel-icon-loc);
 }
 
+/* Un link a la página de un decorado (D828): su violeta (D803) con el subrayado punteado de una locación escrita, sin
+   caja ni ícono: en una columna angosta de una tabla una ficha se partía en pedazos. El subrayado es el del link. */
+.editor a:has(> .rel-set) {
+  text-decoration: none;
+}
+
+.editor .rel-set {
+  color: var(--set-fg);
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--set-fg);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
 .editor .rel-chip.hot {
   box-shadow: 0 0 0 2px var(--lh-scene-line);
 }
@@ -1656,8 +1671,14 @@
     background: none;
   }
 
-  .editor a:has(> .rel-chip) {
+  .editor a:has(> .rel-chip),
+  .editor a:has(> .rel-set) {
     text-decoration: underline;
+  }
+
+  .editor .rel-set {
+    color: inherit;
+    text-decoration: none;
   }
 
   .editor .rel-chip {

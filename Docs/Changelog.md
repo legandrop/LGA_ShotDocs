@@ -1,5 +1,20 @@
 # Changelog — LGA Shot Docs
 
+v0.314 :
+
+Lega preguntó por qué la columna Decorado de la tabla de *Preproducción › Decorados* no va en el violeta de los decorados,
+si la de Locación va en azul. La causa: en el texto de una página el editor reconoce escenas y locaciones (escritas o como
+link), pero no decorados; las celdas de esa columna son links a la página de cada decorado y quedaban como un link común.
+Ahora `underlineInfo` suma los decorados del índice (`registration.sets`) y un link a uno se dibuja en violeta con el
+punteado de una locación (`rel-set`, D828). Primero salió como ficha con ícono, pero en una columna angosta se partía en
+pedazos. No tiene adelanto, y el nombre suelto sigue sin marcarse (D804). Probado en la tabla real (las 66 celdas con link,
+en violeta). La auditoría vio que el violeta daba 4,43 y 4,48 sobre el amarillo y el verde oscuros de la paleta nueva:
+esos dos fondos bajaron un poco y llegan a 4,87 (prueba nueva con escena, locación y decorado sobre cada fondo); y que el
+atajo de volverlo link sobre un decorado decía «Nothing to link here» (ahora «It's already a link»). Ayuda y README al día;
+el recorrido no cambia (*Create page* no escribe un link).
+
+[ v0.314: un link a un decorado se ve en su violeta ]
+
 v0.313 :
 
 Lega vio que en *Preproducción › Decorados* (una tabla escrita en la página, importada de Coda) el encabezado se iba al

@@ -723,6 +723,11 @@ componiendo, espera. Convive con buscar (las dos decoraciones se suman), colapsa
 **La ficha.** Un link a la página de una escena o una locación se ve como ficha (ícono y número, el color de su tipo);
 en un título, la escena suma su título en vivo **al final del título**: lo escrito después del link se lee antes que el
 título (O4 de la auditoría de E5). Una versión vieja ve un link común (prueba con el esquema anterior).
+Un link a la página de un **decorado** (v0.314, D828; `registration.sets` en `underlineInfo`) va en su violeta con el
+subrayado punteado de una locación escrita, sin caja ni ícono (en una columna angosta de una tabla una ficha se partía en
+pedazos) y sin adelanto: la clase es `rel-set`, no `rel-chip`, así el mouse y los toques no lo miran. El nombre de un
+decorado escrito suelto sigue sin subrayarse (D804: se nombra solo con un link o en su campo). Al imprimir, el link de
+siempre.
 
 **El adelanto.** Con el mouse, al quedarse un momento (320 ms) sobre un subrayado o una ficha, solo después de un
 movimiento real del puntero (`MouseGate`: cada tecla lo desarma; un subrayado que aparece debajo del puntero quieto no

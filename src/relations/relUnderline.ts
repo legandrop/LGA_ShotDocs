@@ -18,7 +18,9 @@ import './liveHeader.css';
 // `d_escribir.html`). En el editor de la página abierta, las escenas y locaciones que reconoce el lector de las relaciones
 // (`scan`, el mismo que arma el índice, con el mismo texto: los links a páginas tapados) quedan con un subrayado punteado;
 // lo que no existe en el proyecto (un pendiente, `105_120`), con uno gris de rayas. Un link a la página de una escena o
-// una locación se ve como ficha (número e ícono) y, en un título, con el título de la escena en vivo.
+// una locación se ve como ficha (número e ícono) y, en un título, con el título de la escena en vivo. Un link a la página
+// de un decorado, en violeta con el subrayado punteado (D828): sin adelanto (los decorados no tienen) y sin subrayado
+// del texto suelto (un decorado se nombra solo con un link o en su campo, D804).
 //
 // Son DECORACIONES de ProseMirror: no están en el Y.Doc, no se sincronizan, no se copian, no salen en el PDF (el editor de
 // la exportación no las tiene) ni al imprimir (`@media print`). Una versión vieja ve el texto y los links de siempre.
@@ -33,8 +35,8 @@ export interface UnderlineInfo {
   ep: string | null;
   /** La entidad de la página misma (no se subraya: su adelanto sería la página que se está viendo). */
   self: { kind: 'scene' | 'loc'; ref: string } | null;
-  /** A qué escena o locación lleva un link a esa página (o `null`). */
-  target(pageId: string): { kind: 'scene' | 'loc'; ref: string } | null;
+  /** A qué escena, locación o decorado lleva un link a esa página (o `null`). */
+  target(pageId: string): { kind: 'scene' | 'loc' | 'set'; ref: string } | null;
   /** La página de una escena o locación, si la persona la ve. */
   pageOf(kind: 'scene' | 'loc', ref: string): string | null;
   /** El título en vivo de la escena de esa página (sin su número), o `null`. */
@@ -169,7 +171,8 @@ export function buildUnderlines(doc: PMNode, info: UnderlineInfo | null, memo?: 
       sig.push(`${from}-${to}${cls}${h.ref}`);
     }
     // Los links a una escena o una locación: la ficha. En un título, el título de la escena al final (O4 de E5: lo que se
-    // escribe después del link queda antes del título en vivo y se lee en orden).
+    // escribe después del link queda antes del título en vivo y se lee en orden). Los de un decorado: su violeta, con
+    // otra clase (`rel-set`): el adelanto y los toques miran solo `.rel-chip`.
     let title: string | null = null;
     for (const l of links) {
       const target = l.pageId ? info.target(l.pageId) : null;
@@ -177,6 +180,11 @@ export function buildUnderlines(doc: PMNode, info: UnderlineInfo | null, memo?: 
       const from = unitPos(unit, l.start);
       const to = unitPos(unit, l.end);
       if (to <= from) continue;
+      if (target.kind === 'set') {
+        decos.push(Decoration.inline(from, to, { class: 'rel-set', 'data-rel': 'set', 'data-ref': target.ref }, { set: { ref: target.ref, pageId: l.pageId } }));
+        sig.push(`${from}-${to}rel-set${target.ref}`);
+        continue;
+      }
       const cls = target.kind === 'loc' ? 'rel-chip loc' : 'rel-chip scene';
       decos.push(Decoration.inline(from, to, { class: cls, 'data-rel': target.kind, 'data-ref': target.ref }, { chip: { kind: target.kind, ref: target.ref, pageId: l.pageId } }));
       sig.push(`${from}-${to}${cls}${target.ref}`);
@@ -244,7 +252,8 @@ export function underlineInfo(src: Pick<LiveSource, 'snap' | 'title'>, pageId: s
   const role = snap.registration.roles.get(pageId);
   // Una página fuera de las relaciones (`graph: false`, una plantilla) o que el índice todavía no conoce: nada.
   if (!role || role.excluded) return null;
-  const byPage = new Map<string, { kind: 'scene' | 'loc'; ref: string }>();
+  const byPage = new Map<string, { kind: 'scene' | 'loc' | 'set'; ref: string }>();
+  for (const e of snap.registration.sets) byPage.set(e.pageId, { kind: 'set', ref: e.name });
   for (const e of snap.registry.scenes.values()) if (e.pageId) byPage.set(e.pageId, { kind: 'scene', ref: e.code });
   for (const e of snap.registry.locations.values()) if (e.pageId) byPage.set(e.pageId, { kind: 'loc', ref: e.name });
   const own = role.entity && role.entity.ref && (role.entity.kind === 'scene' || role.entity.kind === 'location') ? { kind: role.entity.kind === 'scene' ? ('scene' as const) : ('loc' as const), ref: role.entity.ref } : null;

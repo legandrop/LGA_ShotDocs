@@ -2313,7 +2313,9 @@ code {
 /* La paleta de colores de texto y de fondo (D827, Doc_Contraste.md sección 5), la de la app y no la de BlockNote: su
    «verde» era un gris azulado (#4d6461), y en oscuro un texto de un color sobre el fondo del mismo color no se leía
    (verde 1,6:1, rojo 1,4:1), como sí se leía en Coda. Acá cada color tiene un fondo apagado y un texto que se lee
-   sobre ese fondo, sobre la página y con el texto por defecto encima del fondo: todo a 4,5:1 o más. El claro vale
+   sobre ese fondo, sobre la página y con el texto por defecto encima del fondo: todo a 4,5:1 o más, también el color de
+   una escena, una locación o un decorado reconocidos sobre cada fondo (D828: el amarillo y el verde oscuros bajaron un
+   poco por el violeta del decorado). El claro vale
    también para el PDF (la vista de impresión arma siempre el claro). El selector de colores muestra estas mismas
    muestras (usa las mismas variables); en el teléfono BlockNote lo dibuja en otra raíz (`.bn-root` sin `.bn-container`,
    en `body`), por eso los dos selectores. */
@@ -2350,9 +2352,9 @@ code {
   --bn-colors-highlights-orange-text: #ee9a50;
   --bn-colors-highlights-orange-background: #5b3716;
   --bn-colors-highlights-yellow-text: #e2c04a;
-  --bn-colors-highlights-yellow-background: #514010;
+  --bn-colors-highlights-yellow-background: #4a3a0e;
   --bn-colors-highlights-green-text: #62c682;
-  --bn-colors-highlights-green-background: #1d4a2b;
+  --bn-colors-highlights-green-background: #1a4427;
   --bn-colors-highlights-blue-text: #66acec;
   --bn-colors-highlights-blue-background: #1c3c5f;
   --bn-colors-highlights-purple-text: #b892ec;
