@@ -542,8 +542,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.format.text',
     keys: { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', code: 'code', link: 'link' },
     more: ['lineBreak'],
-    // La paleta de colores de la app (D827).
-    since: '0.313',
+    // La paleta de colores de la app (D827) y los links con puntitos (D829).
+    since: '0.315',
   },
   {
     id: 'tablePhone',

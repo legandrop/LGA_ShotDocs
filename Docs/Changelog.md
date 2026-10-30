@@ -1,5 +1,19 @@
 # Changelog — LGA Shot Docs
 
+v0.315 :
+
+Lega pidió que los links dejen la raya turquesa fina (D787) y lleven debajo puntitos del mismo color que su texto, como
+los decorados y las locaciones, para no confundirse con un texto subrayado. Ahora `.editor a` va con `underline dotted`
+de 1,5 px en `currentColor` (el color del texto o el elegido, también en un título) y, al pasar, la línea llena (D829).
+Lo mismo en los links de la cabecera viva y de las etapas de la escena, en las fichas al imprimir (la auditoría vio que
+ahí el atajo `text-decoration` los dejaba más finos) y en el nombre de un video o un archivo en el PDF, que iba azul con
+línea llena. Se borra el token
+`--link-line` (pantalla, oscuro y la vista de impresión). Las pruebas de contraste miden ahora el estilo del link y que
+la raya turquesa no quede en ninguna hoja. Probado en el documento de práctica: link común, verde, rojo sobre rojo y en un
+título, junto a un texto subrayado. Ayuda (*Dar formato al texto*) al día; el recorrido no muestra links.
+
+[ v0.315: los links llevan puntitos de su mismo color en vez de la raya turquesa ]
+
 v0.314 :
 
 Lega preguntó por qué la columna Decorado de la tabla de *Preproducción › Decorados* no va en el violeta de los decorados,

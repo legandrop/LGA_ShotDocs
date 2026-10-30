@@ -30,7 +30,6 @@
   --btn-primary-border: #1b1a17;
   --btn-primary-text: #fbfaf8;
   --btn-primary-hover: #33322f;
-  --link-line: #5597a4;
   --menu-bg: #ffffff;
   --menu-border: #e4e0d8;
   --seg-bg: #f4f2ee;
@@ -91,7 +90,6 @@
   --btn-primary-border: var(--accent);
   --btn-primary-text: var(--accent-text);
   --btn-primary-hover: rgba(34, 211, 238, 0.12);
-  --link-line: #218290;
   --menu-bg: #22211f;
   --menu-border: #34332f;
   --seg-bg: #171716;
@@ -2090,20 +2088,20 @@ code {
   color: var(--danger);
 }
 
-/* Los links del texto (D787, D796): el mismo color que el texto que los rodea (el del nivel de contraste, el de un
-   encabezado o un color elegido) con una raya fina turquesa; al pasar, la raya plena. Lo único que los distingue es la
-   raya. El color de verdad queda para lo que la app reconoce (escena, locación, día) y el turquesa pleno para lo elegido
-   y el foco. */
+/* Los links del texto (D787, D796, D829): el mismo color que el texto que los rodea (el del nivel de contraste, el de un
+   encabezado o un color elegido) y debajo unos puntitos de ese mismo color, como lo que la app reconoce (escena,
+   locación, decorado): así un link no se confunde con un texto subrayado. Al pasar, la línea llena. Lo que distingue
+   a una escena o una locación de un link común es su color. */
 .editor a {
   color: inherit;
-  text-decoration: underline;
-  text-decoration-color: var(--link-line);
-  text-decoration-thickness: 1px;
+  text-decoration: underline dotted;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
 }
 
 .editor a:hover {
-  text-decoration-color: var(--accent);
+  text-decoration-style: solid;
 }
 
 .editor-missing {
@@ -3792,8 +3790,6 @@ code {
    Las reglas de adentro valen igual en pantalla (donde se mide) y al imprimir, así los cortes coinciden;
    por eso no dependen del ancho de la ventana (las del teléfono se pisan acá). */
 .print-view {
-  /* La hoja va siempre en claro: también la raya de los links (D787). */
-  --link-line: #5597a4;
   position: fixed;
   top: 0;
   left: -100000px;
@@ -3935,8 +3931,11 @@ code {
   line-height: 16px;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: #1a56c4;
-  text-decoration: underline;
+  /* Un link como los del texto (D829): el color del texto, con puntitos de ese color. */
+  color: inherit;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
 }
 
 .page.sheet img.bn-visual-media {

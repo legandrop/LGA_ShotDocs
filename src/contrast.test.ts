@@ -358,23 +358,35 @@ describe('reglas del editor', () => {
   });
 });
 
-// Los links del texto y el botón principal (D787): la raya turquesa del link llega a 3:1 contra el papel (lo que pide un
-// elemento que no es texto) y el texto del botón delineado del modo oscuro, a 4,5:1.
+// Los links del texto y el botón principal (D787, D829): el link va con los puntitos del color de su texto (ya no la raya
+// turquesa) y el texto del botón delineado del modo oscuro llega a 4,5:1.
 describe('links y botón principal', () => {
   const token = (block: RegExp, name: string) => {
     const body = block.exec(CSS)?.[1] ?? '';
     return new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, 'i').exec(body)?.[1] ?? 'falta';
   };
-  const LIGHT = /:root \{([^}]*)\}/;
   const DARK = /:root\[data-theme='dark'\] \{([^}]*--btn-primary-bg[^}]*)\}/;
-  it('el link tiene el color del texto que lo rodea: lo único que cambia es la raya (D796)', () => {
+  it('el link tiene el color del texto que lo rodea, con puntitos de ese mismo color; al pasar, la línea llena (D796, D829)', () => {
     const rule = /\n\.editor a \{([^}]*)\}/.exec(CSS)?.[1] ?? 'falta';
     expect(rule).toContain('color: inherit');
-    expect(rule).toContain('text-decoration-color: var(--link-line)');
+    expect(rule).toContain('text-decoration: underline dotted');
+    expect(rule).toContain('text-decoration-color: currentColor');
+    expect(/\n\.editor a:hover \{([^}]*)\}/.exec(CSS)?.[1]).toContain('text-decoration-style: solid');
   });
-  it('la raya del link', () => {
-    expect(worst(token(LIGHT, '--link-line'), 'light')).toBeGreaterThanOrEqual(3);
-    expect(worst(token(DARK, '--link-line'), 'dark')).toBeGreaterThanOrEqual(3);
+  it('las fichas al imprimir y el nombre de un archivo en el PDF siguen la misma regla (D829)', () => {
+    const live = readFileSync(resolve(__dirname, 'relations/liveHeader.css'), 'utf8');
+    const print = live.slice(live.indexOf('@media print'));
+    // Solo la línea: el atajo `text-decoration` volvería el grosor a auto y pisaría los 1,5 px de `.editor a`.
+    expect(print).toMatch(/\.editor a:has\(> \.rel-set\) \{\s*text-decoration-line: underline;/);
+    const name = /\n\.print-view \.sd-media-name \{([^}]*)\}/.exec(CSS)?.[1] ?? 'falta';
+    expect(name).toContain('color: inherit');
+    expect(name).toContain('text-decoration: underline dotted');
+  });
+
+  it('ya no queda la raya turquesa de los links en ninguna hoja de estilos', () => {
+    for (const file of ['styles.css', 'relations/liveHeader.css', 'relations/sceneStages.css']) {
+      expect(readFileSync(resolve(__dirname, file), 'utf8'), file).not.toContain('--link-line');
+    }
   });
   it('el texto del botón principal en oscuro (turquesa de texto)', () => {
     expect(worst(token(DARK, '--accent-text'), 'dark')).toBeGreaterThanOrEqual(4.5);

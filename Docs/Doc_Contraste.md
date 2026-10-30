@@ -117,9 +117,11 @@ matiz del verde y del azul; y que la paleta cuelga solo del esquema, nunca de `.
 ## 6. Links, botón principal y foco (v0.281, D787)
 
 - Link del texto: el mismo color que el texto que lo rodea (`color: inherit`, D796: el tono del nivel de contraste, el
-  de un encabezado o un color elegido; hasta v0.284 era `--text`, más claro que el texto común) y raya `--link-line` de
-  1px (#5597a4 en claro, 3,3:1 contra el papel; #218290 en oscuro, 3,7:1); al pasar, la raya en `--accent`. Lo único
-  que lo distingue es la raya. Ya no está en la lista de lo que pone su propio color: una negrita dentro de un link va
+  de un encabezado o un color elegido; hasta v0.284 era `--text`, más claro que el texto común) y, desde v0.315 (D829),
+  puntitos de 1,5 px de ese mismo color (`underline dotted`, `currentColor`), como lo que la app reconoce; al pasar, la
+  línea llena. Así un link no se confunde con un texto subrayado (línea llena). Hasta v0.314 era una raya turquesa fina
+  (`--link-line`, que ya no existe). Igual los links de la cabecera viva (`.lh-sec`), de las etapas de la escena (`.ss-a`)
+  y el nombre de un video o un archivo en el PDF (`.sd-media-name`, antes azul con línea llena). Ya no está en la lista de lo que pone su propio color: una negrita dentro de un link va
   con el tono de la negrita.
 - Botón principal (`--btn-primary-*`): en claro, tinta rellena (16,7:1); en oscuro, delineado en `--accent` con texto
   `--accent-text` (9,6:1). Las acciones de tarjeta van en gris elevado (`--seg-active`).

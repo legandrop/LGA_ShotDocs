@@ -254,8 +254,8 @@ export const help = {
   },
   'help.format.title': { en: "Formatting text", es: "Dar formato al texto" },
   'help.format.text': {
-    en: "Select text to get the formatting bar: bold, italic, colors, links. A text color on a background of the same color is still readable. {bold} bold, {italic} italic, {underline} underline, {strike} strikethrough, {code} code, {link} link.",
-    es: "Elegí texto y aparece la barra de formato: negrita, cursiva, colores, links. Un color de texto sobre un fondo del mismo color se sigue leyendo. {bold} negrita, {italic} cursiva, {underline} subrayado, {strike} tachado, {code} código, {link} link.",
+    en: "Select text to get the formatting bar: bold, italic, colors, links. A text color on a background of the same color is still readable. A link has a dotted underline in its own color, so it never looks like underlined text. {bold} bold, {italic} italic, {underline} underline, {strike} strikethrough, {code} code, {link} link.",
+    es: "Elegí texto y aparece la barra de formato: negrita, cursiva, colores, links. Un color de texto sobre un fondo del mismo color se sigue leyendo. Un link lleva debajo puntitos de su mismo color, así nunca parece un texto subrayado. {bold} negrita, {italic} cursiva, {underline} subrayado, {strike} tachado, {code} código, {link} link.",
   },
   'help.tablePhone.title': { en: "Wide tables on a phone or tablet", es: "Tablas anchas en el teléfono o la tablet" },
   'help.tablePhone.text': {

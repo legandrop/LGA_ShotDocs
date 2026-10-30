@@ -2623,3 +2623,11 @@ color de los decorados, como la de Locación va en azul.
 subrayado punteado de una locación reconocida; sin ficha con caja ni ícono, que en una columna angosta se partía, y sin
 adelanto (un decorado todavía no tiene). Sigue D804: el nombre de un decorado escrito sin link no se marca. Es solo vista:
 no se guarda en la página ni sale en el PDF.
+
+### D829 · Los links, con puntitos de su mismo color (2026-10-29)
+**Pedido de Lega:** que los links dejen la raya turquesa y lleven debajo puntitos del mismo color que el texto del link,
+como los decorados y las locaciones, para no confundirlos con un texto subrayado.
+**Elegimos:** en toda la app (el texto de las páginas, la cabecera viva y las etapas de la escena), un link va con el color
+del texto que lo rodea o el que se le eligió, y debajo puntitos de ese mismo color; al pasar el mouse, la línea llena.
+Reemplaza la raya turquesa de D787. Lo que la app reconoce (escena, locación, decorado) se distingue de un link común por
+su color. Al imprimir y en el PDF, también con puntitos.

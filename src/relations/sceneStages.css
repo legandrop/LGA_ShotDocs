@@ -48,16 +48,16 @@
 /* Con `.ss` delante: el Overview pone `.mp a { color: inherit }` y un link de página quedaba blanco, como texto. */
 .ss .ss-a {
   color: var(--text);
-  text-decoration: underline;
-  text-decoration-color: var(--link-line);
-  text-decoration-thickness: 1px;
+  text-decoration: underline dotted;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
   border-radius: 3px;
 }
 
-/* Como los links del texto (D787): la raya fina turquesa, plena al pasar. */
+/* Como los links del texto (D829): los puntitos del color del link; al pasar, la línea llena. */
 .ss-a:hover {
-  text-decoration-color: var(--accent);
+  text-decoration-style: solid;
 }
 
 .ss .ss-a.scene {
