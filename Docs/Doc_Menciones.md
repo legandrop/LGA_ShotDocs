@@ -96,7 +96,7 @@ auditoría», al final. **Va después del link público** (su migración sube a 
   estaba el `@` (al final, si mientras tanto eso cambió). Un error (por ejemplo `page_in_trash`) queda en la pregunta.
 - **El punto del árbol** (`src/ui/mentionDots.tsx`, una línea en `Sidebar.tsx`): lleno en la página con una mención
   sin leer; hueco en una madre plegada que la tiene adentro. Sale de lo que ya bajó la campana: no pide nada más.
-- **El número afuera de la app** (`src/ui/titleBadge.ts`): `(3) Plan · Shot Docs` en el título de la pestaña
+- **El número afuera de la app** (`src/ui/titleBadge.ts`): `(3) Plan · Mi proyecto · Shot Docs` en el título de la pestaña
   (`PageView` pone su título con `setDocumentTitle`; si otro tomó el título, como imprimir con el nombre del PDF, no
   lo pisa) y `navigator.setAppBadge` en el ícono de la app instalada: de 1 a 9, la marca sin número desde 10 (la base
   cuenta hasta 10), nada con 0 ni al salir del workspace.

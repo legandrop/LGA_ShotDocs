@@ -6,7 +6,7 @@ import { SEPARATOR } from '../search/extract';
 import { usePermissions, useServices, useTree } from '../services';
 import { copyText } from '../ui/commentsUi';
 import { notify } from '../ui/notice';
-import { setDocumentTitle } from '../ui/titleBadge';
+import { pageDocTitle, setDocumentTitle } from '../ui/titleBadge';
 import { useColumnWidths, type ColumnSpec } from '../ui/columnWidths';
 import { openExportPages } from '../ui/ExportHost';
 import { useCurrentProject } from '../ui/project';
@@ -58,9 +58,11 @@ export function MapView({ tab }: { tab: MapTab }) {
   const tr = useT();
   const services = useServices();
   const session = existingRelationsSession(services);
-  // El título de la pestaña del navegador: «Scenes · Overview · Shot Docs». Sin esto quedaba el de la última página
-  // abierta (lo encontró la simulación de D813).
-  const docTitle = `${tr(TAB_TITLE[tab])} · ${tr('map.title')} · Shot Docs`;
+  // El título de la pestaña del navegador: «Scenes · Overview · Mi proyecto · Shot Docs». Sin esto quedaba el de la última
+  // página abierta (lo encontró la simulación de D813).
+  const tree = useTree();
+  const projectName = tree.project(useCurrentProject())?.name;
+  const docTitle = pageDocTitle(`${tr(TAB_TITLE[tab])} · ${tr('map.title')}`, projectName);
   useEffect(() => setDocumentTitle(docTitle), [docTitle]);
   if (!session)
     return (

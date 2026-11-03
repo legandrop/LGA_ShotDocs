@@ -1,5 +1,5 @@
 // El número de menciones sin leer fuera de la app (P.21, entrega 2; Docs/Doc_Menciones.md, sección 9): en el título
-// de la pestaña, `(3) Plan de rodaje · Shot Docs`, y en el ícono de la app instalada (`navigator.setAppBadge`). Lo
+// de la pestaña, `(3) Plan de rodaje · Mi proyecto · Shot Docs`, y en el ícono de la app instalada (`navigator.setAppBadge`). Lo
 // pone la campana; el título de cada página lo pone `PageView` con `setDocumentTitle`.
 //
 // Si otro toma el título un rato (imprimir pone el nombre del PDF; las páginas legales y la práctica, el suyo), el
@@ -17,6 +17,14 @@ export function badgeText(n: number): string {
 /** El título con el número adelante, o tal cual sin menciones sin leer. */
 export function titleWith(title: string, n: number): string {
   return n > 0 ? `(${badgeText(n)}) ${title}` : title;
+}
+
+/**
+ * El título de la pestaña de una página: `Plan · Mi proyecto · Shot Docs`. El proyecto va para que quien mira la pestaña (o
+ * un programa que lee el título de la ventana) sepa en cuál está sin abrir la página; sin proyecto, `Plan · Shot Docs`.
+ */
+export function pageDocTitle(page: string, project?: string): string {
+  return project ? `${page} · ${project} · Shot Docs` : `${page} · Shot Docs`;
 }
 
 /** El título de la pestaña (sin el número: se lo suma acá). */

@@ -27,7 +27,7 @@ import { LinkVisitorAsideNotice } from './LinkVisitorAsideNotice';
 import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
-import { setDocumentTitle } from './titleBadge';
+import { pageDocTitle, setDocumentTitle } from './titleBadge';
 import { kindReader } from '../relations/kind';
 import { sceneTitleJoin, sceneTitleName } from './sceneTitle';
 import { listenBackToTable } from './tableReturn';
@@ -67,10 +67,13 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
   const page = tree.get(id);
   const tr = useT();
 
+  // Con un link público el «proyecto» es la página compartida: ahí el título no lleva proyecto.
+  const link = useLinkMode();
+  const projectName = page && !link ? tree.project(page.workspace_id)?.name : undefined;
   useEffect(() => {
     // Con el número de menciones sin leer adelante, si hay (titleBadge.ts).
-    setDocumentTitle(page ? `${page.title || tr('common.untitled')} · Shot Docs` : 'LGA Shot Docs');
-  }, [page, tr]);
+    setDocumentTitle(page ? pageDocTitle(page.title || tr('common.untitled'), projectName) : 'LGA Shot Docs');
+  }, [page, projectName, tr]);
 
   // Abierta desde una fila de una tabla, Esc vuelve a la tabla (D822).
   useEffect(() => listenBackToTable(), []);

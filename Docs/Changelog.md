@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.316 :
+
+El título de la pestaña no decía en qué proyecto estás: dos pestañas de proyectos distintos se llamaban igual
+(`Plan de rodaje · Shot Docs`) y quien lee el título de la ventana desde afuera (el registro del día de trabajo) tenía que
+preguntar de nuevo con cada página nueva. Ahora el título es `<página> · <proyecto> · Shot Docs` (con el `(n) ` de
+menciones adelante, como antes), y en el mapa `Scenes · Overview · <proyecto> · Shot Docs`. El proyecto sale de
+`page.workspace_id`, y la pestaña se actualiza si se lo renombra. Sin proyecto conocido queda `<página> · Shot Docs`.
+`pageDocTitle` (titleBadge.ts) arma el texto; `pageTitle.test.tsx` abre una página y lo comprueba, y se ajusta el test del
+mapa y la línea de Doc_Menciones. La suite pasa salvo `remoteTimeout` (miniatura lenta), que ya falla sin este cambio.
+
+[ v0.316: el título de la pestaña lleva el proyecto ]
+
 v0.315 :
 
 Lega pidió que los links dejen la raya turquesa fina (D787) y lleven debajo puntitos del mismo color que su texto, como
