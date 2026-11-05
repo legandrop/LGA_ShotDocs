@@ -2697,3 +2697,14 @@ lo del otro supervisor: «Cámara testigo» pierde el «No se usó» que había,
 plantean dos situaciones:» (la cama acuchillada y el degüello son dos versiones). El Día 59 suma las 4 fotos
 finales de los plates de la ambulancia, y el scouting de La Candelaria la sección «Concepts arte». Después, la limpieza
 de D832 a D834 a los tres días y las reglas de fotos al scouting.
+
+### D836 · Los planes del día de rodaje se limpian con el mismo criterio que los reportes (2026-11-05)
+**Pregunta:** Lega propuso dejar los planes del día («| Plan», 35 en ERSO) con las mismas reglas que los reportes. Su
+plantilla es otra (secciones del día, un título por plano con su imagen y su ficha, subtítulos de nivel 4) y las reglas
+de los reportes aplicadas tal cual se equivocaban (por ejemplo, tomaban «Cámara testigo» de «Necesidades rodaje», que es
+un ítem, por un subtítulo). **Decidido por Lega, con capturas del Día 28:** nivel 1 para las secciones del día (Notas /
+pendientes, Notas, Pendientes, Tareas rodaje, Tareas post rodaje, Necesidades rodaje) y para cada plano; nivel 2 para lo
+de adentro de un plano (Descripción, VFX Task, Sup Notes TXT, Consultas, Locacion Real); el decorado que agrupa planos
+(siempre arriba, en la ficha del día) deja de ser título y pasa a un renglón en negrita; todas las imágenes a un tercio, también la del plano; las secciones del día vacías se borran; y lo
+demás como en los reportes (ningún título con color, dos renglones vacíos antes de cada título). Anotado en
+`Doc_Importar_Coda.md` («Planes del día de rodaje»); aplicado y verificado en los 35 planes de ERSO.

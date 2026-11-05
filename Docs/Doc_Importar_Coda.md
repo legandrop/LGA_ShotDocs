@@ -783,6 +783,26 @@ D796, y sacar el que repite una tarjeta, D797) y los títulos con texto pegado a
 Hecho en los 73 reportes de ERSO (2026-11-05): 58 con borrados, cambios de nivel, fotos, colores o aire, todos
 verificados con estos controles.
 
+### Planes del día de rodaje (D836, 2026-11-05)
+
+Los planes del día («… | Plan») tienen otra plantilla que los reportes: la ficha del día, cuatro secciones (Notas /
+pendientes, a veces «Notas:» o «Pendientes:» solas; Tareas rodaje, Tareas post rodaje, Necesidades rodaje) y un título por plano («ERSO_105_046_010 El Arrabal |
+Salón») con su imagen, su ficha y sus subtítulos (Descripción, VFX Task, Sup Notes TXT, Consultas, Locacion Real). Se dejan así:
+
+1. **Las secciones del día vacías se borran** (nada hasta el título siguiente, o solo viñetas vacías o relleno de la
+   plantilla).
+2. **Niveles:** 1 para las secciones del día y para cada plano; 2 para lo de adentro de un plano. Los subtítulos de un
+   plano se reconocen por el nombre: después de nivelar quedan en el mismo nivel que tenía el decorado.
+3. **El decorado que agrupa planos** («El Arrabal | Salón (Disparo y comienzo del fuego)»), que está siempre arriba, en
+   la ficha del día, deja de ser título: pasa a un renglón en negrita, sin color, con su texto y sus links. Un título
+   que no es sección, plano ni subtítulo más abajo no se toca: queda para revisar.
+4. **Todas las imágenes a un tercio**, también la del plano; los storyboards no cuentan como capturas del guion.
+5. Lo demás, como en los reportes: ningún título con color de Coda y dos renglones vacíos antes de cada título.
+
+Acá **no** se pasan párrafos a título: «Cámara testigo» en «Necesidades rodaje» es un ítem de la lista. Los mismos
+controles de los reportes, con las reglas de los planes, y además: cada decorado es un renglón todo en negrita, sin
+color y con sus links, y toda foto está a un tercio. Hecho en los 35 planes de ERSO (2026-11-05), todos verificados.
+
 ### Varios docs en un proyecto (2026-10-17)
 
 Un proyecto puede venir repartido en varios docs de Coda (preproducción, scoutings, reportes de rodaje). Se exporta
