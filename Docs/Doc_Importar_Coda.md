@@ -717,7 +717,8 @@ dice otra cosa (los niveles de los subtítulos), en un reporte manda esta. Se pr
 
 1. **Secciones de la plantilla que quedaron vacías: afuera.** Lega manda la plantilla con planos repetidos y el
    supervisor se olvida de borrar los que no usa. Es *relleno*: «x» o «xxx», «Cámara A xxx», «Descripción del plano: x»
-   (o sin nada después), «En clip x», «En toma x», «Tomado en esta ubicación:», «Cuando se usa?», y las viñetas vacías.
+   (o sin nada después), «En clip x», «En toma x», «Cuando se usa?», y las viñetas vacías. «Tomado en esta ubicación:» es relleno
+   solo adentro de una sección vacía: suelta, abajo suele estar la respuesta («Cerca de ventanas»).
    Los párrafos vacíos no son relleno: son aire, y solo se van si se borra la sección entera. Para decidir si un plano
    o una escena entera está vacía, también cuenta como relleno «En planilla de cámara».
    - **Un plano (H2) o una escena (H1)** con solo relleno (sin fotos, links ni tablas), cuyo título no tiene nombre
@@ -732,40 +733,55 @@ dice otra cosa (los niveles de los subtítulos), en un reporte manda esta. Se pr
      Fotos de puesta de cámara, Fotos de monitor/cámara, Color chart, Chrome ball + color chart, HDRI con color chart,
      Ref Plate, Clean Plate, y Altura, pan, tilt en cada toma (este, con «En planilla de cámara» abajo, queda: dice
      algo). «Cámara testigo» tal como viene en la plantilla («Cámara A: GoPro 12», «Cámara B: GoPro 13», «Cuando se
-     usa?») está sin llenar y se va; quien la usó escribe otra cosa («No se usa», «GoPro 12, solo en…») y queda. Un
+     usa?», con las dos GoPro) está sin llenar y se va; quien la usó escribe otra cosa («No se usa», «GoPro 12, solo
+     en…») y queda con sus líneas de las GoPro, que ahí dicen qué cámara se usó (sueltas no son relleno; se van solo
+     con la sección, y solo si están las dos tal cual). «Cuando se usa?» suelto sí se va. Un
      subtítulo con texto propio («PENDIENTE. NO SE HIZO», «Locación Guion: EXT CASA DE CAMPO») queda.
    - **Renglones de relleno sueltos** en lo que queda: afuera. «Cámara A» o «Cámara B» solas quedan: en los reportes
      de otro supervisor dicen qué cámara grabó.
 2. **Niveles de los títulos, sin saltar ninguno:** encabezado 1 para «Info general» y cada escena; encabezado 2 para
    cada plano y para todo subtítulo que cuelga directo de un encabezado 1 (Coda los dejaba en 3: «Cámara testigo»,
    «Locación Guion», «Descripción de la escena»…; bajo «Info general» no hay planos, todo es subtítulo); encabezado 3
-   para lo que va adentro de un plano.
-3. **Sin los colores de Coda en los títulos de nivel 1 (menos «Info general») y 2:** ni color de texto ni de fondo
-   (Coda resaltaba la escena en violeta y el plano en amarillo; los subtítulos no tenían). La escena ya tiene su color
-   automático, el de su link.
+   para lo que va adentro de un plano. Un subtítulo con el dato pegado («Locación Guion: EXT CASA DE CAMPO») sigue
+   siendo subtítulo, no plano; un plano que empieza con un subtítulo («Clean plate: 104_038 plano 3») sigue siendo
+   plano. Un párrafo que dice solo un subtítulo de la plantilla («Sup notes previa:», «Clean Plate», «Altura, pan,
+   tilt en cada toma:», sin nada después de los dos puntos; pasaba en los reportes de otro supervisor) **pasa a título**
+   con el nivel que le toca (D834). La única excepción con dato es «Locación Guion: <decorado>», que en los reportes
+   va siempre en el título.
+3. **Ningún título lleva los colores de Coda, de ningún nivel, salvo «Info general»** (D834): ni color de texto ni de
+   fondo (Coda resaltaba la escena en violeta y el plano en amarillo, y la plantilla de otro supervisor también los
+   subtítulos). La escena ya tiene su color automático, el de su link. **«Info general» va siempre con fondo violeta**
+   (D833): si le falta, se le pone. Sus renglones sin llenar («Llamado:», «Partichelas:», «Reportes de cámara:»,
+   «Script report:») **se quedan**: tendrían que estar llenos, y así queda a la vista que alguien se olvidó de hacerlo.
 4. **Fotos (D795, D799, D800):** cada foto a un tercio del ancho; las fotos seguidas de un renglón van en filas de a
    tres (la primera de cada fila con *rowStart*, si son dos o más), sin saltos entre ellas; párrafos seguidos que solo
    tienen fotos (con renglones vacíos en el medio) se juntan en el primero; una foto nunca comparte renglón con texto
    (Shift+Enter antes o después). A la mitad y cada una en su renglón: las capturas chicas del guion (ancho/alto 1,5 o
    más) y las tiras del desglose o del plan de rodaje (4:1 o más, aunque tengan color: así las dejó Lega en los
-   scoutings de VLLF). Las páginas de guion (menos de 1,5) seguidas, en una fila, como *Arrange in rows*. No se tocan:
-   las filas que ya tienen *rowStart* (acomodadas a mano) ni las fotos que quedaron adentro de un título.
+   scoutings de VLLF). Las páginas de guion (menos de 1,5) seguidas, en una fila, como *Arrange in rows*. Una foto que
+   quedó adentro de un título (Coda la dejaba en el renglón del subtítulo, por ejemplo en «Fotos de monitor/cámara»)
+   sale del título: se suma al principio del renglón de fotos de abajo, si hay uno (y esa fila se vuelve a armar), o
+   va a un renglón propio justo debajo. No se tocan las filas que ya tienen *rowStart* (acomodadas a mano).
 5. **Aire (D798):** dos renglones vacíos justo antes de cada título (salvo el primer bloque). Se suman los que faltan,
    nunca se sacan, y se crean con los atributos por defecto del esquema.
 
 **Controles, antes de dar una página por hecha:** lo que se borra no puede tener fotos, links ni tablas, ni haber
 cambiado desde la copia con la que se armó el plan (la copia se baja el mismo día); después, las mismas reglas sobre la
-página tal como quedó dan cero borrados y cero cambios de nivel; el mismo texto sin espacios que antes (descontado lo
-borrado), las mismas fotos en el mismo orden; fotos a un tercio salvo las capturas y las filas acomodadas, con
-*rowStart* donde corresponde; ninguna foto pegada a texto; ningún título de nivel 1 (menos «Info general») o 2 con
-color; dos renglones vacíos antes de cada título; ningún atributo booleano o numérico guardado como texto; y «Todo
-sincronizado». El plan se arma sin red sobre una copia de la página; las fotos se miden con la página abierta en la
-app (proporción y píxeles de la miniatura). Esos pasos son propios de cada proyecto y no viven en este repo.
+página tal como quedó dan cero borrados, cero cambios de nivel y cero subtítulos escritos como texto; el mismo texto
+sin espacios que antes (descontado lo borrado), las mismas fotos en el mismo orden; fotos a un tercio salvo las de la
+mitad y las filas acomodadas a mano (con *rowStart*), con *rowStart* donde corresponde; ninguna foto pegada a texto ni
+adentro de un título; ningún título con color salvo «Info general», que es violeta; el formato de cada bloque que
+queda (negrita, subrayado, links) igual que antes: el editor, al escribir, puede reformatear un bloque vecino (pasó
+una vez en unos 4.100 borrados), y hay que corregirlo a mano; dos renglones vacíos antes de cada título; ningún
+atributo booleano o numérico guardado como texto; y «Todo sincronizado». El plan se arma sin red sobre una copia de la
+página; las fotos se miden con la página abierta en la app (proporción y píxeles de la miniatura). Esos pasos son
+propios de cada proyecto y no viven en este repo.
 
 **Lo que esta limpieza no toca** (se hace solo si Lega lo pide): los links de Drive (pasar a tarjeta el link escrito,
-D796, y sacar el que repite una tarjeta, D797), los títulos con texto pegado al nombre, las fotos adentro de un título,
-el color de «Info general» y sus renglones sin llenar («Llamado:», «Partichelas:», «Reportes de cámara:», «Script
-report:»).
+D796, y sacar el que repite una tarjeta, D797) y los títulos con texto pegado al nombre.
+
+Hecho en los 73 reportes de ERSO (2026-11-05): 58 con borrados, cambios de nivel, fotos, colores o aire, todos
+verificados con estos controles.
 
 ### Varios docs en un proyecto (2026-10-17)
 

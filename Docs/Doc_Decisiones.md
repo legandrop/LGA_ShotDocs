@@ -2664,5 +2664,24 @@ escrito entero para hacerlo de una la próxima vez, sin que tenga que recordar n
 `Doc_Importar_Coda.md` («Reportes de rodaje: la limpieza completa»): secciones de plantilla vacías afuera (también
 «Cámara testigo» tal como viene en la plantilla), títulos en 1, 2 y 3 sin saltar niveles, sin colores de Coda en los
 títulos de nivel 1 (menos «Info general») y 2, fotos a un tercio en filas de a tres, capturas del guion y tiras del
-desglose a la mitad, y dos renglones vacíos antes de cada título. Aplicada en ERSO, días 36 y 81; el resto espera el
-visto bueno de Lega.
+desglose a la mitad, y dos renglones vacíos antes de cada título. Aplicada primero en ERSO, días 36 y 81, y con el
+visto bueno de Lega en todos (D833).
+
+### D833 · «Info general» siempre violeta, y sus renglones sin llenar se quedan (2026-11-05)
+**Pregunta:** después de la limpieza de D832, los títulos de escena y de plano quedaron sin los colores de Coda, pero
+«Info general» conservaba su fondo violeta, y sus renglones «Llamado:», «Partichelas:», «Reportes de cámara:» y
+«Script report:» estaban vacíos en muchos reportes. **Decidido por Lega:** «Info general» va **siempre** con fondo
+violeta, como regla (si le falta, se le pone); y esos renglones vacíos **se quedan**: tendrían que estar llenos, y así
+queda a la vista que alguien se olvidó de hacerlo. Anotado en `Doc_Importar_Coda.md` («Reportes de rodaje: la limpieza
+completa», paso 3). Con este sí, la limpieza de D832 se aplicó a los 73 reportes de ERSO.
+
+### D834 · Subtítulos escritos como texto pasan a título, y ningún subtítulo lleva color (2026-11-05)
+**Pregunta:** en los reportes de otro supervisor (sobre todo los días de Roy) algunos subtítulos de la plantilla estaban
+escritos como texto en negrita («Sup notes previa:», «Fotos extras en set», «Clean Plate», «Altura, pan, tilt en cada
+toma»), y los subtítulos de nivel 3 de su plantilla tenían el resaltado amarillo de Coda. **Decidido por Lega:** esos
+párrafos (solo el subtítulo, sin nada después de los dos puntos, salvo «Locación Guion: <decorado>», que en los
+reportes va siempre en el título) **pasan a título**, con el nivel que les toca (2 bajo la escena o en «Info general», 3
+dentro de un plano), y
+**ningún título, de ningún nivel, lleva color de Coda**, salvo «Info general» (D833). Anotado en `Doc_Importar_Coda.md`
+(«Reportes de rodaje: la limpieza completa», pasos 2 y 3); aplicado en ERSO (16 párrafos en 9 reportes, 37 subtítulos
+amarillos).
