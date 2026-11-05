@@ -2642,3 +2642,15 @@ VLLF: 130 renombres (solo el título; el contenido no se toca), 12 escenas sin d
 misma charla aprobó que la columna *Breakdown* de *Preproducción › Decorados* (los planos, `VLLF_180_010_Aeroparque`)
 pase a llamarse **Planos**, con cada link acortado a su código, y que ERSO se revise para lo mismo (su columna *BD Main*);
 queda por hacer desde la app.
+
+### D831 · Los reportes de otro supervisor que faltaban en ERSO (2026-11-05)
+**Pregunta:** Lega no encontraba reportes de la escena 104_011 de ERSO y sospechaba nombres de escena mal escritos en los
+reportes que hizo otro supervisor en un segundo doc de Coda.
+**Qué pasaba:** los nombres estaban bien (forma corta: «4-11» = 104_011, coincide con la *Fecha Rodaje* del desglose). Lo
+que faltaba era el contenido: en el Coda principal, los días 62 a 67 (La Candelaria) eran la plantilla vacía, y así
+entraron («… (en blanco)»). **Decidido:** se escribió en esos seis días el contenido del otro doc (114 fotos), sin tocar
+su primer renglón ni su ficha; los números de escena pasan al formato del proyecto («Escena 104_011», «104_011 plano 1»)
+con su marca «→ Escena …»; las que no están en el desglose (104_015A, 104_043, 104_048) entran como escenas «Solo en
+reportes», y 105_006A va a la sección de 105_006 (la regla de la letra de la importación). Las fechas de los días 66 y
+67 quedan las del desglose (02/03 y 03/03; el otro doc las tenía corridas un día, y el 01/03 era domingo). Copia del
+contenido anterior y del exportado, fuera del repo.
