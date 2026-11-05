@@ -2654,3 +2654,15 @@ con su marca «→ Escena …»; las que no están en el desglose (104_015A, 104
 reportes», y 105_006A va a la sección de 105_006 (la regla de la letra de la importación). Las fechas de los días 66 y
 67 quedan las del desglose (02/03 y 03/03; el otro doc las tenía corridas un día, y el 01/03 era domingo). Copia del
 contenido anterior y del exportado, fuera del repo.
+
+### D832 · La limpieza completa de un reporte de rodaje importado de Coda (2026-11-05)
+**Pedido de Lega:** en los reportes de ERSO quedaron muchas secciones de la plantilla sin llenar (planos y escenas sin
+nombre ni contenido, subtítulos vacíos) y los títulos con tamaños desparejos. Pidió probar en uno o dos días antes de
+hacer todos y, al verlos, que estuvieran también las fotos acomodadas como en los scoutings de VLLF, que los títulos de
+escena y de plano no lleven los colores de Coda (la escena ya tiene su color automático), y que el procedimiento quede
+escrito entero para hacerlo de una la próxima vez, sin que tenga que recordar ninguna regla. **Quedó:** la limpieza de
+`Doc_Importar_Coda.md` («Reportes de rodaje: la limpieza completa»): secciones de plantilla vacías afuera (también
+«Cámara testigo» tal como viene en la plantilla), títulos en 1, 2 y 3 sin saltar niveles, sin colores de Coda en los
+títulos de nivel 1 (menos «Info general») y 2, fotos a un tercio en filas de a tres, capturas del guion y tiras del
+desglose a la mitad, y dos renglones vacíos antes de cada título. Aplicada en ERSO, días 36 y 81; el resto espera el
+visto bueno de Lega.
