@@ -2685,3 +2685,15 @@ dentro de un plano), y
 **ningún título, de ningún nivel, lleva color de Coda**, salvo «Info general» (D833). Anotado en `Doc_Importar_Coda.md`
 («Reportes de rodaje: la limpieza completa», pasos 2 y 3); aplicado en ERSO (16 párrafos en 9 reportes, 37 subtítulos
 amarillos).
+
+### D835 · Lo que faltaba de los docs de los supervisores de ERSO (2026-11-05)
+**Pedido de Lega:** traer lo que solo estaba en los docs de Coda de los supervisores. **Quedó:** el Día 58 (era la
+plantilla vacía) con el reporte entero del otro supervisor, conservando su ficha; su escena «h3-02B» pasa a 103_002B y,
+como no está en el desglose, su marca va a la página de 103_002 «(sección 103_002B)», la regla de la letra de D831. El
+Día 57 suma la versión del otro supervisor sin reemplazar la que había: el uso de la cámara testigo, la nota de la herida,
+las fotos extras y el plano 1 de 104_066 (el degüello) antes del plano 5; las dos descripciones de la escena y las dos
+notas previas quedan juntas, y a la segunda descripción se le saca la «x » de la plantilla. Donde chocaban, Lega eligió
+lo del otro supervisor: «Cámara testigo» pierde el «No se usó» que había, y la nota pasa a «Asesinato de Hitler. Se
+plantean dos situaciones:» (la cama acuchillada y el degüello son dos versiones). El Día 59 suma las 4 fotos
+finales de los plates de la ambulancia, y el scouting de La Candelaria la sección «Concepts arte». Después, la limpieza
+de D832 a D834 a los tres días y las reglas de fotos al scouting.
