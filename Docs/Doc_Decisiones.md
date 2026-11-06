@@ -2708,3 +2708,14 @@ de adentro de un plano (Descripción, VFX Task, Sup Notes TXT, Consultas, Locaci
 (siempre arriba, en la ficha del día) deja de ser título y pasa a un renglón en negrita; todas las imágenes a un tercio, también la del plano; las secciones del día vacías se borran; y lo
 demás como en los reportes (ningún título con color, dos renglones vacíos antes de cada título). Anotado en
 `Doc_Importar_Coda.md` («Planes del día de rodaje»); aplicado y verificado en los 35 planes de ERSO.
+
+### D837 · El link desde PipeSync va a la escena, y el proyecto se nombra por su código (2026-11-05)
+**Pregunta:** cómo saltar desde PipeSync (la tarjeta de un plano, la tabla de producción) a Shot Docs. **Decidido con
+Lega, sobre el plan del 2026-11-05:** el link va al **panorama de la escena**, no al plano: los nombres de los planos no
+coinciden entre las dos apps (`ERSO_1066_0160_WAN` en Flow, `ERSO_101_066_010` en el desglose) y el número de escena sí
+se puede sacar del de Flow. La dirección es la de la vista de escena del Panorama con el proyecto y el workspace
+(`/map/scenes?project=ERSO&scene=1066`); el proyecto se nombra por su id, su nombre o la primera palabra del nombre,
+porque PipeSync solo sabe el código, y solo se elige si hay uno (no se adivina; si hay más, la vista los nombra). Se
+cuenta sobre los proyectos que ve la persona: quien ve «ERSO prueba» y no «ERSO | Serie» cae en el primero; por eso el
+aviso de una escena que no está nombra el proyecto. La resolución vive en Shot Docs: PipeSync
+no guarda ids de Shot Docs. Primera parte hecha en v0.317 (`Doc_Link_Escena.md`); el resto, en `Doc_Roadmap.md`.

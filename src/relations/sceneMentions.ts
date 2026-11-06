@@ -359,6 +359,19 @@ export function sceneMapPath(code: string): string {
   return `${mapPath('scenes')}?scene=${encodeURIComponent(code)}`;
 }
 
+/**
+ * El link para compartir una escena (Docs/Doc_Link_Escena.md): la misma vista, con el proyecto y el workspace en la
+ * dirección para que abra esa escena de ese proyecto en cualquier dispositivo, no la del último proyecto elegido.
+ * No da acceso: quien lo abre tiene que poder ver el proyecto.
+ */
+export function sceneShareLink(appOrigin: string, localKey: string, projectId: string, code: string): string {
+  const url = new URL(mapPath('scenes'), appOrigin);
+  url.searchParams.set('project', projectId);
+  url.searchParams.set('scene', code);
+  url.searchParams.set('w', localKey);
+  return url.href;
+}
+
 /** El resumen de una locación o un decorado en el mapa (`/map/locations?page=…`, D815), armado con lo que dicen las páginas. */
 export function entityMapPath(tab: 'locations' | 'sets', pageId: string): string {
   return `${mapPath(tab)}?page=${encodeURIComponent(pageId)}`;

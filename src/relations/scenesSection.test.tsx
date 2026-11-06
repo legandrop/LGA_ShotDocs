@@ -423,7 +423,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(lone.querySelector('.ss-row[data-row="other"] .ss-more')!.textContent).toBe('1 index page ▾');
     // Una dirección con un número que no es una escena.
     act(() => navigate('/map/scenes?scene=105_999'));
-    await shown(() => expect(host.querySelector('.mp-scene .mp-empty')!.textContent).toBe('105_999 isn’t a scene of this project.'));
+    await shown(() => expect(host.querySelector('.mp-scene .mp-empty')!.textContent).toBe('105_999 isn’t a scene of Serie de prueba.'));
     // «All scenes» vuelve a la lista.
     click(host.querySelector('.mp-back'));
     await shown(() => expect(host.querySelectorAll('.mp-srow:not(.head)').length).toBe(24));

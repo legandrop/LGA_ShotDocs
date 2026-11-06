@@ -3,13 +3,13 @@ import { locale, useT, type Key } from '../i18n';
 import '../i18n/lazy/map';
 import { mapPath, navigate, nextFromTable, pagePath, useSearchParam, type MapTab } from '../router';
 import { SEPARATOR } from '../search/extract';
-import { usePermissions, useServices, useTree } from '../services';
+import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { copyText } from '../ui/commentsUi';
 import { notify } from '../ui/notice';
 import { pageDocTitle, setDocumentTitle } from '../ui/titleBadge';
 import { useColumnWidths, type ColumnSpec } from '../ui/columnWidths';
 import { openExportPages } from '../ui/ExportHost';
-import { useCurrentProject } from '../ui/project';
+import { shownParam, storeProject, useCurrentProject, useProjectParam } from '../ui/project';
 import { existingRelationsSession, useIndexProgress } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
 import type { Place } from './liveView';
@@ -24,7 +24,7 @@ import { MergeButton, MergePendingRows, useMergeRows } from './MergeAction';
 import { FoldPendingRow } from './FoldShots';
 import { contentCounts } from './merge';
 import { twinLabels } from './twinNames';
-import { mapPathFrom, sceneLinks, sceneMentions, scenePageCount, type SceneLinks } from './sceneMentions';
+import { mapPathFrom, sceneLinks, sceneMentions, scenePageCount, sceneShareLink, type SceneLinks } from './sceneMentions';
 import { sceneLive, setIndex, type LiveSource, type PageChip, type SceneLive, type SetRow } from './liveView';
 import { shotsTable } from './shotsTable';
 import { ShotsView } from './ShotsView';
@@ -64,6 +64,28 @@ export function MapView({ tab }: { tab: MapTab }) {
   const projectName = tree.project(useCurrentProject())?.name;
   const docTitle = pageDocTitle(`${tr(TAB_TITLE[tab])} · ${tr('map.title')}`, projectName);
   useEffect(() => setDocumentTitle(docTitle), [docTitle]);
+  // Un link con `?project=` (Docs/Doc_Link_Escena.md): ese proyecto queda elegido, así el inicio y la barra siguen en él
+  // al salir del Panorama. Si no está entre los del dispositivo, se dice en vez de mostrar el de otro proyecto.
+  const param = useProjectParam();
+  const status = useSyncStatus();
+  const found = param.kind === 'found' ? param.id : null;
+  useEffect(() => {
+    if (found) storeProject(services.workspace.config.storage, services.user.id, found);
+  }, [found, services.workspace, services.user.id]);
+  if (param.kind === 'ambiguous' || param.kind === 'missing') {
+    // Mientras no terminó una vuelta con el servidor, el proyecto puede estar bajando (un dispositivo nuevo).
+    const settled = status.lastSyncAt !== null || status.lastError !== null;
+    const name = shownParam(param.value);
+    return (
+      <div className="mp">
+        <p className="mp-empty">
+          {param.kind === 'ambiguous'
+            ? tr('map.projectAmbiguous', { name, list: param.names.join(' · ') })
+            : tr(settled ? 'map.projectUnknown' : 'map.projectOpening', { name })}
+        </p>
+      </div>
+    );
+  }
   if (!session)
     return (
       <div className="mp">
@@ -84,6 +106,7 @@ const ICONS = {
   code: 'm8 8-4 4 4 4M16 8l4 4-4 4',
   filter: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5',
   table: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 10h18M3 15h18M9 5v14',
+  link: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
 } as const;
 
 function Ic({ name, small }: { name: keyof typeof ICONS; small?: boolean }) {
@@ -299,7 +322,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
           ) : tab === 'sets' ? (
             <Sets rows={sets} data={data} fq={fq} complete={complete} />
           ) : tab === 'scenes' && sceneCode && src ? (
-            <SceneDetail key={sceneCode} code={resolve(sceneCode) ?? sceneCode} data={data} src={src} links={links} complete={complete} partial={partial} />
+            <SceneDetail key={sceneCode} code={resolve(sceneCode) ?? sceneCode} projectId={projectId} data={data} src={src} links={links} complete={complete} partial={partial} />
           ) : tab === 'scenes' ? (
             <Scenes data={data} fq={fq} codes={codes} complete={complete} partial={partial} src={src} links={links} />
           ) : tab === 'scouting' ? (
@@ -664,6 +687,7 @@ function Scenes({
 
 function SceneDetail({
   code,
+  projectId,
   data,
   src,
   links,
@@ -671,6 +695,7 @@ function SceneDetail({
   partial,
 }: {
   code: string;
+  projectId: string;
   data: ProjectMapData;
   src: SceneSrc;
   links: SceneLinks | null;
@@ -678,7 +703,15 @@ function SceneDetail({
   partial: boolean;
 }) {
   const tr = useT();
+  const { workspace } = useServices();
+  // El nombre del proyecto en el aviso de una escena que no está: llegando por un link (D837) puede no ser el que se esperaba.
+  const projectName = useTree().project(projectId)?.name ?? tr('project.defaultName');
   const top = useRef<HTMLDivElement>(null);
+  // El link de esta escena en este proyecto (Docs/Doc_Link_Escena.md): para pasárselo a alguien del equipo.
+  const copyLink = async (sceneCode: string) => {
+    const ok = await copyText(sceneShareLink(location.origin, workspace.config.localKey, projectId, sceneCode));
+    notify(ok ? tr('map.linkCopied', { code: sceneCode }) : tr('map.copyFailed'));
+  };
   // Al abrir otra escena (desde la barra lateral, ya en el mapa), la vista vuelve arriba, con las pestañas a la vista.
   // Con llaves y sin `scrollIntoView`/`scrollTo`: en Chromium pueden devolver una promesa, y React tomaría lo devuelto
   // por el efecto como su limpieza (la app caía al salir de la vista).
@@ -710,7 +743,7 @@ function SceneDetail({
       </a>
       {!scene || !list ? (
         // Quien ve una parte del proyecto no puede saber si existe en una página que no ve (D401).
-        <p className="mp-empty">{complete ? tr(partial ? 'map.sceneUnknownSeen' : 'map.sceneUnknown', { code }) : tr('live.reading')}</p>
+        <p className="mp-empty">{complete ? tr(partial ? 'map.sceneUnknownSeen' : 'map.sceneUnknown', { code, project: projectName }) : tr('live.reading')}</p>
       ) : (
         <>
           <h2 className="mp-sh">
@@ -728,14 +761,21 @@ function SceneDetail({
           </h2>
           <div className="mp-sbar">
             <p className="mp-smeta">{metaOf(tr, live, scene.episode)}</p>
-            {/* Todas las páginas de la lista en un PDF o un zip, sin las páginas índice (nombran decenas de escenas). Mientras el
-                índice lee, apagado: la lista todavía puede crecer y la ventana se lleva la de ese momento. */}
-            <button className="mp-btn" data-tip={tr('map.sceneExportTip')} disabled={!complete || exportIds.length === 0} onClick={() => openExportPages(`scene:${scene.code}`, tr('map.sceneExportTitle', { code: scene.code }), exportIds)}>
-              <svg className="mp-i s" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
-              </svg>
-              {tr('map.sceneExport')}
-            </button>
+            {/* Los dos botones juntos a la derecha: la barra reparte con `space-between`. */}
+            <span className="mp-actions">
+              <button className="mp-btn" data-tip={tr('map.copyLinkTip')} onClick={() => void copyLink(scene.code)}>
+                <Ic name="link" small />
+                {tr('map.copyLink')}
+              </button>
+              {/* Todas las páginas de la lista en un PDF o un zip, sin las páginas índice (nombran decenas de escenas). Mientras el
+                  índice lee, apagado: la lista todavía puede crecer y la ventana se lleva la de ese momento. */}
+              <button className="mp-btn" data-tip={tr('map.sceneExportTip')} disabled={!complete || exportIds.length === 0} onClick={() => openExportPages(`scene:${scene.code}`, tr('map.sceneExportTitle', { code: scene.code }), exportIds)}>
+                <svg className="mp-i s" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+                </svg>
+                {tr('map.sceneExport')}
+              </button>
+            </span>
           </div>
           {list.scenePages > 1 && (
             // La escena está en dos páginas o más: las relaciones usan la primera; se resuelve en Pending (D747).

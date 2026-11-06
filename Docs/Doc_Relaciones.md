@@ -1294,8 +1294,8 @@ una página del árbol, no se guarda en ningún documento y no escribe nada.
 | Las páginas de una escena, por grupo, con lugares y extractos (puro); quién linkea cada escena; las escenas por episodio de la barra | `src/relations/sceneMentions.ts` (`sceneMentions`, `sceneLinks`, `scenePageCount`, `sceneSnippet`, `sceneEpisodes`, `sceneMapPath`, `mapPathFrom`) |
 | La lista (vista de una escena y fila desplegada de *Map › Scenes*) | `src/relations/SceneMentionsView.tsx` + `map.css` (`mp-sm*`) |
 | La lista de la barra lateral (desde v0.269, *Scenes* adentro de *Overview*: sección 22) | `src/relations/OverviewNav.tsx` + `scenesNav.css` (prefijo `scene-nav`) |
-| La vista de una escena | `MapView.tsx` (`SceneDetail`), `/map/scenes?scene=<código>` |
-| Textos y ayuda | `sidebar.scenes*`, `map.scene*`, `map.pagesN`, `map.colPages*`; ayuda `scenesSection` (since 0.260) |
+| La vista de una escena | `MapView.tsx` (`SceneDetail`), `/map/scenes?scene=<código>`; con `project` y `w`, el link a una escena (`Doc_Link_Escena.md`) |
+| Textos y ayuda | `sidebar.scenes*`, `map.scene*`, `map.pagesN`, `map.colPages*`; ayuda `scenesSection` (since 0.317, `SCENES_SECTION`) |
 
 **La sección de la barra lateral** (desde v0.269, *Scenes* adentro de *Overview*, con lo plegado en `shotdocs-overview-nav`: sección 22)**.** (Desde v0.268, D771, su título y el episodio abierto quedan pegados arriba al bajar
 mientras se ve algo de su lista.) Debajo de la fila *Map* y arriba de *Pages*, en todo proyecto con escenas en el
@@ -1371,6 +1371,12 @@ lista en su orden, sin las páginas índice. Cada una sale sola, como página ra
 las de la papelera; PDF y zip como desde una página, con el título «Scene <código>». Mientras el índice lee, el botón
 está apagado (la ventana se lleva la lista de ese momento). Pruebas: `exportPagesGroup.test.tsx`
 (el PDF y el zip con las páginas justas) y `scenesSection.test.tsx` (el botón pide las 9 páginas de la lista).
+
+**El link a una escena (v0.317, D837).** Al lado de *Export…*, *Copy link* copia la dirección de la escena con el
+proyecto y el workspace (`/map/scenes?project=<id>&scene=<código>&w=<clave>`), que la abre en ese proyecto en cualquier
+dispositivo. La misma dirección acepta el proyecto por su nombre o su primera palabra: así abre PipeSync una escena desde
+la tarjeta de un plano. Si la escena no está, el aviso nombra el proyecto («105_999 isn’t a scene of ERSO | Serie»).
+Detalle, casos y pruebas: `Doc_Link_Escena.md`.
 
 ## 22. *Overview* en la barra lateral: el mapa con sus partes adentro (v0.269, D772)
 

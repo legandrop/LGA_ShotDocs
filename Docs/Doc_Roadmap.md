@@ -15,6 +15,25 @@ fases originales están en `Plan_ShotDocs.md`, sección 9.
 
 **NVIDIA BYOK, entrega v0.189; aceptación real v0.197:** catálogo y una respuesta de texto de Kimi K3 por la app y el portero propio, con clave personal, comprobados online en Windows sobre texto sintético. Conservó los datos pedidos; Apply aplicó la sugerencia, Undo recuperó el original exacto y Redo restauró la sugerencia sin otro envío. Siguen pendientes Stop real, cambios concurrentes, otros dispositivos, otros modelos y Caption, vencimiento físico de metadatos y recuperación tras reinicios. No cierra la fase 5 ni el MCP, no cambia la selección automática y NVIDIA no se usa para audio. Parar no garantiza detener cómputo ni cobros remotos. Detalle: `Doc_Asistente.md`.
 
+**Link a una escena (v0.317, D837, `Doc_Link_Escena.md`):** la dirección `/map/scenes?project=…&scene=…&w=…` y *Copy
+link* en la vista de escena están hechos. Lo que sigue, en este orden (plan del 2026-11-05):
+(1) **Que el link entre en la app instalada.** Hoy un link abierto desde otra app (PipeSync) va siempre al navegador.
+En el manifiesto (`vite.config.ts`, el `manifest` de la PWA): `launch_handler: { client_mode: 'focus-existing' }` y
+`handle_links: 'preferred'`, y en la app un `window.launchQueue.setConsumer(...)` que abra la dirección recibida en un
+tab nuevo (`src/ui/tabs.ts`). Hay que medirlo antes de prometerlo: con Chrome y Edge instalados en Mac y Windows
+debería andar; la app agregada al Dock desde Safari puede no tomar links de afuera (entonces queda el navegador, que
+igual funciona). Sin probar en ninguna instalación real.
+(2) **El botón en PipeSync** (repo `LGA_PipeSync_2`, su `Roadmap.md`): arma esta dirección desde la ShotCard y el menú del
+tab PROD. No pide nada más de acá.
+(3) **El botón del correo de login** vuelve al inicio, no a la escena: `emailRedirectTo` en `src/ui/Login.tsx` conserva
+solo la dirección de un archivo. Con el código de 8 dígitos sí sigue a la escena. Bajo.
+(4) **Compartir una escena con alguien de afuera (un vendor)** sin darle los reportes de rodaje enteros, que mezclan
+escenas (R6 / D581: no se parten ni se copia texto entre páginas). Hoy se le puede compartir la página de la escena como
+invitado: ve el desglose y sus fichas, no los días. Opciones a decidir por Lega: una foto fechada de solo lectura con
+lo que junta el panorama (simple, pero copia texto y envejece, contra R6), o un permiso por escena en el que el
+servidor entrega solo las secciones de esa escena de cada reporte (lo correcto; toca permisos, auditoría obligatoria, y
+lleva al servidor la lectura de secciones que hoy hace el dispositivo, `src/relations/`). Grande.
+
 ## Regla para todo lo que se haga: cada workspace es una isla
 
 Un **workspace** es de un dueño y tiene varios proyectos. Es su Supabase (login, textos, permisos), el

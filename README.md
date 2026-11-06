@@ -280,7 +280,8 @@ In development. What works today:
 - *Scenes*, first in *Overview* in the sidebar: scenes by episode with their
   live titles, and each one says where everything about it is, one line per stage (*Preproduction | Breakdown*,
   *Scouting | Reports*, *Planning | Day plan*, *Shoot | Reports*…), each link to the page or the exact section; index
-  pages stay folded. The scene's own page shows the same lines above its text, and its shots can live inside it, one
+  pages stay folded. *Copy link* copies a link that opens that scene of that project on any device, for whoever can see
+  the project. The scene's own page shows the same lines above its text, and its shots can live inside it, one
   heading each: *Bring them into this page…* (or *Bring them all in* in *Overview › Pending*) moves shots that are still
   subpages, as imported from Coda, into the scene.
 - While you write, scene numbers and location names that exist in the project are written in their color with a subtle

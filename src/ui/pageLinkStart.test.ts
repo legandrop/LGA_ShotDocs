@@ -84,6 +84,21 @@ describe('arranque y autoridad de página', () => {
     expect((await app()).computeStart().kind).toBe('link');
   });
 
+  it('el link a una escena del Panorama elige su workspace con w, como una página (Doc_Link_Escena.md)', async () => {
+    writeWorkspaces({ active: A.id, workspaces: [A, B] }); dormant();
+    await arrive('/map/scenes?project=ERSO&scene=101_066&w=isla_b');
+    expect((await app()).computeStart()).toEqual({ kind: 'open', entry: B });
+    expect(location.search).toBe('?project=ERSO&scene=101_066&w=isla_b');
+    await arrive('/map/scenes?project=ERSO&scene=101_066&w=missing_1');
+    expect((await app()).computeStart()).toEqual({ kind: 'welcome' });
+    expect(opened).not.toHaveBeenCalled();
+    // Sin w (el link que arma PipeSync, que abre una pestaña nueva): el workspace de siempre del dispositivo.
+    localStorage.clear(); sessionStorage.clear();
+    writeWorkspaces({ active: A.id, workspaces: [A, B] });
+    await arrive('/map/scenes?project=ERSO&scene=101_066');
+    expect((await app()).computeStart()).toEqual({ kind: 'open', entry: A });
+  });
+
   it('invitación y archivo preceden w/link dormido', async () => {
     writeWorkspaces({ active: A.id, workspaces: [A, B] }); dormant();
     const hash = new URL(inviteLink(location.origin, { u: B.url, k: B.publishableKey, l: B.localKey })).hash;

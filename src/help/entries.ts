@@ -173,9 +173,9 @@ const LIVE_MAP = '0.269';
 /**
  * La sección automática *Scenes* de la barra lateral y las páginas de cada escena (Doc_Relaciones.md, sección 21): llegó
  * en v0.260, sube con *Export…* en la vista de una escena (D769), pasa adentro de *Overview* (D772) y sube con los
- * renglones por etapa (D783).
+ * renglones por etapa (D783) y con *Copy link* (D837).
  */
-const SCENES_SECTION = '0.279';
+const SCENES_SECTION = '0.317';
 /**
  * El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6): llegó en
  * v0.244, sube con el texto en el color de cada cosa (D774), con «Escena» dibujada junto a su número (D776) y con el link
@@ -374,7 +374,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'overview',
     title: 'help.scenesSection.title',
     text: 'help.scenesSection.text',
-    words: ['scenes', 'escenas', 'scene list', 'lista de escenas', 'episode', 'episodio', 'pages', 'páginas', 'mentions', 'menciones', 'where', 'dónde', 'backlinks', 'related', 'relacionado', 'index pages', 'páginas índice', 'export', 'exportar', 'pdf', 'zip', 'stage', 'etapa'],
+    words: ['scenes', 'escenas', 'scene list', 'lista de escenas', 'episode', 'episodio', 'pages', 'páginas', 'mentions', 'menciones', 'where', 'dónde', 'backlinks', 'related', 'relacionado', 'index pages', 'páginas índice', 'export', 'exportar', 'pdf', 'zip', 'stage', 'etapa', 'copy link', 'copiar link', 'link', 'share', 'compartir', 'pipesync'],
     since: SCENES_SECTION,
   },
   {

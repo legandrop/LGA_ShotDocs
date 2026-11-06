@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.317 :
+
+No había forma de mandar a alguien a una escena: la dirección del Panorama (`/map/scenes?scene=…`) abría la escena del
+último proyecto elegido en ese dispositivo, así que un link de ERSO podía caer en VLLF, y desde PipeSync no se podía
+saltar a Shot Docs. Ahora la dirección acepta `project` (id, nombre o primera palabra del nombre, solo si hay uno) y `w`
+(el workspace, como en una página): ese proyecto manda sobre el elegido y queda elegido; si no está, o coincide con
+más de uno, la vista lo dice en vez de mostrar otro proyecto, y una escena que no está nombra el proyecto. La vista de
+una escena suma *Copy link*, con el id del proyecto, y la ayuda lo explica (sale en novedades). Pruebas en
+`sceneLink.test.tsx` (con tres mutantes corridos) y `pageLinkStart.test.ts`. Doc nuevo:
+`Doc_Link_Escena.md`; D837. Primera parte del salto desde PipeSync; lo demás, en el roadmap.
+[ Panorama - Link a una escena con su proyecto y Copy link ]
+
 v0.316 :
 
 El título de la pestaña no decía en qué proyecto estás: dos pestañas de proyectos distintos se llamaban igual

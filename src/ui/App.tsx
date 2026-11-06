@@ -116,8 +116,9 @@ export function computeStart(): Start {
     if (invite.kind === 'confirm') return { kind: 'confirm', entry: invite.entry, target: invite.target, fallback };
     setArrivalNotice(invite.reason);
   }
-  // La identidad explícita de una página normal manda incluso al restaurar una pestaña de un link.
-  if (route?.name === 'page') {
+  // La identidad explícita de una página normal manda incluso al restaurar una pestaña de un link. Lo mismo el link a
+  // una escena del Panorama (`/map/scenes?project=…&scene=…&w=…`, Docs/Doc_Link_Escena.md).
+  if (route?.name === 'page' || route?.name === 'map') {
     const selector = workspaceSelector(location.search);
     if (selector.kind !== 'absent') {
       const entry = selector.kind === 'workspace' ? list.workspaces.find((w) => !w.pending && configOf(w).localKey === selector.key) : undefined;

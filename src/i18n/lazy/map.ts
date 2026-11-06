@@ -177,12 +177,27 @@ export const map = {
     es: "Todas las páginas que hablan de la escena en un solo PDF o zip, sin las páginas índice",
   },
   'map.sceneExportTitle': { en: "Scene {code}", es: "Escena {code}" },
+  'map.copyLink': { en: "Copy link", es: "Copiar link" },
+  'map.copyLinkTip': {
+    en: "Opens this scene of this project on any device. It doesn’t give access: whoever opens it has to be able to see the project.",
+    es: "Abre esta escena de este proyecto en cualquier dispositivo. No da acceso: quien lo abre tiene que poder ver el proyecto.",
+  },
+  'map.linkCopied': { en: "Link to scene {code} copied", es: "Se copió el link a la escena {code}" },
+  'map.projectOpening': { en: "Opening project “{name}”…", es: "Abriendo el proyecto «{name}»…" },
+  'map.projectUnknown': {
+    en: "“{name}” isn’t a project you can see here. Ask for access, or check you’re in its workspace.",
+    es: "«{name}» no es un proyecto que puedas ver acá. Pedí acceso, o fijate de estar en su workspace.",
+  },
+  'map.projectAmbiguous': {
+    en: "“{name}” matches more than one project: {list}. Open the one you want from the project list.",
+    es: "«{name}» coincide con más de un proyecto: {list}. Abrí el que buscás desde la lista de proyectos.",
+  },
   'map.sceneTwins': {
     en: { one: "{count} page has this scene number.", other: "{count} pages have this scene number." },
     es: { one: "{count} página tiene este número de escena.", other: "{count} páginas tienen este número de escena." },
   },
   'map.sceneTwinsGo': { en: "Merge them in Overview › Pending", es: "Unilas en Panorama › Pendientes" },
-  'map.sceneUnknown': { en: "{code} isn’t a scene of this project.", es: "{code} no es una escena de este proyecto." },
+  'map.sceneUnknown': { en: "{code} isn’t a scene of {project}.", es: "{code} no es una escena de {project}." },
   'map.sceneUnknownSeen': { en: "{code} isn’t in the pages you can see.", es: "{code} no está en las páginas que ves." },
 } satisfies Dict;
 

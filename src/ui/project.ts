@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { locale, t as current, type Translate } from '../i18n';
 import { errorMessage } from '../sync/types';
-import { navigate, pagePath, useRoute } from '../router';
+import { navigate, pagePath, useRoute, useSearchParam } from '../router';
 import { projectDriveAt, type ProjectDrive } from '../media/projectDrive';
 import { useServices, useSyncStatus, useTree } from '../services';
 import { APP_OUTDATED, PROJECT_DRIVE_SCHEMA_VERSION } from '../sync/remote';
 import type { PageTree } from '../sync/tree';
+import type { ProjectRow } from '../sync/types';
 import type { StorageNames } from '../workspace';
 
 // El proyecto abierto sale de la página abierta; en el inicio o en la papelera, del último elegido en
@@ -60,6 +61,72 @@ function subscribe(fn: () => void): () => void {
   return () => window.removeEventListener(EVENT, fn);
 }
 
+// El proyecto que nombra la dirección del Panorama (`/map/scenes?project=ERSO&scene=101_066`): lo usan los links que
+// llegan de afuera (PipeSync, otra persona del equipo), que tienen que abrir ese proyecto y no el último elegido en
+// este dispositivo (Docs/Doc_Link_Escena.md).
+export const PROJECT_PARAM = 'project';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Un nombre de proyecto comparable: sin mayúsculas, sin tildes y sin espacios de más. */
+function projectKey(name: string): string {
+  return name.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** La primera palabra del nombre: «ERSO | Serie» → «erso». */
+function projectCode(name: string): string {
+  return projectKey(name).split(/[\s|·_\-/]+/).filter(Boolean)[0] ?? '';
+}
+
+type Named = Pick<ProjectRow, 'id' | 'name'>;
+
+/**
+ * Los proyectos que nombra `value`: el de ese id, los que se llaman así enteros o, si no hay ninguno, los que empiezan
+ * con esa palabra (el código con que los conocen PipeSync y Flow). Solo entre los que este dispositivo conoce.
+ */
+export function projectMatches<P extends Named>(projects: readonly P[], value: string): P[] {
+  const raw = value.trim();
+  if (!raw || raw.length > 200) return [];
+  if (UUID.test(raw)) return projects.filter((p) => p.id.toLowerCase() === raw.toLowerCase());
+  const key = projectKey(raw);
+  const exact = projects.filter((p) => projectKey(p.name) === key);
+  return exact.length ? exact : projects.filter((p) => projectCode(p.name) === key);
+}
+
+/** El proyecto que nombra `value`, solo si hay UNO: con dos que coinciden, ninguno (no se adivina cuál). */
+export function projectFromParam(projects: readonly Named[], value: string): string | null {
+  const found = projectMatches(projects, value);
+  return found.length === 1 ? found[0].id : null;
+}
+
+/**
+ * Lo que dice la dirección del Panorama sobre el proyecto: nada (`none`), el proyecto que nombra (`found`), más de uno
+ * (`ambiguous`, con sus nombres) o ninguno de este dispositivo (`missing`; puede estar bajando todavía, quien lo muestra
+ * decide).
+ */
+export type ProjectParam =
+  | { kind: 'none' }
+  | { kind: 'found'; id: string }
+  | { kind: 'ambiguous'; value: string; names: string[] }
+  | { kind: 'missing'; value: string };
+
+export function useProjectParam(): ProjectParam {
+  const tree = useTree();
+  const route = useRoute();
+  const value = useSearchParam(PROJECT_PARAM);
+  if (route.name !== 'map' || value === null) return { kind: 'none' };
+  const found = projectMatches(tree.projects(), value);
+  if (found.length === 1) return { kind: 'found', id: found[0].id };
+  if (found.length > 1) return { kind: 'ambiguous', value, names: found.map((p) => p.name) };
+  return { kind: 'missing', value };
+}
+
+/** El valor de la dirección tal como se muestra en un aviso: recortado, para que no se lea como un texto de la app. */
+export function shownParam(value: string): string {
+  const one = value.trim().replace(/\s+/g, ' ');
+  return one.length > 40 ? `${one.slice(0, 39).trimEnd()}…` : one;
+}
+
 /** El id del proyecto abierto. */
 export function useCurrentProject(): string {
   const tree = useTree();
@@ -67,8 +134,10 @@ export function useCurrentProject(): string {
   const route = useRoute();
   const keys = workspace.config.storage;
   const stored = useSyncExternalStore(subscribe, () => storedProject(keys, user.id));
+  const param = useProjectParam();
   const page = route.name === 'page' ? tree.get(route.id) : undefined;
   if (page) return page.workspace_id;
+  if (param.kind === 'found') return param.id;
   if (stored && tree.project(stored)) return stored;
   // Sin uno elegido, el primero del dispositivo; si está archivado, el primero activo (P.14, sección 8).
   if (tree.project(tree.workspaceId)?.archived_at) return tree.activeProjects()[0]?.id ?? tree.workspaceId;
