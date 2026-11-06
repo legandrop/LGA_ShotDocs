@@ -66,6 +66,11 @@ async function main() {
     await doc(bloque, 'D38 26.01.19 | La Arenera');
     localStorage.setItem('shotdocs-expanded', JSON.stringify([sc, pl, bloque, built.ids.rodaje]));
   }
+  // `?proyectos`: varios proyectos con nombres largos, para ver el menú de proyectos (que se lean los nombres enteros).
+  if (new URLSearchParams(location.search).has('proyectos')) {
+    for (const name of ['MGTZD comercial Mercado Libre segunda tanda', 'ERSO | El Robo del Siglo', 'Prueba color de proyecto con nombre largo', 'VLLF'])
+      await A.tree.createProject(name);
+  }
   await A.engine.syncNow();
   // El proyecto sintético como el elegido (en `/map` no hay página abierta que lo diga).
   localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [server.ownerId]: built.projectId }));

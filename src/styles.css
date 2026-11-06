@@ -2829,8 +2829,10 @@ code {
   white-space: nowrap;
 }
 
+/* 520 px: en los renglones sin íconos el nombre y la línea de páginas tienen unos 440 px; en el que los muestra (seis),
+   unos 265 px (230 con OPEN), y lo que no entra termina en «…». */
 .project-menu {
-  width: 340px;
+  width: 520px;
   max-width: calc(100vw - 16px);
   max-height: min(560px, calc(100vh - 80px));
   overflow-y: auto;
@@ -2913,19 +2915,20 @@ code {
   font-weight: 700;
 }
 
-/* Renombrar, archivar y borrar: al pasar el mouse, con el foco y en el renglón activo de las flechas. */
+/* Bajar, abrir en tab, color, renombrar, archivar y borrar: al pasar el mouse, con el foco y en el renglón activo de
+   las flechas. Ocultos no ocupan lugar (`display: none`), así en los demás renglones el nombre y la línea de páginas
+   usan todo el ancho; a la vista entran al lado de la marca OPEN y el nombre termina en «…» si no entra. */
 .menu .project-actions {
-  display: flex;
+  display: none;
   flex: none;
   gap: 0;
   padding-right: 2px;
-  visibility: hidden;
 }
 
 .menu .project-row:hover .project-actions,
 .menu .project-row:focus-within .project-actions,
 .menu .project-row.active .project-actions {
-  visibility: visible;
+  display: flex;
 }
 
 .menu .project-actions .icon-button,
@@ -3052,11 +3055,13 @@ code {
   padding: 0 12px;
 }
 
-/* La papelera única, adentro del selector de proyectos: más ancha que el selector para que entren el filtro, la
-   miniatura y *Restore*. En el teléfono, la hoja de abajo de siempre (ancho entero). */
+/* La papelera única, adentro del selector de proyectos, toma el ancho del selector (520 px): entran el filtro, la
+   miniatura y *Restore*. El color y el formulario de nombre, en cambio, más angostos: el picker tiene medidas fijas (el
+   cuadro de 240 px) y el nombre es un solo campo. En el teléfono, la hoja de abajo de siempre (ancho entero). */
 @media (min-width: 761px) {
-  .menu.project-menu.trash-menu {
-    width: 440px;
+  .menu.project-menu.color-menu,
+  .menu.project-menu:has(> .project-form) {
+    width: 340px;
   }
 }
 

@@ -162,14 +162,14 @@ export function ProjectSwitcher() {
 
   const toggle = () => {
     setStartIn('list');
-    setPosition((open) => (open || !button.current ? null : menuBelow(button.current, 340)));
+    setPosition((open) => (open || !button.current ? null : menuBelow(button.current, 520)));
   };
 
   useEffect(() => {
     const open = () => {
       if (!button.current) return;
       setStartIn('trash');
-      setPosition(menuBelow(button.current, 340));
+      setPosition(menuBelow(button.current, 520));
     };
     trashListeners.add(open);
     return () => {

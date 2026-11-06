@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.326 :
+
+Lega mandó una captura del selector de proyectos: los nombres no se leían («MGTZD co…», «E…» al lado de OPEN, «63…»).
+El menú medía 340 px y los íconos de cada renglón (bajar, abrir en tab, color, renombrar, archivar, borrar) guardaban
+su lugar aunque estuvieran ocultos, así que el nombre tenía unos 150 px. Ahora el menú mide 520 px (también la
+papelera) y los íconos ocultos no ocupan lugar: aparecen, dentro del renglón, solo al pasar el mouse, con el foco o en el
+renglón de las flechas. En los demás renglones el nombre y la línea de páginas usan todo el ancho (unos 440 px); en el
+de los seis íconos quedan unos 265 px (230 si además lleva OPEN, que ya no queda tapada): los nombres de hoy entran, y
+un nombre o una línea más largos («636 páginas · 12,3 MB · editado hace 5 minutos») terminan en «…» en ese renglón.
+El color y el formulario de nombre siguen en 340 px (el picker tiene medidas fijas). El teléfono no cambia (la hoja de
+abajo, a lo ancho, con «⋯»). Visto en el arnés `src/dev/barra-lateral.html?proyectos` (nuevo: proyectos de nombre
+largo); la primera versión, con los íconos encima del final del renglón, tapaba OPEN y se descartó en la auditoría. [ v0.326: Selector de proyectos más ancho - los nombres se leen enteros y los íconos aparecen al pasar el mouse ]
+
 v0.325 :
 
 Lega pidió bajar el tráfico de Supabase (plan gratis, 5 GB de salida por mes) después de prender la privacidad de lo
