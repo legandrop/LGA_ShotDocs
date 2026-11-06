@@ -186,10 +186,6 @@ export const map = {
   },
   'map.linkCopied': { en: "Link to scene {code} copied", es: "Se copió el link a la escena {code}" },
   'map.projectOpening': { en: "Opening project “{name}”…", es: "Abriendo el proyecto «{name}»…" },
-  'map.projectUnknown': {
-    en: "“{name}” isn’t a project you can see here. Ask for access, or check you’re in its workspace.",
-    es: "«{name}» no es un proyecto que puedas ver acá. Pedí acceso, o fijate de estar en su workspace.",
-  },
   'map.projectAmbiguous': {
     en: "“{name}” matches more than one project: {list}. Open the one you want from the project list.",
     es: "«{name}» coincide con más de un proyecto: {list}. Abrí el que buscás desde la lista de proyectos.",
@@ -199,8 +195,11 @@ export const map = {
     es: { one: "{count} página tiene este número de escena.", other: "{count} páginas tienen este número de escena." },
   },
   'map.sceneTwinsGo': { en: "Merge them in Overview › Pending", es: "Unilas en Panorama › Pendientes" },
+  'map.emptyPartial': {
+    en: "Nothing you can see in this project has scenes, locations or shoot days yet. The overview fills in by itself.",
+    es: "En lo que ves de este proyecto todavía no hay escenas, locaciones ni días de rodaje. El panorama se llena solo.",
+  },
   'map.sceneUnknown': { en: "{code} isn’t a scene of {project}.", es: "{code} no es una escena de {project}." },
-  'map.sceneUnknownSeen': { en: "{code} isn’t in the pages you can see.", es: "{code} no está en las páginas que ves." },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

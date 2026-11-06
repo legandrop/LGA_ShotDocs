@@ -149,6 +149,8 @@ export const team = {
   },
   'requests.asks': { en: "{email} asks for access to {file}", es: "{email} pide acceso a {file}" },
   'requests.asksPage': { en: "{email} asks for access to the page {page}", es: "{email} pide acceso a la página {page}" },
+  // El pedido de una escena desde su link (Doc_Compartir_Escenas.md, B-2): la escena como vino en el link.
+  'requests.asksScene': { en: "{email} asks for scene {scene} of {project}", es: "{email} pide la escena {scene} de {project}" },
   'requests.times': {
     en: { one: "{count} time", other: "{count} times" },
     es: { one: "{count} vez", other: "{count} veces" },

@@ -39,6 +39,35 @@ export const teamDialogs = {
     es: "¿Revocar la invitación de {email}? Ya no va a poder entrar con ella; nada más cambia.",
   },
   // *Share scenes* (Docs/Doc_Compartir_Escenas.md, B-1).
+  // Decidir el pedido de una escena desde su link (Doc_Compartir_Escenas.md, B-2): la ventana de la campana.
+  'requests.scene': { en: "Scene", es: "Escena" },
+  'requests.scenePick': { en: "Pick a scene", es: "Elegí una escena" },
+  'requests.sceneAsked': {
+    en: "The link asked for “{scene}”, which isn't a scene of this project you can find. Pick the right one, or decline.",
+    es: "El link pedía «{scene}», que no aparece como escena de este proyecto. Elegí la que corresponde, o rechazá el pedido.",
+  },
+  'requests.sceneLinkSaid': { en: "The link said “{project}”.", es: "El link decía «{project}»." },
+  'requests.sceneByWord': {
+    en: "The link said “{project}”, which only matches the first word of this project's name: it may mean another project. Pick the scene yourself, or decline.",
+    es: "El link decía «{project}», que coincide solo con la primera palabra del nombre de este proyecto: puede ser otro proyecto. Elegí la escena vos, o rechazá el pedido.",
+  },
+  'requests.sceneConfirm': {
+    en: "The link asked for “{asked}”, you're giving {given}. Give access?",
+    es: "El link pedía «{asked}» y estás dando {given}. ¿Dar acceso?",
+  },
+  'requests.giveConfirm': { en: "Yes, give access", es: "Sí, dar acceso" },
+  'requests.sceneInfo': {
+    en: { one: "Scene · {count} page inside", other: "Scene · {count} pages inside" },
+    es: { one: "Escena · {count} página adentro", other: "Escena · {count} páginas adentro" },
+  },
+  'requests.sceneScope': {
+    en: "They'll see this scene and the pages inside it, never the locations, the shoot days or the other scenes. Same rules as Share scenes.",
+    es: "Va a ver esta escena y las páginas de adentro, nunca las locaciones, los días de rodaje ni las otras escenas. Las mismas reglas que Compartir escenas.",
+  },
+  'requests.sceneNoScenes': {
+    en: "This project has no scenes on this device yet. Decline, or try again when it has synced.",
+    es: "Este proyecto todavía no tiene escenas en este dispositivo. Rechazá el pedido, o probá de nuevo cuando termine de sincronizar.",
+  },
   'scenes.share.label': { en: "Share scenes", es: "Compartir escenas" },
   'scenes.share.title': { en: "Share scenes of “{name}”", es: "Compartir escenas de “{name}”" },
   'scenes.share.lead': {

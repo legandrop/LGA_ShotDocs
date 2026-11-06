@@ -4,7 +4,7 @@ import { locale, useT } from '../i18n';
 import { useLinkMode } from '../linkMode';
 import { navigate, pagePath } from '../router';
 import { useAccessRequests, useServices, useSyncStatus, useTree } from '../services';
-import type { AccessRequest } from '../sync/accessRequests';
+import { requestKey, type AccessRequest } from '../sync/accessRequests';
 import { labelForEmail } from '../sync/comments';
 import type { InboxSnapshot, MentionItem } from '../sync/mentions';
 import { AccessRequestRow } from './AccessRequestRow';
@@ -162,7 +162,7 @@ function MentionsPanel({ anchor, onClose, onReview }: { anchor: HTMLElement | nu
           <h3 className="access-requests-head">{tr('requests.title')}</h3>
           <ul className="access-requests">
             {requests.items.map((r) => (
-              <AccessRequestRow key={r.id} request={r} onReview={() => onReview(r)} />
+              <AccessRequestRow key={requestKey(r)} request={r} onReview={() => onReview(r)} />
             ))}
           </ul>
         </section>

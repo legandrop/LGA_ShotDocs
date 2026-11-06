@@ -1,17 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/teamDialogs';
-import { setPageType } from '../relations/entitySync';
-import { entityMark, kindReader } from '../relations/kind';
-import { sceneCode } from '../relations/kind';
 import { sceneLabel } from '../relations/reader';
-import { registerProject } from '../relations/register';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { LEVEL_LABELS, ROLE_LABELS, type GrantLevel } from '../sync/access';
 import type { InvitationRow, MemberRow, PageShareRow, PageSharesResult } from '../sync/remote';
-import type { PageRow } from '../sync/types';
 import { inviteAndCopy, useInviteLink } from './MembersDialog';
-import { isEntityMarked, outsideReadersStore, wholeBranch } from './outsideReaders';
+import { outsideReadersStore } from './outsideReaders';
+import { markScenes as markAndWait, MARKS_PENDING, projectSceneItems, type SceneItem } from './projectScenes';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate, type ShareScope } from './shareGate';
 import { teamErrorText } from './teamText';
 
@@ -24,31 +20,10 @@ import { teamErrorText } from './teamText';
 // entidad adentro (otra escena, una locación, un día, un decorado, algo con forma de escena: un episodio que el registro
 // tomó por escena) no se puede compartir: la fila queda apagada con el motivo, sin opción para seguir.
 
-/** La marca de escena no llegó al servidor (sin red, o la cola del árbol trabada): no se comparte nada. */
-const MARKS_PENDING = new Error('marks_pending');
 const EMAIL = /^[^@\s]+@[^@\s]+$/;
 const MAX_PAGES = 200;
-const ENTITY_KINDS = new Set(['scene', 'location', 'day', 'set']);
 
 const isOutsideRow = (r: PageShareRow) => r.role === 'guest' || r.level === 'view' || r.level === 'comment';
-
-function isMarkedScene(row: PageRow | undefined): boolean {
-  const mark = entityMark(row);
-  return !!mark && mark !== 'other' && mark.kind === 'scene';
-}
-
-interface SceneItem {
-  pageId: string;
-  code: string;
-  title: string;
-  /** Las páginas de adentro (sus fichas): van con la escena. */
-  inside: number;
-  /**
-   * Adentro (también en la papelera) hay otra escena, una locación, un día o un decorado (por el registro o por la marca
-   * de la base), una carpeta que guarda alguno, o una página con título de escena: no se puede compartir.
-   */
-  blocked: boolean;
-}
 
 export function ShareScenesDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const services = useServices();
@@ -105,24 +80,11 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   }, [remote, projectId, reload]);
 
   // Las escenas del proyecto, en orden de número, con lo de adentro (se arma con el árbol de este dispositivo).
-  const scenes = useMemo<SceneItem[]>(() => {
-    const kinds = kindReader(tree);
-    return registerProject(tree, projectId, kinds)
-      .scenes.filter((s): s is typeof s & { pageId: string } => typeof s.pageId === 'string' && !tree.isTrashed(s.pageId))
-      .map((s) => {
-        const inside = engine.branchOf(s.pageId).slice(1);
-        const everything = wholeBranch(tree, s.pageId).slice(1);
-        return {
-          pageId: s.pageId,
-          code: s.code,
-          title: tree.get(s.pageId)?.title ?? '',
-          inside: inside.length,
-          blocked: everything.some((r) => isEntityMarked(r) || ENTITY_KINDS.has(kinds.kindOf(r.id).kind) || sceneCode(r.title) !== null),
-        };
-      })
-      .sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }));
+  const scenes = useMemo<SceneItem[]>(
+    () => projectSceneItems(tree, engine, projectId),
     // El árbol cambia de revisión, no de identidad: `useTree` vuelve a dibujar y esto se rearma con cada cambio.
-  }, [tree, tree.getRevision(), projectId, engine]); // eslint-disable-line react-hooks/exhaustive-deps
+    [tree, tree.getRevision(), projectId, engine], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const sceneIds = useMemo(() => new Set(scenes.map((s) => s.pageId)), [scenes]);
 
   // La persona: un miembro activo, o alguien a invitar (con o sin una invitación pendiente).
@@ -220,16 +182,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   const canSave = !busy && cleanOn && valid && rows !== null && perms.canInvite && total > 0 && total <= MAX_PAGES;
 
   /** La marca de escena en las elegidas que no la tienen, y esperar a que suba (si no, la base las rechaza). */
-  async function markScenes(ids: string[]): Promise<void> {
-    const unmarked = ids.filter((id) => !isMarkedScene(tree.get(id)));
-    if (unmarked.length === 0) return;
-    for (const id of unmarked) await setPageType(tree, id, 'scene');
-    await engine.syncNow();
-    const waiting = new Set(unmarked);
-    const left = tree.pendingOps().some((o) => o.op.kind === 'update' && waiting.has(o.op.id));
-    const failed = tree.failedOps().some((o) => o.op.kind === 'update' && waiting.has(o.op.id));
-    if (left || failed || unmarked.some((id) => !isMarkedScene(tree.get(id)))) throw MARKS_PENDING;
-  }
+  const markScenes = (ids: string[]) => markAndWait(tree, engine, ids);
 
   /** Guarda (en el gesto: el link de una invitación se copia sin esperar nada antes). */
   function save(e?: FormEvent) {

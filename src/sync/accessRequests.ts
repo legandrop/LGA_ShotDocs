@@ -12,12 +12,21 @@ import { errorMessage, isNetworkError } from './types';
 // Entrega 3 (supabase/migrations/20261102120000_access_requests_paginas.sql): también se pide una página desde `/p/<id>`
 // sin acceso (`request_page_access`). La lista trae esos pedidos con `target_page_id` y una sola página (la pedida), y
 // decidirlos da el permiso sobre ella; la campana, *Share* y la ventana de decidir son las mismas.
+//
+// Entrega B-2 de *Share scenes* (supabase/migrations/20261119120000_pedir_escena.sql, Docs/Doc_Compartir_Escenas.md,
+// sección 9): quien abre el link de una escena (`/map/scenes?project=…&scene=…`) sin verla la pide
+// (`request_scene_access`, siempre `sent`). Los pedidos van aparte (`scene_access_requests_pending`, solo para dueño y
+// admins) con el proyecto y la escena como vino en el link, y se suman a la misma campana; decidirlos
+// (`decide_scene_access_request`) da la escena con las reglas de *Share scenes*.
 
 /** La versión de la base con los pedidos de acceso. */
 export const ACCESS_REQUESTS_SCHEMA_VERSION = 22;
 
 /** La versión de la base que también deja pedir una página (entrega 3). */
 export const ACCESS_REQUESTS_PAGES_SCHEMA_VERSION = 24;
+
+/** La versión de la base que deja pedir una escena desde su link (B-2). */
+export const SCENE_REQUESTS_SCHEMA_VERSION = 29;
 
 /** Cada cuánto se pregunta con la ventana a la vista (el mismo ciclo de la campana, LF12). */
 export const ACCESS_REQUESTS_EVERY_MS = 60_000;
@@ -36,15 +45,33 @@ export interface AccessRequest {
   mime: string;
   askedAt: string;
   times: number;
-  /** Las páginas vivas que usan el archivo y quien llama puede compartir, en el orden en que se agregó (la primera, por defecto). */
+  /** Las páginas vivas que usan el archivo y quien llama puede compartir, en el orden en que se agregó (la primera, por defecto). Vacía en el pedido de una escena. */
   pages: { pageId: string; title: string }[];
+  /**
+   * El pedido de una escena desde su link (B-2): el proyecto (uno que quien mira puede compartir; con un nombre que nombra
+   * dos, una fila por cada uno) y la escena tal como vino. La app de quien decide la busca entre las escenas del proyecto.
+   * `linkText`: lo que decía el link del proyecto (normalizado; `null` si traía el id). `exact`: el proyecto salió por el
+   * id o por el nombre entero; si no (por la primera palabra), quien decide elige la escena a mano.
+   */
+  scene?: { projectId: string; text: string; linkText: string | null; exact: boolean };
+}
+
+/** La clave de una fila de la lista: el pedido de una escena puede venir en una fila por proyecto. */
+export function requestKey(r: AccessRequest): string {
+  return r.scene ? `${r.id}:${r.scene.projectId}` : r.id;
 }
 
 /** Lo que se le pregunta a la base (las pruebas ponen uno en memoria). */
 export interface AccessRequestsRemote {
-  pending(): Promise<AccessRequest[]>;
+  /** `scenes`: sumar los pedidos de escenas (con la base en la 29 y para dueño o admin). */
+  pending(opts?: { scenes?: boolean }): Promise<AccessRequest[]>;
   decide(id: string, accept: boolean, pageId: string | null, level: GrantLevel): Promise<'accepted' | 'declined'>;
+  /** Decidir el pedido de una escena (B-2): desde uno de sus proyectos, sobre una escena de ese proyecto. */
+  decideScene?(id: string, accept: boolean, projectId: string, pageId: string | null, level: SceneLevel): Promise<'accepted' | 'declined'>;
 }
+
+/** Lo que se da al aceptar el pedido de una escena: lo de *Share scenes*. */
+export type SceneLevel = 'view' | 'comment';
 
 async function call<T>(client: SupabaseClient, fn: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error, status } = await timed(client.rpc(fn, args));
@@ -62,6 +89,94 @@ export async function requestAccess(client: SupabaseClient, fileId: string): Pro
 export async function requestPageAccess(client: SupabaseClient, pageId: string): Promise<'sent' | 'has_access'> {
   const res = await call<unknown>(client, 'request_page_access', { p_page: pageId });
   return res === 'has_access' ? 'has_access' : 'sent';
+}
+
+/**
+ * Lo que la app manda al pedir una escena (B-2): el proyecto del link como id (lo pone *Copy link*) o como texto
+ * comparable (sin mayúsculas, sin tildes, sin espacios de más: `projectKey` de src/ui/project.ts, que la base repite), y
+ * la escena como vino, sin espacios de más.
+ */
+export interface SceneTarget {
+  projectId: string | null;
+  projectText: string | null;
+  scene: string;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// `private.project_text_key` de la base, letra por letra: el servidor en memoria usa esta misma regla, así una prueba no
+// da verde con una normalización que la base no hace (auditoría de B-2).
+const KEY_FROM = 'ÁÀÂÄÃÅáàâäãåÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÖÕóòôöõÚÙÛÜúùûüÑñÇçÝýÿ';
+const KEY_TO = 'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuNnCcYyy';
+const KEY_MAP = new Map([...KEY_FROM].map((c, i) => [c, KEY_TO[i]]));
+
+/**
+ * Un nombre de proyecto comparable, con la regla exacta de `private.project_text_key`: los espacios seguidos
+ * (`[[:space:]]+`) en uno, sin espacios en los bordes (`btrim`), las letras con tilde del castellano y vecinas sin tilde
+ * (`translate`), en minúsculas (`lower`). Otras marcas quedan: ese nombre no coincide y el pedido no le llega a nadie.
+ */
+export function projectTextKey(name: string): string {
+  const spaced = name.replace(/[ \t\n\v\f\r]+/g, ' ').replace(/^ +| +$/g, '');
+  return [...spaced].map((c) => KEY_MAP.get(c) ?? c).join('').toLowerCase();
+}
+
+/** La primera palabra de un nombre ya comparable (`private.project_text_code`): «erso | serie» → «erso». */
+export function projectTextCode(key: string): string {
+  return key.split(/[ \t\n\v\f\r|·_/-]+/).filter(Boolean)[0] ?? '';
+}
+
+/** La escena del link sin espacios de más (la base la guarda así). */
+export function sceneTextKey(scene: string): string {
+  return scene.trim().replace(/\s+/g, ' ');
+}
+
+/** Lo que se pide desde un link: el proyecto como id si lo es, si no como texto. `null` si falta algo o es muy largo. */
+export function sceneTarget(project: string, scene: string): SceneTarget | null {
+  const raw = project.trim();
+  const sc = sceneTextKey(scene);
+  if (!raw || !sc || sc.length > 80) return null;
+  if (UUID.test(raw)) return { projectId: raw.toLowerCase(), projectText: null, scene: sc };
+  const text = projectTextKey(raw);
+  return text && text.length <= 200 ? { projectId: null, projectText: text, scene: sc } : null;
+}
+
+/**
+ * Pedir una escena (B-2): siempre `sent` (la base no dice si el proyecto o la escena existen ni si ya los ve). Tira
+ * `rate_limited` (20 llamadas por día, repetidas o no) y `not_member`.
+ */
+export async function requestSceneAccess(client: SupabaseClient, target: SceneTarget): Promise<'sent'> {
+  await call<unknown>(client, 'request_scene_access', {
+    p_project: target.projectId,
+    p_project_text: target.projectText,
+    p_scene: target.scene,
+  });
+  return 'sent';
+}
+
+/** Una fila de `scene_access_requests_pending`, o `null` si no tiene la forma. */
+export function parseSceneRequest(r: Record<string, unknown>): AccessRequest | null {
+  const s = (v: unknown) => (typeof v === 'string' ? v : null);
+  const id = s(r.id);
+  const userId = s(r.user_id);
+  const projectId = s(r.project_id);
+  const text = s(r.scene_text);
+  if (!id || !userId || !projectId || !text || !isRole(r.role)) return null;
+  const linkText = s(r.project_text);
+  return {
+    id,
+    userId,
+    email: s(r.email) ?? '',
+    role: r.role,
+    fileId: null,
+    targetPageId: null,
+    fileName: '',
+    mime: '',
+    askedAt: s(r.asked_at) ?? '',
+    times: typeof r.times === 'number' ? r.times : 1,
+    pages: [],
+    // Sin el dato, como por la primera palabra: quien decide elige la escena (el lado seguro).
+    scene: { projectId, text, linkText, exact: r.exact === true },
+  };
 }
 
 /** Una fila de `access_requests_pending`, o `null` si no tiene la forma. */
@@ -98,15 +213,31 @@ export function parseAccessRequest(r: Record<string, unknown>): AccessRequest | 
 /** Lo de la base de un workspace con sesión. */
 export function supabaseAccessRequests(client: SupabaseClient): AccessRequestsRemote {
   return {
-    async pending() {
+    async pending(opts) {
       const rows = await call<Record<string, unknown>[] | null>(client, 'access_requests_pending');
-      return (rows ?? []).map(parseAccessRequest).filter((r): r is AccessRequest => r !== null);
+      const items = (rows ?? []).map(parseAccessRequest).filter((r): r is AccessRequest => r !== null);
+      if (!opts?.scenes) return items;
+      const scenes = await call<Record<string, unknown>[] | null>(client, 'scene_access_requests_pending');
+      const more = (scenes ?? []).map(parseSceneRequest).filter((r): r is AccessRequest => r !== null);
+      // Los más nuevos arriba, como los ordena cada lista.
+      return [...items, ...more].sort((a, b) => (a.askedAt < b.askedAt ? 1 : a.askedAt > b.askedAt ? -1 : 0));
     },
     async decide(id, accept, pageId, level) {
       if (accept && !isGrantLevel(level)) throw new Error('level_invalid');
       const res = await call<unknown>(client, 'decide_access_request', {
         p_id: id,
         p_accept: accept,
+        p_page: accept ? pageId : null,
+        p_level: level,
+      });
+      return res === 'declined' ? 'declined' : 'accepted';
+    },
+    async decideScene(id, accept, projectId, pageId, level) {
+      if (accept && level !== 'view' && level !== 'comment') throw new Error('level_invalid');
+      const res = await call<unknown>(client, 'decide_scene_access_request', {
+        p_id: id,
+        p_accept: accept,
+        p_project: projectId,
         p_page: accept ? pageId : null,
         p_level: level,
       });
@@ -121,6 +252,11 @@ export function supabaseAccessRequests(client: SupabaseClient): AccessRequestsRe
  */
 export function accessRequestsEnabled(schemaVersion: number | null | undefined, role: Role | null): boolean {
   return (schemaVersion ?? 0) >= ACCESS_REQUESTS_SCHEMA_VERSION && role !== null && role !== 'guest';
+}
+
+/** ¿Se preguntan también los pedidos de escenas (B-2)? Con la base en la 29 y para dueño o admin (la base igual filtra). */
+export function sceneRequestsEnabled(schemaVersion: number | null | undefined, role: Role | null): boolean {
+  return (schemaVersion ?? 0) >= SCENE_REQUESTS_SCHEMA_VERSION && (role === 'owner' || role === 'admin');
 }
 
 export interface AccessRequestsSnapshot {
@@ -139,6 +275,7 @@ export class AccessRequestsInbox {
   private snapshot: AccessRequestsSnapshot = EMPTY;
   private readonly listeners = new Set<() => void>();
   private enabled = false;
+  private scenes = false;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly cleanups: (() => void)[] = [];
   private running: Promise<void> | null = null;
@@ -166,6 +303,14 @@ export class AccessRequestsInbox {
       return;
     }
     this.publish({ ready: true, items: this.snapshot.items });
+    void this.poll();
+  }
+
+  /** Suma o saca los pedidos de escenas (B-2, ver `sceneRequestsEnabled`). Al cambiar, pregunta ya. */
+  setScenes(on: boolean): void {
+    if (this.stopped || on === this.scenes) return;
+    this.scenes = on;
+    if (!on && this.snapshot.items.some((r) => r.scene)) this.publish({ ...this.snapshot, items: this.snapshot.items.filter((r) => !r.scene) });
     void this.poll();
   }
 
@@ -209,7 +354,7 @@ export class AccessRequestsInbox {
         this.again = false;
         if (this.options.online && !this.options.online()) break;
         try {
-          const items = await this.remote.pending();
+          const items = await this.remote.pending(this.scenes ? { scenes: true } : undefined);
           if (this.enabled) this.publish({ ready: true, items });
         } catch (err) {
           if (!isNetworkError(err)) console.warn('[pedidos] no se pudo preguntar:', errorMessage(err));
@@ -229,6 +374,21 @@ export class AccessRequestsInbox {
       return res;
     } catch (err) {
       // Ya decidido por otro, o ya no le toca: sale de la lista igual.
+      if (errorMessage(err) === 'request_not_found') this.drop(id);
+      throw err;
+    } finally {
+      void this.poll();
+    }
+  }
+
+  /** Decide el pedido de una escena (B-2), como `decide`: sale de la lista (todas sus filas) y vuelve a preguntar. */
+  async decideScene(id: string, accept: boolean, projectId: string, pageId: string | null, level: SceneLevel): Promise<'accepted' | 'declined'> {
+    try {
+      if (!this.remote.decideScene) throw new Error('scene_requests_off');
+      const res = await this.remote.decideScene(id, accept, projectId, pageId, level);
+      this.drop(id);
+      return res;
+    } catch (err) {
       if (errorMessage(err) === 'request_not_found') this.drop(id);
       throw err;
     } finally {
@@ -284,15 +444,23 @@ function readAsked(scope: string, store: Store | null): Record<string, string> {
   }
 }
 
-/** Lo que se pidió: un archivo (por su id) o una página (entrega 3). */
+/**
+ * Lo que se pidió: un archivo (por su id), una página (entrega 3) o una escena desde su link (B-2: `id` es el proyecto
+ * y la escena, `sceneAskedId`).
+ */
 export interface AccessTarget {
-  kind: 'file' | 'page';
+  kind: 'file' | 'page' | 'scene';
   id: string;
 }
 
-/** La clave de lo pedido en el dispositivo: el id de un archivo tal cual (como en la entrega 2), el de una página con `p:`. */
+/** El `id` de una escena pedida, para anotarla en el dispositivo: el proyecto (id o texto) y la escena sin mayúsculas. */
+export function sceneAskedId(target: SceneTarget): string {
+  return `${target.projectId ?? `t:${target.projectText}`}|${target.scene.toLowerCase()}`;
+}
+
+/** La clave de lo pedido en el dispositivo: el id de un archivo tal cual (como en la entrega 2), el de una página con `p:`, una escena con `s:`. */
 function askedKey(target: AccessTarget | string): string {
-  return typeof target === 'string' ? target : target.kind === 'page' ? `p:${target.id}` : target.id;
+  return typeof target === 'string' ? target : target.kind === 'page' ? `p:${target.id}` : target.kind === 'scene' ? `s:${target.id}` : target.id;
 }
 
 /**

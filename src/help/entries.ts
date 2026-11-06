@@ -1053,6 +1053,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
     // Sin `when`: el ojo y los avisos les llegan también a quienes solo editan.
     since: '0.323',
   },
+  // Pedir una escena desde su link (Doc_Compartir_Escenas.md, B-2).
+  {
+    id: 'sceneRequests',
+    section: 'sharing',
+    title: 'help.sceneRequests.title',
+    text: 'help.sceneRequests.text',
+    words: ['request access', 'pedir acceso', 'pipesync', 'link', 'scene', 'escena', 'vendor', 'nda', 'bell', 'campana'],
+    // Sin `when`: lo ve quien pide (cualquier miembro, también un invitado) y quien decide.
+    since: '0.324',
+  },
   {
     id: 'publicLink',
     section: 'sharing',

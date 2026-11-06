@@ -25,8 +25,8 @@ debería andar; la app agregada al Dock desde Safari puede no tomar links de afu
 igual funciona). Sin probar en ninguna instalación real.
 (2) **El botón en PipeSync** (repo `LGA_PipeSync_2`, su `Roadmap.md`): arma esta dirección desde la ShotCard y el menú del
 tab PROD. No pide nada más de acá.
-(3) **El botón del correo de login** vuelve al inicio, no a la escena: `emailRedirectTo` en `src/ui/Login.tsx` conserva
-solo la dirección de un archivo. Con el código de 8 dígitos sí sigue a la escena. Bajo.
+(3) **El botón del correo de login:** desde la v0.324 vuelve al link entero (B-2). Falta verificar que Supabase acepte
+esa dirección con `?` entre las permitidas (si no, vuelve al inicio, como antes). Bajo.
 (4) **Compartir una escena con alguien de afuera (un vendor)** sin darle los reportes de rodaje enteros, que mezclan
 escenas (R6 / D581: no se parten ni se copia texto entre páginas). Hoy se le puede compartir la página de la escena como
 invitado: ve el desglose y sus fichas, no los días. Opciones a decidir por Lega: una foto fechada de solo lectura con
@@ -34,9 +34,10 @@ lo que junta el panorama (simple, pero copia texto y envejece, contra R6), o un 
 servidor entrega solo las secciones de esa escena de cada reporte (lo correcto; toca permisos, auditoría obligatoria, y
 lleva al servidor la lectura de secciones que hoy hace el dispositivo, `src/relations/`). Grande.
 **Desde la v0.323 (D843), *Share scenes*** comparte de a muchas las páginas de escena con una persona (ve la escena y sus
-fichas; ni los días ni los reportes): `Doc_Compartir_Escenas.md`. Siguen pendientes ahí B-2 (pedir una escena desde
-este link sin acceso) y B-3 (prender D14, que hoy frena *Share scenes*); las secciones de una escena dentro de un
-reporte siguen sin compartirse.
+fichas; ni los días ni los reportes): `Doc_Compartir_Escenas.md`. **Desde la v0.324 (D847), B-2:** quien abre este
+link sin ver la escena la puede pedir, y el dueño o un admin la da desde la campana (sección 10). Sigue pendiente B-3
+(prender D14, que hoy frena *Share scenes* y dar una escena pedida); las secciones de una escena dentro de un reporte
+siguen sin compartirse. Avisarle a quien pidió que se le dio (correo o campana): para Lega.
 
 ## Regla para todo lo que se haga: cada workspace es una isla
 

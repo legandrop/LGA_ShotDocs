@@ -2835,3 +2835,36 @@ compartir, mover y volver a compartir, y ahí `scene_contains_entities` y la ven
 rechaza también una escena que es ella misma carpeta de entidades. La app dice «The scene … is shared with people outside
 the team. To move a page into it, stop sharing it first.» sin opción de seguir, también al unir fichas. Detalle,
 condiciones de las auditorías y lo pendiente: `Doc_Compartir_Escenas.md`.
+
+### D847 · Pedir una escena desde su link, entrega B-2 de *Share scenes* (2026-11-06)
+**Pedido de Lega (2026-11-06):** en PipeSync hay botones que linkean a una escena del Panorama. Quien toca el link sin
+acceso al proyecto (o a esa escena) cae en una página «no tenés acceso a esto, ¿querés pedirlo?»; lo pide, y el dueño,
+los dueños o los admins se enteran y deciden si le dan acceso y a qué. Seguridad máxima (NDA): nadie sin acceso puede ver
+nada del proyecto, ni el nombre de la escena ni si el proyecto existe. **Decidido sin Lega (lo puede cambiar):** (1) La
+pantalla dice solo «You don't have access to this. Request access?» y el botón, y después «Request sent»; **no muestra
+nada del link** (ni el proyecto ni la escena) y es la misma exista o no. Aparece para un proyecto que la persona no ve,
+para una escena que no está en lo que ve quien ve una parte del proyecto (D401), y para quien no ve ningún proyecto. (2)
+**La base nunca resuelve nada al pedir:** guarda el id del proyecto (o el nombre del link, normalizado) y la escena como
+vinieron, y responde siempre `sent`; **el tope cuenta todas las llamadas** (20 cada 24 horas por persona), así la llamada
+21 da lo mismo exista o no lo pedido. Un repetido no deja otra fila. (3) **Los pedidos les llegan al dueño y a los admins
+del workspace que pueden compartir el proyecto** (B3 de la auditoría): son quienes pueden dar la escena (*Share scenes*
+es de dueño y admins, D843 (3)). Un dueño o admin sin permiso sobre el proyecto no los recibe: no ve el proyecto, y
+mostrarle el pedido sería contarle que existe; tampoco podría darlo. Quien creó el proyecto siendo miembro común tampoco
+(puede compartirlo con *Share*, no darlo como escena): un proyecto que solo comparte un miembro no le llega a nadie. (4)
+El nombre del link se resuelve **al leer** los pendientes, **solo entre los proyectos que puede compartir quien mira y
+antes de comparar el nombre entero** (si no, que «erso» no le llegue a un admin le diría que existe otro «Érso» que no ve),
+con la regla del link (el nombre entero gana a la primera palabra); si nombra dos, una fila por proyecto y decidir una
+cierra las dos. Si salió por la primera palabra, quien decide elige la escena a mano y confirma «the link asked for X,
+you're giving Y»; con el id o el nombre entero y la escena encontrada, la lista queda fija. Quien ve una parte del
+proyecto (sin mirar el rol) pide con el id solo si el link lo nombra sin dudas; si no, con el texto del link. Un tope de
+Nada de lo que decide quien decide cambia la respuesta de quien pide (un tope de abiertos al pedir lo filtraba: un
+rechazo pasaba de `rate_limited` a `sent`); el tope de abiertos vive en la lista (los 20 pendientes más nuevos de cada
+persona), y al pedir se borra lo propio creado hace más de 30 días, en cualquier estado.
+(5) **Dar acceso es *Share scenes* para una escena:** Ver o Comentar, sobre una página marcada como escena de ese
+proyecto, con la marca escrita y subida antes, sin *Share anyway*, y la base llama a `set_page_shares` (no repite reglas
+de seguridad); hasta B-3 está frenado por `clean_off`, como *Share scenes*; rechazar sí se puede. Antes de *Give access*
+la ventana dice qué es la página y cuántas lleva adentro. La escena del link se busca con el lector del Panorama; si no
+aparece, se elige de la lista. (6) Un rechazo deja en silencio el mismo pedido por un día (como los pedidos de páginas).
+(7) Quien pidió no recibe aviso: la escena le aparece con la próxima sincronización. (8) El link del correo de login
+vuelve al link entero. (9) Sin paso en los recorridos (como D843 (12)): necesita un link ajeno, la base y otra persona;
+va en la ayuda. Detalle: `Doc_Compartir_Escenas.md`, sección 10.

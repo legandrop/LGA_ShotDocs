@@ -63,6 +63,14 @@ describe('Login desde la dirección de un archivo', () => {
     expect(el.textContent).toContain(t('file.askInvite'));
   });
 
+  it('desde el link de una escena (B-2): el correo vuelve al link entero, con lo de después del `?`', async () => {
+    const { signInWithOtp } = await render('/map/scenes?project=ERSO&scene=1066&w=wanka_1');
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: 'cliente@ejemplo.invalid',
+      options: { emailRedirectTo: `${location.origin}/map/scenes?project=ERSO&scene=1066&w=wanka_1` },
+    });
+  });
+
   it('desde otra dirección, como siempre', async () => {
     const { before, signInWithOtp } = await render('/');
     expect(before).not.toContain(t('file.signIn'));

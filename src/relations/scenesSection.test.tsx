@@ -478,9 +478,9 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(view.textContent).toContain('Día 70');
     // Lo que no ve se dice «que veas», nunca «no hay» (D401).
     expect(view.querySelector('.ss-row[data-row="scouting"]')!.textContent).toBe('Scouting | ReportsNo scouting you can see names it');
-    // Una escena que no ve: «no está en las páginas que ves», nunca «no existe» (D401).
+    // Una escena que no ve: la pantalla sin acceso (B-2), nunca «no existe» (D401).
     act(() => navigate('/map/scenes?scene=105_029'));
-    await shown(() => expect(host.querySelector('.mp-scene .mp-empty')!.textContent).toBe('105_029 isn’t in the pages you can see.'));
+    await shown(() => expect(host.querySelector('.mp-scene .scene-request p')!.textContent).toMatch(/^You don't have access to this\./));
     expect(host.textContent).not.toMatch(/isn’t a scene|doesn.t exist/);
   });
 

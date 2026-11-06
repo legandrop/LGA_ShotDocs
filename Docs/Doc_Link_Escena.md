@@ -36,17 +36,20 @@ https://shotdocs.lega.com.ar/map/scenes?project=<proyecto>&scene=<escena>[&w=<wo
   inicio y la barra siguen en ese proyecto.
 - **Si el proyecto no está** entre los del dispositivo, la vista no muestra el panorama de otro proyecto: dice
   «Opening project “ERSO”…» mientras no terminó una vuelta con el servidor (un dispositivo nuevo puede estar bajándolo) y
-  después «“ERSO” isn’t a project you can see here. Ask for access, or check you’re in its workspace.». Con dos que
+  después, desde la v0.324, la pantalla sin acceso: «You don't have access to this. Request access?» y *Request access*,
+  sin nada del link (`Doc_Compartir_Escenas.md`, sección 10, B-2; antes decía «“ERSO” isn’t a project you can see
+  here…»). Lo mismo para quien ve una parte del proyecto y abre una escena que no está en lo que ve, y para quien no ve
+  ningún proyecto. Con dos que
   coinciden: «“ERSO” matches more than one project: ERSO | Serie · ERSO (copia). Open the one you want from the project
   list.». El valor del link se muestra entre comillas y recortado a 40 caracteres (`shownParam`), para que no se lea como
   un texto de la app. Mientras tanto, el título de la pestaña y la barra siguen en el proyecto elegido antes (no se
   muestra nada de él en el centro).
-- **Si la escena no existe** en ese proyecto, el aviso nombra el proyecto: «101_099 isn’t a scene of ERSO | Serie.» (o,
-  para quien ve solo una parte del proyecto, que no está en las páginas que ve, D401).
-- **No da acceso.** Quien lo abre tiene que poder ver el proyecto con su cuenta. Sin sesión, la app pide entrar: con el
-  código de 8 dígitos, en la misma pestaña, la dirección no se toca y sigue a la escena. El botón del correo, en cambio,
-  vuelve al inicio (`emailRedirectTo` en `src/ui/Login.tsx` solo conserva la dirección de un archivo; pendiente en
-  `Doc_Roadmap.md`, «Link a una escena»).
+- **Si la escena no existe** en ese proyecto, el aviso nombra el proyecto: «101_099 isn’t a scene of ERSO | Serie.» (para
+  quien ve solo una parte del proyecto, D401, la pantalla sin acceso de arriba, con el pedido por el id del proyecto).
+- **No da acceso.** Quien lo abre tiene que poder ver el proyecto con su cuenta; si no, lo puede pedir (B-2). Sin sesión,
+  la app pide entrar: con el código de 8 dígitos, en la misma pestaña, la dirección no se toca y sigue a la escena. Desde
+  la v0.324 el botón del correo también vuelve al link entero (`emailRedirectTo` en `src/ui/Login.tsx`), si Supabase
+  acepta esa dirección (no se pudo verificar; si no, vuelve al inicio).
 - **Sin red** funciona igual si el proyecto ya está en el dispositivo: todo se resuelve ahí. Si no está, sin red no hay
   forma de saber si existe: el error de red cuenta como vuelta terminada y dice que no lo ve.
 - Un link público (`#link=`) no tiene Panorama (D495): esta dirección es solo para cuentas.
@@ -71,7 +74,7 @@ No suma un paso a los recorridos: compartir no es parte de armar un proyecto, y 
 | La dirección (la escena con `sceneLabel`, v0.319) | `sceneShareLink` en `src/relations/sceneMentions.ts` |
 | El `scene=` en cualquier forma (v0.319) | `resolveSceneParam` en `src/relations/sceneSearch.ts` (lo usan `MapView` y `OverviewNav`) |
 | `w` también en `/map` | `computeStart` en `src/ui/App.tsx` |
-| Textos | `map.copyLink`, `map.copyLinkTip`, `map.linkCopied`, `map.projectOpening`, `map.projectUnknown`, `map.projectAmbiguous`, `map.sceneUnknown` con `{project}` (`src/i18n/lazy/map.ts`); ayuda `help.scenesSection` (`src/i18n/lazy/help.ts`; sube a 0.317 en `src/help/entries.ts`, así sale en las novedades) |
+| Textos | `map.copyLink`, `map.copyLinkTip`, `map.linkCopied`, `map.projectOpening`, `map.projectAmbiguous`, `map.sceneUnknown` con `{project}` (`map.projectUnknown` y `map.sceneUnknownSeen` salieron con B-2) (`src/i18n/lazy/map.ts`); ayuda `help.scenesSection` (`src/i18n/lazy/help.ts`; sube a 0.317 en `src/help/entries.ts`, así sale en las novedades) |
 
 ## Pruebas
 

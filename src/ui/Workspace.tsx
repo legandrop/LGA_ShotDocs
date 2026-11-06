@@ -74,7 +74,7 @@ import { errorMessage } from '../sync/types';
 import { disposeUndoTimeline } from './undoTimeline';
 import { useUndoTimelineKeys } from './undoTimelineUi';
 import { appLinkSource, setMediaLinkSource } from './mediaLinks';
-import { isAccessRoute, NoProjectsAccess, useNoProjectsAccess, type AccessRoute } from './NoProjectsRoute';
+import { isAccessRoute, NoProjectsAccess, NoProjectsSceneAccess, useNoProjectsAccess, useSceneLink, type AccessRoute } from './NoProjectsRoute';
 import { noticeOutsideCreate } from './outsideReaders';
 
 // La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
@@ -219,9 +219,23 @@ export function NoProjectsBoot({ user, onRetry, link }: { user: AuthUser; onRetr
   const route = useRoute();
   const { client, config } = useWorkspace();
   const tr = useT();
-  const wanted = !link && isAccessRoute(route);
+  const sceneLink = useSceneLink();
+  const wanted = !link && (isAccessRoute(route) || !!sceneLink);
   const access = useNoProjectsAccess(user.id, wanted);
   if (wanted && !access) return <main className="center-screen muted">{tr('shell.opening')}</main>;
+  if (wanted && access?.member && sceneLink) {
+    // El link de una escena (B-2): la pantalla sin acceso de la escena, con *Request access*.
+    return (
+      <NoProjectsSceneAccess
+        project={sceneLink.project}
+        client={client}
+        userId={user.id}
+        localKey={config.localKey}
+        schemaVersion={access.schemaVersion}
+        online={typeof navigator === 'undefined' || navigator.onLine !== false}
+      />
+    );
+  }
   if (wanted && access?.member) {
     return (
       <NoProjectsAccess
@@ -810,6 +824,20 @@ export function NoProjectsOpen() {
   const link = useLinkMode();
   const rejected = status.failedOps + status.failedMedia + status.failedComments;
   const pending = usePendingCount() + rejected;
+  const sceneLink = useSceneLink();
+  // El link de una escena (B-2): la pantalla sin acceso de la escena.
+  if (!link && sceneLink) {
+    return (
+      <NoProjectsSceneAccess
+        project={sceneLink.project}
+        client={client}
+        userId={user.id}
+        localKey={workspace.config.localKey}
+        schemaVersion={status.schemaVersion}
+        online={status.online}
+      />
+    );
+  }
   // La dirección de una página o de un archivo: la pantalla sin acceso con *Request access* (O2). *Go to Shot Docs* lleva
   // al inicio, que muestra esta misma pantalla sin proyectos con lo que falta subir.
   if (!link && isAccessRoute(route)) {

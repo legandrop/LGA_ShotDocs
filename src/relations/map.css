@@ -833,3 +833,8 @@
 .mp-ls .lh-addwrap {
   margin-left: 6px;
 }
+
+/* La pantalla sin acceso del link de una escena (Doc_Compartir_Escenas.md, B-2). */
+.mp .scene-request {
+  margin: 16px 0;
+}

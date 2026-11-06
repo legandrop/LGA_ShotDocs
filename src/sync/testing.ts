@@ -64,7 +64,7 @@ import {
   ARCHIVE_COMMENTS_SCHEMA_VERSION,
 } from './comments';
 import { MentionsInbox, type InboxResponse, type MentionCandidate, type MentionsRemote } from './mentions';
-import type { AccessRequestsRemote } from './accessRequests';
+import { projectTextCode, projectTextKey, SCENE_REQUESTS_SCHEMA_VERSION, sceneTextKey, type AccessRequest, type AccessRequestsRemote, type SceneTarget } from './accessRequests';
 import { CLEAN_SCHEMA_VERSION } from './clean';
 import { normalizeStructure, seedIfEmpty } from './structure';
 import { mergeSettings, PageTree } from './tree';
@@ -244,6 +244,83 @@ export const SCENE_SHARE_MUTANTS = [
   'guardMove',
 ] as const;
 export type SceneShareMutant = (typeof SCENE_SHARE_MUTANTS)[number];
+
+/**
+ * Los chequeos de pedir una escena desde su link (B-2, 20261119120000_pedir_escena.sql) que las pruebas sacan de a uno
+ * (`FakeServer.sceneRequestMutants`): con cualquiera afuera, una prueba de `src/ui/sceneRequests.test.tsx` tiene que fallar.
+ */
+export const SCENE_REQUEST_MUTANTS = [
+  /** Pedir: solo un miembro vivo (`not_member`). */
+  'member',
+  /** Pedir: siempre `sent`, exista o no el proyecto (la mutante dice que no existe). */
+  'sameAnswer',
+  /** El tope cuenta todas las llamadas (la mutante cuenta solo las filas nuevas, como los pedidos de archivos). */
+  'allCalls',
+  /** Un pedido repetido (persona, proyecto o texto, escena) no deja otra fila. */
+  'dedup',
+  /** La lista: solo dueño o admin del workspace. */
+  'listRole',
+  /** La lista: solo los proyectos que quien mira puede compartir (`scene_request_projects`, desde la lista). */
+  'listShare',
+  /** La lista: por texto, el nombre entero gana a la primera palabra. */
+  'listExact',
+  /**
+   * La lista y decidir resuelven el texto solo entre los proyectos que quien mira puede compartir, ANTES de comparar el
+   * nombre entero (la mutante compara entre todos y filtra después: un admin se entera de que existe otro proyecto).
+   */
+  'shareFirst',
+  /** La lista trae el texto del link y si el proyecto salió por la primera palabra (la mutante dice «por el id»). */
+  'projectText',
+  /** La lista: no los pedidos propios (segunda capa: `listSees` ya los saca). */
+  'listOwn',
+  /** La lista: no el pedido de quien ya ve el proyecto entero. */
+  'listSees',
+  /** La lista: los de 30 días. */
+  'listRecent',
+  /** La lista: solo de miembros vivos. */
+  'listRemoved',
+  /** Decidir: solo dueño o admin (también para rechazar). */
+  'decideRole',
+  /** Decidir: quien decide puede compartir el proyecto (`scene_request_projects`, desde decidir). */
+  'decideShare',
+  /** Decidir: el proyecto es uno de los que nombra el pedido. */
+  'decideCandidate',
+  /** Decidir: solo un pedido pendiente. */
+  'decideState',
+  /** Decidir: nunca uno propio. */
+  'decideOwn',
+  /** Decidir: solo los de 30 días. */
+  'decideRecent',
+  /** Decidir: quien pidió sigue siendo miembro (si no, `set_page_shares` lo invitaría). */
+  'decideMember',
+  /** Dar acceso pasa por `set_page_shares` (la mutante da el permiso directo, sin sus reglas). */
+  'reuse',
+  /** Dar acceso: solo Ver o Comentar (segunda capa de `set_page_shares`). */
+  'level',
+  /** La lista: de cada persona, solo sus 20 pendientes más nuevos (el tope vive acá, no al pedir). */
+  'openCap',
+  /** Pedir: se borran las filas propias creadas hace más de 30 días, en cualquier estado (no por lo que decidió otro). */
+  'cleanup',
+] as const;
+export type SceneRequestMutant = (typeof SCENE_REQUEST_MUTANTS)[number];
+
+/** Una fila de `scene_access_requests` (B-2). */
+export interface SceneAccessRequestRow {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  project_text: string | null;
+  scene_text: string;
+  state: 'pending' | 'accepted' | 'declined' | 'void';
+  times: number;
+  created_at: string;
+  asked_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+  decided_project: string | null;
+  page_id: string | null;
+  level: 'view' | 'comment' | null;
+}
 
 /** La marca de escena de la fila, como la mira la base (`settings -> 'entity' ->> 'kind' = 'scene'`). */
 function isSceneRow(page: PageRow): boolean {
@@ -1027,6 +1104,19 @@ export class FakeServer {
     page_id: string | null;
     level: GrantLevel | null;
   }[] = [];
+  /** `scene_access_requests` (B-2): los pedidos de una escena desde su link; nada se borra. */
+  readonly sceneAccessRequests: SceneAccessRequestRow[] = [];
+  /** `scene_access_calls`: el tope de pedir una escena, por persona (desde cuándo cuenta y cuántas llamadas). */
+  readonly sceneAccessCalls = new Map<string, { start: number; calls: number }>();
+  /** Mutantes de pedir una escena (`SCENE_REQUEST_MUTANTS`). */
+  readonly sceneRequestMutants = new Set<SceneRequestMutant>();
+
+  /** Prende pedir una escena: la base en la versión 29 (después de `enableSceneShares`). */
+  enableSceneRequests(): void {
+    this.enableSceneShares();
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, SCENE_REQUESTS_SCHEMA_VERSION) };
+  }
+
   /** `comment_mentions`, con las filas sacadas (`removed_at`): nada se borra. */
   readonly mentions: {
     id: string;
@@ -1876,6 +1966,8 @@ const ACCESS_HOUR_MS = 3_600_000;
 const ACCESS_DAY_MS = 24 * ACCESS_HOUR_MS;
 /** `access_requests_pending` y decidir: los de 30 días (LF14; O2 de la auditoría de E2). */
 export const ACCESS_REQUEST_DAYS_MS = 30 * ACCESS_DAY_MS;
+/** De cada persona, cuántos pendientes muestra la lista de quien decide (B-2). */
+const ACCESS_OPEN_PER_PERSON = 20;
 /** Filas nuevas por persona y día, archivos y páginas juntos. */
 export const ACCESS_REQUESTS_PER_DAY = 20;
 
@@ -3432,6 +3524,166 @@ export class FakeRemote
     return this.askAccess(mine, () => this.pageAlive(pageId) && !this.declinedLately(mine), { file_id: null, target_page_id: pageId });
   }
 
+  // --- Pedir una escena desde su link (B-2): las reglas de 20261119120000_pedir_escena.sql, con sus mutantes ---
+
+  /**
+   * `private.scene_request_projects`: los proyectos sin borrar que nombra un pedido, entre los que quien llama puede
+   * compartir (el id, o el texto: entero gana a la primera palabra), con `exact` (por el id o el nombre entero).
+   */
+  private sceneRequestProjects(r: Pick<SceneAccessRequestRow, 'project_id' | 'project_text'>, skipShare: boolean): { pid: string; exact: boolean }[] {
+    const m = this.server.sceneRequestMutants;
+    const mine = (id: string) => skipShare || this.canShare({ projectId: id });
+    const live = [...this.server.projects.values()].filter((p) => !this.server.projectDeleted(p.id) && (m.has('shareFirst') || mine(p.id)));
+    const after = (list: { pid: string; exact: boolean }[]) => (m.has('shareFirst') ? list.filter((x) => mine(x.pid)) : list);
+    if (r.project_id !== null) return after(live.some((p) => p.id === r.project_id) ? [{ pid: r.project_id, exact: true }] : []);
+    const text = r.project_text ?? '';
+    const exact = live.filter((p) => projectTextKey(p.name) === text).map((p) => ({ pid: p.id, exact: true }));
+    const byCode = live.filter((p) => projectTextCode(projectTextKey(p.name)) === text).map((p) => ({ pid: p.id, exact: false }));
+    if (m.has('listExact')) return after([...exact, ...byCode.filter((b) => !exact.some((e) => e.pid === b.pid))]);
+    return after(exact.length > 0 ? exact : byCode);
+  }
+
+  /** `request_scene_access`: siempre `sent`; el tope cuenta todas las llamadas; un repetido renueva su fila. */
+  async requestSceneAccess(target: SceneTarget): Promise<'sent'> {
+    this.server.check();
+    const m = this.server.sceneRequestMutants;
+    if (!m.has('member') && !this.server.role(this.userId)) throw new RemoteError('not_member', true, '42501');
+    const text = target.projectText === null ? null : projectTextKey(target.projectText);
+    const scene = sceneTextKey(target.scene ?? '');
+    if (
+      (target.projectId === null) === (text === null) ||
+      (text !== null && (text.length < 1 || text.length > 200)) ||
+      scene.length < 1 ||
+      scene.length > 80
+    ) {
+      throw new RemoteError('target_invalid', true, '22023');
+    }
+    if (m.has('sameAnswer') && target.projectId !== null && !this.server.projects.has(target.projectId)) return 'no_project' as 'sent';
+    const nowMs = this.server.now();
+    const now = new Date(nowMs).toISOString();
+    const key = target.projectId ?? `t:${text}`;
+    const same = (r: SceneAccessRequestRow) =>
+      r.user_id === this.userId && (r.project_id ?? `t:${r.project_text}`) === key && r.scene_text.toLowerCase() === scene.toLowerCase();
+    // Las propias creadas hace más de 30 días, en cualquier estado: se borran al pedir (antes de buscar el repetido, como
+    // la base). Depende solo de cuándo pidió la persona, nunca de lo que decidió otro.
+    const stale = (r: SceneAccessRequestRow) =>
+      r.user_id === this.userId &&
+      (m.has('cleanup') ? r.state !== 'pending' && this.agoMs(r.decided_at ?? r.asked_at) >= ACCESS_REQUEST_DAYS_MS : this.agoMs(r.created_at) >= ACCESS_REQUEST_DAYS_MS);
+    const open = m.has('dedup') ? undefined : this.server.sceneAccessRequests.find((r) => same(r) && (r.state === 'pending' || r.state === 'void') && !stale(r));
+    // El tope: todas las llamadas de la ventana de 24 horas. Si se pasa, el error deshace también la cuenta.
+    const calls = this.server.sceneAccessCalls.get(this.userId);
+    const next = !calls || nowMs - calls.start >= ACCESS_DAY_MS ? { start: nowMs, calls: 1 } : { start: calls.start, calls: calls.calls + 1 };
+    if (m.has('allCalls')) {
+      const today = this.server.sceneAccessRequests.filter((r) => r.user_id === this.userId && this.agoMs(r.created_at) < ACCESS_DAY_MS).length;
+      if (!open && today >= ACCESS_REQUESTS_PER_DAY) throw new RemoteError('rate_limited', true, 'P0001');
+    } else if (next.calls > ACCESS_REQUESTS_PER_DAY) {
+      throw new RemoteError('rate_limited', true, 'P0001');
+    }
+    this.server.sceneAccessCalls.set(this.userId, next);
+    for (let i = this.server.sceneAccessRequests.length - 1; i >= 0; i--) {
+      if (stale(this.server.sceneAccessRequests[i])) this.server.sceneAccessRequests.splice(i, 1);
+    }
+    const voided = this.server.sceneAccessRequests.some((r) => same(r) && r.state === 'declined' && this.agoMs(r.decided_at) < ACCESS_DAY_MS);
+    if (open) {
+      if (this.agoMs(open.asked_at) > ACCESS_HOUR_MS) {
+        open.asked_at = now;
+        open.times = Math.min(open.times + 1, 1000);
+      }
+      if (open.state === 'void' && !voided) open.state = 'pending';
+      return 'sent';
+    }
+    this.server.sceneAccessRequests.push({
+      id: crypto.randomUUID(),
+      user_id: this.userId,
+      project_id: target.projectId,
+      project_text: text,
+      scene_text: scene,
+      state: voided ? 'void' : 'pending',
+      times: 1,
+      created_at: now,
+      asked_at: now,
+      decided_at: null,
+      decided_by: null,
+      decided_project: null,
+      page_id: null,
+      level: null,
+    });
+    return 'sent';
+  }
+
+  /** `scene_access_requests_pending`: dueño o admin; una fila por proyecto del pedido que puede compartir. */
+  private sceneRequestsPending(): AccessRequest[] {
+    const m = this.server.sceneRequestMutants;
+    const role = this.server.role(this.userId);
+    if (!role || (!m.has('listRole') && role !== 'owner' && role !== 'admin')) return [];
+    const out: AccessRequest[] = [];
+    const rows = this.server.sceneAccessRequests
+      .filter((r) => r.state === 'pending' && (m.has('listOwn') || r.user_id !== this.userId))
+      .filter((r) => m.has('listRecent') || this.agoMs(r.asked_at) < ACCESS_REQUEST_DAYS_MS)
+      .filter((r) => m.has('listRemoved') || !!this.server.role(r.user_id))
+      .sort((a, b) => (a.asked_at < b.asked_at ? 1 : a.asked_at > b.asked_at ? -1 : a.id < b.id ? -1 : 1));
+    // De cada persona, solo sus 20 pendientes más nuevos (antes de resolver el proyecto, como el `row_number` de la base).
+    const seen = new Map<string, number>();
+    const capped = rows.filter((r) => {
+      const n = (seen.get(r.user_id) ?? 0) + 1;
+      seen.set(r.user_id, n);
+      return m.has('openCap') || n <= ACCESS_OPEN_PER_PERSON;
+    });
+    for (const r of capped) {
+      for (const { pid: projectId, exact } of this.sceneRequestProjects(r, m.has('listShare')).sort((a, b) => (a.pid < b.pid ? -1 : 1))) {
+        if (!m.has('listSees') && this.server.projectLevel(r.user_id, projectId) >= 1) continue;
+        out.push({
+          id: r.id,
+          userId: r.user_id,
+          email: this.server.members.get(r.user_id)?.email ?? '',
+          role: this.server.members.get(r.user_id)?.role ?? 'guest',
+          fileId: null,
+          targetPageId: null,
+          fileName: '',
+          mime: '',
+          askedAt: r.asked_at,
+          times: r.times,
+          pages: [],
+          scene: m.has('projectText') ? { projectId, text: r.scene_text, linkText: null, exact: true } : { projectId, text: r.scene_text, linkText: r.project_text, exact },
+        });
+      }
+    }
+    return out.slice(0, 100);
+  }
+
+  /** `decide_scene_access_request`: el mismo `request_not_found` para todo lo que no toca; dar acceso es `set_page_shares`. */
+  private async decideSceneRequest(id: string, accept: boolean, projectId: string, pageId: string | null, level: 'view' | 'comment'): Promise<'accepted' | 'declined'> {
+    this.server.check();
+    const m = this.server.sceneRequestMutants;
+    const r = this.server.sceneAccessRequests.find((x) => x.id === id);
+    const role = this.server.role(this.userId);
+    if (
+      !r ||
+      (!m.has('decideState') && r.state !== 'pending') ||
+      (!m.has('decideRecent') && this.agoMs(r.asked_at) >= ACCESS_REQUEST_DAYS_MS) ||
+      (!m.has('decideOwn') && r.user_id === this.userId) ||
+      !role ||
+      (!m.has('decideRole') && role !== 'owner' && role !== 'admin') ||
+      !projectId ||
+      (!m.has('decideCandidate') && !this.sceneRequestProjects(r, m.has('decideShare')).some((c) => c.pid === projectId))
+    ) {
+      throw new RemoteError('request_not_found', true, 'P0002');
+    }
+    const now = new Date(this.server.now()).toISOString();
+    if (!accept) {
+      Object.assign(r, { state: 'declined', decided_at: now, decided_by: this.userId, decided_project: projectId });
+      return 'declined';
+    }
+    if (!m.has('level') && level !== 'view' && level !== 'comment') throw new RemoteError('level_invalid', true, '22023');
+    if (!pageId) throw new RemoteError('page_invalid', true, '22023');
+    const member = this.server.members.get(r.user_id);
+    if (!m.has('decideMember') && !this.server.role(r.user_id)) throw new RemoteError('member_not_found', true, 'P0002');
+    if (m.has('reuse')) await this.share(r.user_id, { pageId }, level);
+    else await this.setPageShares(projectId, member?.email ?? '', [pageId], [], level);
+    Object.assign(r, { state: 'accepted', decided_at: now, decided_by: this.userId, decided_project: projectId, page_id: pageId, level });
+    return 'accepted';
+  }
+
   /** `access_requests_pending` y `decide_access_request` de esta sesión. */
   accessRequestsRemote(): AccessRequestsRemote {
     const canDecide = () => this.server.role(this.userId) !== 'guest';
@@ -3451,10 +3703,12 @@ export class FakeRemote
         ? this.server.pageLevel(r.user_id, r.target_page_id) >= 1
         : this.aliveFilePages(r.file_id!).some((p) => this.server.pageLevel(r.user_id, p) >= 1);
     return {
-      pending: async () => {
+      pending: async (opts) => {
         this.server.check();
         if (!this.server.role(this.userId) || this.server.role(this.userId) === 'guest') return [];
-        return this.server.accessRequests
+        // B-2: los de escenas, con la base en la 29 (la app los pide solo entonces y para dueño o admin).
+        const scenes = opts?.scenes && (this.server.settings?.schemaVersion ?? 0) >= SCENE_REQUESTS_SCHEMA_VERSION ? this.sceneRequestsPending() : [];
+        const filesAndPages: AccessRequest[] = this.server.accessRequests
           .filter((r) => r.state === 'pending' && recent(r) && r.user_id !== this.userId && this.server.role(r.user_id))
           .filter((r) => !sees(r))
           .map((r) => ({ r, pages: shareable(r) }))
@@ -3472,7 +3726,9 @@ export class FakeRemote
             times: r.times,
             pages: pages.map((p) => ({ pageId: p, title: this.server.pages.get(p)?.title ?? '' })),
           }));
+        return [...filesAndPages, ...scenes];
       },
+      decideScene: (id, accept, projectId, pageId, level) => this.decideSceneRequest(id, accept, projectId, pageId, level),
       decide: async (id, accept, pageId, level) => {
         this.server.check();
         const r = this.server.accessRequests.find((x) => x.id === id);

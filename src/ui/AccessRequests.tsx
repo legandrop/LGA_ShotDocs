@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
-import { useAccessRequests, useServices, useSyncStatus } from '../services';
+import '../i18n/lazy/teamDialogs';
+import { sceneLabel } from '../relations/reader';
+import { useAccessRequests, useServices, useSyncStatus, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, type GrantLevel } from '../sync/access';
-import type { AccessRequest } from '../sync/accessRequests';
+import type { AccessRequest, SceneLevel } from '../sync/accessRequests';
 import { AccessRequestRow, agoText, requestText } from './AccessRequestRow';
-import { ShareGateNotes, useShareGate } from './shareGate';
+import { outsideReadersStore } from './outsideReaders';
+import { MARKS_PENDING, markScenes, projectSceneItems, resolveProjectScene } from './projectScenes';
+import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
 
 // Los pedidos de acceso a un archivo o a una página (P.30, entregas 2 y 3; Docs/Doc_Links_PDF.md, 5.3): lo que se decide, desde la campana
@@ -171,6 +175,177 @@ export function ShareRequests({ pageId, onDecided }: { pageId: string; onDecided
   );
 }
 
+/**
+ * Decidir el pedido de una escena desde su link (Docs/Doc_Compartir_Escenas.md, B-2). La escena del link se busca entre las
+ * del proyecto con el lector del Panorama y, si aparece y el proyecto salió por el id o por el nombre entero, la lista queda
+ * fija en ella. Si no aparece, o el proyecto salió solo por la primera palabra del nombre (el link decía «mor» y el
+ * proyecto se llama «MOR 2»: puede ser otro), se elige a mano, y *Give access* pide confirmar «the link asked for X,
+ * you're giving Y» (o se rechaza). Antes de *Give access* dice
+ * qué es la página y cuántas lleva adentro (M6), y una escena con otra entidad adentro no se puede dar (como en *Share
+ * scenes*). Dar acceso es lo de *Share scenes* para una escena: Ver o Comentar, la marca de escena escrita y subida antes,
+ * la compuerta sin *Share anyway*, y la base vuelve a controlar todo (`set_page_shares`).
+ */
+export function SceneRequestForm({ request, onDone, onCancel }: { request: AccessRequest; onDone: () => void; onCancel: () => void }) {
+  const tr = useT();
+  const services = useServices();
+  const { accessRequests, engine } = services;
+  const tree = useTree();
+  const status = useSyncStatus();
+  const gate = useShareGate();
+  const projectId = request.scene!.projectId;
+  const asked = request.scene!.text;
+  const linkText = request.scene!.linkText;
+  const byWord = !request.scene!.exact;
+  const projectName = tree.project(projectId)?.name;
+  const revision = tree.getRevision();
+  const scenes = useMemo(() => projectSceneItems(tree, engine, projectId), [tree, revision, projectId, engine]); // eslint-disable-line react-hooks/exhaustive-deps
+  const resolved = useMemo(() => resolveProjectScene(tree, projectId, asked), [tree, revision, projectId, asked]); // eslint-disable-line react-hooks/exhaustive-deps
+  // La escena que el link nombra sin dudas: con ella la lista queda fija. Por la primera palabra, nunca sola.
+  const fixed = byWord ? null : resolved;
+  const [page, setPage] = useState<string>(() => fixed ?? '');
+  const [level, setLevel] = useState<SceneLevel>('view');
+  // Elegida a mano: el primer *Give access* muestra qué pedía el link y qué se da; el segundo da.
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // El proyecto puede estar terminando de bajar: la escena del link, apenas aparece (si no se eligió otra).
+  useEffect(() => {
+    if (fixed && page !== fixed) setPage(fixed);
+  }, [fixed]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Otra escena u otro nivel: el aviso de lo pendiente (y su *Retry*) era del pedido de antes, y la confirmación también.
+  useEffect(() => {
+    gate.clearBlocked();
+    setConfirming(false);
+  }, [page, level]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const item = scenes.find((s) => s.pageId === page) ?? null;
+  const latestDecide = useRef<(accept: boolean) => Promise<void>>(async () => undefined);
+
+  async function decide(accept: boolean) {
+    if (!accessRequests || busy) return;
+    if (accept && !fixed && !confirming) {
+      setConfirming(true);
+      return;
+    }
+    const target = page;
+    const lvl = level;
+    setBusy(true);
+    setError(null);
+    gate.clearBlocked();
+    const scope = { pageIds: [target] };
+    try {
+      if (accept) {
+        await markScenes(tree, engine, [target]);
+        // Sin *Share anyway* (M4); *Retry* manda el formulario de ese momento.
+        if (!(await gate.ready(scope, true, () => void latestDecide.current(true), null))) throw UNSYNCED_BEFORE_SHARE;
+      }
+      await accessRequests.decideScene(request.id, accept, projectId, accept ? target : null, lvl);
+      if (accept) {
+        gate.after(scope, true, request.email);
+        void outsideReadersStore(services)?.invalidate(projectId);
+      }
+      onDone();
+    } catch (err) {
+      if (err === UNSYNCED_BEFORE_SHARE) return;
+      const code = err instanceof Error ? err.message : String(err);
+      setError(
+        err === MARKS_PENDING
+          ? tr('scenes.share.marksPending')
+          : code === 'clean_off'
+            ? tr('scenes.share.cleanOff')
+            : code === 'page_invalid'
+              ? tr('scenes.share.pageInvalid')
+              : code === 'scene_contains_entities'
+                ? tr('scenes.share.containsEntities')
+                : code === 'invitation_exists'
+                  ? tr('scenes.share.memberInvitation')
+                  : teamErrorText(err),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  latestDecide.current = decide;
+
+  const offline = !status.online;
+  const canGive = !busy && !offline && status.cleanOn && !!item && !item.blocked;
+  return (
+    <div className="access-request-form scene-request-form" role="group" aria-label={tr('requests.title')}>
+      <p>
+        <strong>{requestText(request, tr, projectName)}</strong>
+      </p>
+      <p className="muted small">
+        {tr(ROLE_LABELS[request.role])} · {agoText(request.askedAt, tr.lang)}
+      </p>
+      {!status.cleanOn && <p className="muted small">{tr('scenes.share.cleanOff')}</p>}
+      {/* Lo que decía el link del proyecto (lo escribió quien pide: no dice nada que no sepa). */}
+      {linkText !== null && (
+        <p className="muted small scene-request-link">
+          {byWord ? tr('requests.sceneByWord', { project: linkText }) : tr('requests.sceneLinkSaid', { project: linkText })}
+        </p>
+      )}
+      {scenes.length === 0 ? (
+        <p className="muted small">{tr('requests.sceneNoScenes')}</p>
+      ) : (
+        <>
+          {!resolved && <p className="muted small">{tr('requests.sceneAsked', { scene: asked })}</p>}
+          <div className="access-request-fields">
+            <label>
+              <span className="pref-label">{tr('requests.scene')}</span>
+              <select value={page} disabled={busy || !!fixed} onChange={(e) => setPage(e.target.value)}>
+                {!page && <option value="">{tr('requests.scenePick')}</option>}
+                {scenes.filter((s) => !fixed || s.pageId === fixed).map((s) => (
+                  <option key={s.pageId} value={s.pageId} disabled={s.blocked}>
+                    {s.title ? `${sceneLabel(s.code)} · ${s.title}` : sceneLabel(s.code)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="pref-label">{tr('requests.level')}</span>
+              <select value={level} disabled={busy} onChange={(e) => setLevel(e.target.value as SceneLevel)}>
+                {(['view', 'comment'] as const).map((l) => (
+                  <option key={l} value={l}>
+                    {tr(LEVEL_LABELS[l])}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {item && (
+            // Qué se da, antes de darlo (M6): el tipo de la página y cuántas lleva adentro.
+            <p className="small scene-request-info" data-scene={item.pageId}>
+              {tr('requests.sceneInfo', { count: item.inside })}
+            </p>
+          )}
+          {item?.blocked && <p className="error small">{tr('scenes.share.blocked')}</p>}
+          {confirming && item && (
+            <p className="small scene-request-confirm" role="alert">
+              {tr('requests.sceneConfirm', { asked, given: item.title ? `${sceneLabel(item.code)} · ${item.title}` : sceneLabel(item.code) })}
+            </p>
+          )}
+        </>
+      )}
+      <p className="muted small">{tr('requests.sceneScope')}</p>
+      <ShareGateNotes gate={gate} reader />
+      {offline && <p className="muted small">{tr('requests.offline')}</p>}
+      {error && <p className="error">{error}</p>}
+      <div className="modal-actions">
+        <button type="button" disabled={busy} onClick={onCancel}>
+          {tr('common.cancel')}
+        </button>
+        <button type="button" className="danger" disabled={busy || offline} onClick={() => void decide(false)}>
+          {tr('requests.decline')}
+        </button>
+        <button type="button" className="primary" disabled={!canGive} onClick={() => void decide(true)}>
+          {confirming ? tr('requests.giveConfirm') : tr('requests.give')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** La ventana de decidir, desde la campana. Esc o tocar afuera cierran sin decidir. */
 export function AccessRequestDialog({ request, onClose }: { request: AccessRequest; onClose: () => void }) {
   const tr = useT();
@@ -183,7 +358,11 @@ export function AccessRequestDialog({ request, onClose }: { request: AccessReque
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal team-dialog" role="dialog" aria-label={tr('requests.title')} onClick={(e) => e.stopPropagation()}>
         <h2>{tr('requests.title')}</h2>
-        <AccessRequestForm request={request} onDone={onClose} onCancel={onClose} />
+        {request.scene ? (
+          <SceneRequestForm request={request} onDone={onClose} onCancel={onClose} />
+        ) : (
+          <AccessRequestForm request={request} onDone={onClose} onCancel={onClose} />
+        )}
       </div>
     </div>
   );

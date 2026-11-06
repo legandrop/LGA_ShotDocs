@@ -1,11 +1,13 @@
 # Compartir escenas con un vendor (*Share scenes*)
 
 **Estado:** entrega **B-1 hecha en la v0.323** (D843): *Share scenes of “<proyecto>”…*, la migración
-`20261118120000_compartir_escenas.sql` (base 28, **pendiente: se aplica al publicar la v0.323**), la marca del árbol de
+`20261118120000_compartir_escenas.sql` (base 28, **aplicada** con la v0.323, 2026-11-06), la marca del árbol de
 lo que ven personas de afuera, sus avisos y el freno en la base para que nada marcado entre en una escena compartida.
 Pasó por dos auditorías (la de la propuesta y la de la entrega, las dos «aprobado con condiciones»; sección 8).
-**Pendientes:** B-2 (pedir una escena desde un link de PipeSync) y B-3 (prender la privacidad de lo borrado, D14),
-sección 9. Hasta B-3, *Share scenes* está **frenado**: la base rechaza guardar (`clean_off`) y la ventana lo dice.
+**B-2 hecha en la v0.324** (D847): pedir una escena desde su link (sección 10; migración
+`20261119120000_pedir_escena.sql`, base 29, **aplicada** con la v0.324, 2026-11-06). **Pendiente:**
+B-3 (prender la privacidad de lo borrado, D14), sección 9. Hasta B-3, *Share scenes* y dar una escena pedida están
+**frenados**: la base rechaza guardar (`clean_off`) y las ventanas lo dicen.
 
 Pedido de Lega (2026-11-05): dentro de un proyecto, además de *Share “<proyecto>”…*, **«Share scenes of “<proyecto>”…»**.
 Un vendor tiene asignadas algunas escenas: se elige a quién, aparecen las escenas con las que ya tiene marcadas, se marcan
@@ -331,12 +333,7 @@ sin opción de seguir.
 
 ## 9. Pendiente
 
-**B-2 (versión aparte):** pedir una escena desde un link de PipeSync (`/map/scenes?project=…&scene=…`) sin acceso. El
-pedido guarda el **id** del proyecto si la app lo resolvió, o el texto normalizado (columna propia), con deduplicado por
-(persona, proyecto o texto, escena) y el mismo tope en los dos casos (sin oráculo de existencia, A1); se resuelve al leer
-los pendientes, entre los proyectos que puede compartir quien mira. Decidir pide `can_share(proyecto)`, una página
-**marcada como escena de ese proyecto** y nivel `view`/`comment` (M6). Los pedidos les llegan a quienes pueden compartir
-el proyecto (B3: confirmar con Lega si también al dueño del workspace sin permiso).
+**B-2:** hecha en la v0.324 (sección 10).
 
 **B-3 (D14):** contar invitados y permisos Ver/Comentar vivos; **el orden de la restauración**: el script de restaurar
 del repo privado tiene que cargar las páginas antes que los permisos y las invitaciones (o correr con
@@ -352,3 +349,154 @@ un día, y ver esa rama. Una vez compartida, el trigger sí frena lo que se meta
 imágenes viejas `sdfile://` en escenas a compartir (B1: verificar que no haya); dos páginas con el mismo número de escena
 (B4: se comparte la que se marcó). La fila de `pages` que baja un vendor trae `parent_id` (un id del padre que no ve),
 `settings` y `created_by`: son ids y ajustes, no contenido; no se cambió.
+
+## 10. B-2: pedir una escena desde su link (v0.324, D847)
+
+Pedido de Lega: en PipeSync hay botones que linkean a una escena en el Panorama (`/map/scenes?project=…&scene=…`,
+`Doc_Link_Escena.md`). Los reviewers ven el proyecto entero y entran directo. **Quien toca el link sin ver el proyecto (o
+esa escena) cae en una página que dice «no tenés acceso a esto, ¿querés pedirlo?»; lo pide, y el dueño o los admins se
+enteran y deciden si le dan acceso y a qué.** Hay NDA: nadie sin acceso puede saber nada del proyecto, ni si existe.
+
+### 10.1 Quien pide
+
+- **La pantalla** (`SceneRequestAccess` y `SceneNoAccess` en `src/ui/RequestAccess.tsx`): «You don't have access to this.
+  Request access?» y *Request access*; después, «Request sent». **No muestra nada del link** (ni el proyecto ni la escena),
+  y es la misma exista o no: el valor del link puede ser un texto armado para engañar (antes se mostraba recortado). Si
+  ya lo pidió desde este dispositivo, «You asked for access on …» y *Ask again* (se anota por workspace y persona, como
+  los pedidos de páginas). Sin red, con la base vieja, con un link público o sin saber de qué workspace es el link (sin
+  `w=` y con más de un workspace en el dispositivo: el pedido iría a la base de otro), solo «You don't have access to
+  this.» (y, en el último caso, el aviso de cambiar de workspace).
+- **Dónde aparece:** (a) en el Panorama, cuando el `project=` no nombra ningún proyecto que la persona ve, después de la
+  primera vuelta con el servidor (antes, «Opening project…»); reemplaza a «“X” isn’t a project you can see here»; (b) en
+  la vista de la escena, cuando la persona ve **una parte** del proyecto (D401: un vendor con dos escenas) y la escena no
+  está en lo que ve; reemplaza a «isn’t in the pages you can see». También si lo que ve del proyecto no tiene ninguna
+  escena (antes caía en «This project has no scenes…» y no podía pedir); sin escena en el link, a esa persona la lista
+  vacía le dice «Nothing you can see in this project has scenes…», nunca «no hay» (D401). «Ve una parte» es no tener
+  permiso sobre el proyecto entero, **sin mirar el rol**: un admin con una sola escena también pide; (c) quien
+  no ve ningún proyecto (`NoProjectsSceneAccess` en `src/ui/NoProjectsRoute.tsx`, desde `NoProjectsBoot` y
+  `NoProjectsOpen`), en vez de «No projects yet». Quien ve el proyecto entero sigue leyendo «… isn’t a scene of …»: sabe
+  que no existe. Un nombre que nombra dos proyectos que la persona ve sigue nombrándolos (los ve).
+- **Lo que manda** (`sceneTarget` y `requestSceneAccess` en `src/sync/accessRequests.ts`): el proyecto como **id** si el
+  link trae un id (*Copy link* pone el id desde la v0.317; PipeSync puede mandar un nombre), si no como **texto
+  comparable** (`projectTextKey`: la regla exacta de `private.project_text_key`, letra por letra, que usa también el
+  servidor en memoria; una prueba lee la migración y compara); y la escena como vino, sin espacios de más. Quien ve una
+  parte del proyecto pide con el **id** solo si el link lo nombra sin dudas (trae su id o su nombre entero, o no trae
+  proyecto); si acá coincidió solo por la primera palabra («ERSO» con «ERSO | Serie» a la vista), va **el texto del link**
+  (`sceneRequestProject` en `src/ui/project.ts`): puede nombrar otro proyecto, uno que la persona no ve, y la base lo
+  resuelve entre los de quien decide.
+- **Sin cuenta:** el login de siempre. Con el código, la pestaña sigue en el link; el link del correo ahora también vuelve
+  al link entero, con lo de después del `?` (`emailRedirectTo` en `src/ui/Login.tsx`). **No se pudo verificar** que
+  Supabase acepte esa dirección con `?` en la lista de direcciones permitidas (si no la acepta, vuelve al inicio, como
+  antes).
+
+### 10.2 La base (`20261119120000_pedir_escena.sql`, versión 29)
+
+- **Tablas** `scene_access_requests` (el pedido) y `scene_access_calls` (el tope), cerradas con RLS sin políticas y `revoke
+  all`: solo las tocan las funciones. Aparte de `access_requests` (sus funciones publicadas no cambian).
+- **`request_scene_access(p_project, p_project_text, p_scene)`** — cualquier miembro vivo con sesión permitida, también un
+  invitado (el vendor que pide otra escena). **Nunca resuelve nada al pedir** (A1): guarda lo que vino y responde siempre
+  `sent`, exista o no el proyecto o la escena; un id que no existe también deja su fila (sin clave foránea). Los únicos
+  otros resultados no dependen de lo que hay en la base: `not_member`, `target_invalid` (lo mal formado) y `rate_limited`
+  (solo por el tope de llamadas). **Nada de lo que decida quien decide cambia la respuesta**: sin tope de pedidos
+  abiertos al pedir (un rechazo sacaba la fila de la cuenta y quien pide lo notaba al pasar de `rate_limited` a `sent`:
+  oráculo de que el proyecto existe, re-verificación de B-2); un repetido rechazado da `sent` como uno pendiente. Al
+  pedir se borran las filas propias creadas hace más de 30 días, en cualquier estado (depende solo de cuándo pidió la
+  persona): la tabla no crece sin fin.
+  **El tope cuenta todas las llamadas**, repetidas o no: 20 cada 24 horas por persona, en una fila por persona que se
+  suma antes de mirar nada más; la 21 da `rate_limited` exista o no lo pedido (y el error deshace también la cuenta, así
+  la ventana no crece). Un pedido repetido (persona, id o texto, escena sin mayúsculas) renueva su fila como mucho una
+  vez por hora. Un rechazo de hace menos de un día deja el pedido nuevo en `void` (no se lista); pasado el día, al volver
+  a pedir vuelve a `pending`. El mismo candado por persona que los pedidos de archivos y páginas.
+- **`scene_access_requests_pending()`** — solo **dueño o admin** del workspace (B2, B3). **Resuelve al leer, y solo entre
+  los proyectos que quien mira puede compartir** (`can_share` dentro de `scene_request_projects`, **antes** de comparar
+  el nombre entero): un id, si el proyecto existe, no está borrado y lo puede compartir; un texto, entre los suyos sin
+  borrar, por el nombre entero o, si ninguno de los suyos se llama así, por la primera palabra (como `projectMatches`).
+  Si el filtro fuera después, «erso» no le llegaría a un admin que comparte «ERSO | Serie» porque existe otro «Érso» que
+  no ve, y eso le diría que existe (oráculo, auditoría de B-2). Una fila por proyecto (un texto que nombra dos da dos
+  filas, y decidir una cierra las dos). De cada persona, solo sus 20 pendientes más nuevos (`row_number()` por persona,
+  antes de resolver el proyecto): el tope de abiertos vive acá, en lo que quien pide no ve. No muestra el pedido de quien ya ve ese proyecto entero, el de alguien sacado,
+  los propios ni los de más de 30 días. Devuelve el id del proyecto (la app pone el nombre, que ya tiene), el texto del
+  link (`project_text`: lo escribió quien pide, no dice nada que no sepa), si el proyecto salió por el id o el nombre
+  entero o por la primera palabra (`exact`) y la escena como vino; nunca cuántos proyectos coinciden. Costo: por pedido
+  pendiente, un `can_share` por proyecto vivo con texto (decenas) o uno con id.
+- **`decide_scene_access_request(p_id, p_accept, p_project, p_page, p_level)`** — dueño o admin que puede compartir
+  `p_project`, que tiene que ser uno de los que resuelve el pedido; si no (o el pedido no existe, ya se decidió, es de más
+  de 30 días o es propio), el mismo `request_not_found`. Rechazar es explícito. **Dar acceso llama a `set_page_shares`**
+  con esa sola página y el correo de quien pidió (M6): el interruptor de lo borrado (`clean_off`), nivel `view` o
+  `comment`, la página **marcada como escena de ese proyecto** y viva (`page_invalid`), nada adentro marcado como otra
+  entidad (`scene_contains_entities`), el candado por correo, el permiso que nunca baja y la base limpia de la rama.
+  Ninguna regla de seguridad se repite. Antes: el nivel (`level_invalid`), la página (`page_invalid`) y que quien pidió
+  siga siendo miembro (`member_not_found`: si no, `set_page_shares` lo invitaría como alguien nuevo), con la fila de su
+  membresía bloqueada (`for share`) hasta el final, contra un `remove_member` a la vez. Quién puede decidir desde qué
+  proyecto sale de la misma `scene_request_projects` que la lista.
+
+### 10.3 Quien decide
+
+- **La campana** suma los pedidos de escenas para dueño y admins con la base en la 29 (`sceneRequestsEnabled`,
+  `AccessRequestsInbox.setScenes`): «<correo> asks for scene <lo del link> of <proyecto>», con el rol y cuándo.
+- **La ventana** (`SceneRequestForm` en `src/ui/AccessRequests.tsx`): muestra lo que decía el link del proyecto («The
+  link said “…”.») y busca la escena del link entre las del proyecto con el lector del Panorama (`resolveProjectScene`,
+  que usa `resolveSceneParam`). Si aparece y el proyecto salió por el id o por el nombre entero, **la lista queda fija en
+  ella**. Si no aparece («The link asked for “…”…»), o el proyecto salió solo por la primera palabra («The link said
+  “mor”, which only matches the first word…»: puede ser otro proyecto, y la escena **no se elige sola**), se elige a mano
+  y el primer *Give access* muestra «The link asked for “X”, you're giving Y. Give access?» con *Yes, give access*;
+  cambiar la escena o el nivel lo vuelve a pedir. Se puede rechazar siempre. Las escenas salen de `projectSceneItems`
+  (`src/ui/projectScenes.ts`), lo mismo que *Share scenes*: **antes de *Give access* dice qué es y cuántas páginas lleva
+  adentro** («Scene · 3 pages inside», M6), y una escena con otra entidad adentro sale apagada y, elegida, con el motivo.
+  Nivel *Can view* (de fábrica) o *Can comment*. Sin el interruptor de lo borrado, el aviso y *Give access* apagado
+  (rechazar sí se puede). Dar acceso escribe la marca de escena si falta y espera a que suba (`markScenes`), pasa por la
+  compuerta sin *Share anyway* y, después, arma las bases limpias y vuelve a pedir la marca del árbol. Los errores de
+  `set_page_shares` se dicen con las frases de *Share scenes*.
+- **B3, decidido sin Lega (D847):** los pedidos les llegan al **dueño y a los admins del workspace que pueden compartir
+  el proyecto**, que son quienes pueden dar la escena (*Share scenes* es de dueño y admins, D843 (3)). Un dueño o admin
+  **sin permiso sobre el proyecto no los recibe**: no ve el proyecto (la regla de NDA vale también para él: ni su nombre ni
+  que existe) y no podría darla. Tampoco quien creó el proyecto siendo miembro común: puede compartirlo con *Share*, pero
+  no darlo como escena. Un proyecto que solo puede compartir un miembro que lo creó no le llega a nadie; queda escrito.
+
+### 10.4 Pruebas
+
+- **SQL** (`supabase/tests/pedir_escena_permisos.sql`, en `begin … rollback`, termina en `select 'ok'`): las puertas y la
+  normalización; pedir (siempre `sent`, quién, lo mal formado, el texto normalizado, los repetidos, **la 21 da lo mismo
+  exista o no**, el tope por persona y su ventana); la lista (resolver el texto, el nombre entero gana, una palabra que
+  nombra dos, quién la ve y quién no, quien ve el proyecto entero, sacado, 30 días); decidir (`clean_off`, quién no puede,
+  un proyecto que no es del pedido, las reglas de la página de `set_page_shares`, dar una vez, nunca baja, «mor» desde
+  uno, sacado, rechazar y el `void` del día). Después de la auditoría: la lista y decidir resuelven solo entre los
+  proyectos de quien mira (con EX vivo, para `a` «erso» es PR y lo decide desde PR), el texto del link y `exact` en la
+  lista, decidir uno propio, y el borrado de lo viejo al pedir; los chequeos de «no está en la
+  lista» exigen una lista (un `error:…` ya no pasa por vacía). Corrió contra la base real en una transacción que se deshace
+  en cada vuelta de auditoría (tres) y dio `ok`. Después
+  de la re-verificación: con 20 abiertos, uno nuevo, uno repetido pendiente y uno repetido rechazado dan `sent`; el
+  borrado por `created_at` en cualquier estado; la lista con 22 pendientes de una persona trae sus 20 más nuevos y los
+  de los demás enteros. Tampoco corrió todavía.
+- **App** (`src/ui/sceneRequests.test.tsx`, contra el servidor en memoria con las mismas reglas en `src/sync/testing.ts`):
+  las reglas con **24 mutantes** (`SCENE_REQUEST_MUTANTS`: `member`, `sameAnswer`, `allCalls`, `dedup`, `listRole`,
+  `listShare`, `listExact`, `shareFirst` —el filtro antes del nombre entero—, `projectText`, `listOwn` —segunda capa, con
+  `listSees` también afuera—, `listSees`, `listRecent`, `listRemoved`, `decideRole`, `decideShare`, `decideCandidate`,
+  `decideState`, `decideOwn`, `decideRecent`, `decideMember`, `reuse` —dar acceso pasa por `set_page_shares`—, `level`,
+  segunda capa que se prueba con `reuse` también afuera, `openCap` —los 20 pendientes más nuevos por persona en la lista,
+  con uno nuevo y uno rechazado que siguen dando `sent`— y `cleanup` —el borrado por `created_at`—), todos detectados; la normalización igual a la de
+  la migración (la prueba lee el `translate` del archivo); el borrado de lo viejo al pedir; la pantalla sin acceso (igual exista o no, sin nada del link, *Request access*
+  y «Request sent», el dispositivo que recuerda, el tope en palabras, la base vieja, sin proyectos, el invitado que ve una
+  escena y pide otra por el id; el link por la primera palabra va como texto y por el nombre entero como id; un admin con
+  una sola escena pide; quien ve una parte sin ninguna escena pide y no lee «no hay»); la ventana de decidir (la escena
+  del link fija, qué es y cuántas lleva adentro, la marca escrita antes, el permiso dado; por la primera palabra, a mano
+  y con la confirmación; una escena del link que no aparece; sin el interruptor; una escena con una locación adentro). `src/ui/loginFile.test.tsx`: el correo vuelve al link de la escena. `sceneLink.test.tsx` y
+  `scenesSection.test.tsx`: ajustados a la pantalla nueva.
+
+### 10.5 Lo que no se verificó y lo que queda
+
+- **La prueba SQL corrió contra la base real** en una transacción que se deshace en cada vuelta de auditoría, y al
+  aplicar la migración con la v0.324 (2026-11-06) las 50 pruebas de permisos dieron `ok`. No se midió el costo de la
+  lista con la base real.
+- La columna generada con el nombre normalizado en `workspaces` (opcional en la auditoría) no se hizo: `translate` no
+  cambia de un nombre a otro y los proyectos son decenas; si la lista se pone lenta, es lo primero.
+- **No se vio en el navegador con sesión real** (el pedido y la ventana, contra la base real, necesitan la 29).
+- La dirección con `?` del link del correo de login en la lista de Supabase (10.1).
+- **Sin paso en los recorridos** (como *Share scenes*, D843 (12)): pedir necesita un link de otro proyecto y la base, y
+  decidir, otra persona; la página de práctica no tiene ninguno. Va en la ayuda (*Ask for a scene from its link*).
+- Quien pide no sabe nunca si se le dio: el proyecto le aparece con la próxima sincronización y el link se abre (como los
+  pedidos de páginas). Avisarle (un correo, la campana) queda para Lega.
+- Dos pedidos de la misma persona por la misma escena en dos formas (`1066` y `101_066`) son dos filas: decidir una no
+  cierra la otra, que queda pendiente hasta decidirla (dar de nuevo no cambia nada) o que pasen 30 días. Bajo.
+- Una carrera de la inbox (pre-existente): una pregunta pedida justo cuando termina otra puede devolver la lista de antes;
+  la próxima vuelta (60 s, o al abrir la campana) la corrige.

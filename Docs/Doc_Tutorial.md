@@ -92,7 +92,7 @@ Relevado del código de `main`. Son los lugares a los que puede apuntar un globi
 | Links de Drive | `DrivePasteMenu.tsx`, `driveCard.ts` | Pegar un link de Drive ofrece link, texto o tarjeta con reproductor. |
 | Comentarios y preguntas | `EditorComments.tsx`, `CommentsPanel.tsx` | Comentar un bloque (ícono al costado, botón de la barra, Ctrl/⌘+Alt+M), el panel con los hilos, las preguntas (un párrafo marcado que se contesta con un hilo). |
 | Buscar y reemplazar | `FindBar.tsx` | La barra de la página; reemplazar se despliega con la flecha. Con P.12 (entrega 2), la lupa del proyecto a la izquierda del "+" de páginas. |
-| Compartir y miembros | `ShareDialog.tsx`, `MembersDialog.tsx`, `ShareScenesDialog.tsx` | Invitar, permisos por proyecto o página. Desde v0.323, *Share scenes* (dueño y admins: las escenas de un proyecto para un vendor) y el ojo del árbol en lo que ven personas de afuera; sin paso en los recorridos (D843). |
+| Compartir y miembros | `ShareDialog.tsx`, `MembersDialog.tsx`, `ShareScenesDialog.tsx` | Invitar, permisos por proyecto o página. Desde v0.323, *Share scenes* (dueño y admins: las escenas de un proyecto para un vendor) y el ojo del árbol en lo que ven personas de afuera; sin paso en los recorridos (D843). Desde v0.324, pedir una escena desde su link (la pantalla sin acceso y los pedidos en la campana, `RequestAccess.tsx`, `AccessRequests.tsx`); tampoco lleva paso: necesita un link ajeno, la base y otra persona (D847). |
 | Hojas y PDF | `SheetBreaks.tsx`, `printPage.ts` | Marcas de hoja en pantalla, el PDF con los mismos cortes. |
 
 ## 2. Todos los atajos de hoy

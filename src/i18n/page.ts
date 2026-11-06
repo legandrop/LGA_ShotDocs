@@ -22,6 +22,10 @@ export const page = {
     en: "Request sent. If someone gives you access, the page opens here.",
     es: "Pedido enviado. Si alguien te da acceso, la página se abre acá.",
   },
+  // Pedir una escena desde su link (Doc_Compartir_Escenas.md, B-2): nunca nombra la escena ni el proyecto (NDA).
+  'page.sceneNoAccess': { en: "You don't have access to this.", es: "No tenés acceso a esto." },
+  'page.sceneRequestAsk': { en: "Request access?", es: "¿Querés pedirlo?" },
+  'page.sceneRequestSent': { en: "Request sent", es: "Pedido enviado" },
   // Con más de un workspace en el dispositivo, `/p/<id>` no dice de cuál es: sin *Request access* (Doc_Links_PDF.md, 19).
   'page.otherWorkspace': {
     en: "If this link is from another of your workspaces, switch to it in Workspaces and open the link again.",

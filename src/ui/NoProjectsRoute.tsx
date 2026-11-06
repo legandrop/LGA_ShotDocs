@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useMemo, useState } from 'react';
 import { useT } from '../i18n';
-import { navigate, type Route } from '../router';
-import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION, ACCESS_REQUESTS_SCHEMA_VERSION } from '../sync/accessRequests';
+import { navigate, useRoute, useSearchParam, type Route } from '../router';
+import { ACCESS_REQUESTS_PAGES_SCHEMA_VERSION, ACCESS_REQUESTS_SCHEMA_VERSION, SCENE_REQUESTS_SCHEMA_VERSION } from '../sync/accessRequests';
 import { SupabaseRemote } from '../sync/remote';
 import { useWorkspace } from '../workspace';
-import { RequestAccess, usePageWorkspaceKnown } from './RequestAccess';
+import { PROJECT_PARAM } from './project';
+import { RequestAccess, SceneRequestAccess, usePageWorkspaceKnown, WORKSPACE_PARAM } from './RequestAccess';
 
 // Quien no ve ningún proyecto y abre la dirección de una página (`/p/<id>`) o de un archivo (`/f/<clave local>/<id>`)
 // (P.30, Docs/Doc_Links_PDF.md, sección 19, O2): en vez de «No projects yet», la pantalla sin acceso de siempre con
@@ -62,6 +63,51 @@ export function NoProjectsAccess({
         ) : file ? (
           <p className="muted">{tr('file.noAccess.text')}</p>
         ) : null}
+        <button className="link" onClick={() => navigate('/')}>
+          {tr('file.home')}
+        </button>
+      </div>
+    </main>
+  );
+}
+
+/**
+ * El link de una escena (`/map/scenes?project=…&scene=…`, Doc_Link_Escena.md): con `project=`, `null` si la dirección no es
+ * eso. Quien no ve ningún proyecto y lo abre ve la pantalla sin acceso de la escena (B-2), no «No projects yet».
+ */
+export function useSceneLink(): { project: string } | null {
+  const route = useRoute();
+  const project = useSearchParam(PROJECT_PARAM);
+  return route.name === 'map' && project !== null && project.trim() !== '' ? { project } : null;
+}
+
+/** La pantalla sin acceso del link de una escena para quien no ve ningún proyecto (B-2), con *Go to Shot Docs*. */
+export function NoProjectsSceneAccess({
+  project,
+  client,
+  userId,
+  localKey,
+  schemaVersion,
+  online,
+}: {
+  project: string;
+  client: SupabaseClient;
+  userId: string;
+  localKey: string;
+  schemaVersion: number | null;
+  online: boolean;
+}) {
+  const tr = useT();
+  const scene = useSearchParam('scene') ?? '';
+  const single = usePageWorkspaceKnown();
+  const named = useSearchParam(WORKSPACE_PARAM) !== null;
+  const known = single || named;
+  const canRequest = online && known && (schemaVersion ?? 0) >= SCENE_REQUESTS_SCHEMA_VERSION;
+  return (
+    <main className="center-screen file-screen">
+      <div className="card">
+        <SceneRequestAccess key={`${project}|${scene}`} client={client} userId={userId} localKey={localKey} project={project} scene={scene} canRequest={canRequest} />
+        {!known && <p className="muted">{tr('page.otherWorkspace')}</p>}
         <button className="link" onClick={() => navigate('/')}>
           {tr('file.home')}
         </button>

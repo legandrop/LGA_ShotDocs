@@ -1,4 +1,5 @@
 import { locale, useT, type Translate } from '../i18n';
+import { useTree } from '../services';
 import { ROLE_LABELS } from '../sync/access';
 import type { AccessRequest } from '../sync/accessRequests';
 
@@ -17,8 +18,15 @@ export function agoText(iso: string, lang: Parameters<typeof locale>[0], now = D
   return new Intl.DateTimeFormat(locale(lang), { month: 'short', day: 'numeric' }).format(t);
 }
 
-/** «<correo> pide acceso a <archivo>» o, si pidió una página (entrega 3), «… a la página <título>». */
-export function requestText(request: AccessRequest, tr: Translate): string {
+/**
+ * «<correo> pide acceso a <archivo>», si pidió una página (entrega 3) «… a la página <título>», y si pidió una escena desde
+ * su link (B-2) «<correo> pide la escena <lo del link> de <proyecto>» (`projectName`: el nombre que tiene en este
+ * dispositivo quien decide, que lo puede compartir).
+ */
+export function requestText(request: AccessRequest, tr: Translate, projectName?: string): string {
+  if (request.scene) {
+    return tr('requests.asksScene', { email: request.email, scene: request.scene.text, project: projectName || tr('project.thisProject') });
+  }
   if (request.targetPageId) {
     return tr('requests.asksPage', { email: request.email, page: request.pages[0]?.title || tr('common.untitled') });
   }
@@ -28,10 +36,12 @@ export function requestText(request: AccessRequest, tr: Translate): string {
 /** Una fila: quién pide qué, su rol, cuándo y cuántas veces, y *Review*. */
 export function AccessRequestRow({ request, onReview }: { request: AccessRequest; onReview: () => void }) {
   const tr = useT();
+  const tree = useTree();
+  const projectName = request.scene ? tree.project(request.scene.projectId)?.name : undefined;
   return (
     <li className="access-request">
       <span className="access-request-text">
-        <span>{requestText(request, tr)}</span>
+        <span>{requestText(request, tr, projectName)}</span>
         <span className="muted small">
           {tr(ROLE_LABELS[request.role])} · {agoText(request.askedAt, tr.lang)}
           {request.times > 1 ? ` · ${tr('requests.times', { count: request.times })}` : ''}

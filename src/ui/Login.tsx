@@ -53,6 +53,9 @@ export function Login({ consent }: { consent?: { notice: string; returnTo: strin
   // dirección (sin el `#`); con el código, la pestaña ya está ahí.
   const route = useRoute();
   const fileRoute = !consent && route.name === 'file';
+  // El link de una escena (`/map/scenes?project=…&scene=…`, Doc_Compartir_Escenas.md, B-2): el link del correo vuelve
+  // también a esa dirección, con lo de después del `?`, y ahí, si no la ve, la pantalla para pedirla.
+  const sceneLink = !consent && route.name === 'map' && new URLSearchParams(location.search).has('project');
 
   async function sendEmail(e?: FormEvent) {
     e?.preventDefault();
@@ -62,7 +65,11 @@ export function Login({ consent }: { consent?: { notice: string; returnTo: strin
     setError(null);
     const { error } = await client.auth.signInWithOtp({
       email: address,
-      options: { emailRedirectTo: consent?.returnTo ?? (fileRoute ? location.origin + location.pathname : location.origin) },
+      options: {
+        emailRedirectTo:
+          consent?.returnTo ??
+          (sceneLink ? location.origin + location.pathname + location.search : fileRoute ? location.origin + location.pathname : location.origin),
+      },
     });
     setBusy(false);
     if (error) setError(explain(error));

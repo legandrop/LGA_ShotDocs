@@ -9,7 +9,8 @@ import { notify } from '../ui/notice';
 import { pageDocTitle, setDocumentTitle } from '../ui/titleBadge';
 import { useColumnWidths, type ColumnSpec } from '../ui/columnWidths';
 import { openExportPages } from '../ui/ExportHost';
-import { shownParam, storeProject, useCurrentProject, useProjectParam } from '../ui/project';
+import { shownParam, storeProject, useCurrentProject, useProjectParam, useSceneRequestProject } from '../ui/project';
+import { SceneNoAccess } from '../ui/RequestAccess';
 import { existingRelationsSession, useIndexProgress } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
 import type { Place } from './liveView';
@@ -80,12 +81,18 @@ export function MapView({ tab }: { tab: MapTab }) {
     // Mientras no terminó una vuelta con el servidor, el proyecto puede estar bajando (un dispositivo nuevo).
     const settled = status.lastSyncAt !== null || status.lastError !== null;
     const name = shownParam(param.value);
+    // Un proyecto que no ve (exista o no): la pantalla sin acceso, sin nada del proyecto ni de la escena (B-2, NDA).
+    if (param.kind === 'missing' && settled) {
+      return (
+        <div className="mp">
+          <SceneNoAccess project={param.value} />
+        </div>
+      );
+    }
     return (
       <div className="mp">
         <p className="mp-empty">
-          {param.kind === 'ambiguous'
-            ? tr('map.projectAmbiguous', { name, list: param.names.join(' · ') })
-            : tr(settled ? 'map.projectUnknown' : 'map.projectOpening', { name })}
+          {param.kind === 'ambiguous' ? tr('map.projectAmbiguous', { name, list: param.names.join(' · ') }) : tr('map.projectOpening', { name })}
         </p>
       </div>
     );
@@ -217,8 +224,11 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   // El número de la dirección leído con el mismo lector que la lupa (`105_055a`, `101-012`, `5055`): la escena exacta.
   const resolve = (q: string): string | null => (snap ? resolveSceneParam({ snap, title: (id) => tree.get(id)?.title }, q) : null);
 
-  // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta (D401).
-  const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
+  // Quien no ve el proyecto entero (un invitado a una rama, o un admin con una sola escena) no puede saber qué falta
+  // (D401). Sin mirar el rol: un admin sin permiso sobre el proyecto también ve solo una parte y tiene que poder pedir.
+  const partial = perms.known && perms.projectLevel(projectId) === 0;
+  // Lo que se pide desde acá: el id del proyecto, o el texto del link si acá coincidió solo por la primera palabra.
+  const requestProject = useSceneRequestProject(projectId);
   const complete = !!data?.complete;
   const counts = data ? mapCounts(data) : { scenes: 0, locations: 0, days: 0, scoutings: 0, pending: 0, duplicates: 0, unnumbered: 0, toResolve: 0 };
   // Lo que llegó tarde a una página unida (E16) también espera en *Pending*.
@@ -275,8 +285,13 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
           </span>
         )}
       </p>
-      {empty ? (
-        <p className="mp-empty">{tr('map.empty')}</p>
+      {empty && partial && tab === 'scenes' && sceneCode ? (
+        // Quien ve una parte del proyecto sin ninguna escena a la vista: la escena del link puede estar en lo que no ve
+        // (D401), la misma pantalla sin acceso que en la vista de la escena (B-2).
+        <SceneNoAccess project={requestProject} />
+      ) : empty ? (
+        // Para quien ve una parte, «no hay» sería mentira (puede haber en lo que no ve, D401).
+        <p className="mp-empty">{tr(partial ? 'map.emptyPartial' : 'map.empty')}</p>
       ) : (
         <>
           <div className="mp-bar">
@@ -721,6 +736,7 @@ function SceneDetail({
   const { workspace } = useServices();
   // El nombre del proyecto en el aviso de una escena que no está: llegando por un link (D837) puede no ser el que se esperaba.
   const projectName = useTree().project(projectId)?.name ?? tr('project.defaultName');
+  const requestProject = useSceneRequestProject(projectId);
   const top = useRef<HTMLDivElement>(null);
   // El link de esta escena en este proyecto (Docs/Doc_Link_Escena.md): para pasárselo a alguien del equipo.
   // La escena va en la forma de la post (`scene=1013`), como la nombran PipeSync y Flow; el link lee las tres.
@@ -758,8 +774,13 @@ function SceneDetail({
         {tr('map.allScenes')}
       </a>
       {!scene || !list ? (
-        // Quien ve una parte del proyecto no puede saber si existe en una página que no ve (D401).
-        <p className="mp-empty">{complete ? tr(partial ? 'map.sceneUnknownSeen' : 'map.sceneUnknown', { code, project: projectName }) : tr('live.reading')}</p>
+        // Quien ve una parte del proyecto no puede saber si existe en una página que no ve (D401): la pantalla sin acceso,
+        // con el pedido por el id del proyecto (B-2). Quien ve el proyecto entero sabe que no existe.
+        complete && partial ? (
+          <SceneNoAccess project={requestProject} />
+        ) : (
+          <p className="mp-empty">{complete ? tr('map.sceneUnknown', { code, project: projectName }) : tr('live.reading')}</p>
+        )
       ) : (
         <>
           <h2 className="mp-sh">

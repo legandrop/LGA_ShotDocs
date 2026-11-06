@@ -121,6 +121,27 @@ export function useProjectParam(): ProjectParam {
   return { kind: 'missing', value };
 }
 
+/**
+ * Lo que va en el pedido de una escena (B-2) desde el proyecto abierto `projectId`, del que se ve una parte: su id solo si
+ * el link lo nombra sin dudas (trae su id, o su nombre entero, o no trae proyecto); si el link trae un nombre que acá
+ * coincidió solo por la primera palabra («erso» con «ERSO | Serie» a la vista), el texto del link, que la base resuelve
+ * entre los proyectos de quien decide: puede nombrar otro proyecto, uno que esta persona no ve.
+ */
+export function sceneRequestProject(projects: readonly Named[], projectId: string, value: string | null): string {
+  const raw = (value ?? '').trim();
+  if (!raw) return projectId;
+  if (UUID.test(raw)) return raw.toLowerCase() === projectId.toLowerCase() ? projectId : raw;
+  const project = projects.find((p) => p.id === projectId);
+  return project && projectKey(project.name) === projectKey(raw) ? projectId : raw;
+}
+
+/** `sceneRequestProject` con el `project=` de la dirección. */
+export function useSceneRequestProject(projectId: string): string {
+  const tree = useTree();
+  const value = useSearchParam(PROJECT_PARAM);
+  return sceneRequestProject(tree.projects(), projectId, value);
+}
+
 /** El valor de la dirección tal como se muestra en un aviso: recortado, para que no se lea como un texto de la app. */
 export function shownParam(value: string): string {
   const one = value.trim().replace(/\s+/g, ' ');

@@ -1,5 +1,21 @@
 # Changelog — LGA Shot Docs
 
+v0.324 :
+
+Lega pidió que quien toque el link de una escena desde PipeSync sin acceso pueda pedirla, con NDA: sin saber nada del
+proyecto. Antes la vista decía «“ERSO” isn’t a project you can see here» con el texto del link. Ahora, para un proyecto
+que no ve, una escena fuera de lo que ve o sin ningún proyecto, dice solo «You don't have access to this. Request
+access?» y *Request access*. La base guarda el id o el nombre normalizado sin resolverlo, responde siempre `sent` y el
+tope cuenta todas las llamadas (migración `20261119120000_pedir_escena.sql`, base 29, prueba SQL). El dueño y los admins
+que comparten el proyecto lo ven en la campana: la escena del link, qué es y cuántas páginas lleva, y *Give access* pasa
+por `set_page_shares` (frenado hasta D14). El correo de login vuelve al link. Con las correcciones de la auditoría: el
+nombre del link se resuelve solo entre los proyectos de quien decide (sin oráculo), la ventana muestra lo que decía el
+link y, si coincidió solo por la primera palabra, la escena se elige a mano con una confirmación; un admin con una sola
+escena y quien ve una parte sin escenas también piden. Nada de lo que decide el dueño cambia la respuesta de quien
+pide: el tope de pedidos abiertos pasó a la lista (los 20 más nuevos de cada persona). 24 mutantes, todos detectados. D847;
+`Doc_Compartir_Escenas.md`, sección 10.
+[ v0.324: Pedir una escena desde su link - pantalla sin acceso sin nada del proyecto, pedidos en la campana del dueño y los admins ]
+
 v0.323 :
 
 Lega pidió compartir con un vendor solo las escenas en las que trabaja. Ahora el dueño y los admins tienen *Share

@@ -172,7 +172,7 @@ describe('el link a una escena', () => {
     }
   });
 
-  it('un proyecto que no está no muestra la escena de otro: «Opening…» hasta una vuelta con el servidor, después que no lo ve', async () => {
+  it('un proyecto que no está no muestra la escena de otro: «Opening…» hasta una vuelta con el servidor, después la pantalla sin acceso', async () => {
     const { d, other } = await twoProjects();
     const real = d.engine.getStatus;
     // Un dispositivo nuevo que todavía no habló con el servidor: el proyecto puede estar bajando.
@@ -186,12 +186,14 @@ describe('el link a una escena', () => {
     const synced = { ...real(), lastSyncAt: Date.now(), lastError: null };
     d.engine.getStatus = () => synced;
     act(() => navigate('/map/scenes?project=NOPE&scene=105_028'));
-    await shown(() => expect(host.querySelector('.mp-empty')?.textContent).toBe('“NOPE” isn’t a project you can see here. Ask for access, or check you’re in its workspace.'));
+    // La pantalla sin acceso de B-2 (Doc_Compartir_Escenas.md): nada del proyecto ni de lo que dice el link (NDA).
+    await shown(() => expect(host.querySelector('.scene-request p')?.textContent).toMatch(/^You don't have access to this\./));
+    expect(host.querySelector('.mp')!.textContent).not.toContain('NOPE');
     expect(host.querySelector('.mp-sh')).toBeNull();
     expect(storedProjectOf(d.remote.userId)).toBe(other);
   });
 
-  it('dos proyectos que empiezan igual: no se adivina, se nombran los dos; el valor largo se recorta', async () => {
+  it('dos proyectos que empiezan igual: no se adivina, se nombran los dos; uno que no está no muestra el valor', async () => {
     const { d, other } = await twoProjects();
     await d.tree.createProject('ERSO (copia)');
     const host = mount(d, '/map/scenes?project=erso&scene=105_027');
@@ -199,7 +201,9 @@ describe('el link a una escena', () => {
     expect(host.querySelector('.mp-sh')).toBeNull();
     expect(storedProjectOf(d.remote.userId)).toBe(other);
     act(() => navigate(`/map/scenes?project=${encodeURIComponent('Your session expired, call this number now to keep your account')}&scene=1`));
-    await shown(() => expect(host.querySelector('.mp-empty')?.textContent).toContain('“Your session expired, call this number…”'));
+    // Un proyecto que no ve: la pantalla sin acceso (B-2), que no muestra nada de lo que dice el link.
+    await shown(() => expect(host.querySelector('.scene-request')).not.toBeNull());
+    expect(host.querySelector('.mp')!.textContent).not.toContain('Your session');
   });
 
   it('una escena que no está nombra el proyecto; en una página manda la página aunque la dirección diga otro proyecto', async () => {
