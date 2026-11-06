@@ -1918,7 +1918,7 @@ el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar de
   dirección o de dominio (`/`, `:`, `@` o un punto seguido de letras) se descarta y queda "Join a
   workspace?". Al aceptar, lo agrega, lo abre y sigue al login, con la página del link pendiente para después de entrar.
   El link se puede abrir o pegar en *Join a workspace* (en la bienvenida o en el selector).
-- **Crear:** la bienvenida (o *Create a workspace…* en el selector) enlaza la guía en el repo público
+- **Crear:** la bienvenida (o *Create a workspace* en el selector) enlaza la guía en el repo público
   (`Guide_Create_Workspace.md` en GitHub) y pide la dirección y la clave publicable que imprime el comando.
   La app lee `workspace_settings` (`name`, `local_key`, `schema_version`) con la clave publicable: sin la
   tabla o sin clave local, avisa que falta correr el comando; con una clave que no es de esa dirección, lo
@@ -1929,11 +1929,11 @@ el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar de
   de la clave local y recarga. Un pendiente nunca abre una base local, así que no hay nada más que mover.
   Si falta la clave local, lo avisa y ofrece quitarlo.
 - **El selector Workspace › Proyecto:** con un solo workspace se ve igual que antes, más una línea al pie
-  del selector de proyectos (*Join or create a workspace…*). Con varios, arriba de la barra lateral el
+  del selector de proyectos (*Join or create a workspace*). Con varios, arriba de la barra lateral el
   nombre del workspace va antes del proyecto, y el selector tiene la sección *Workspaces* (cambiar, *Join a
-  workspace…*, *Create a workspace…*). En el login, con más de un workspace (o uno que no es Wanka), se ve
+  workspace*, *Create a workspace*). En el login, con más de un workspace (o uno que no es Wanka), se ve
   en cuál se entra y *Change* abre la lista.
-- **Quitar un workspace del dispositivo** (*Remove “…” from this device…* en el selector, solo el abierto y
+- **Quitar un workspace del dispositivo** (*Remove “…” from this device* en el selector, solo el abierto y
   nunca el de la compilación): cuenta lo sin subir como la pantalla de "sacado"; con cambios pendientes, el
   botón queda apagado hasta bajarlos con *Download my unsynced changes* y, uno por uno, cada original de
   foto o video sin subir (el archivo no los trae; la lista es la misma de la pantalla de "sacado"), o hasta

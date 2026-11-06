@@ -11,7 +11,7 @@ import { markScenes as markAndWait, MARKS_PENDING, projectSceneItems, type Scene
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate, type ShareScope } from './shareGate';
 import { teamErrorText } from './teamText';
 
-// *Share scenes of “<proyecto>”…* (Docs/Doc_Compartir_Escenas.md, B-1, D843): las escenas del proyecto que ve una persona
+// *Share scenes of “<proyecto>”* (Docs/Doc_Compartir_Escenas.md, B-1, D843): las escenas del proyecto que ve una persona
 // de afuera (un vendor). Una persona por guardado; las escenas salen del registro de este dispositivo (quien comparte ve
 // el proyecto entero: dueño o admin) y cada una se comparte con Ver o Comentar sobre su página, que vale para ella y las
 // de adentro (sus fichas). Antes de guardar se escribe la marca de escena a las que no la tienen (el vendor no ve la

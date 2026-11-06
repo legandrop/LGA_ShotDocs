@@ -746,7 +746,7 @@ function ImportCodaHost() {
 }
 
 /**
- * *Import Shot Docs archive…* (P.22, entrega 3; lo abre el selector de proyectos, para dueño y admins): como el de
+ * *Import Shot Docs archive* (P.22, entrega 3; lo abre el selector de proyectos, para dueño y admins): como el de
  * Coda, se dibuja acá para que la importación siga a la vista aunque el selector se desmonte.
  */
 function ImportArchiveHost() {

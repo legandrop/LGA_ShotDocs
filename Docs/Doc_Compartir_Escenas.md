@@ -1,6 +1,6 @@
 # Compartir escenas con un vendor (*Share scenes*)
 
-**Estado:** entrega **B-1 hecha en la v0.323** (D843): *Share scenes of “<proyecto>”…*, la migración
+**Estado:** entrega **B-1 hecha en la v0.323** (D843): *Share scenes of “<proyecto>”*, la migración
 `20261118120000_compartir_escenas.sql` (base 28, **aplicada** con la v0.323, 2026-11-06), la marca del árbol de
 lo que ven personas de afuera, sus avisos y el freno en la base para que nada marcado entre en una escena compartida.
 Pasó por dos auditorías (la de la propuesta y la de la entrega, las dos «aprobado con condiciones»; sección 8).
@@ -9,7 +9,7 @@ Pasó por dos auditorías (la de la propuesta y la de la entrega, las dos «apro
 la privacidad de lo borrado (D14) está prendida, así que *Share scenes* y dar una escena pedida ya guardan. Falta
 probarlo con una persona real (sección 9).
 
-Pedido de Lega (2026-11-05): dentro de un proyecto, además de *Share “<proyecto>”…*, **«Share scenes of “<proyecto>”…»**.
+Pedido de Lega (2026-11-05): dentro de un proyecto, además de *Share “<proyecto>”*, **«Share scenes of “<proyecto>”»**.
 Un vendor tiene asignadas algunas escenas: se elige a quién, aparecen las escenas con las que ya tiene marcadas, se marcan
 o desmarcan, y al entrar al proyecto **solo ve lo de sus escenas**, en el Panorama y en todo lo demás. **Seguridad máxima
 (material con NDA): compartir algo nunca puede dejar ver otra cosa.**
@@ -34,7 +34,7 @@ está a la vista de afuera (sección 5).
 **Quién:** solo el dueño y los admins del workspace que además pueden compartir el proyecto (`perms.canInvite` y
 `canShareProject` en la app; la base vuelve a pedirlo), con la base en la versión 28.
 
-**Dónde:** en el selector de proyectos, *Share scenes of “<proyecto>”…* (debajo de *Share “<proyecto>”…*), y en el
+**Dónde:** en el selector de proyectos, *Share scenes of “<proyecto>”* (debajo de *Share “<proyecto>”*), y en el
 Panorama, en *Scenes*, *Share scenes…* al lado de *Copy overview* (solo en la lista, no dentro de una escena).
 
 **La ventana** (`src/ui/ShareScenesDialog.tsx`):

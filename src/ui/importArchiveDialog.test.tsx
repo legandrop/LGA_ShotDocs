@@ -14,7 +14,7 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { ImportArchiveDialog } from './ImportArchiveDialog';
 import { ProjectSwitcher } from './ProjectSwitcher';
 
-// La ventana *Import Shot Docs archive…* (P.22, entrega 3): la entrada del selector de proyectos solo para quien crea
+// La ventana *Import Shot Docs archive* (P.22, entrega 3): la entrada del selector de proyectos solo para quien crea
 // proyectos (dueño y admins), elegir un zip, lo que dice antes de empezar (páginas, archivos, lo que falta, sin Drive)
 // y el resultado; un zip roto o de una versión más nueva avisa sin crear nada.
 
@@ -184,7 +184,7 @@ describe('la entrada del selector de proyectos', () => {
     await act(async () => new Promise((r) => setTimeout(r, 20)));
     await act(async () => host.querySelector<HTMLButtonElement>('.project-button')!.click());
   }
-  const entry = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import Shot Docs archive…');
+  const entry = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import Shot Docs archive');
 
   it('el dueño la ve y abre la ventana del archivo (no la de Coda)', async () => {
     const server = new FakeServer();

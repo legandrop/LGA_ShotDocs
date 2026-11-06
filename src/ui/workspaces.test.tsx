@@ -227,7 +227,7 @@ describe('en la app abierta', () => {
       </ServicesContext.Provider>,
     );
     expect(host.querySelectorAll('button')).toHaveLength(1);
-    expect(host.textContent).toContain('Join or create a workspace…');
+    expect(host.textContent).toContain('Join or create a workspace');
     expect(host.textContent).not.toContain('Remove');
   });
 
@@ -244,8 +244,8 @@ describe('en la app abierta', () => {
     expect(host.textContent).toContain('Workspaces');
     expect(host.textContent).toContain('Studio');
     expect(host.textContent).toContain('znlvpuddswymxpffgvbz.supabase.co');
-    expect(host.textContent).toContain('Remove “Studio” from this device…');
-    click(button(host, 'Join a workspace…'));
+    expect(host.textContent).toContain('Remove “Studio” from this device');
+    click(button(host, 'Join a workspace'));
     expect(onDialog).toHaveBeenCalledWith('join');
 
     // Abierto en Wanka: no se ofrece quitarla.

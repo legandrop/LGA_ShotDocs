@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.327 :
+
+Lega pidió poder marcar proyectos como favoritos y que se listen primero. Cada renglón del selector de proyectos tiene
+ahora una estrella entre el nombre y los íconos: en un favorito está llena, celeste y siempre a la vista; en los demás
+aparece vacía al pasar el mouse, con el foco o en el renglón de las flechas (en el teléfono, siempre). Los favoritos van
+primero, con el orden de siempre dentro de cada grupo, también al buscar y en los archivados. Se guardan en el
+dispositivo, por workspace y por usuario (`src/ui/projectFavorites.ts`), como lo colapsado «solo para vos»; quitar el
+workspace los olvida. Además, las entradas de abajo del selector ya no terminan en «…» (Share, Share scenes, Import,
+los de workspaces). Ayuda: «Proyectos favoritos». El recorrido no cambia: el paso del selector enseña a cambiar de
+proyecto y la estrella es una comodidad. Doc_Navegacion, «Proyectos favoritos»; prueba `projectFavorites.test.tsx`. [ v0.327: Proyectos favoritos - una estrella en el selector los lista primero, y el menú sin puntos suspensivos ]
+
 v0.326 :
 
 Lega mandó una captura del selector de proyectos: los nombres no se leían («MGTZD co…», «E…» al lado de OPEN, «63…»).

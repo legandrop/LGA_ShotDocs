@@ -349,6 +349,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['colorAdjust', 'colorAccept'],
     since: '0.320',
   },
+  {
+    // Los proyectos favoritos (Docs/Doc_Navegacion.md, «Proyectos favoritos»).
+    id: 'projectsFavorites',
+    section: 'pages',
+    title: 'help.projectsFavorites.title',
+    text: 'help.projectsFavorites.text',
+    showMe: 'project-switcher',
+    words: ['favorito', 'favorite', 'favourite', 'estrella', 'star', 'orden', 'order', 'primero', 'first', 'proyecto', 'project'],
+    since: '0.327',
+  },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },
   {

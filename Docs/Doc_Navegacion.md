@@ -96,6 +96,20 @@ del navegador y la página no los recibe; ahí se usan sus pestañas (sección s
   ventana; si ninguno la tiene (se llegó con un link), va uno nuevo al principio.
 - Un link a otro workspace o con la autoridad de un link público no se abre en un tab (`appPath`): se abre como siempre.
 
+## Proyectos favoritos (v0.327)
+
+Pedido de Lega (2026-11-06): una estrella en cada renglón del selector de proyectos para marcarlo como favorito; los
+favoritos se listan antes que los demás.
+
+- **Dónde se ve:** la estrella (`project-star`, `src/ui/ProjectSwitcher.tsx`) va entre el nombre y los íconos del
+  renglón. En un favorito está llena, con el color de acento, y siempre a la vista; en los demás aparece vacía como los
+  íconos (mouse, foco o renglón de las flechas). En el teléfono, siempre (fuera del ⋯: es un toque).
+- **El orden:** `favoritesFirst` pone los favoritos primero y deja el orden de siempre dentro de cada grupo. Vale también
+  con una búsqueda escrita y en la lista de archivados. Las flechas y Enter siguen el orden que se ve.
+- **Dónde se guarda:** en este dispositivo (`localStorage`, clave `<proyecto elegido del workspace>-favorites`, por
+  usuario; `src/ui/projectFavorites.ts`), como lo colapsado «solo para vos». No se sincroniza entre dispositivos: si
+  hiciera falta, iría a una tabla por persona en la base. Quitar el workspace del dispositivo lo olvida.
+
 ## Color del proyecto (v0.320, D841)
 
 Cada proyecto tiene un punto de color (`ProjectDot`, `src/ui/ProjectSwitcher.tsx`), que reemplazó al recuadro amarillo con

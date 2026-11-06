@@ -4,11 +4,11 @@ import type { Dict } from './types';
 
 export const workspaces = {
   'workspaces.title': { en: "Workspaces", es: "Workspaces" },
-  'workspaces.joinOrCreate': { en: "Join or create a workspace…", es: "Unirse a un workspace o crear uno…" },
-  'workspaces.removeNamed': { en: "Remove “{name}” from this device…", es: "Quitar “{name}” de este dispositivo…" },
+  'workspaces.joinOrCreate': { en: "Join or create a workspace", es: "Unirse a un workspace o crear uno" },
+  'workspaces.removeNamed': { en: "Remove “{name}” from this device", es: "Quitar “{name}” de este dispositivo" },
   'workspaces.signInToFinish': { en: "sign in to finish", es: "entrá para terminar" },
-  'workspaces.joinEllipsis': { en: "Join a workspace…", es: "Unirse a un workspace…" },
-  'workspaces.createEllipsis': { en: "Create a workspace…", es: "Crear un workspace…" },
+  'workspaces.joinEllipsis': { en: "Join a workspace", es: "Unirse a un workspace" },
+  'workspaces.createEllipsis': { en: "Create a workspace", es: "Crear un workspace" },
   'leave.unsaved': {
     en: "Some of your latest edits are not saved on this device yet. Wait a moment and try again.",
     es: "Algunos de tus últimos cambios todavía no se guardaron en este dispositivo. Esperá un momento y probá de nuevo.",

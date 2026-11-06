@@ -77,6 +77,9 @@ export const sidebar = {
   'project.renameNamed': { en: "Rename “{name}”", es: "Renombrar “{name}”" },
   // El color del proyecto (Docs/Doc_Navegacion.md, «Color del proyecto»).
   'project.color': { en: "Color", es: "Color" },
+  'project.favoriteNamed': { en: "Add “{name}” to favorites", es: "Marcar “{name}” como favorito" },
+  'project.unfavoriteNamed': { en: "Remove “{name}” from favorites", es: "Quitar “{name}” de favoritos" },
+  'project.favoriteTip': { en: "Favorite: listed before the other projects", es: "Favorito: se lista antes que los demás proyectos" },
   'project.colorNamed': { en: "Color of “{name}”", es: "Color de “{name}”" },
   'project.colorTip': { en: "Project color: it marks the project in the list and in the tabs", es: "Color del proyecto: lo marca en la lista y en los tabs" },
   'project.colorFailed': { en: "Couldn't save the color", es: "No se pudo guardar el color" },
@@ -90,9 +93,9 @@ export const sidebar = {
   'color.brightness': { en: "Brightness", es: "Brillo" },
   'color.hex': { en: "Hex color", es: "Color en hex" },
   'color.reset': { en: "Back to the default color", es: "Volver al color de fábrica" },
-  'project.share': { en: "Share “{name}”…", es: "Compartir “{name}”…" },
+  'project.share': { en: "Share “{name}”", es: "Compartir “{name}”" },
   // *Share scenes* (Docs/Doc_Compartir_Escenas.md): la entrada del selector y lo que ven personas de afuera en el árbol.
-  'project.shareScenes': { en: "Share scenes of “{name}”…", es: "Compartir escenas de “{name}”…" },
+  'project.shareScenes': { en: "Share scenes of “{name}”", es: "Compartir escenas de “{name}”" },
   'outside.tree.direct': {
     en: {
       one: "Seen by {count} person outside the team (a guest, or View or Comment), with the pages inside",
@@ -201,8 +204,8 @@ export const sidebar = {
     en: "This project was deleted forever: it can no longer be restored from the app.",
     es: "Este proyecto se borró para siempre: ya no se puede restaurar desde la app.",
   },
-  'import.menu': { en: "Import from Coda…", es: "Importar de Coda…" },
-  'importArchive.menu': { en: "Import Shot Docs archive…", es: "Importar archivo de Shot Docs…" },
+  'import.menu': { en: "Import from Coda", es: "Importar de Coda" },
+  'importArchive.menu': { en: "Import Shot Docs archive", es: "Importar archivo de Shot Docs" },
   // Con una importación en curso (de Coda o de un archivo de Shot Docs, importJob.ts): cerrar la sesión o quitar el
   // workspace esperan.
   'import.running': {

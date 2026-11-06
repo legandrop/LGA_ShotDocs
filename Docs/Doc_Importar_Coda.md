@@ -71,7 +71,7 @@ convertir las fotos que faltaban.
 
 ## 2. Importar la carpeta (la app)
 
-Selector de proyectos → **Import from Coda…**. Se elige la carpeta y todo entra a un **proyecto nuevo**. El
+Selector de proyectos → **Import from Coda**. Se elige la carpeta y todo entra a un **proyecto nuevo**. El
 código está en `src/import/` y el diálogo en `src/ui/ImportCodaDialog.tsx`.
 
 - **Quién lo ve: solo la cuenta de Lega** (y solo donde puede crear proyectos). Es una herramienta suya, no una

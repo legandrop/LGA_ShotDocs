@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { t } from './i18n';
 import { parseInviteHash, type InvitePayload } from './invite';
 import { legacyStorageNames, storageNamesFor, WANKA_LOCAL_KEY, type WorkspaceConfig } from './workspace';
+import { favoritesKey } from './ui/projectFavorites';
 
 // La lista de workspaces del dispositivo (paso 12 de Docs/Plan_Workspaces.md). Vive en `localStorage`
 // porque hace falta antes de entrar y sin red: dice a qué Supabase se conecta la app y cómo se llama lo
@@ -519,6 +520,7 @@ export function forgetWorkspaceStorage(ws: DeviceWorkspace, store: KeyValueStore
     store.removeItem(names.lastUser);
     store.removeItem(names.project);
     store.removeItem(names.lastPages);
+    store.removeItem(favoritesKey(names));
     store.removeItem(names.inviteTarget);
   } catch {
     // Son comodidades y una sesión: si no se pueden borrar, no importa.

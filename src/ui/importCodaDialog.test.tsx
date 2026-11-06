@@ -182,7 +182,7 @@ describe('importar de Coda, solo para la cuenta de Lega', () => {
     await act(async () => host.querySelector<HTMLButtonElement>('.project-button')!.click());
   }
 
-  const importEntry = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import from Coda…');
+  const importEntry = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import from Coda');
 
   it('con otro correo no aparece la entrada', async () => {
     setCodaOwnerForTests({ hash: sha256('otra-persona@ejemplo.com') });

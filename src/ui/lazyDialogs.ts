@@ -27,5 +27,5 @@ export const LookForFilesButton = lazyPart(() => import('./ProjectStatesPart').t
 export const InstallDialog = lazyPart(() => import('./InstallDialog').then((m) => m.InstallDialog));
 // Exportar una rama o un proyecto como PDF (P.22, Docs/Doc_Exportar.md).
 export const ExportDialog = lazyPart(() => import('./ExportDialog').then((m) => m.ExportDialog));
-// *Share scenes of “<proyecto>”…* (Docs/Doc_Compartir_Escenas.md): en el selector de proyectos y en el Panorama.
+// *Share scenes of “<proyecto>”* (Docs/Doc_Compartir_Escenas.md): en el selector de proyectos y en el Panorama.
 export const ShareScenesDialog = lazyPart(() => import('./ShareScenesDialog').then((m) => m.ShareScenesDialog));

@@ -787,7 +787,7 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(owner).workspace.config.storage, owner.remote.userId, built.projectId);
     mount(owner, <ProjectSwitcher />);
     await openSwitcher();
-    click(byText('Share scenes of “Serie de prueba”…'));
+    click(byText('Share scenes of “Serie de prueba”'));
     await until(() => document.querySelector('.share-scenes'), 'la ventana');
     expect(document.querySelector('.share-scenes h2')!.textContent).toBe('Share scenes of “Serie de prueba”');
   });
@@ -797,8 +797,8 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(old.owner).workspace.config.storage, old.owner.remote.userId, old.built.projectId);
     mount(old.owner, <ProjectSwitcher />);
     await openSwitcher();
-    expect(byText('Share “Serie de prueba”…')).toBeTruthy();
-    expect(byText('Share scenes of “Serie de prueba”…')).toBeUndefined();
+    expect(byText('Share “Serie de prueba”')).toBeTruthy();
+    expect(byText('Share scenes of “Serie de prueba”')).toBeUndefined();
     for (const r of roots.splice(0)) act(() => r.unmount());
     document.body.innerHTML = '';
 
@@ -812,7 +812,7 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(beto).workspace.config.storage, 'beto', built.projectId);
     mount(beto, <ProjectSwitcher />);
     await openSwitcher();
-    expect(byText('Share scenes of “Serie de prueba”…')).toBeUndefined();
+    expect(byText('Share scenes of “Serie de prueba”')).toBeUndefined();
   });
 
   it('en el Panorama, en la lista de escenas', async () => {

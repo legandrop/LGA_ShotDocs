@@ -259,8 +259,8 @@ times a day, encrypted with a passphrase only you know.
    to Home Screen**).
 2. On the welcome screen, choose **Create my workspace**, paste your **Project URL** and **Publishable
    key**, and click **Connect**. (If you already use the app with another workspace: click the project name
-   at the top of the sidebar → **Join or create a workspace…** → **Create my workspace**, or **Create a
-   workspace…** if you have more than one.)
+   at the top of the sidebar → **Join or create a workspace** → **Create my workspace**, or **Create a
+   workspace** if you have more than one.)
 3. Type the owner's email → **Continue with email**. Type the 8-digit code from the email → **Sign in**.
    The app then reads your workspace settings and opens it.
 4. On **No projects yet**, click **New project**.

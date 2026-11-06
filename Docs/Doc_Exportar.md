@@ -56,7 +56,7 @@ las doce observaciones están aplicados en el texto; la tabla está en "Correcci
     Shot Docs** (EX4, EX5, EX8).
     Se arma igual que *Download all* de una carpeta (`Doc_Carpetas.md`, D24): sin comprimir, con Zip64, escrito a
     medida que llega en Chrome y Edge de computadora, en memoria con tope en Safari, Firefox y el teléfono.
-- **Volver (EX6):** *Import Shot Docs archive…* en el selector de proyectos crea un **proyecto nuevo** con las
+- **Volver (EX6):** *Import Shot Docs archive* en el selector de proyectos crea un **proyecto nuevo** con las
   páginas, el orden, los formatos de hoja, los bloques tal cual (Script, saltos de hoja, fotos en línea, fotos en las
   celdas, preguntas), los comentarios con su autor y su fecha, y los archivos subidos al Drive del workspace donde se
   importa. Nunca pisa un proyecto que existe. No vuelven el historial, la papelera ni los permisos.
@@ -314,7 +314,7 @@ Reporte_ERSO/
 
 ## 3. Volver a Shot Docs (EX5, EX6)
 
-- **Dónde:** selector de proyectos → *Import Shot Docs archive…*, para quien puede crear proyectos (dueño y admins). Se
+- **Dónde:** selector de proyectos → *Import Shot Docs archive*, para quien puede crear proyectos (dueño y admins). Se
   elige **el zip** con un selector de archivo común (anda también en el iPhone, que no elige carpetas enteras), o la
   carpeta descomprimida en Chrome y Edge. El zip se lee por partes (`Blob.slice` sobre el índice del final): no se
   carga entero en memoria.
@@ -537,7 +537,7 @@ de empezar y ofrece el zip liviano (EX12). Un zip grande se arma desde una compu
 
 - **Menú de la página** (arriba y en la barra lateral): *Export…* debajo de *Export PDF / Print*, que sigue igual (un
   clic, Ctrl/⌘+P). **Menú de cada proyecto** en el selector (al lado de *Available offline…*): *Export project…*,
-  también en *Archived projects*. **Selector de proyectos:** *Import Shot Docs archive…* (dueño y admins), al lado de
+  también en *Archived projects*. **Selector de proyectos:** *Import Shot Docs archive* (dueño y admins), al lado de
   *New project*.
 - **La ventana *Export "<título>"*:**
   1. *What*: *This page* / *This page and the pages inside (12)* / (desde el proyecto) *The whole project (240 pages)*.
@@ -571,7 +571,7 @@ de empezar y ofrece el zip liviano (EX12). Un zip grande se arma desde una compu
 | **0** | El editor de exportación con el esquema real: poner bloques, esperar imágenes, copiar y paginar, página por página | Bajo | Con un proyecto de prueba de 300 páginas (texto, Script, fotos en línea y en celdas, tablas, saltos, preguntas): menos de 60 s en la computadora; el Y.Doc de cada página byte por byte igual antes y después; las hojas de cada página iguales a las marcas de la pantalla |
 | **1** | PDF de una rama o de un proyecto: índice con hojas, cada página con su formato, links internos, fotos, comentarios opcionales, topes | Medio | En Chromium: hojas = índice + suma de las marcas; cada página empieza en la hoja que dice el índice (si en algún navegador no, ahí el índice sale sin números); los tamaños del PDF (pdf.js) son los de cada página; los links del índice son internos; toda foto entra achicada a su ancho impreso (medir memoria de la vista y peso del PDF); sin páginas de la papelera; un invitado con dos ramas exporta solo la suya y el índice no nombra el proyecto. **Con `window.print()` y *Save as PDF* reales en Chrome y Edge** (hojas mezcladas y links internos), que arman la lista de navegadores probados. A mano: Safari de la Mac, Firefox y el iPhone (memoria y topes de píxeles) |
 | **2** | Zip: HTML, Markdown, JSON, originales, comentarios, `MISSING_FILES.txt`; los destinos de *Download all*; sin red; cancelar | Medio | El zip lo abre Python (`testzip`); cada `.html` abre con `file://` sin red y **muestra cada foto en Chromium y Firefox, también las HEIC y con *Original photos* destildada** (la vista JPEG), con link al original cuando está; el texto del `.md` es el de la página; **el texto secreto escrito y borrado y la foto sacada no están en ningún byte del zip ni del PDF**; **ningún byte del zip contiene el correo de nadie del equipo**; las claves de colapsado para todos están en el JSON; en una rama, ni el nombre ni el id del proyecto ni ids de afuera; un archivo de dos páginas va una vez; nombres sin espacios y carpetas de página de 60 letras como mucho; sin red, la lista de lo que falta y la fecha de la última sincronización. ERSO entero en Chrome, medido (tiempo, pedidos al Worker y llamados al Durable Object en el panel) |
-| **3** | *Import Shot Docs archive…*: proyecto nuevo, archivos al Drive, comentarios, seguir donde quedó; migración de `imported_from` | Medio | Ida y vuelta: los bloques de cada página iguales (salvo ids de archivos y links, cambiados), el colapsado para todos igual, los hilos con su autor, fecha y resuelto, los archivos con el mismo peso y MD5, el árbol en el mismo orden; importar dos veces el mismo zip en el mismo Supabase no choca (ids de comentarios derivados del proyecto nuevo); un comentario ajeno vuelve con `imported_author_email` nulo y uno propio a nombre de quien importa solo si la huella coincide; un hilo con el primero borrado entra con la primera respuesta viva; un zip cortado o con un JSON roto avisa sin crear nada a medias; un bloque de un tipo desconocido o con una propiedad desconocida queda en la lista; un manifest editado con el mismo id no ofrece seguir; sin espacio en el dispositivo, avisa sin empezar; cortar a mitad y seguir no duplica páginas |
+| **3** | *Import Shot Docs archive*: proyecto nuevo, archivos al Drive, comentarios, seguir donde quedó; migración de `imported_from` | Medio | Ida y vuelta: los bloques de cada página iguales (salvo ids de archivos y links, cambiados), el colapsado para todos igual, los hilos con su autor, fecha y resuelto, los archivos con el mismo peso y MD5, el árbol en el mismo orden; importar dos veces el mismo zip en el mismo Supabase no choca (ids de comentarios derivados del proyecto nuevo); un comentario ajeno vuelve con `imported_author_email` nulo y uno propio a nombre de quien importa solo si la huella coincide; un hilo con el primero borrado entra con la primera respuesta viva; un zip cortado o con un JSON roto avisa sin crear nada a medias; un bloque de un tipo desconocido o con una propiedad desconocida queda en la lista; un manifest editado con el mismo id no ofrece seguir; sin espacio en el dispositivo, avisa sin empezar; cortar a mitad y seguir no duplica páginas |
 | **4** | Después: el contenido de las carpetas de Drive (P.9) en el zip, volver al mismo workspace sin subir de nuevo los archivos que ya están, el PDF para un link público | — | Se diseña aparte |
 
 Cada entrega con su auditoría independiente antes de pasar a `main`, su entrada en la ayuda y sus pruebas en
@@ -679,7 +679,7 @@ Cada entrega con su auditoría independiente antes de pasar a `main`, su entrada
 
 - **Qué pasaba:** archivar un proyecto y volver a abrirlo dentro de un año, quizás en otro workspace (otro dueño, otro
   Drive).
-- **Las opciones:** A) *Import Shot Docs archive…* siempre a un proyecto nuevo, para quien puede crear proyectos, con
+- **Las opciones:** A) *Import Shot Docs archive* siempre a un proyecto nuevo, para quien puede crear proyectos, con
   los archivos subidos al Drive de destino. B) Restaurar encima del proyecto original. C) Sin vuelta por ahora.
 - **Elegí A porque** nunca pisa nada (regla 5), reusa la importación de Coda (crear, escribir, seguir donde quedó) y
   anda entre workspaces. B puede pisar trabajo nuevo.

@@ -25,6 +25,8 @@ import {
   SearchIcon,
   ShareIcon,
   SizeListIcon,
+  StarFilledIcon,
+  StarIcon,
   TrashIcon,
   UnarchiveIcon,
 } from './icons';
@@ -34,6 +36,7 @@ import { editedLabel, lastPageOf, projectStateError, useCurrentProject, useSwitc
 import { defaultProjectColor, loadRecentColors, previewColor, PROJECT_PRESETS, projectColor, rememberRecentColor, useProjectColor } from './projectColor';
 import { ColorPicker } from './ColorPicker';
 import { useSearchSession } from './projectSearchUi';
+import { favoritesFirst, useProjectFavorites } from './projectFavorites';
 import { tipRows } from './tipRows';
 import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, ShareScenesDialog, TrashPanel } from './lazyDialogs';
 import { Part } from './lazyPart';
@@ -148,7 +151,7 @@ export function ProjectSwitcher() {
   // Con qué lista se abre el selector: la de siempre o la papelera (`openProjectTrash`).
   const [startIn, setStartIn] = useState<'list' | 'trash'>('list');
   const [sharing, setSharing] = useState<string | null>(null);
-  // *Share scenes of “<proyecto>”…* (Doc_Compartir_Escenas.md): el proyecto cuyas escenas se comparten.
+  // *Share scenes of “<proyecto>”* (Doc_Compartir_Escenas.md): el proyecto cuyas escenas se comparten.
   const [sharingScenes, setSharingScenes] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
   const switchTo = useSwitchProject();
@@ -299,14 +302,14 @@ function ProjectMenu(props: {
   anchor: HTMLElement | null;
   onClose: () => void;
   onShare: (projectId: string) => void;
-  /** *Share scenes of “<proyecto>”…* (Doc_Compartir_Escenas.md): dueño y admins, con la base en la 28. */
+  /** *Share scenes of “<proyecto>”* (Doc_Compartir_Escenas.md): dueño y admins, con la base en la 28. */
   onShareScenes: (projectId: string) => void;
   onDelete: (projectId: string, name: string) => void;
   onWorkspaces: (mode: WorkspacesMode) => void;
   onRemoveWorkspace: () => void;
   /** Solo para la cuenta de Lega (codaOwner.ts); sin esto no aparece "Importar de Coda". */
   onImport?: () => void;
-  /** *Import Shot Docs archive…* (P.22, entrega 3): para quien crea proyectos (dueño y admins). */
+  /** *Import Shot Docs archive* (P.22, entrega 3): para quien crea proyectos (dueño y admins). */
   onImportArchive?: () => void;
 }) {
   const tree = useTree();
@@ -338,8 +341,10 @@ function ProjectMenu(props: {
   // *Share scenes* (Doc_Compartir_Escenas.md, B-1): solo dueño y admins que pueden compartir el proyecto, con la base en la
   // 28. La base vuelve a pedir todo (`set_page_shares`).
   const scenesReady = (status.schemaVersion ?? 0) >= SCENE_SHARES_SCHEMA_VERSION && perms.canInvite;
-  const { workspace } = useServices();
+  const { workspace, user } = useServices();
   const keys = workspace.config.storage;
+  // La estrella de cada renglón: los favoritos de la persona van primero (en este dispositivo, projectFavorites.ts).
+  const { favorites, toggle: toggleFavorite } = useProjectFavorites(keys, user.id);
   const offline = !status.online;
   const needle = query.trim().toLowerCase();
   const archivedMode = mode.name === 'archived';
@@ -350,7 +355,10 @@ function ProjectMenu(props: {
     archivedMode || known.some((p) => p.id === props.current)
       ? known
       : [{ id: props.current, name: tr('project.defaultName'), created_at: '' }, ...known];
-  const projects = all.filter((p) => !needle || p.name.toLowerCase().includes(needle));
+  const projects = favoritesFirst(
+    all.filter((p) => !needle || p.name.toLowerCase().includes(needle)),
+    favorites,
+  );
   const archivedCount = tree.archivedProjects().filter((p) => p.id !== props.current).length;
   const currentName = tree.project(props.current)?.name ?? tr('project.thisProject');
   // El peso que se muestra de un proyecto: solo a quien ve su papelera de archivos (también en el dispositivo: un
@@ -701,11 +709,12 @@ function ProjectMenu(props: {
               </div>
             );
           }
+          const favorite = favorites.includes(p.id);
           return (
             <div
               key={p.id}
               role="presentation"
-              className={`project-row${i === active ? ' active' : ''}${touch ? ' touch' : ''}${opened === p.id ? ' opened' : ''}`}
+              className={`project-row${i === active ? ' active' : ''}${touch ? ' touch' : ''}${opened === p.id ? ' opened' : ''}${favorite ? ' favorite' : ''}`}
               onMouseEnter={() => setActive(i)}
             >
               <button
@@ -745,6 +754,23 @@ function ProjectMenu(props: {
                 {p.id === props.current && (
                   <span className="current-mark">{archived ? tr('project.archivedMark') : tr('project.open')}</span>
                 )}
+              </button>
+              {/* La estrella: llena y siempre a la vista en un favorito; en los demás, al pasar el mouse (en el
+                  teléfono, siempre). */}
+              <button
+                className="icon-button project-star"
+                aria-label={tr(favorite ? 'project.unfavoriteNamed' : 'project.favoriteNamed', { name: p.name })}
+                aria-pressed={favorite}
+                // En un favorito, la estrella llena ya lo dice: el tooltip solo explica qué hace marcarla.
+                data-tip={touch || favorite ? undefined : tr('project.favoriteTip')}
+                onClick={() => {
+                  // El renglón cambia de lugar: el resaltado (y Enter) lo sigue, no se queda en el que ocupó su lugar.
+                  const nextFavorites = favorite ? favorites.filter((id) => id !== p.id) : [...favorites, p.id];
+                  setActive(Math.max(0, favoritesFirst(projects, nextFavorites).findIndex((q) => q.id === p.id)));
+                  toggleFavorite(p.id);
+                }}
+              >
+                {favorite ? <StarFilledIcon size={16} /> : <StarIcon size={16} />}
               </button>
               {actions && touch && (
                 <button

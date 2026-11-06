@@ -2931,7 +2931,28 @@ code {
   display: flex;
 }
 
+/* La estrella de favorito (projectFavorites.ts): llena y siempre a la vista en un favorito; en los demás, como los
+   íconos, al pasar el mouse, con el foco o en el renglón activo. En el teléfono, siempre. */
+.menu .project-star {
+  display: none;
+  flex: none;
+  color: var(--muted);
+}
+
+.menu .project-row.favorite .project-star,
+.menu .project-row.touch .project-star,
+.menu .project-row:hover .project-star,
+.menu .project-row:focus-within .project-star,
+.menu .project-row.active .project-star {
+  display: inline-flex;
+}
+
+.menu .project-row.favorite .project-star svg {
+  color: var(--accent);
+}
+
 .menu .project-actions .icon-button,
+.menu .project-star,
 .menu .project-more {
   width: 30px;
   height: 30px;

@@ -1145,7 +1145,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cada página, cada página con su hoja y sus cortes de la fase 4, sin comentarios por defecto) y un zip para archivar
   (una carpeta por página con `.html`, `.md`, los originales del Drive, los comentarios y los bloques en JSON para
   volver; el zip de *Download all*). Lo exporta quien ve, solo su rama; nunca lo borrado (se exportan bloques, nunca el
-  documento Yjs) ni la papelera. Volver: *Import Shot Docs archive…*, siempre a un proyecto nuevo. Entregas: 0 (el editor
+  documento Yjs) ni la papelera. Volver: *Import Shot Docs archive*, siempre a un proyecto nuevo. Entregas: 0 (el editor
   de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
   reusar archivos, link público). **Entrega 0 hecha (v0.115):** el editor de exportación en `src/export/`
   (sin interfaz), medido con 300 páginas y 2219 fotos en Chromium: 14,5 a 38,9 s, nada guardado cambia y las hojas de
@@ -1168,13 +1168,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   y 2219 fotos de teléfono) y la lista de las que fallaron con *Export again*. Falta a mano: guardar de verdad una parte
   de 500 MB con la vista previa de Chrome y Edge (también en 8 GB), originales reales de iPhone por el portero, Safari,
   Firefox y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 1b"). **Entrega 3 hecha (v0.141): volver a Shot Docs
-  desde el zip** (*Import Shot Docs archive…* en el selector, dueño y admins, EX16): siempre a un proyecto nuevo, con el
+  desde el zip** (*Import Shot Docs archive* en el selector, dueño y admins, EX16): siempre a un proyecto nuevo, con el
   árbol, los ajustes, las marcas de plantilla, los bloques revisados contra el esquema, el colapsado, las anotaciones,
   los archivos (sin original, la vista de la foto o su nombre) y los comentarios (migración
   `20261026120000_comentarios_archivo.sql`, **aplicada**, verificada en la base el 2026-10-06; con la base vieja esperaban para *Resume*); sigue donde quedó
   sin duplicar; zips rotos y hostiles avisados sin crear nada. Falta: correr la prueba SQL de esa migración (ya aplicada) y a mano
   ERSO entero con el portero de verdad, Safari y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 3"). Sigue la 4.
-  **Importación por generaciones (v0.211, parcial; también *Import from Coda…*; D304 y D305):** cada importación
+  **Importación por generaciones (v0.211, parcial; también *Import from Coda*; D304 y D305):** cada importación
   reserva en el dispositivo su identidad (generación, proyecto y la operación que lo crea) antes de crear el proyecto;
   reintentar o *Resume* usa los mismos ids y no crea otro proyecto; *Import into a new project*, o importar otra vez
   algo ya terminado, abre otra generación sin tocar la anterior; cada página se escribe entera o no se escribe, y una
@@ -1204,7 +1204,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (tienen el recibo de la página anterior); la salida hoy es *Import into a new project*, y el arreglo es rehacer los
   comentarios con identidad nueva al reemplazar una página pendiente (ya pasaba en la versión anterior); (n) un zip
   cuyo archivo cambió en el disco después de elegirlo deja la página esperando en cada *Resume* hasta volver a
-  elegirlo; (o) el final de *Import from Coda…* muestra "Files keep uploading to Drive…" también con 0 archivos (el
+  elegirlo; (o) el final de *Import from Coda* muestra "Files keep uploading to Drive…" también con 0 archivos (el
   de archivo de Shot Docs lo oculta).
   **Aviso de conversión aclarado (v0.191):** una foto de más de 100 MP que hay que pasar a JPEG (girada, PNG, CMYK)
   conserva la reducción existente a su ancho impreso; la ventana cuenta aparte ese límite y los originales no disponibles,

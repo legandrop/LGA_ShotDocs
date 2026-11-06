@@ -278,7 +278,7 @@ describe('selector en el teléfono', () => {
       // "Available offline" (P.10) no aparece: jsdom no tiene Web Locks (sin ellos, la opción no se ofrece).
       'Export project…',
       'Rename',
-      'Share “Bosque Negro”…',
+      'Share “Bosque Negro”',
       'Archive',
       'Delete…',
     ]);
