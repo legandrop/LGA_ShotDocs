@@ -2746,3 +2746,11 @@ falta en un plan se suma** desde la página de su escena, con las filas de los p
 los días 33, 35 y 52; fichas nuevas en los días 33 y 35; fichas unidas en los días 17 y 36; duplicado fuera en el 37;
 notas en los días 18, 20, 21 y 31; el Día 46 era el 47 (30/01); el plan «COFA (2)» era del Día 43; el plan vacío «sin
 lugar (2)» del Día 37 a la papelera.
+
+### D840 · Códigos de ERSO en la forma de la post (2026-11-05)
+**Pregunta:** ERSO numeraba las escenas `101_013` y los planos `ERSO_101_066_010`, y la post y PipeSync los escriben
+distinto. **Decidido por Lega:** escena `1013` en vez de `101_013` (la última cifra del episodio y las 3 de la escena) y
+plano `ERSO_1066_010` en vez de `ERSO_101_066_010`, igual que en la post y en PipeSync. El código interno sigue
+`101_013` (la marca de la página, el registro y el orden), y la app entiende y muestra la forma de la post. El link de
+escena abre con las dos formas. Un inserto es parte de su escena (`1033A-INS` → `101_033A`). VLLF (un largo) no cambia.
+Implementado en v0.319 (`Doc_Relaciones.md`, sección 2).

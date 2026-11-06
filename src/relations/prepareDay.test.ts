@@ -95,9 +95,9 @@ describe('Prepare tomorrow’s report', () => {
     // Lo de antes, igual y en su lugar; lo nuevo al final, antes del renglón vacío de cierre.
     expect(blocks.slice(0, 4).map((b) => b.text)).toEqual(['Info general', 'Llamado 7:00.', 'Escena 105_029a', 'Primer plano, luz de atardecer.']);
     expect(blocks.slice(4)).toEqual([
-      { type: 'h1', text: 'Escena 104_008', href: `/p/${PAGES['104_008']}` },
+      { type: 'h1', text: 'Escena 4008', href: `/p/${PAGES['104_008']}` },
       { type: 'paragraph', text: '' },
-      { type: 'h1', text: 'Escena 104_009', href: `/p/${PAGES['104_009']}` },
+      { type: 'h1', text: 'Escena 4009', href: `/p/${PAGES['104_009']}` },
       { type: 'paragraph', text: '' },
       { type: 'paragraph', text: '' },
     ]);
@@ -111,7 +111,7 @@ describe('Prepare tomorrow’s report', () => {
     expect(again.added.map((a) => a.code)).toEqual(['105_027']);
     expect(again.skipped).toEqual(['104_008', '104_009']);
     expect(again.merged).toBe(0);
-    expect(headings(doc)).toEqual(['Info general', 'Escena 105_029a', 'Escena 104_008', 'Escena 104_009', 'Escena 105_027']);
+    expect(headings(doc)).toEqual(['Info general', 'Escena 105_029a', 'Escena 4008', 'Escena 4009', 'Escena 5027']);
     expect(read(doc).map((b) => b.text)).toContain('Se hizo con grúa.');
     // Nada que agregar: el documento no cambia.
     const before = Y.encodeStateVector(doc);
@@ -143,7 +143,7 @@ describe('Prepare tomorrow’s report', () => {
     e.unmount();
     const undo = undoInDoc(doc, out.added, linkTarget);
     expect(undo).toEqual({ removed: 1, kept: 2 });
-    expect(headings(doc)).toEqual(['Info general', 'Escena 105_029a', 'Escena 104_008', 'Escena 105_027 (si sobra tiempo)']);
+    expect(headings(doc)).toEqual(['Info general', 'Escena 105_029a', 'Escena 4008', 'Escena 105_027 (si sobra tiempo)']);
     expect(read(doc).map((b) => b.text)).toContain('Tres tomas.');
     // Sin nada escrito: Undo deja el documento como estaba.
     const clean = report();
@@ -161,7 +161,7 @@ describe('Prepare tomorrow’s report', () => {
     editors.splice(editors.indexOf(e), 1);
     e.unmount();
     expect(undoInDoc(doc, out.added, linkTarget)).toEqual({ removed: 0, kept: 1 });
-    expect(headings(doc)).toContain('Escena 104_008');
+    expect(headings(doc)).toContain('Escena 4008');
   });
 
   it('una versión con el esquema anterior abre el reporte preparado sin perder el título, el link ni lo escrito', () => {
@@ -172,12 +172,12 @@ describe('Prepare tomorrow’s report', () => {
     const { audio: _a, file: _f, video: _v, ...oldSpecs } = defaultBlockSpecs;
     const old = mount(doc, BlockNoteSchema.create({ blockSpecs: oldSpecs }));
     const texts = old.document.map((b) => (Array.isArray(b.content) ? (b.content as { type: string; text?: string; content?: { text: string }[] }[]).map((c) => c.text ?? (c.content ?? []).map((x) => x.text).join('')).join('') : ''));
-    expect(texts).toEqual(expect.arrayContaining(['Escena 104_008', 'Se hizo con grúa.']));
+    expect(texts).toEqual(expect.arrayContaining(['Escena 4008', 'Se hizo con grúa.']));
     const heading = old.document.find((b) => b.id === out.added[0].headingId)!;
     expect((heading.content as { type: string; href?: string }[]).find((c) => c.type === 'link')?.href).toBe(`/p/${PAGES['104_008']}`);
     editors.splice(editors.indexOf(old), 1);
     old.unmount();
-    expect(read(doc).map((b) => b.text)).toEqual(expect.arrayContaining(['Escena 104_008', 'Se hizo con grúa.']));
+    expect(read(doc).map((b) => b.text)).toEqual(expect.arrayContaining(['Escena 4008', 'Se hizo con grúa.']));
   });
 });
 
@@ -196,7 +196,7 @@ describe('B4: preparar nunca saca un título escrito a mano', () => {
     e.unmount();
     const out = prepareInDoc(doc, opts(['104_008']));
     expect(out.merged).toBe(0);
-    expect(headings(doc)).toEqual(['Info general', 'Escena 105_029', 'Escena 105_029a', 'Escena 104_008']);
+    expect(headings(doc)).toEqual(['Info general', 'Escena 105_029', 'Escena 105_029a', 'Escena 4008']);
   });
 });
 
@@ -220,8 +220,8 @@ describe('dos dispositivos preparan a la vez, sin red (D436)', () => {
     sync(a, b);
     // Yjs no puede fundir dos títulos insertados por separado: quedan los dos de cada escena, en el mismo orden en los dos.
     expect(headings(a)).toEqual(headings(b));
-    expect(headings(a).filter((h) => h === 'Escena 104_008')).toHaveLength(2);
-    expect(headings(a).filter((h) => h === 'Escena 104_009')).toHaveLength(2);
+    expect(headings(a).filter((h) => h === 'Escena 4008')).toHaveLength(2);
+    expect(headings(a).filter((h) => h === 'Escena 4009')).toHaveLength(2);
     // La cabecera del día ya los cuenta una sola vez (dayLive); preparar de nuevo, en cualquiera de los dos, los resuelve.
     const again = prepareInDoc(a, opts(['104_008', '104_009']));
     expect(again.added).toEqual([]);
@@ -229,12 +229,12 @@ describe('dos dispositivos preparan a la vez, sin red (D436)', () => {
     sync(a, b);
     // Cada escena una vez (el orden de las dos tandas depende de qué dispositivo Yjs pone primero).
     expect(headings(a).slice(0, 2)).toEqual(['Info general', 'Escena 105_029a']);
-    expect(headings(a).slice(2).sort()).toEqual(['Escena 104_008', 'Escena 104_009']);
+    expect(headings(a).slice(2).sort()).toEqual(['Escena 4008', 'Escena 4009']);
     expect(read(a)).toEqual(read(b));
     // De 104_008 quedó la de B, la que tiene algo escrito; la vacía de A se fue.
     const blocks = read(a);
     expect(blocks.map((x) => x.text)).toContain('B: se hizo con grúa.');
-    const i = blocks.findIndex((x) => x.text === 'Escena 104_008');
+    const i = blocks.findIndex((x) => x.text === 'Escena 4008');
     expect(blocks[i + 1].text).toBe('B: se hizo con grúa.');
     // Nada de lo de antes se tocó.
     expect(blocks.slice(0, 4).map((x) => x.text)).toEqual(['Info general', 'Llamado 7:00.', 'Escena 105_029a', 'Primer plano, luz de atardecer.']);
@@ -252,7 +252,7 @@ describe('dos dispositivos preparan a la vez, sin red (D436)', () => {
     expect(again.merged).toBe(0);
     sync(a, b);
     const texts = read(b).map((x) => x.text);
-    expect(texts.filter((t) => t === 'Escena 104_008')).toHaveLength(2);
+    expect(texts.filter((t) => t === 'Escena 4008')).toHaveLength(2);
     expect(texts).toEqual(expect.arrayContaining(['A: dos tomas.', 'B: una toma más.']));
   });
 
@@ -265,7 +265,7 @@ describe('dos dispositivos preparan a la vez, sin red (D436)', () => {
     const rb = prepareInDoc(b, opts(['104_009']));
     expect([ra.merged, rb.merged]).toEqual([1, 1]);
     sync(a, b);
-    expect(headings(a).filter((h) => h === 'Escena 104_009')).toHaveLength(1);
+    expect(headings(a).filter((h) => h === 'Escena 4009')).toHaveLength(1);
     expect(read(a)).toEqual(read(b));
   });
 
@@ -307,8 +307,8 @@ describe('dos dispositivos preparan a la vez, sin red (D436)', () => {
     expect(read(a)).toEqual(read(b));
     const blocks = read(a);
     expect(blocks.map((x) => x.text)).toContain('B: escrito en la copia que se saca.');
-    expect(headings(a).filter((h) => h === 'Escena 104_009')).toHaveLength(1);
-    const i = blocks.findIndex((x) => x.text === 'Escena 104_009');
+    expect(headings(a).filter((h) => h === 'Escena 4009')).toHaveLength(1);
+    const i = blocks.findIndex((x) => x.text === 'Escena 4009');
     expect(blocks.slice(i + 1).map((x) => x.type)).not.toContain('h1');
   });
 });

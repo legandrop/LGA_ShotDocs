@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.319 :
+
+ERSO pasa a numerar como la post (D840): escena `1013` y plano `ERSO_1066_010`, y la app solo entendía `101_013`. La
+forma de la post se acepta al entrar (`normalizeSceneCode`: el título `1013 | desc` en la carpeta de su episodio, la
+marca, *Escenas*, el `/e`, el plano y su inserto, y `scene=` del link, que abre con las tres formas) y se muestra al
+salir (`sceneLabel`: Panorama, cabeceras, avisos, *Copy link*, lo escrito con link). El código interno sigue en
+`101_013`: una versión vieja abierta no pisa la marca (prueba con el código real de v0.317). Años, cantidades, fotos de
+cámara y fechas no son escenas; un largo (VLLF) no cambia y con 101 y 201 no se adivina. Una escena sin marca con título
+nuevo la cubren los datos: todas marcadas antes del renombre, y `min_app_version`. Los recorridos no cambian: usan un
+largo (escenas `011`).
+[ v0.319: escenas y planos con la forma de la post (1013, ERSO_1066_010) ]
+
 v0.318 :
 
 Editar un bloque podía cambiar las marcas de otro renglón sin tocar su texto: en la limpieza de VLLF, una tarjeta de

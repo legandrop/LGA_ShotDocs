@@ -74,12 +74,12 @@ describe('Assign en el Y.Doc', () => {
     expect(text.toDelta()).toEqual([{ insert: '105_025', attributes: linkAttr(`/p/${SCENE}`) }]);
   });
 
-  it('una sección sin número: agrega « · 105_025» con link al final del título; otra escena suma la suya', () => {
+  it('una sección sin número: agrega « · 5025» (105_025 como se muestra) con link al final del título; otra escena suma la suya', () => {
     const { doc, ids } = makeDoc();
     expect(assignHeadingInDoc(doc, ids[0], 'Plates ambulancia', { code: '105_025', pageId: SCENE })).toMatchObject({ status: 'ok', added: 1 });
-    expect(read(doc)[0]).toBe(`Plates ambulancia · [105_025](/p/${SCENE})`);
-    expect(assignHeadingInDoc(doc, ids[0], `Plates ambulancia · 105_025`, { code: '105_027', pageId: OTHER }).status).toBe('ok');
-    expect(read(doc)[0]).toBe(`Plates ambulancia · [105_025](/p/${SCENE}) · [105_027](/p/${OTHER})`);
+    expect(read(doc)[0]).toBe(`Plates ambulancia · [5025](/p/${SCENE})`);
+    expect(assignHeadingInDoc(doc, ids[0], `Plates ambulancia · 5025`, { code: '105_027', pageId: OTHER }).status).toBe('ok');
+    expect(read(doc)[0]).toBe(`Plates ambulancia · [5025](/p/${SCENE}) · [5027](/p/${OTHER})`);
     // El lector cuenta el link del título: la sección es de las dos escenas.
     const meta: BlockMeta[] = [];
     const units = unitsFromYDoc(doc, meta);
@@ -121,7 +121,7 @@ describe('Assign en el Y.Doc', () => {
     const a = read(A)[0];
     expect(read(B)[0]).toBe(a);
     expect(a).toContain('ruta');
-    expect(a).toContain(`[105_025](/p/${SCENE})`);
+    expect(a).toContain(`[5025](/p/${SCENE})`);
     expect(a).toContain('Plates ambulancia');
   });
 
@@ -154,7 +154,19 @@ describe('Assign en el Y.Doc', () => {
     assignMentionInDoc(doc, ids[1], '105_120', { pageId: SCENE }, { registry, ep: '105' });
     assignHeadingInDoc(doc, ids[0], 'Plates ambulancia', { code: '105_027', pageId: OTHER });
     expect(unlinkPageInDoc(doc, SCENE)).toBe(2);
-    expect(read(doc)).toEqual([`Plates ambulancia · [105_027](/p/${OTHER})`, 'Plates de ruta, la 105_120 con grúa y otra vez 105_120.', 'Escena 105_120']);
+    expect(read(doc)).toEqual([`Plates ambulancia · [5027](/p/${OTHER})`, 'Plates de ruta, la 105_120 con grúa y otra vez 105_120.', 'Escena 105_120']);
+  });
+
+  it('Undo de crear una escena de serie (v0.319): el link «5120» vuelve a ser el número interno 105_120, pendiente', () => {
+    const doc = new Y.Doc();
+    const e = editorOn(doc);
+    e.replaceBlocks(e.document, [
+      { type: 'paragraph', content: ['Falta la ', { type: 'link', href: `/p/${SCENE}`, content: '5120' }, ' y la ', { type: 'link', href: `/p/${OTHER}`, content: '5120' }, '.'] },
+      { type: 'paragraph', content: ['Ver ', { type: 'link', href: `/p/${SCENE}`, content: 'la escena' }] },
+    ] as never);
+    expect(unlinkPageInDoc(doc, SCENE, { from: '5120', to: '105_120' })).toBe(2);
+    // Solo el link a esa página cuyo texto es el número; otro texto o un link a otra página quedan como estaban.
+    expect(read(doc)).toEqual([`Falta la 105_120 y la [5120](/p/${OTHER}).`, 'Ver la escena']);
   });
 
   it('una página que no terminó de bajar (y no baja): no se abre ni se escribe', async () => {

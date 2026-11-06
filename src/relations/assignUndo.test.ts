@@ -75,10 +75,10 @@ function spansOf(res: ReturnType<typeof assignHeadingInDoc>): AssignSpan[] {
 }
 
 describe('Undo de Assign en el Y.Doc', () => {
-  it('una sección: saca « · 105_025» y el título queda como estaba', () => {
+  it('una sección: saca « · 5025» y el título queda como estaba', () => {
     const { doc, ids } = makeDoc();
     const spans = spansOf(assignHeadingInDoc(doc, ids[0], 'Plates ambulancia', { code: '105_025', pageId: SCENE }));
-    expect(read(doc)[0]).toBe(`Plates ambulancia · [105_025](/p/${SCENE})`);
+    expect(read(doc)[0]).toBe(`Plates ambulancia · [5025](/p/${SCENE})`);
     expect(undoAssignInDoc(doc, spans)).toBe('undone');
     expect(read(doc)).toEqual(['Plates ambulancia', 'Plates de ruta, la 105_120 con grúa y otra vez 105_120.', `Ya era link: [105_025](/p/${SCENE})`]);
     // Una segunda vez ya no hay nada que deshacer: no toca nada.
@@ -102,7 +102,7 @@ describe('Undo de Assign en el Y.Doc', () => {
     });
     view.dispatch(view.state.tr.insertText(' (ruta)', end));
     sync(A, B);
-    expect(read(A)[0]).toBe(`Plates ambulancia · [105_025](/p/${SCENE}) (ruta)`);
+    expect(read(A)[0]).toBe(`Plates ambulancia · [5025](/p/${SCENE}) (ruta)`);
     expect(undoAssignInDoc(A, spans)).toBe('undone');
     sync(A, B);
     expect(read(A)[0]).toBe('Plates ambulancia (ruta)');
@@ -134,7 +134,7 @@ describe('Undo de Assign en el Y.Doc', () => {
     const view = e.prosemirrorView!;
     view.dispatch(view.state.tr.removeMark(0, view.state.doc.content.size, view.state.schema.marks.link));
     expect(undoAssignInDoc(doc, spans)).toBe('changed');
-    expect(read(doc)[0]).toBe('Plates ambulancia · 105_025');
+    expect(read(doc)[0]).toBe('Plates ambulancia · 5025');
 
     const { doc: d2, ids: i2 } = makeDoc();
     const s2 = spansOf(assignHeadingInDoc(d2, i2[0], 'Plates ambulancia', { code: '105_025', pageId: SCENE }));

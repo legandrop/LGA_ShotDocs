@@ -9,6 +9,7 @@ import { assignHeading, assignMention, assignMentionEverywhere, undoAssign, undo
 import { createDepsFrom, createEntity, createGuard, freshSync, undoCreate, type CreateResult, type CreateWant, type GuardResult } from './createEntity';
 import { sceneTitleOf } from './dayLive';
 import { Ic } from './LiveHeader';
+import { sceneLabel } from './reader';
 import { nearEpisodes, searchScenes, type SceneOption } from './sceneSearch';
 
 // Los botones de *Create* y *Assign* (Docs/Doc_Relaciones.md, sección 15; E7): el mismo en el adelanto de un pendiente,
@@ -68,6 +69,11 @@ export function createEnv(services: Pick<Services, 'tree' | 'docs' | 'engine' | 
   };
 }
 
+/** Un código como se muestra (`1013` en una serie), con el registro del proyecto si ya está leído. */
+export function labelIn(services: Pick<Services, 'tree' | 'docs' | 'engine' | 'access' | 'user'>, projectId: string, code: string): string {
+  return sceneLabel(code, existingRelationsSession(services)?.relations.snapshot(projectId)?.registry ?? null);
+}
+
 /**
  * Crea y avisa: «Created scene 105_120 in «105 | Episodio 5»» con *Open* y *Undo* (D518). `inPage` es la página donde
  * se escribió el número (el `/`): *Undo* también le saca el link a la página creada, que vuelve a leerse como pendiente.
@@ -100,7 +106,7 @@ export async function runCreate(
   const folder = title(created.parentId) ?? '';
   const message =
     want.kind === 'scene'
-      ? tr('create.createdScene', { code: want.code, folder })
+      ? tr('create.createdScene', { code: labelIn(services, env.projectId, want.code), folder })
       : tr(want.kind === 'set' ? 'create.createdSet' : 'create.createdLocation', { name: created.title, folder });
   notify(
     message,
@@ -123,7 +129,9 @@ export async function runCreate(
             notify(tr('create.undoChanged', { title: created.title }));
             return;
           }
-          if (out === 'trashed' && opts.inPage) await unlinkPage(services, opts.inPage, created.pageId).catch(() => 0);
+          // Una escena vuelve al número interno (`105_120`), que el índice lee como pendiente; el link decía `5120`.
+          const restore = want.kind === 'scene' ? { from: labelIn(services, env.projectId, want.code), to: want.code } : undefined;
+          if (out === 'trashed' && opts.inPage) await unlinkPage(services, opts.inPage, created.pageId, restore).catch(() => 0);
           if (out === 'trashed') notify(tr('create.undone', { title: created.title }));
         })();
       },
@@ -167,7 +175,7 @@ export function CreateEntityButton({
   const [busy, setBusy] = useState(false);
   const env = createEnv(services, projectId, tr.lang);
   const guard = env.guard(want);
-  const full = want.kind === 'scene' ? tr('create.scene', { code: want.code }) : want.kind === 'set' ? tr('create.set', { name: want.name }) : tr('create.location', { name: want.name });
+  const full = want.kind === 'scene' ? tr('create.scene', { code: labelIn(services, projectId, want.code) }) : want.kind === 'set' ? tr('create.set', { name: want.name }) : tr('create.location', { name: want.name });
   const label = shortLabel ?? full;
   if (!guard.ok) {
     const why = reasonText(tr, guard, want, (id) => tree.get(id)?.title);
@@ -291,7 +299,7 @@ export function ScenePicker({
         {options.length ? (
           options.map((o) => (
             <button key={o.code} onClick={() => o.pageId && onPick({ code: o.code, pageId: o.pageId })}>
-              <span className="k">{o.code}</span>
+              <span className="k">{sceneLabel(o.code, src.snap.registry)}</span>
               <span className="t">{o.title}</span>
             </button>
           ))
@@ -404,7 +412,7 @@ export function AssignButton({
           notify([tr(out.failed.some((f) => f.status === 'missing') ? 'assign.missing' : out.failed.some((f) => f.status === 'unknown') ? 'assign.unknown' : 'assign.changedMention'), locked].filter(Boolean).join(' · '));
           return;
         }
-        const parts = [tr('assign.doneEverywhere', { pending: target.pending, code: scene.code, count: out.done.length })];
+        const parts = [tr('assign.doneEverywhere', { pending: sceneLabel(target.pending, src.snap.registry), code: sceneLabel(scene.code, src.snap.registry), count: out.done.length })];
         if (out.failed.length) parts.push(tr('assign.notIn', { pages: out.failed.map((f) => `«${name(f.pageId)}»`).join(', '), count: out.failed.length }));
         if (locked) parts.push(locked);
         notify(parts.join(' · '), undoAction(tr, () => undoAssignEverywhere(services, out.done)));
@@ -413,9 +421,10 @@ export function AssignButton({
       const at = pageId!;
       const res =
         target.kind === 'heading'
-          ? await assignHeading(services, at, target.blockId, target.text, scene)
+          ? await assignHeading(services, at, target.blockId, target.text, scene, src.snap.registry)
           : await assignMention(services, at, target.blockId, target.pending, scene, { registry: src.snap.registry, ep: target.ep });
-      const done = target.kind === 'heading' ? tr('assign.done', { code: scene.code, title: target.text }) : tr('assign.doneMention', { pending: target.pending, code: scene.code });
+      const lab = (c: string) => sceneLabel(c, src.snap.registry);
+      const done = target.kind === 'heading' ? tr('assign.done', { code: lab(scene.code), title: target.text }) : tr('assign.doneMention', { pending: lab(target.pending), code: lab(scene.code) });
       const spans = res.status === 'ok' ? res.undo : [];
       assignNotice(tr, res, done, target.kind, () => undoAssign(services, at, spans));
     } catch (err) {

@@ -1,7 +1,7 @@
 import type { PageRow } from '../sync/types';
 import { kindReader, type DocKind, type EntityKind, type PageKind } from './kind';
 import { withBareNames } from './aliases';
-import { fold, sceneCode as canonicalCode, type LocationInput, type SceneInput } from './reader';
+import { episodeOfCode, fold, normalizeSceneCode, type LocationInput, type SceneInput } from './reader';
 
 // Qué escenas, locaciones y días existen en el proyecto y qué es cada página para las relaciones (Docs/Doc_Relaciones.md,
 // sección 4). El tipo de cada página es de `src/relations/kind.ts` (`kindReader(tree).kindOf`: la marca de la página, la
@@ -96,7 +96,7 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
   const roles = new Map<string, PageRole>();
   const byCode = new Map<string, string[]>();
   const refOf = (id: string, kind: EntityKind, code: string | null): string | null => {
-    if (kind === 'scene') return code ? (canonicalCode(code) ?? code) : null;
+    if (kind === 'scene') return code ? (normalizeSceneCode(code) ?? code) : null;
     if (kind === 'location' || kind === 'set') return locationFromTitle(tree.get(id)?.title ?? '').name || null;
     return id;
   };
@@ -118,15 +118,15 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
       const partOf = w ? { kind: w.ofKind, ref, pageId: w.of } : null;
       // Un plan es de la etapa de rodaje (lo planeado para un día); su día sale de `planDay.ts`.
       // Adentro de una escena o una locación toma la etapa de esa entidad, como antes.
-      role = { entity: null, partOf, doc: k.doc, ep: epOf(w?.ofKind === 'scene' ? ref : null), excluded, stage: k.doc !== 'plan' ? 'scouting' : w && w.ofKind !== 'day' ? stageOf(w.ofKind, false) : 'shoot' };
+      role = { entity: null, partOf, doc: k.doc, ep: episodeOfCode(w?.ofKind === 'scene' ? ref : null), excluded, stage: k.doc !== 'plan' ? 'scouting' : w && w.ofKind !== 'day' ? stageOf(w.ofKind, false) : 'shoot' };
       const pointer = (page.settings?.entity as { day?: unknown } | false | undefined) || null;
       if (k.doc === 'plan' && pointer && typeof pointer.day === 'string') role.planDay = pointer.day;
     } else if (k.kind === 'part') {
       const ref = refOf(k.of, k.ofKind, k.code);
-      role = { entity: null, partOf: { kind: k.ofKind, ref, pageId: k.of }, doc: null, ep: epOf(k.ofKind === 'scene' ? ref : null), excluded, stage: stageOf(k.ofKind, false) };
+      role = { entity: null, partOf: { kind: k.ofKind, ref, pageId: k.of }, doc: null, ep: episodeOfCode(k.ofKind === 'scene' ? ref : null), excluded, stage: stageOf(k.ofKind, false) };
     } else {
       const ref = refOf(page.id, k.kind, k.code);
-      role = { entity: { kind: k.kind, ref }, partOf: null, doc: null, ep: epOf(k.kind === 'scene' ? ref : null), excluded, stage: stageOf(k.kind, true) };
+      role = { entity: { kind: k.kind, ref }, partOf: null, doc: null, ep: episodeOfCode(k.kind === 'scene' ? ref : null), excluded, stage: stageOf(k.kind, true) };
       if (!excluded && ref && k.kind === 'scene') {
         const list = byCode.get(ref) ?? [];
         list.push(page.id);
@@ -146,8 +146,6 @@ export function registerProject(tree: RegisterTree, projectId: string, kinds: Ki
   const duplicates = [...byCode].filter(([, ids]) => ids.length > 1).map(([code, pageIds]) => ({ code, pageIds }));
   return { scenes, locations: withBareNames(locations), titleLocations: locations, sets, roles, duplicates };
 }
-
-const epOf = (code: string | null): string | null => (code && /^\d{3}_/.test(code) ? code.slice(0, 3) : null);
 
 /**
  * Si una página está fuera de las relaciones por `graph: false` (D387, D540): en una carpeta de arriba (la más alta que

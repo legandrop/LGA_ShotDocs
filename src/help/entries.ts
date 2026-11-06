@@ -167,15 +167,16 @@ const LIVE_FIELDS = '0.240';
 const LIVE_PHOTOS = '0.243';
 /**
  * El panorama del proyecto (antes *Map*), Copy overview / JSON y la lupa por escenas y locaciones (relaciones en vivo,
- * E9): llegó en v0.242 y sube con el bloque *Overview* de la barra (D772).
+ * E9): llegó en v0.242, sube con el bloque *Overview* de la barra (D772) y con la forma de la post y el nombre de plano
+ * en la lupa (`1074`, `ERSO_1074_010`, v0.319).
  */
-const LIVE_MAP = '0.269';
+const LIVE_MAP = '0.319';
 /**
  * La sección automática *Scenes* de la barra lateral y las páginas de cada escena (Doc_Relaciones.md, sección 21): llegó
  * en v0.260, sube con *Export…* en la vista de una escena (D769), pasa adentro de *Overview* (D772) y sube con los
- * renglones por etapa (D783) y con *Copy link* (D837).
+ * renglones por etapa (D783), con *Copy link* (D837) y con el número de la post en el link (v0.319).
  */
-const SCENES_SECTION = '0.317';
+const SCENES_SECTION = '0.319';
 /**
  * El subrayado de escenas y locaciones, su adelanto, volverlo link y la barra Today (relaciones en vivo, E6): llegó en
  * v0.244, sube con el texto en el color de cada cosa (D774), con «Escena» dibujada junto a su número (D776) y con el link
@@ -404,9 +405,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.pageTypes.title',
     text: 'help.pageTypes.text',
     words: ['type', 'tipo', 'scene', 'escena', 'location', 'locación', 'set', 'decorado', 'shoot day', 'día de rodaje', 'breakdown', 'desglose', 'scout', 'scouting', 'test', 'prueba', 'episode', 'episodio', 'folder', 'carpeta'],
-    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los decorados (D804) y con
-    // las etiquetas PLAN y REPORTE de la semana de rodaje (D815).
-    since: '0.307',
+    // El tipo de página y de carpeta (Doc_Estructura_Proyecto.md, «Tipo de página»); subió con los decorados (D804), con
+    // las etiquetas PLAN y REPORTE de la semana de rodaje (D815) y con los números de escena de la post (`1074`, v0.319).
+    since: '0.319',
   },
   {
     id: 'liveHeader',
@@ -479,7 +480,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'overview',
     title: 'help.searchEntities.title',
     text: 'help.searchEntities.text',
-    words: ['scene number', 'número de escena', '5027', '101_074', 'location', 'locación', 'search', 'buscar'],
+    words: ['scene number', 'número de escena', '5027', '1074', '101_074', 'shot', 'plano', 'location', 'locación', 'search', 'buscar'],
     since: LIVE_MAP,
   },
   {

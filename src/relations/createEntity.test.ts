@@ -45,10 +45,10 @@ async function world(server = new FakeServer()): Promise<{ d: Device; built: Bui
 }
 
 describe('las guardas (G1–G5)', () => {
-  it('pasa: la carpeta de su episodio, en orden por número, título = el código', async () => {
+  it('pasa: la carpeta de su episodio, en orden por número, título = el código como se muestra (5120, la forma de la post)', async () => {
     const { built, ctx } = await world();
     const c = await ctx();
-    expect(createGuard(c, { kind: 'scene', code: '105_120' })).toEqual({ ok: true, parentId: built.ids.ep5, before: undefined, title: '105_120' });
+    expect(createGuard(c, { kind: 'scene', code: '105_120' })).toEqual({ ok: true, parentId: built.ids.ep5, before: undefined, title: '5120' });
     expect(createGuard(c, { kind: 'scene', code: '105_028' })).toMatchObject({ ok: true, parentId: built.ids.ep5, before: built.ids.s029 });
     expect(createGuard(c, { kind: 'scene', code: '104_001' })).toMatchObject({ ok: true, parentId: built.ids.ep4, before: built.ids.s008 });
     // Un episodio que no existe no se ofrece; un código que no es canónico, tampoco.
@@ -204,10 +204,10 @@ describe('crear', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const row = d.tree.get(res.pageId)!;
-    expect(row).toMatchObject({ parent_id: built.ids.ep5, title: '105_028', template_id: BUILTIN_SCENE });
+    expect(row).toMatchObject({ parent_id: built.ids.ep5, title: '5028', template_id: BUILTIN_SCENE });
     expect(row.settings?.entity).toEqual({ kind: 'scene', code: '105_028' });
     const kids = d.tree.children(built.ids.ep5).map((p) => p.title);
-    expect(kids.indexOf('105_028')).toBe(kids.findIndex((t) => t.startsWith('029')) - 1);
+    expect(kids.indexOf('5028')).toBe(kids.findIndex((t) => t.startsWith('029')) - 1);
     const doc = await d.docs.open(res.pageId);
     expect(unitsFromYDoc(doc).length).toBeGreaterThan(2);
     d.docs.close(res.pageId);
@@ -224,7 +224,7 @@ describe('crear', () => {
     await ready();
     const [a, b] = await Promise.all([createEntity(deps, { kind: 'scene', code: '105_120' }), createEntity(deps, { kind: 'scene', code: '105_120' })]);
     expect(a).toEqual(b);
-    expect(d.tree.children(built.ids.ep5).filter((p) => p.title === '105_120')).toHaveLength(1);
+    expect(d.tree.children(built.ids.ep5).filter((p) => p.title === '5120')).toHaveLength(1);
   });
 
   it('sin red en el momento de crear (la sincronización de antes falla): no crea y dice por qué', async () => {

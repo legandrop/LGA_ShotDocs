@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_ONSET } from '../templates/builtinIds';
-import { episodeOf, holdsOf, isEpisodeTitle, kindReader, pageKind, sceneCode } from './kind';
+import { entityMark, episodeOf, holdsOf, isEpisodeTitle, kindReader, pageKind, sceneCode } from './kind';
 import { fakeTree } from './kindTesting';
 
 // Qué es cada página (src/relations/kind.ts): la marca de la página, la carpeta, los grupos (episodios, bloques), «parte
@@ -266,6 +266,57 @@ describe('un proyecto sin episodios (D383)', () => {
   it('la marca guardada sin episodio vale (SCENE_CODE acepta `074`)', () => {
     const tree = fakeTree([{ id: 'x', title: 'Cocina', settings: { entity: { kind: 'scene', code: '074' } } }]);
     expect(pageKind(tree, 'x')).toMatchObject({ kind: 'scene', code: '074' });
+  });
+});
+
+describe('la forma de la post en los títulos (`1013 | desc`, v0.319)', () => {
+  it('solo adentro de la carpeta de un episodio y con su cifra, `1013` como toda la primera parte da el código interno', () => {
+    expect(sceneCode('1013 | Llegan al bar', '101')).toBe('101_013');
+    expect(sceneCode('1013', '101')).toBe('101_013');
+    expect(sceneCode('2016A | Puerta', '102')).toBe('102_016A');
+    expect(sceneCode('1033A-INS | Inserto', '101')).toBe('101_033A');
+    expect(sceneCode('Escena 1013 | Bar', '101')).toBe('101_013');
+    // La vieja y la nueva dan lo mismo.
+    expect(sceneCode('013 | Llegan al bar | 101_013', '101')).toBe('101_013');
+    expect(sceneCode('013 | Llegan al bar | 1013', '101')).toBe('101_013');
+    // La cifra tiene que ser la del episodio de la carpeta; 201 también termina en 1.
+    expect(sceneCode('1013 | Llegan al bar', '102')).toBeNull();
+    expect(sceneCode('1013 | Llegan al bar', '201')).toBe('201_013');
+  });
+
+  it('lo que daba null en v0.317 sigue dando null (auditoría de v0.319): años, cantidades, resoluciones y unidades', () => {
+    // En la raíz de escenas de la serie (sin episodio): nada de la forma de la post.
+    for (const t of ['2026 | Calendario', 'Notas | 2024', '1013 | Llegan al bar', '013 | Llegan al bar | 1013']) expect([t, sceneCode(t, null, false)]).toEqual([t, null]);
+    // En un largo, tampoco.
+    for (const t of ['1013 | Llegan al bar', '2024 | Recap']) expect([t, sceneCode(t)]).toEqual([t, null]);
+    // Adentro de un episodio: solo si es toda la primera parte y no es una unidad.
+    expect(sceneCode('Calendario | 2025', '102')).toBeNull();
+    for (const t of ['1920 x 1080', '1500 extras', '1080px | Plates', '1080p | Plates', '4096K | Plates', 'Persecución, sigue en 1076']) expect([t, sceneCode(t, '101')]).toEqual([t, null]);
+  });
+
+  it('en el árbol: el título viejo y el nuevo, adentro de «101 | Episodio 1», son la misma escena; en un largo no', () => {
+    const tree = fakeTree([
+      { id: 'bd', title: 'Desglose', settings: { holds: 'scene' } },
+      { id: 'ep1', parent: 'bd', title: '101 | Episodio 1' },
+      { id: 'vieja', parent: 'ep1', title: '013 | Llegan al bar | 101_013' },
+      { id: 'nueva', parent: 'ep1', title: '1014 | Salen del bar' },
+      { id: 'ficha', parent: 'nueva', title: 'ERSO_1014_010 | Bar' },
+      { id: 'largo', title: 'Breakdown', settings: { holds: 'scene' } },
+      { id: 'vllf', parent: 'largo', title: '009 | Aeroparque' },
+      { id: 'cuatro', parent: 'largo', title: '1013 | No es escena' },
+    ]);
+    const k = kindReader(tree);
+    expect(k.kindOf('vieja')).toMatchObject({ kind: 'scene', code: '101_013' });
+    expect(k.kindOf('nueva')).toMatchObject({ kind: 'scene', code: '101_014' });
+    expect(k.kindOf('ficha')).toEqual({ kind: 'part', of: 'nueva', ofKind: 'scene', code: '101_014' });
+    expect(k.kindOf('vllf')).toMatchObject({ kind: 'scene', code: '009' });
+    expect(k.kindOf('cuatro')).toMatchObject({ kind: 'scene', code: null });
+  });
+
+  it('una marca guardada con la forma de la post se lee como el código interno (no se descarta)', () => {
+    expect(entityMark(fakeTree([{ id: 'x', title: 'Bar', settings: { entity: { kind: 'scene', code: '1013' } } }]).get('x'))).toEqual({ kind: 'scene', code: '101_013' });
+    expect(entityMark(fakeTree([{ id: 'x', title: 'Bar', settings: { entity: { kind: 'scene', code: '101_013' } } }]).get('x'))).toEqual({ kind: 'scene', code: '101_013' });
+    expect(entityMark(fakeTree([{ id: 'x', title: 'Bar', settings: { entity: { kind: 'scene', code: 'cualquiera' } } }]).get('x'))).toEqual({ kind: 'scene' });
   });
 });
 

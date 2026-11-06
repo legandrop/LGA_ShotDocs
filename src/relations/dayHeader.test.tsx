@@ -162,17 +162,17 @@ describe('la cabecera del día en la app', () => {
     expect(lh.querySelector('.lh-id')!.textContent).toContain('Thu 19 Feb 2026');
     expect(lh.textContent).toContain('Scenes of the day');
     expect([...lh.querySelectorAll('.lh-mrow')].map((r) => r.textContent)).toEqual([
-      '105_027 BLa ambulancia empieza a zigzaguear · 5 photosshot',
+      '5027 BLa ambulancia empieza a zigzaguear · 5 photosshot',
       '«Plates ambulancia» · no scene number · 2 photosAssign',
-      '105_025El fugitivo espera escondidoplanned · no section',
+      '5025El fugitivo espera escondidoplanned · no section',
     ]);
     expect(lh.textContent).toContain('2 scenes from the breakdown (Fecha Rodaje 19/02)');
     const card = lh.querySelector('.lh-tomorrow')!;
     expect(card.textContent).toContain('Tomorrow · Día 60');
     expect(card.textContent).toContain('3 scenes · from the breakdown (Fecha Rodaje 20/02');
     // A medias (D788): 105_029 ya tiene su sección (✓, llena); las otras dos, punteadas; el botón dice cuántas faltan.
-    expect([...card.querySelectorAll('.tchip.has .k')].map((x) => x.textContent)).toEqual(['105_029']);
-    expect([...card.querySelectorAll('.tchip.miss .k')].map((x) => x.textContent)).toEqual(['104_008', '104_009']);
+    expect([...card.querySelectorAll('.tchip.has .k')].map((x) => x.textContent)).toEqual(['5029']);
+    expect([...card.querySelectorAll('.tchip.miss .k')].map((x) => x.textContent)).toEqual(['4008', '4009']);
     expect(card.querySelector('.lh-prepare')!.textContent).toBe('Add the 2 missing scenes');
     expect(card.querySelector('.lh-open')!.textContent).toBe('Open Día 60');
     // Tooltips de la app, nunca `title=`.
@@ -183,22 +183,22 @@ describe('la cabecera del día en la app', () => {
     await wait(100);
     const before59 = Y.encodeStateVector(doc59);
     // Sacar 104_009 de la lista y preparar.
-    click(card.querySelector('[aria-label="Remove 104_009 from tomorrow"]'));
+    click(card.querySelector('[aria-label="Remove 4009 from tomorrow"]'));
     await wait();
-    expect(header(host)!.querySelector('.lh-tomorrow .chips')!.textContent).not.toContain('104_009');
+    expect(header(host)!.querySelector('.lh-tomorrow .chips')!.textContent).not.toContain('4009');
     expect(header(host)!.querySelector('.lh-prepare')!.textContent).toBe('Add the missing scene');
     click(header(host)!.querySelector('.lh-prepare'));
     await until(() => location.pathname === pagePath(built.ids.d60), 'el Día 60');
-    await until(async () => (await headingsOf(d, built.ids.d60)).includes('Escena 104_008'), 'la sección nueva');
-    expect(await headingsOf(d, built.ids.d60)).toEqual(['Escena 105_029a', 'Escena 104_008']);
+    await until(async () => (await headingsOf(d, built.ids.d60)).includes('Escena 4008'), 'la sección nueva');
+    expect(await headingsOf(d, built.ids.d60)).toEqual(['Escena 105_029a', 'Escena 4008']);
     expect(Y.encodeStateVector(doc59)).toEqual(before59);
     d.docs.close(built.ids.d59);
     // El aviso con Undo.
     await until(() => [...host.querySelectorAll('button')].some((b) => b.textContent === 'Undo'), 'el aviso con Undo');
     const notice = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Undo')!;
-    expect(host.textContent).toContain('Día 60 · added 1 section · 105_029 already had one');
+    expect(host.textContent).toContain('Día 60 · added 1 section · 5029 already had one');
     // El Día 60 la muestra «prepared», y el editor, el título de la escena y su pregunta abierta (vista, no documento).
-    await until(() => [...host.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.includes('104_008') && r.textContent.includes('prepared')), 'prepared en el Día 60');
+    await until(() => [...host.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.includes('4008') && r.textContent.includes('prepared')), 'prepared en el Día 60');
     await until(() => host.querySelector('.bn-editor .lh-qcall'), 'la pregunta abierta en el editor');
     expect(host.querySelector('.bn-editor .lh-ltitle')!.textContent).toBe(' · La camioneta frena en la banquina');
     expect(host.querySelector('.bn-editor .lh-qcall')!.textContent).toContain('¿Solo planos desde el exterior?');
@@ -206,7 +206,7 @@ describe('la cabecera del día en la app', () => {
     expect(await headingsOf(d, built.ids.d60)).not.toContain('La camioneta frena en la banquina');
     // Undo: se va lo agregado (seguía vacío).
     click(notice);
-    await until(async () => !(await headingsOf(d, built.ids.d60)).includes('Escena 104_008'), 'Undo');
+    await until(async () => !(await headingsOf(d, built.ids.d60)).includes('Escena 4008'), 'Undo');
     expect(await headingsOf(d, built.ids.d60)).toEqual(['Escena 105_029a']);
   });
 
@@ -397,13 +397,13 @@ describe('Tomorrow sin día siguiente: crear y preparar el reporte de mañana (D
       return c!;
     });
     expect(card.querySelector('.th')!.textContent).toBe('Tomorrow · Mon 16 Mar · no report yet');
-    expect([...card.querySelectorAll('.tchip .k')].map((x) => x.textContent)).toEqual(['105_029']);
+    expect([...card.querySelectorAll('.tchip .k')].map((x) => x.textContent)).toEqual(['5029']);
     expect(card.querySelector('.row2')!.textContent).toContain('Creates «2026-03-16 | Día 77» in «2 | Rodaje»');
     // Sumar una escena a mano antes de crear (se guarda en el dispositivo y pasa al reporte nuevo).
     click(card.querySelector('.lh-tbtn.add'));
     type(header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!, '025');
     click(header(host)!.querySelector('.lh-picker-list button'));
-    await shown(() => expect([...header(host)!.querySelectorAll('.lh-tomorrow.new .tchip .k')].map((x) => x.textContent)).toEqual(['105_029', '105_025']));
+    await shown(() => expect([...header(host)!.querySelectorAll('.lh-tomorrow.new .tchip .k')].map((x) => x.textContent)).toEqual(['5029', '5025']));
     click(header(host)!.querySelector('.lh-tomorrow.new .lh-prepare'));
     const created = await shown(() => {
       const row = d.tree.children(built.ids.rodaje).find((p) => p.title === '2026-03-16 | Día 77');
@@ -411,7 +411,7 @@ describe('Tomorrow sin día siguiente: crear y preparar el reporte de mañana (D
       return row!;
     });
     await shown(() => expect(location.pathname).toBe(pagePath(created.id)));
-    await shown(async () => expect((await headingRuns(d, created.id)).filter((h) => h.startsWith('Escena'))).toEqual([`Escena [105_029](/p/${built.ids.s029})`, `Escena [105_025](/p/${built.ids.s025})`]));
+    await shown(async () => expect((await headingRuns(d, created.id)).filter((h) => h.startsWith('Escena'))).toEqual([`Escena [5029](/p/${built.ids.s029})`, `Escena [5025](/p/${built.ids.s025})`]));
     await shown(() => expect(host.textContent).toContain('Created «2026-03-16 | Día 77» · added 2 sections'));
     // El Día 76 ahora tiene día siguiente: el reporte nuevo es un día.
     expect(created.settings?.entity).toEqual({ kind: 'day' });
@@ -484,7 +484,7 @@ describe('Tomorrow sin día siguiente: crear y preparar el reporte de mañana (D
 });
 
 describe('Create y Assign en la cabecera del día (E7)', () => {
-  it('Assign en una sección sin número: agrega « · 105_025» con link al título y la sección pasa a esa escena con sus fotos', async () => {
+  it('Assign en una sección sin número: agrega « · 5025» con link al título y la sección pasa a esa escena con sus fotos', async () => {
     const { d, built, host } = await app('d59');
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera completa');
     const row = () => [...header(host)!.querySelectorAll<HTMLElement>('.lh-mrow')].find((r) => r.textContent?.includes('Plates ambulancia'));
@@ -492,17 +492,17 @@ describe('Create y Assign en la cabecera del día (E7)', () => {
     const input = header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!;
     type(input, '025');
     const options = [...header(host)!.querySelectorAll<HTMLElement>('.lh-picker-list button')];
-    expect(options[0].textContent).toBe('105_025El fugitivo espera escondido');
+    expect(options[0].textContent).toBe('5025El fugitivo espera escondido');
     click(options[0]);
-    await until(async () => (await headingRuns(d, built.ids.d59)).some((h) => h.includes('105_025')), 'el título con la escena');
-    expect(await headingRuns(d, built.ids.d59)).toContain(`Plates ambulancia · [105_025](/p/${built.ids.s025})`);
-    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('105_025') && r.textContent.includes('2 photos')), 'la fila de 105_025');
+    await until(async () => (await headingRuns(d, built.ids.d59)).some((h) => h.includes('5025')), 'el título con la escena');
+    expect(await headingRuns(d, built.ids.d59)).toContain(`Plates ambulancia · [5025](/p/${built.ids.s025})`);
+    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('5025') && r.textContent.includes('2 photos')), 'la fila de 105_025');
     expect([...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.includes('no scene number'))).toBe(false);
     // Tooltips de la app, nunca `title=`.
     expect(header(host)!.querySelectorAll('[title]').length).toBe(0);
   });
 
-  it('Assign tiene Undo en su aviso: saca solo « · 105_025»; si alguien cambió el título después, no toca nada (D566)', async () => {
+  it('Assign tiene Undo en su aviso: saca solo « · 5025»; si alguien cambió el título después, no toca nada (D566)', async () => {
     const { d, built, host } = await app('d59');
     await until(() => header(host)?.textContent?.includes('Live'), 'la cabecera completa');
     const row = () => [...header(host)!.querySelectorAll<HTMLElement>('.lh-mrow')].find((r) => r.textContent?.includes('Plates ambulancia'));
@@ -510,7 +510,7 @@ describe('Create y Assign en la cabecera del día (E7)', () => {
       click(row()!.querySelector('.rel-assign'));
       type(header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!, '025');
       click(header(host)!.querySelector('.lh-picker-list button'));
-      await shown(async () => expect(await headingRuns(d, built.ids.d59)).toContain(`Plates ambulancia · [105_025](/p/${built.ids.s025})`));
+      await shown(async () => expect(await headingRuns(d, built.ids.d59)).toContain(`Plates ambulancia · [5025](/p/${built.ids.s025})`));
       return shown(() => {
         const undo = [...host.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent === 'Undo');
         expect(undo).toBeTruthy();
@@ -518,7 +518,7 @@ describe('Create y Assign en la cabecera del día (E7)', () => {
       });
     };
     const undo = await assign();
-    expect(host.textContent).toContain('Assigned 105_025 to «Plates ambulancia»');
+    expect(host.textContent).toContain('Assigned 5025 to «Plates ambulancia»');
     click(undo);
     await shown(async () => expect(await headingRuns(d, built.ids.d59)).toContain('Plates ambulancia'));
     await shown(() => expect(host.textContent).toContain('Assign undone'));
@@ -551,17 +551,17 @@ describe('Create y Assign en la cabecera del día (E7)', () => {
     await until(() => [...(header(host)?.querySelectorAll('.lh-mrow') ?? [])].some((r) => r.textContent?.includes('105_120')), 'la fila pendiente');
     const row = [...header(host)!.querySelectorAll<HTMLElement>('.lh-mrow')].find((r) => r.textContent?.includes('105_120'))!;
     const cant = row.querySelector('.rel-cant')!;
-    expect(cant.textContent).toBe('Create scene 105_120');
+    expect(cant.textContent).toBe('Create scene 5120');
     expect(cant.getAttribute('data-tip')).toContain('whole project');
     click(row.querySelector('.rel-assign'));
     // Sin plan ni secciones de escena en el día: primero las del episodio del número escrito (D570, O8 de E7).
     const firsts = [...header(host)!.querySelectorAll('.lh-picker-list button .k')].map((x) => x.textContent);
-    expect(firsts.slice(0, 4)).toEqual(['105_025', '105_026', '105_027', '105_029']);
+    expect(firsts.slice(0, 4)).toEqual(['5025', '5026', '5027', '5029']);
     type(header(host)!.querySelector<HTMLInputElement>('.lh-picker input')!, '5026');
     click(header(host)!.querySelector('.lh-picker-list button'));
     await until(async () => (await headingRuns(d, built.ids.d58)).some((h) => h.includes('/p/')), 'el link');
     expect(await headingRuns(d, built.ids.d58)).toEqual(['Info general', `Escena [105_120](/p/${built.ids.s026})`]);
-    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('105_026')), 'la fila de 105_026');
+    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('5026')), 'la fila de 105_026');
   });
 
   it('con las guardas: Create crea la escena en su carpeta, la fila pasa a ser de ella, y Undo la manda a la papelera', async () => {
@@ -575,15 +575,15 @@ describe('Create y Assign en la cabecera del día (E7)', () => {
     const host = mount(d, built.ids.d58);
     await until(() => [...(header(host)?.querySelectorAll('.lh-mrow .rel-create') ?? [])].length === 1, 'el botón Create');
     const button = header(host)!.querySelector<HTMLElement>('.lh-mrow .rel-create')!;
-    expect(button.textContent).toBe('Create scene 105_120');
+    expect(button.textContent).toBe('Create scene 5120');
     expect(button.getAttribute('data-tip')).toBe('In «105 | Episodio 5»');
     click(button);
-    await until(() => d.tree.children(built.ids.ep5).some((p) => p.title === '105_120'), 'la escena creada');
-    const created = d.tree.children(built.ids.ep5).find((p) => p.title === '105_120')!;
+    await until(() => d.tree.children(built.ids.ep5).some((p) => p.title === '5120'), 'la escena creada');
+    const created = d.tree.children(built.ids.ep5).find((p) => p.title === '5120')!;
     expect(created.settings?.entity).toEqual({ kind: 'scene', code: '105_120' });
     await until(() => [...host.querySelectorAll('button')].some((b) => b.textContent === 'Undo'), 'el aviso');
-    expect(host.textContent).toContain('Created scene 105_120 in «105 | Episodio 5»');
-    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('105_120') && !r.querySelector('.rel-create')), 'la fila de la escena');
+    expect(host.textContent).toContain('Created scene 5120 in «105 | Episodio 5»');
+    await until(() => [...header(host)!.querySelectorAll('.lh-mrow')].some((r) => r.textContent?.startsWith('5120') && !r.querySelector('.rel-create')), 'la fila de la escena');
     click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Undo'));
     await until(() => d.tree.isTrashed(created.id), 'a la papelera');
     // La fila vuelve a pendiente y dice a la vista que está en la papelera, con el link para restaurarla (O4).

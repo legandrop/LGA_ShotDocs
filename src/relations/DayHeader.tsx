@@ -20,6 +20,7 @@ import { createTomorrow, creatingKey, creatingSnapshot, isCreating, nextDayNumbe
 import type { PreparedSection } from './prepareDay';
 import { dateAtStart, localDate, planTitleFor } from '../templates/dayReport';
 import { isDayPlanRow } from './kind';
+import { episodeOfCode, sceneLabel, type Registry } from './reader';
 import { plansOfDay } from './planDay';
 
 // La cabecera viva de un día de rodaje y su tarjeta *Tomorrow* (Docs/Doc_Relaciones.md, sección 11; maqueta S4 «D»,
@@ -69,18 +70,21 @@ function dayTitleTip(src: LiveSource, d: DayRef): string | undefined {
 const ddmm = (date: string | null) => (date ? `${date.slice(8, 10)}/${date.slice(5, 7)}` : '');
 const short = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : text);
 
-function SceneChip({ code, pageId, extra }: { code: string; pageId: string | null; extra?: string }) {
+/** Un código como se muestra (`1013` en una serie, la forma de la post), con el registro del proyecto. */
+const lab = (src: LiveSource, code: string) => sceneLabel(code, src.snap.registry);
+
+function SceneChip({ code, pageId, extra, R }: { code: string; pageId: string | null; extra?: string; R: Registry }) {
   if (!pageId) {
     return (
       <span className="lh-chip scene mono static out">
         <Ic name="scene" />
-        <span className="lh-chip-t">{code}</span>
+        <span className="lh-chip-t">{sceneLabel(code, R)}</span>
       </span>
     );
   }
   return (
     <Chip kind="scene" mono onClick={() => navigate(pagePath(pageId))}>
-      {code}
+      {sceneLabel(code, R)}
       {extra && <span className="n"> {extra}</span>}
     </Chip>
   );
@@ -136,7 +140,7 @@ function Rows({ v, src, tr, partial }: { v: DayLive; src: LiveSource; tr: Transl
         if (r.kind === 'scene') {
           return (
             <div className="lh-mrow" key={i}>
-              <SceneChip code={r.code} pageId={r.scenePageId} extra={r.part || undefined} />
+              <SceneChip code={r.code} pageId={r.scenePageId} extra={r.part || undefined} R={src.snap.registry} />
               <button className="tt" onClick={() => go(r.place)} data-tip={tr('live.goTip')}>
                 {r.sceneTitle || r.heading}
                 {r.photos > 0 && <span className="lh-via"> · {tr('live.photoCount', { count: r.photos })}</span>}
@@ -150,7 +154,7 @@ function Rows({ v, src, tr, partial }: { v: DayLive; src: LiveSource; tr: Transl
         if (r.kind === 'planned') {
           return (
             <div className="lh-mrow" key={i}>
-              <SceneChip code={r.code} pageId={r.scenePageId} />
+              <SceneChip code={r.code} pageId={r.scenePageId} R={src.snap.registry} />
               <span className="tt">{r.sceneTitle}</span>
               <span className="meta">
                 <span className="lh-st plan" data-tip={tr('day.plannedNoSectionTip')}>
@@ -165,7 +169,7 @@ function Rows({ v, src, tr, partial }: { v: DayLive; src: LiveSource; tr: Transl
             <div className="lh-mrow" key={i}>
               <span className="lh-chip scene mono static out">
                 <Ic name="scene" />
-                <span className="lh-chip-t">{r.code}</span>
+                <span className="lh-chip-t">{lab(src, r.code)}</span>
               </span>
               <button className="tt" onClick={() => go(r.place)}>
                 «{r.heading}» <span className="lh-via">· {tr(partial ? 'day.notSeen' : 'day.doesntExist')}</span>
@@ -179,7 +183,7 @@ function Rows({ v, src, tr, partial }: { v: DayLive; src: LiveSource; tr: Transl
                     target={{ kind: 'mention', blockId: r.place.blockId, pending: r.code, ep: src.snap.registration.roles.get(v.day.pageId)?.ep ?? null }}
                     near={near}
                     // Sin plan ni secciones de escena, primero las del episodio del número escrito (como el adelanto, D570).
-                    ep={r.code.includes('_') ? r.code.slice(0, 3) : null}
+                    ep={episodeOfCode(r.code)}
                   />
                 )}
               </span>
@@ -204,7 +208,7 @@ function Rows({ v, src, tr, partial }: { v: DayLive; src: LiveSource; tr: Transl
   );
 }
 
-function Questions({ list, scenePage, tr }: { list: DayQuestion[]; scenePage: (code: string) => string | null; tr: Translate }) {
+function Questions({ list, scenePage, tr, R }: { list: DayQuestion[]; scenePage: (code: string) => string | null; tr: Translate; R: Registry }) {
   const go = useGo();
   const shown = list.slice(0, 3);
   return (
@@ -212,7 +216,7 @@ function Questions({ list, scenePage, tr }: { list: DayQuestion[]; scenePage: (c
       {shown.map((q, i) => (
         <div className="lh-dq" key={i}>
           {q.codes.map((c) => (
-            <SceneChip key={c} code={c} pageId={scenePage(c)} />
+            <SceneChip key={c} code={c} pageId={scenePage(c)} R={R} />
           ))}
           <button className="lh-q" onClick={() => go(q.place)} data-tip={tr('live.questionTip')}>
             <span className="lh-qt">{short(q.text, 110)}</span>{' '}
@@ -335,8 +339,8 @@ async function prepareSections(services: Services, src: LiveSource, tr: Translat
       return;
     }
     const parts = [res.added.length ? tr('day.added', { count: res.added.length }) : tr('day.nothingToAdd')];
-    if (res.skipped.length) parts.push(tr('day.alreadyHad', { codes: res.skipped.join(', '), count: res.skipped.length }));
-    if (noPage.length) parts.push(tr('day.noPage', { codes: noPage.join(', '), count: noPage.length }));
+    if (res.skipped.length) parts.push(tr('day.alreadyHad', { codes: res.skipped.map((c) => lab(src, c)).join(', '), count: res.skipped.length }));
+    if (noPage.length) parts.push(tr('day.noPage', { codes: noPage.map((c) => lab(src, c)).join(', '), count: noPage.length }));
     if (res.merged) parts.push(tr('day.merged', { count: res.merged }));
     const added: PreparedSection[] = res.added;
     const prepared = { added, origin: res.origin };
@@ -482,10 +486,10 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
             <span key={code} className={`lh-chip scene tchip${pageId ? '' : ' out'}${mark}`} data-tip={has ? tr('day.hasSectionTip') : undefined}>
               <Ic name={has ? 'check' : 'scene'} />
               <span className="lh-chip-t">
-                <span className="k">{code}</span>
+                <span className="k">{lab(src, code)}</span>
                 {title && <span className="tl"> {short(title, 24)}</span>}
               </span>
-              <button className="x" onClick={() => removeFromPlan(t.day.pageId, code)} aria-label={tr('day.removeScene', { code })}>
+              <button className="x" onClick={() => removeFromPlan(t.day.pageId, code)} aria-label={tr('day.removeScene', { code: lab(src, code) })}>
                 <Ic name="x" small />
               </button>
             </span>
@@ -511,7 +515,7 @@ function Tomorrow({ v, src, tr }: { v: DayLive; src: LiveSource; tr: Translate }
           )}
         </span>
       </div>
-      {t.repeated.length > 0 && <div className="lh-via rep">{tr('day.repeated', { codes: t.repeated.join(', ') })}</div>}
+      {t.repeated.length > 0 && <div className="lh-via rep">{tr('day.repeated', { codes: t.repeated.map((c) => lab(src, c)).join(', ') })}</div>}
       <div className="row2">
         {canEdit ? (
           <>
@@ -633,10 +637,10 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
       const parts = [tr(res.created ? 'day.newCreated' : 'day.newExisted', { title: res.title })];
       if (p.status === 'ok') {
         parts.push(p.added.length ? tr('day.added', { count: p.added.length }) : tr('day.nothingToAdd'));
-        if (p.skipped.length) parts.push(tr('day.alreadyHad', { codes: p.skipped.join(', '), count: p.skipped.length }));
+        if (p.skipped.length) parts.push(tr('day.alreadyHad', { codes: p.skipped.map((c) => lab(src, c)).join(', '), count: p.skipped.length }));
         if (p.merged) parts.push(tr('day.merged', { count: p.merged }));
       } else parts.push(tr(p.status === 'missing' ? 'day.prepareMissing' : p.status === 'busy' ? 'day.prepareBusy' : 'day.prepareUnknown', { day: res.title }));
-      if (noPage.length) parts.push(tr('day.noPage', { codes: noPage.join(', '), count: noPage.length }));
+      if (noPage.length) parts.push(tr('day.noPage', { codes: noPage.map((c) => lab(src, c)).join(', '), count: noPage.length }));
       const canUndo = res.created || (p.status === 'ok' && p.added.length > 0);
       notify(
         parts.join(' · '),
@@ -704,10 +708,10 @@ function TomorrowNew({ v, src, tr, proposal }: { v: DayLive; src: LiveSource; tr
             <span key={code} className={`lh-chip scene tchip${pageId ? '' : ' out'}`}>
               <Ic name="scene" />
               <span className="lh-chip-t">
-                <span className="k">{code}</span>
+                <span className="k">{lab(src, code)}</span>
                 {t && <span className="tl"> {short(t, 24)}</span>}
               </span>
-              <button className="x" onClick={() => removeFromPlan(key, code)} aria-label={tr('day.removeScene', { code })}>
+              <button className="x" onClick={() => removeFromPlan(key, code)} aria-label={tr('day.removeScene', { code: lab(src, code) })}>
                 <Ic name="x" small />
               </button>
             </span>
@@ -887,7 +891,7 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
           <>
             <dt>{tr('day.openQuestionsLabel')}</dt>
             <dd>
-              <Questions list={v.questions} scenePage={scenePage} tr={tr} />
+              <Questions list={v.questions} scenePage={scenePage} tr={tr} R={src.snap.registry} />
             </dd>
           </>
         )}
@@ -896,7 +900,7 @@ export function DayHeader({ v, src, pages, partial, photos }: { v: DayLive; src:
             <dt>{tr('live.namedInText')}</dt>
             <dd className="chips">
               {v.named.map((m) => (
-                <SceneChip key={m.code} code={m.code} pageId={m.scenePageId} />
+                <SceneChip key={m.code} code={m.code} pageId={m.scenePageId} R={src.snap.registry} />
               ))}
             </dd>
           </>

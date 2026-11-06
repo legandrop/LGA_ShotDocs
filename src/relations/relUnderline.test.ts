@@ -437,6 +437,19 @@ describe('Assign desde el adelanto de un pendiente y el link de lo creado desde 
     expect(linkTextInBlock(v, { blockId: block, offset: at.offset }, '105_120', `/p/${PAGES['105_029']}`)).toBe(false);
     expect(linkTextInBlock(v, { blockId: 'no-esta', offset: 0 }, 'CENADE', `/p/${PAGES.CENADE}`)).toBe(false);
   });
+
+  it('linkTextInBlock con `shown`: reemplaza el número por el que se muestra (`5120`) y lo vuelve link, en un paso', async () => {
+    const doc = page();
+    const e = mount(doc);
+    await tick();
+    const v = view(e);
+    const block = e.document[1].id;
+    const at = anchorOf(v.state, drawnRange(e, 'Escena 105_120').from, '');
+    expect(linkTextInBlock(v, { blockId: block, offset: at.offset }, '105_120', `/p/${PAGES['105_027']}`, '5120')).toBe(true);
+    const xml = doc.getXmlFragment(CONTENT_FRAGMENT).toString();
+    expect(xml).toContain(`<link href="/p/${PAGES['105_027']}">5120</link>`);
+    expect(xml).not.toContain('105_120');
+  });
 });
 
 describe('la ficha de un link a una escena', () => {

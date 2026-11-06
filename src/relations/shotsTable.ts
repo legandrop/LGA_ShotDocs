@@ -1,6 +1,7 @@
 import { emptyValue, FIELD_LABELS, normLabel, type FieldValue, type PageFields } from './fields';
 import { pageBlocks, shotSections, type LiveSource, type Place } from './liveView';
 import type { RelationSnapshot } from './relationIndex';
+import { sceneLabel, type Registry } from './reader';
 
 // *Overview › Shots* (D813, `Docs/Plan_Fichas_Cuaderno.md`, parte 3): la tabla de planos que reemplaza a `BD Main`. Una
 // fila por plano de todas las escenas, armada con lo que el índice ya tiene en memoria: los planos escritos adentro de
@@ -168,10 +169,13 @@ export function buildShotsTable(src: LiveSource): ShotsTable {
   return { columns: cols, rows, scenes, withoutShots };
 }
 
-/** La tabla como texto separado por tabulaciones, para pegar en una planilla (presupuesto, vendors). */
-export function shotsTsv(table: ShotsTable, rows: ShotRow[], headers: { scene: string; shot: string }): string {
+/**
+ * La tabla como texto separado por tabulaciones, para pegar en una planilla (presupuesto, vendors). La escena como se
+ * muestra (`1013` en una serie, la forma de la post; `R`: el registro, para no acortar una ambigua).
+ */
+export function shotsTsv(table: ShotsTable, rows: ShotRow[], headers: { scene: string; shot: string }, R?: Pick<Registry, 'epByDigit'> | null): string {
   const clean = (text: string) => text.replace(/[\t\r\n]+/g, ' ');
   const head = [headers.scene, headers.shot, ...table.columns.map((c) => c.label)];
-  const body = rows.map((r) => [r.scene, r.shot, ...table.columns.map((c) => r.values.get(c.key) ?? '')].map(clean).join('\t'));
+  const body = rows.map((r) => [sceneLabel(r.scene, R), r.shot, ...table.columns.map((c) => r.values.get(c.key) ?? '')].map(clean).join('\t'));
   return [head.map(clean).join('\t'), ...body].join('\n');
 }

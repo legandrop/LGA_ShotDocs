@@ -164,9 +164,10 @@ describe('el mapa del proyecto', () => {
     expect(text).toContain('days: Día 70 (2026-03-06), 2026-03-10 | Sin reporte | La Arenera (estudio), Colegio Pradere, Día 76 (2026-03-14)');
     expect(text).not.toMatch(/1 days/);
     expect(text).toContain('- CENADE: 6 scenes · 3 days');
-    expect(text).toContain('105_027 La ambulancia empieza a zigzaguear: planned at');
+    // Los códigos como se muestran (la forma de la post, v0.319); el JSON sigue con los internos.
+    expect(text).toContain('5027 La ambulancia empieza a zigzaguear: planned at');
     expect(text).toContain('shot Día 59 at CENADE (§ Escena 105_027b)');
-    expect(text).toContain('105_026 El fugitivo cruza la ruta: planned at CENADE · no report section');
+    expect(text).toContain('5026 El fugitivo cruza la ruta: planned at CENADE · no report section');
     expect(text).not.toContain(built.ids.d59);
   });
 

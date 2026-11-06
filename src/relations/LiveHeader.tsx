@@ -13,6 +13,7 @@ import { useLiveOpen, type FoldKind } from './liveFold';
 import { locationLive, sceneLive, setLive, type SetLive, type DayRef, type Excerpt, type LiveSource, type LocationLive, type PageChip, type PhotoRef, type Place, type SceneLive, type SetRef } from './liveView';
 import { dayGallery, locationGallery, sceneGallery, type Gallery } from './photoGallery';
 import { PhotoSources } from './PhotoSources';
+import { sceneLabel, type Registry } from './reader';
 import { leftOutBy } from './register';
 import { TwinLine, type MergePair } from './MergeAction';
 import { sceneStageRows, type StageOptions } from './sceneStageRows';
@@ -94,7 +95,7 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta: las ausencias se dicen «you can
   // see» (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
-  if (view.kind === 'set') return <SetHeader v={view.data} pages={snap.pages.size} partial={partial} />;
+  if (view.kind === 'set') return <SetHeader v={view.data} pages={snap.pages.size} partial={partial} R={snap.registry} />;
   // *New set* crea el decorado adentro de esta locación (D818): quien ve el proyecto entero (G1 de `createGuard`) y puede
   // crear acá.
   const newSetIn = view.kind === 'location' && perms.known && perms.projectLevel(projectId) >= LEVEL_VIEW && perms.canCreateIn(pageId, projectId) ? pageId : null;
@@ -109,7 +110,7 @@ function LiveHeaderFor({ pageId, session }: { pageId: string; session: NonNullab
     ) : view.kind === 'scene' ? (
       <SceneHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} opts={stageOpts} />
     ) : (
-      <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} newSetIn={newSetIn} />
+      <LocationHeader v={view.data} pages={snap.pages.size} partial={partial} photos={photos} newSetIn={newSetIn} R={snap.registry} />
     );
   if (!twin) return header;
   return (
@@ -633,7 +634,7 @@ function NewSetButton({ into, reading }: { into: string; reading: boolean }) {
   );
 }
 
-function LocationHeader({ v, pages, partial, photos, newSetIn }: { v: LocationLive; pages: number; partial: boolean; photos: HeaderPhotos; newSetIn: string | null }) {
+function LocationHeader({ v, pages, partial, photos, newSetIn, R }: { v: LocationLive; pages: number; partial: boolean; photos: HeaderPhotos; newSetIn: string | null; R: Registry }) {
   const tr = useT();
   const go = useGo();
   const [openPref, setOpenRaw] = useLiveOpen('location');
@@ -649,7 +650,7 @@ function LocationHeader({ v, pages, partial, photos, newSetIn }: { v: LocationLi
   const shotScenes = new Set(v.days.flatMap((d) => d.scenes.map((s) => s.code)));
   const sceneChip = (code: string, pageId: string | null) => (
     <Chip key={code} kind="scene" mono onClick={() => (pageId ? navigate(pagePath(pageId)) : undefined)}>
-      {code}
+      {sceneLabel(code, R)}
     </Chip>
   );
 
@@ -686,7 +687,7 @@ function LocationHeader({ v, pages, partial, photos, newSetIn }: { v: LocationLi
               <button key={s.code} className="lh-row" onClick={() => (s.pageId ? navigate(pagePath(s.pageId)) : undefined)}>
                 <span className="lh-chip scene mono static">
                   <Ic name="scene" />
-                  <span className="lh-chip-t">{s.code}</span>
+                  <span className="lh-chip-t">{sceneLabel(s.code, R)}</span>
                 </span>
                 <span className="tt">{s.title}</span>
                 <span className={`lh-st${s.days.length ? ' shot' : ''}`}>{s.days.length ? tr('live.reportOn', { days: s.days.map((d) => d.label).join(', ') }) : absent(tr('live.noReport'))}</span>
@@ -804,7 +805,7 @@ function LocationHeader({ v, pages, partial, photos, newSetIn }: { v: LocationLi
           {v.noReport.length > 0 && !reading && (
             <div className="lh-via lh-noreport-yet">
               {tr.rich(partial ? 'live.noReportYetSeen' : 'live.noReportYet', {
-                codes: <span className="lh-codes">{v.noReport.join(', ')}</span>,
+                codes: <span className="lh-codes">{v.noReport.map((c) => sceneLabel(c, R)).join(', ')}</span>,
               })}
             </div>
           )}
@@ -825,7 +826,7 @@ function LocationHeader({ v, pages, partial, photos, newSetIn }: { v: LocationLi
  * El decorado (D804): sus escenas (las que lo nombran en su campo), dónde se filma (su campo *Locación*) y los días en que
  * se filmaron sus escenas. Sin etapas ni fotos propias: lo de cada escena está en la página de la escena.
  */
-function SetHeader({ v, pages, partial }: { v: SetLive; pages: number; partial: boolean }) {
+function SetHeader({ v, pages, partial, R }: { v: SetLive; pages: number; partial: boolean; R: Registry }) {
   const tr = useT();
   const [openPref, setOpenRaw] = useLiveOpen('set');
   const open = useContext(LiveFixed) || openPref;
@@ -838,7 +839,7 @@ function SetHeader({ v, pages, partial }: { v: SetLive; pages: number; partial: 
   const absent = (text: string) => (reading ? tr('live.reading') : text);
   const sceneChip = (code: string, pageId: string | null) => (
     <Chip key={code} kind="scene" mono onClick={() => (pageId ? navigate(pagePath(pageId)) : undefined)}>
-      {code}
+      {sceneLabel(code, R)}
     </Chip>
   );
   const locChip = (l: SetLive['locs'][number]) =>

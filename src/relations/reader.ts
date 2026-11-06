@@ -5,9 +5,10 @@
 //
 // - Una escena con letra propia (`101_069A`) es su propia escena y nunca se pliega a la base; la letra queda como
 //   «parte» (`1074C` → `101_074`, parte C) solo si esa escena con letra no existe.
-// - Formas: nombre de plano (`ERSO_105_027_010`), canónica (`105_027`, `105-027`, `105_027b`), compacta (`5027b`,
-//   `H1067`, `2065A_PD`), con cero (`0116B`, solo en títulos), corta (`5-27A`), «Esc 27» dentro de su episodio;
-//   continuaciones «+ 029B», «/46», «+C», «+14» y rangos «105_70-72».
+// - Formas: nombre de plano (`ERSO_105_027_010`, y el de la post `ERSO_5027_010`), canónica (`105_027`, `105-027`,
+//   `105_027b`), compacta (`5027b`, `H1067`, `2065A_PD`; es la de la post, la que se muestra en una serie), con cero
+//   (`0116B`, solo en títulos), corta (`5-27A`), «Esc 27» dentro de su episodio; continuaciones «+ 029B», «/46», «+C»,
+//   «+14» y rangos «105_70-72».
 // - El dígito de la forma compacta sale de los episodios que existen en el proyecto (101…109 → 1…9, también 201…);
 //   si dos episodios terminan igual, la forma compacta se apaga (salvo con el episodio de la página).
 // - En un título, una forma compacta o corta cuenta solo si es lo primero del título o va después de «Escena/Sc».
@@ -163,6 +164,68 @@ export function sceneCode(raw: string | null | undefined): string | null {
   return null;
 }
 
+/** El episodio de un código interno (`101_013` → `101`), o `null` sin episodio (`074`, un largo). */
+export function episodeOfCode(code: string | null | undefined): string | null {
+  return code && /^\d{3}_/.test(code) ? code.slice(0, 3) : null;
+}
+
+/**
+ * De dónde sale el episodio de la forma de la post (`1013`): el registro del proyecto (`epByDigit`) y el episodio de la
+ * página o de la carpeta. Sin nada, la cifra es la última de `10D` (ERSO: 101…109).
+ */
+export interface SceneCodeContext {
+  R?: Pick<Registry, 'epByDigit'> | null;
+  ep?: string | null;
+}
+
+const lastDigit = (ep: string) => String(+ep.slice(1));
+
+/**
+ * El episodio de la cifra de la forma de la post (`1` de `1013`), o `null`. Como `epOf` de `scan`: primero el registro
+ * (si dos episodios terminan igual, 101 y 201, no se adivina), después el episodio de contexto; sin registro, `10D`. Con
+ * registro y sin ese episodio (un largo no tiene ninguno) no hay.
+ */
+export function episodeOfDigit(d: string, ctx: SceneCodeContext = {}): string | null {
+  const e = ctx.R?.epByDigit.get(d);
+  if (e) return e;
+  if (ctx.ep && /^\d{3}$/.test(ctx.ep) && lastDigit(ctx.ep) === d) return ctx.ep;
+  return ctx.R ? null : `10${d}`;
+}
+
+// La forma de la post (PipeSync, Flow): la última cifra del episodio y las 3 de la escena (`1013`, `2016A`, `H1067`).
+// Con hasta dos letras, como el código interno (`101_013AB` se muestra `1013AB` y se lee de vuelta).
+const CODE_POST = /^[hH]?([1-9])(\d{3})([A-Za-z]{1,2})?$/;
+
+/** Solo la forma de la post (`1013` → `101_013`, `2016a` → `102_016A`), con su contexto, o `null`. */
+export function postSceneCode(raw: string | null | undefined, ctx: SceneCodeContext = {}): string | null {
+  const m = CODE_POST.exec((raw ?? '').trim());
+  if (!m || +m[2] === 0) return null;
+  const ep = episodeOfDigit(m[1], ctx);
+  return ep ? `${ep}_${m[2]}${(m[3] ?? '').toUpperCase()}` : null;
+}
+
+/**
+ * El código interno de lo que escribió alguien o mandó otro programa (Docs/Doc_Relaciones.md, «Códigos de escena»): la
+ * forma canónica (`101_013`, `101-13a`, `074`) y, además, la de la post (`1013`, `2016A`) cuando hay contexto de serie
+ * (ver `episodeOfDigit`). El código que se guarda y se compara sigue siendo el canónico: una versión vieja no entiende
+ * `1013` y lo volvería a escribir desde el título.
+ */
+export function normalizeSceneCode(raw: string | null | undefined, ctx: SceneCodeContext = {}): string | null {
+  return sceneCode(raw) ?? postSceneCode(raw, ctx);
+}
+
+/**
+ * Cómo se muestra un código (la forma de la post, v0.319): `101_013` → `1013`, `101_033A` → `1033A`. Solo los episodios
+ * 101–109 y, con el registro, si la cifra no es de dos episodios (101 y 201): si no, el código queda como está, igual
+ * que el de un largo (`074`). Siempre se puede leer de vuelta con `normalizeSceneCode` y el mismo registro.
+ */
+export function sceneLabel(code: string, R?: Pick<Registry, 'epByDigit'> | null): string {
+  const m = /^10([1-9])_(\d{3}[A-Z]{0,2})$/.exec(code);
+  if (!m) return code;
+  if (R && R.epByDigit.get(m[1]) !== `10${m[1]}`) return code;
+  return m[1] + m[2];
+}
+
 function splitCode(code: string): { ep: string; n: string; letter: string } {
   const m = /^(?:(\d{3})_)?(\d{3})([A-Z]?)$/.exec(code)!;
   return { ep: m[1] ?? '', n: m[2], letter: m[3] };
@@ -258,6 +321,12 @@ const CONT = /^(\s*(?:[+/]|,|y|-)\s*)(\d{1,4}|[A-Za-z])([A-Za-z]?)(?=\W|_|$)/;
 const MASK = /https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w-]+\.[\w.]+/g;
 
 const RE_SHOT = /\b[A-Z]{2,6}_(\d{3})_(\d{1,3})([A-Za-z]?)(?=_|\b)(?:_\d{2,3})?/g;
+// El plano con la forma de la post (`ERSO_1066_010`, `ERSO_1066_0160_WAN`, el inserto `ERSO_1033A-INS_010`). El número
+// de plano es obligatorio, y nunca el nombre de una foto de cámara (`IMG_1066_01.jpg`, `DSC_1066_002.NEF`) ni una fecha
+// (`ERSO_2026_02_19`, `PLAN_2025_10_01`): serían la escena 101_066 o 102_026. El registro no sabe el código del proyecto
+// (`ERSO`), así que se excluye lo que no es un plano.
+const CAMERA = 'IMG|DSC|DSCF|DSCN|DJI|MVI|GOPR|GP|PXL|VID|MOV|CIMG|SAM';
+const RE_POST_SHOT = new RegExp(`\\b(?!(?:${CAMERA})_)[A-Z]{2,6}_[hH]?([1-9])(\\d{3})(?!_\\d{2}_\\d{2}(?!\\d))([A-Za-z]?)(?:-[A-Za-z]+)?_\\d{2,4}(?=_|\\b)`, 'g');
 const RE_CAN = new RegExp(`(?<![\\w/=.:])(\\d{3})\\s?[-_]\\s?(\\d{1,3})${SUF}(?=_|\\b)`, 'g');
 const RE_CMP = new RegExp(`(?<![\\w./:=#-])[hH]?([1-9])(\\d{3})${SUF}(?=_|\\b)(?![.,]\\d|-\\d)`, 'g');
 const RE_ZERO = new RegExp(`(?<![\\w./:=#-])0([1-9])(\\d{2})${SUF}(?=_|\\b)`, 'g');
@@ -316,12 +385,7 @@ export function scan(R: Registry, text: string, ctx: ScanContext = {}): Hit[] {
     if (R.scenes.has(key(ep, n))) return { id: key(ep, n), part: L };
     return null;
   };
-  const epOf = (d: string): string | null => {
-    const e = R.epByDigit.get(d);
-    if (e) return e;
-    if (ctx.ep && String(+ctx.ep.slice(1)) === d) return ctx.ep;
-    return null;
-  };
+  const epOf = (d: string): string | null => episodeOfDigit(d, { R, ep: ctx.ep });
   const push = (s: number, e: number, ep: string, num: string, letter: string | undefined, form: HitForm, strong: boolean) => {
     const r = resolve(ep, num, letter);
     if (r) {
@@ -396,6 +460,16 @@ export function scan(R: Registry, text: string, ctx: ScanContext = {}): Hit[] {
       if (!R.eps.has(m[1]) || !free(s, e)) continue;
       taken.push([s, e]);
       push(s, e, m[1], m[2], m[3], 'shot', false);
+    }
+    // 1b) Nombre de plano de la post: ERSO_1066_010 (la cifra del episodio, como la forma compacta).
+    RE_POST_SHOT.lastIndex = 0;
+    while ((m = RE_POST_SHOT.exec(masked))) {
+      const s = m.index;
+      const e = s + m[0].length;
+      const ep = epOf(m[1]);
+      if (!ep || !free(s, e)) continue;
+      taken.push([s, e]);
+      push(s, e, ep, m[2], m[3], 'shot', false);
     }
     // 2) Canónica: 105_027, 105-027, 105_027b, 103_045/46, 105_70-72.
     RE_CAN.lastIndex = 0;

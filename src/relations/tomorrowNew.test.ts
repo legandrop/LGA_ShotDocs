@@ -209,7 +209,7 @@ describe('crear y preparar el reporte de mañana', () => {
     // escenas en título 1 y la plantilla trae títulos 2: van al final, porque en el medio la última se quedaría con todo
     // lo de abajo como su sección (auditoría de v0.305; con escenas en título 2 van después del resumen, `sectionsSpot`).
     const heads = await headingsOf(A, res.pageId);
-    expect(heads.slice(-2)).toEqual(['Escena 104_008', 'Escena 105_029']);
+    expect(heads.slice(-2)).toEqual(['Escena 4008', 'Escena 5029']);
     expect(res.prepared).toMatchObject({ status: 'ok', added: [{ code: '104_008' }, { code: '105_029' }] });
     // La carpeta no cambió de marca.
     expect(A.tree.get(built.ids.rodaje)!.settings?.dayReports).toEqual({});
@@ -242,7 +242,7 @@ describe('crear y preparar el reporte de mañana', () => {
     expect(B.tree.children(built.ids.rodaje).filter((p) => p.title.startsWith('2026-03-16')).length).toBe(1);
     await B.engine.syncNow();
     await A.engine.syncNow();
-    expect((await headingsOf(A, res.pageId)).filter((h) => h.startsWith('Escena'))).toEqual(['Escena 104_008', 'Escena 105_029']);
+    expect((await headingsOf(A, res.pageId)).filter((h) => h.startsWith('Escena'))).toEqual(['Escena 4008', 'Escena 5029']);
   });
 
   it('mientras crea, se sabe que este dispositivo lo está creando (la tarjeta de siempre lo dice, D629)', async () => {
@@ -319,7 +319,7 @@ describe('crear y preparar el reporte de mañana', () => {
     const res = await createTomorrow(depsOf(A), input, canCreate);
     if (res.status !== 'ok') throw new Error(res.status);
     expect(res).toMatchObject({ created: false, pageId: existing });
-    expect(await headingsOf(A, existing)).toEqual(['Info general', 'Escena 104_008', 'Escena 105_029']);
+    expect(await headingsOf(A, existing)).toEqual(['Info general', 'Escena 4008', 'Escena 5029']);
     expect(await undoTomorrow(depsOf(A), res, built.ids.rodaje, input.prepare.linkTarget)).toMatchObject({ kind: 'prepared', removed: 2 });
     expect(await headingsOf(A, existing)).toEqual(['Info general']);
     expect(A.tree.isTrashed(existing)).toBe(false);
@@ -373,7 +373,7 @@ describe('la carrera de dos dispositivos (B2 de la auditoría de E11, D579, D580
     expect(res).toMatchObject({ status: 'ok', added: [] });
     await B.engine.syncNow();
     await A.engine.syncNow();
-    for (const d of [A, B]) expect(escenas(await headingsOf(d, id))).toEqual(['Escena 104_008', 'Escena 105_029']);
+    for (const d of [A, B]) expect(escenas(await headingsOf(d, id))).toEqual(['Escena 4008', 'Escena 5029']);
   });
 
   it('una página vacía de verdad (creada hace rato y dejada así) se prepara como siempre', async () => {
@@ -402,7 +402,7 @@ describe('la carrera de dos dispositivos (B2 de la auditoría de E11, D579, D580
     const live = A.tree.children(built.ids.rodaje).filter((p) => p.title.startsWith('2026-03-16') && !A.tree.isTrashed(p.id));
     // Siempre queda al menos uno (el de id menor nunca cede).
     expect(live.length).toBeGreaterThanOrEqual(1);
-    for (const p of live) for (const d of [A, B]) expect(escenas(await headingsOf(d, p.id))).toEqual(['Escena 104_008', 'Escena 105_029']);
+    for (const p of live) for (const d of [A, B]) expect(escenas(await headingsOf(d, p.id))).toEqual(['Escena 4008', 'Escena 5029']);
     if (live.length > 1) {
       expect([ra, rb].some((r) => r.status === 'ok' && r.twins.length > 0)).toBe(true);
       const { src } = await sourceOf(A, built);
@@ -593,7 +593,7 @@ describe('la copia que cede y un tercer dispositivo que escribe en ella (D626–
     await B.engine.syncNow();
     expect(A.tree.isTrashed(res.pageId)).toBe(false);
     expect(await textOf(A, res.pageId)).toContain('Nota temprana de C');
-    expect(escenasDe(await headingsOf(A, res.pageId))).toEqual(['Escena 104_008', 'Escena 105_029']);
+    expect(escenasDe(await headingsOf(A, res.pageId))).toEqual(['Escena 4008', 'Escena 5029']);
     expect(liveOn(B, built).length).toBe(2);
     // Undo saca solo las secciones agregadas, como el de Prepare; la página y lo de C quedan (O6 de la auditoría, D635).
     expect(res.joined).toBe(true);

@@ -151,12 +151,25 @@ describe('el link a una escena', () => {
     const { d, built } = await twoProjects();
     // La forma de PipeSync: el código del proyecto y el número en cualquier forma (`5027` = 105_027).
     const host = mount(d, '/map/scenes?project=ERSO&scene=5027');
-    await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('105_027'));
+    await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('5027La ambulancia'));
     expect(storedProjectOf(d.remote.userId)).toBe(built.projectId);
     // Al salir del Panorama, el inicio sigue en ese proyecto.
     act(() => navigate('/'));
     await act(() => settled(30));
     expect(storedProjectOf(d.remote.userId)).toBe(built.projectId);
+  });
+
+  it('la escena en cualquier forma abre la misma: interna, de la post, el nombre de un plano o de su inserto (v0.319)', async () => {
+    const { d } = await twoProjects();
+    const host = mount(d, '/map/scenes?project=ERSO&scene=104_008');
+    await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('4008'));
+    for (const q of ['105_027', '5027', 'ERSO_5027_010', 'ERSO_105_027_010', 'ERSO_5027A-INS_010', 'ERSO_105_027A-INS_010']) {
+      // Entre una y otra, otra escena: que la vista cambie de verdad.
+      act(() => navigate('/map/scenes?project=ERSO&scene=104_008'));
+      await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('4008'));
+      act(() => navigate(`/map/scenes?project=ERSO&scene=${q}`));
+      await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('5027La ambulancia'));
+    }
   });
 
   it('un proyecto que no está no muestra la escena de otro: «Opening…» hasta una vuelta con el servidor, después que no lo ve', async () => {
@@ -208,7 +221,7 @@ describe('el link a una escena', () => {
     const host = mount(d, pagePath(built.ids.notas));
     await act(() => settled(30));
     act(() => navigate('/map/scenes?scene=105_027'));
-    await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('105_027'));
+    await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('5027La ambulancia'));
     const button = [...host.querySelectorAll<HTMLButtonElement>('.mp-sbar .mp-btn')].find((b) => b.textContent === 'Copy link');
     expect(button).toBeTruthy();
     await act(async () => button!.click());
@@ -217,12 +230,13 @@ describe('el link a una escena', () => {
     expect(copied).toBe(sceneShareLink(location.origin, WANKA_LOCAL_KEY, built.projectId, '105_027'));
     const url = new URL(copied);
     expect(url.pathname).toBe('/map/scenes');
-    expect(Object.fromEntries(url.searchParams)).toEqual({ project: built.projectId, scene: '105_027', w: WANKA_LOCAL_KEY });
+    // La escena con la forma de la post (como la nombran PipeSync y Flow), no el código interno.
+    expect(Object.fromEntries(url.searchParams)).toEqual({ project: built.projectId, scene: '5027', w: WANKA_LOCAL_KEY });
 
     // Abierto con otro proyecto elegido, el link copiado vuelve a esa escena.
     storeProject(STORAGE, d.remote.userId, d.tree.projects().find((p) => p.id !== built.projectId)!.id);
     act(() => navigate(url.pathname + url.search));
-    await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('105_027'));
+    await shown(() => expect(host.querySelector('.mp-sh')?.textContent).toContain('5027La ambulancia'));
     expect(storedProjectOf(d.remote.userId)).toBe(built.projectId);
   });
 });

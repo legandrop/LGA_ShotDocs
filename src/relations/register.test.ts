@@ -57,6 +57,28 @@ describe('qué existe y qué es cada página', () => {
     expect(role('s074')).toMatchObject({ entity: { kind: 'scene', ref: '101_074' }, ep: '101', stage: 'breakdown' });
   });
 
+  it('la forma de la post (v0.319): `1013 | …` y `013 | … | 101_013` son la misma escena; una marca `1013` se normaliza', () => {
+    const r = registerProject(
+      tree([
+        { id: 'bd', title: 'Breakdown', settings: { holds: 'scene' } },
+        { id: 'ep1', parent: 'bd', title: '101 | Episodio 1' },
+        { id: 'vieja', parent: 'ep1', title: '013 | Llegan | 101_013' },
+        { id: 'nueva', parent: 'ep1', title: '1013 | Llegan' },
+        { id: 'ficha', parent: 'nueva', title: 'ERSO_1013_010' },
+        { id: 'marcada', parent: 'ep1', title: 'Salen', settings: { entity: { kind: 'scene', code: '1014' } } },
+        { id: 'ep2', parent: 'bd', title: '201 | Episode 1' },
+        { id: 'otra', parent: 'ep2', title: '1013 | Otra serie' },
+      ]),
+      'p',
+    );
+    expect(r.scenes.map((x) => `${x.code}@${x.pageId}`)).toEqual(['101_013@vieja', '101_014@marcada', '201_013@otra']);
+    expect(r.duplicates).toEqual([{ code: '101_013', pageIds: ['vieja', 'nueva'] }]);
+    expect(r.roles.get('ficha')).toMatchObject({ partOf: { kind: 'scene', ref: '101_013', pageId: 'nueva' }, ep: '101' });
+    expect(r.roles.get('otra')).toMatchObject({ entity: { kind: 'scene', ref: '201_013' }, ep: '201' });
+    // Con 101 y 201 la forma de la post no se adivina: el registro apaga la cifra.
+    expect(buildRegistry({ scenes: r.scenes, locations: [] }).epByDigit.get('1')).toBeNull();
+  });
+
   it('locaciones (con sus alias) y días; lo de adentro es scouting o rodaje', () => {
     // El paréntesis no da alias (D416): ni «CENADE» ni «Centro Nacional» solos; «CENADE», solo en el título de un día (D417).
     expect(reg.locations).toEqual([{ name: 'CENADE (Centro Nacional)', aliases: ['CENADE (Centro Nacional)'], dayTitleAliases: ['CENADE'], pageId: 'cenade' }]);

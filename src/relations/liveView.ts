@@ -3,7 +3,7 @@ import type { IndexedContent } from '../search/projectIndex';
 import { dateAtStart, dayInTitle } from '../templates/dayReport';
 import { coordsIn, emptyValue, fieldValues, normLabel, openQuestionText, type FieldValue, type PageFields } from './fields';
 import { blocksOf, INDEX_PAGE_MIN, type Mention, type PageRelations, type Section } from './pageRelations';
-import { fold, scan, sceneCode as canonicalCode, type Registry } from './reader';
+import { fold, normalizeSceneCode, scan, type Registry } from './reader';
 import { entityRelations, type EntityPage, type RelationSnapshot } from './relationIndex';
 import { planDayOf } from './planDay';
 
@@ -462,8 +462,11 @@ function unknownLocations(registry: Registry, fields: FieldValue[], planned: Map
   }
 }
 
-/** Un pedazo del campo *Escenas* que empieza con un número: `027`, `27b`, `105_027`, `105-27`, `Escena 27 | El vuelco`. */
-const SCENE_PIECE = /^(?:(?:escenas?|esc|scenes?|sc)\.?\s*)?(\d{3}\s?[-_]\s?\d{1,3}[A-Za-z]?|\d{1,3}[A-Za-z]?)(?![\p{L}\p{N}])/iu;
+/**
+ * Un pedazo del campo *Escenas* que empieza con un número: `027`, `27b`, `105_027`, `105-27`, `Escena 27 | El vuelco`, y
+ * la forma de la post (`1013`, `2016A`; solo en una serie: en un largo no hay episodio para la cifra).
+ */
+const SCENE_PIECE = /^(?:(?:escenas?|esc|scenes?|sc)\.?\s*)?(\d{3}\s?[-_]\s?\d{1,3}[A-Za-z]?|[hH]?[1-9]\d{3}[A-Za-z]?|\d{1,3}[A-Za-z]?)(?![\p{L}\p{N}])/iu;
 
 /**
  * Las escenas que nombra el campo *Escenas* de una página (la de una locación, D818), con el bloque del campo: sus links a
@@ -486,7 +489,7 @@ function fieldScenes(src: LiveSource, pageId: string | null): Map<string, string
     // shortcut: un rango («027-029») no se abre en sus escenas; si hiciera falta, con `scan` y su contexto.
     for (const piece of f.text.split(/\n|[,;·]|\s+(?:y|and|&)\s+/)) {
       const m = SCENE_PIECE.exec(piece.trim());
-      add(m ? canonicalCode(m[1]) : null);
+      add(m ? normalizeSceneCode(m[1], { R }) : null);
     }
   }
   return out;

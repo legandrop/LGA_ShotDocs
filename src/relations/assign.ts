@@ -2,7 +2,7 @@ import * as Y from 'yjs';
 import type { PageDocs } from '../sync/docs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { findUnknownContent } from '../ui/unknownContent';
-import { scan, type Registry } from './reader';
+import { scan, sceneLabel, type Registry } from './reader';
 
 // *Assign* (Docs/Doc_Relaciones.md, sección 15; D521, D522): decir de qué escena es algo escrito, sin cambiar lo escrito.
 //
@@ -104,7 +104,7 @@ export type AssignResult = { status: 'ok'; added: number; undo: AssignSpan[] } |
  * Agrega « · 105_025» (con el número como link) al final de un título (D521). `expect` es el texto del título que
  * mostraba la fila: si el bloque ya no está, no es un título o dice otra cosa, no escribe (`changed`).
  */
-export function assignHeadingInDoc(doc: Y.Doc, blockId: string, expect: string, scene: { code: string; pageId: string }): AssignResult {
+export function assignHeadingInDoc(doc: Y.Doc, blockId: string, expect: string, scene: { code: string; pageId: string }, R?: Pick<Registry, 'epByDigit'> | null): AssignResult {
   const container = findContainer(doc, blockId);
   const content = container ? contentOf(container) : null;
   if (!content || content.nodeName !== 'heading') return { status: 'changed' };
@@ -124,8 +124,10 @@ export function assignHeadingInDoc(doc: Y.Doc, blockId: string, expect: string, 
     const at = target.length;
     // Los atributos explícitos: sin ellos, Yjs le pone al texto nuevo el formato del final (un link, una negrita).
     target.insert(at, sep, {});
-    target.insert(at + sep.length, scene.code, linkAttr(href));
-    undo = [spanOf(target, at, at + sep.length + scene.code.length, 'delete', sep + scene.code, href, sep.length)];
+    // El número como se muestra (`1013` en una serie): lo nombra el link, no el texto.
+    const shown = sceneLabel(scene.code, R);
+    target.insert(at + sep.length, shown, linkAttr(href));
+    undo = [spanOf(target, at, at + sep.length + shown.length, 'delete', sep + shown, href, sep.length)];
   });
   return { status: 'ok', added: 1, undo };
 }
@@ -285,24 +287,38 @@ export function assignMentionInDoc(
 /**
  * Saca los links que llevan a esa página en todo el documento (solo la marca: el texto queda). Lo usa *Undo* de crear
  * desde el `/`: la página nueva va a la papelera y el número que se escribió vuelve a leerse como pendiente (D518).
+ * Con `restore`, un link cuyo texto es `restore.from` (la forma de la post de una escena, `5120`) vuelve a escribirse
+ * como `restore.to` (el código interno, `105_120`): un `5120` suelto en el texto el índice no lo lee como pendiente.
  */
-export function unlinkPageInDoc(doc: Y.Doc, pageId: string): number {
+export function unlinkPageInDoc(doc: Y.Doc, pageId: string, restore?: { from: string; to: string }): number {
   const href = pageHref(pageId);
-  const spots: { text: Y.XmlText; from: number; len: number }[] = [];
+  const spots: { text: Y.XmlText; from: number; len: number; str?: string; attrs?: Record<string, unknown> }[] = [];
   const walk = (node: Y.XmlElement | Y.XmlFragment) => {
     for (const child of node.toArray()) {
       if (child instanceof Y.XmlText) {
         let at = 0;
         for (const op of child.toDelta() as { insert: unknown; attributes?: { link?: { href?: unknown } } }[]) {
           const len = typeof op.insert === 'string' ? op.insert.length : 1;
-          if (op.attributes?.link?.href === href) spots.push({ text: child, from: at, len });
+          if (op.attributes?.link?.href === href) {
+            const { link: _link, ...attrs } = op.attributes as Record<string, unknown>;
+            spots.push({ text: child, from: at, len, str: typeof op.insert === 'string' ? op.insert : undefined, attrs });
+          }
           at += len;
         }
       } else if (child instanceof Y.XmlElement) walk(child);
     }
   };
   walk(doc.getXmlFragment(CONTENT_FRAGMENT));
-  if (spots.length) doc.transact(() => spots.forEach((s) => s.text.format(s.from, s.len, { link: null })));
+  if (spots.length)
+    doc.transact(() => {
+      // De atrás para adelante: reemplazar el texto cambia las posiciones de lo que viene después en el mismo nodo.
+      for (const s of [...spots].reverse()) {
+        if (restore && restore.from !== restore.to && s.str === restore.from) {
+          s.text.delete(s.from, s.len);
+          s.text.insert(s.from, restore.to, s.attrs && Object.keys(s.attrs).length ? s.attrs : undefined);
+        } else s.text.format(s.from, s.len, { link: null });
+      }
+    });
   return spots.length;
 }
 
@@ -334,8 +350,8 @@ async function inPage(deps: AssignDeps, pageId: string, run: (doc: Y.Doc) => Ass
 }
 
 /** *Assign* de una sección sin número (ver `assignHeadingInDoc`). */
-export function assignHeading(deps: AssignDeps, pageId: string, blockId: string, expect: string, scene: { code: string; pageId: string }): Promise<AssignResult> {
-  return inPage(deps, pageId, (doc) => assignHeadingInDoc(doc, blockId, expect, scene));
+export function assignHeading(deps: AssignDeps, pageId: string, blockId: string, expect: string, scene: { code: string; pageId: string }, R?: Pick<Registry, 'epByDigit'> | null): Promise<AssignResult> {
+  return inPage(deps, pageId, (doc) => assignHeadingInDoc(doc, blockId, expect, scene, R));
 }
 
 /** *Assign* de un número que no existe (ver `assignMentionInDoc`). */
@@ -433,11 +449,11 @@ export async function undoAssignEverywhere(deps: Pick<AssignDeps, 'docs'>, done:
 }
 
 /** *Undo* de crear desde el `/`: saca los links a la página creada en la página donde se escribió. */
-export async function unlinkPage(deps: AssignDeps, inPageId: string, pageId: string): Promise<number> {
+export async function unlinkPage(deps: AssignDeps, inPageId: string, pageId: string, restore?: { from: string; to: string }): Promise<number> {
   const doc = await deps.docs.open(inPageId);
   try {
     if (findUnknownContent(doc)) return 0;
-    const n = unlinkPageInDoc(doc, pageId);
+    const n = unlinkPageInDoc(doc, pageId, restore);
     await deps.docs.flush(inPageId);
     return n;
   } finally {

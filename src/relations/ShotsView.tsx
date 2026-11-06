@@ -8,7 +8,7 @@ import { notify } from '../ui/notice';
 import { fieldDate, fieldName } from './fields';
 import { goToPlace } from './goToPlace';
 import type { LiveSource } from './liveView';
-import { fold } from './reader';
+import { fold, sceneLabel } from './reader';
 import { byScene, shotsTable, shotsTsv, type ShotRow } from './shotsTable';
 import { useColumnWidths, type ColumnSpec } from '../ui/columnWidths';
 import { useCurrentProject } from '../ui/project';
@@ -74,7 +74,7 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
   const shown = useMemo(() => {
     if (!table) return [];
     // Como en *Scenes* y *Shoot days*: si lo escrito nombra escenas (`5029`, «Escena 29»), las suyas; si no, el texto.
-    const rows = !fq ? table.rows : table.rows.filter((r) => (codes ? codes.has(r.scene) : fold(`${r.scene} ${r.shot} ${[...r.values.values()].join(' ')}`).includes(fq)));
+    const rows = !fq ? table.rows : table.rows.filter((r) => (codes ? codes.has(r.scene) : fold(`${r.scene} ${sceneLabel(r.scene, src?.snap.registry)} ${r.shot} ${[...r.values.values()].join(' ')}`).includes(fq)));
     if (!sort) return rows;
     const valueOf = (r: ShotRow) => (sort.key === ':scene' ? r.scene : sort.key === ':shot' ? r.shot : (r.values.get(sort.key) ?? ''));
     const cmp = (a: ShotRow, b: ShotRow) => {
@@ -92,7 +92,7 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
 
   const headers = { scene: tr('map.colShotScene'), shot: tr('map.colShot') };
   const copy = async () => {
-    const ok = await copyText(shotsTsv(table, shown, headers));
+    const ok = await copyText(shotsTsv(table, shown, headers, src?.snap.registry));
     notify(ok ? tr('map.shotsCopied', { count: shown.length }) : tr('map.copyFailed'));
   };
   const open = (e: MouseEvent, r: ShotRow) => {
@@ -146,7 +146,7 @@ export function ShotsView({ src, fq, codes, complete }: { src: LiveSource | null
             <tbody>
               {shown.map((r) => (
                 <tr key={r.key}>
-                  <td className="mono scene">{r.scene}</td>
+                  <td className="mono scene">{sceneLabel(r.scene, src?.snap.registry)}</td>
                   <td className="mono">
                     <a className="mp-link" href={pagePath(r.place.pageId)} onClick={(e) => open(e, r)}>
                       {r.shot}

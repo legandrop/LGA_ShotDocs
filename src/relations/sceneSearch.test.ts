@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildRegistry } from './reader';
-import { findEntities, searchLocations, searchScenes, type SearchSource } from './sceneSearch';
+import { findEntities, resolveSceneParam, searchLocations, searchScenes, type SearchSource } from './sceneSearch';
 
 // Buscar una escena o una locación por cualquier forma de su número o su nombre (Docs/Doc_Relaciones.md, sección 12):
 // el mismo lector que el texto, la escena exacta primero, el episodio de la página abierta antes que los otros.
@@ -99,6 +99,33 @@ describe('searchScenes: cualquier forma del número, la escena exacta primero', 
     const src2 = source();
     const hidden: SearchSource = { snap: src2.snap, title: (id) => (id === 'p-105_027' ? undefined : src2.title(id)) };
     expect(searchScenes(hidden, '5027')[0]).toMatchObject({ code: '105_027', pageId: null, title: '' });
+  });
+});
+
+describe('el `scene=` de una dirección (resolveSceneParam, v0.319)', () => {
+  it('la interna, la de la post y el nombre de un plano abren la misma escena', () => {
+    const src = source();
+    for (const q of ['105_027', '5027', '105-027', 'ERSO_5027_010', 'ERSO_105_027_010', 'ERSO_5027_0160_WAN']) expect(resolveSceneParam(src, q), q).toBe('105_027');
+    expect(resolveSceneParam(src, '1074')).toBe('101_074');
+    expect(resolveSceneParam(src, '1069a')).toBe('101_069A');
+    expect(resolveSceneParam(src, '105_999')).toBeNull();
+    expect(resolveSceneParam(src, 'IMG_5027')).toBeNull();
+  });
+
+  it('101 y 201 en el mismo proyecto: la forma de la post no adivina; la interna sí abre', () => {
+    const src = source(['101_013', '201_013'], { '101_013': '013 | Uno', '201_013': '013 | Otro' });
+    expect(resolveSceneParam(src, '1013')).toBeNull();
+    expect(resolveSceneParam(src, 'ERSO_1013_010')).toBeNull();
+    expect(resolveSceneParam(src, '201_013')).toBe('201_013');
+    expect(codes(searchScenes(src, '1013', { loose: false }))).toEqual([]);
+    // Con el episodio de la página, sí.
+    expect(codes(searchScenes(src, '1013', { loose: false, ep: '201' }))).toEqual(['201_013']);
+  });
+
+  it('el título nuevo (`1013 | …`) se muestra sin el número, como el viejo', () => {
+    const src = source(['101_013', '101_014'], { '101_013': '1013 | Llegan al bar', '101_014': '014 | Salen | 101_014' });
+    expect(searchScenes(src, '1013', { loose: false })[0]).toMatchObject({ code: '101_013', title: 'Llegan al bar' });
+    expect(searchScenes(src, '1014', { loose: false })[0]).toMatchObject({ code: '101_014', title: 'Salen' });
   });
 });
 

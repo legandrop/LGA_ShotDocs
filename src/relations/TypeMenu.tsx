@@ -4,7 +4,7 @@ import { useLinkMode } from '../linkMode';
 import { useServices, useTree } from '../services';
 import { ArrowLeftIcon, CheckIcon, EyeOffIcon, TypeIcon } from '../ui/icons';
 import { useCurrentProject } from '../ui/project';
-import { existingRelationsSession } from '../ui/relationsUi';
+import { existingRelationsSession, sceneLabelIn } from '../ui/relationsUi';
 import { markFolderHolds, setPageType } from './entitySync';
 import { entityMark, holdsDoc, kindReader, type DocKind, type EntityKind } from './kind';
 import { leftOutBy } from './register';
@@ -60,6 +60,7 @@ export function TypeMenuItem({ pageId, onOpen }: { pageId: string; onOpen: () =>
 /** Lo que reemplaza a los ítems del menú mientras se elige el tipo. */
 export function TypeSubmenu({ pageId, onBack, onClose }: { pageId: string; onBack: () => void; onClose: () => void }) {
   const tree = useTree();
+  const services = useServices();
   const tr = useT();
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => first.current?.focus({ preventScroll: true }), []);
@@ -81,7 +82,7 @@ export function TypeSubmenu({ pageId, onBack, onClose }: { pageId: string; onBac
   const pageItem = (value: Choice | null) => {
     const checked = value === null ? !pageKind && (mark === false || kind.kind !== 'part') : pageKind?.kind === value;
     // La escena muestra su número; lo que da la carpeta sin marca en la página, «by folder».
-    const note = !checked ? '' : pageKind?.kind === 'scene' && pageKind.code ? pageKind.code : pageKind?.source === 'folder' ? tr('type.byFolder') : '';
+    const note = !checked ? '' : pageKind?.kind === 'scene' && pageKind.code ? sceneLabelIn(services, tree.get(pageId)?.workspace_id, pageKind.code) : pageKind?.source === 'folder' ? tr('type.byFolder') : '';
     return (
       <button
         key={value ?? 'none'}

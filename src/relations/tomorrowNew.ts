@@ -8,6 +8,7 @@ import type { PrepareDeps, PrepareOptions, PrepareResult } from './prepareDay';
 import { BUILTIN_ONSET } from '../templates/builtinIds';
 import { cardFields, findFields } from './relationIndex';
 import { isDayPlanRow } from './kind';
+import { sceneLabel } from './reader';
 
 // La tarjeta *Tomorrow* de un día sin día siguiente (Docs/Doc_Relaciones.md, sección 11; roadmap v0.241 (1); D573–D577):
 // ofrece crear el reporte de mañana como *New day report* (misma carpeta que el día, el título con la forma de los días
@@ -340,14 +341,14 @@ export function createTomorrow(deps: TomorrowDeps, input: TomorrowInput, canCrea
     }
     // 5. La plantilla y las secciones, de una vez.
     const scenes = input.prepare.scenes.filter((x, i, all) => all.findIndex((y) => y.code === x.code) === i);
-    const added = scenes.map((x) => ({ code: x.code, headingId: crypto.randomUUID(), paragraphId: crypto.randomUUID(), text: `${input.prepare.word} ${x.code}` }));
+    const added = scenes.map((x) => ({ code: x.code, headingId: crypto.randomUUID(), paragraphId: crypto.randomUUID(), text: `${input.prepare.word} ${sceneLabel(x.code, input.prepare.registry)}` }));
     // Las secciones después del *Summary* de la plantilla, donde se escribe en el set (`sectionsSpot`), no al final.
     // La locación del cuerpo, la misma que la del título cuando se sabe la de mañana (verificación de v0.306); si no, la de ayer.
     const base = reportBlocks(plan, { date: input.date, day, location: input.place?.trim() || plan.facts?.location || '' }, input.lang, template);
     const at = sectionsSpot(base, new Set(), input.prepare.level);
     const blocks = [
       ...base.slice(0, at),
-      ...scenes.flatMap((x, i) => sectionBlocks(x, input.prepare.word, input.prepare.level, { heading: added[i].headingId, paragraph: added[i].paragraphId })),
+      ...scenes.flatMap((x, i) => sectionBlocks(x, input.prepare.word, input.prepare.level, { heading: added[i].headingId, paragraph: added[i].paragraphId }, input.prepare.registry)),
       ...base.slice(at),
     ];
     await writeNewPage(deps.docs, pageId, blocks, template?.collapsed ?? [], template?.markup ?? []);

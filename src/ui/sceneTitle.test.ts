@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nextSceneCodes } from '../relations/FolderIndex';
+import { sceneLabel } from '../relations/reader';
 import { sceneTitleJoin, sceneTitleName } from './sceneTitle';
 
 // El título partido de una escena (D818) y el número que propone *New scene*.
@@ -13,6 +14,14 @@ describe('sceneTitleName / sceneTitleJoin', () => {
     // Lo escrito se conserva tal cual (dos espacios, un nombre con «|» adentro).
     expect(sceneTitleJoin('029', sceneTitleName('029 |  Plaza', '029')!)).toBe('029 |  Plaza');
     expect(sceneTitleName('105_120 | Bar | Noche', '105_120')).toBe('Bar | Noche');
+  });
+
+  it('con la forma de la post (v0.319): se parte por el número como se muestra', () => {
+    expect(sceneTitleName('1013 | Llegan al bar', sceneLabel('101_013'))).toBe('Llegan al bar');
+    expect(sceneTitleJoin(sceneLabel('101_013'), 'Llegan al bar')).toBe('1013 | Llegan al bar');
+    // El título viejo no empieza con la forma corta: no se parte con ella (sí con la canónica, si empieza así).
+    expect(sceneTitleName('013 | Llegan | 101_013', sceneLabel('101_013'))).toBeNull();
+    expect(sceneTitleName('101_013 | Llegan', '101_013')).toBe('Llegan');
   });
 
   it('un título que no empieza con su número no se parte', () => {
@@ -37,5 +46,7 @@ describe('nextSceneCodes', () => {
   it('en una serie, el siguiente del último episodio', () => {
     const registry = { flat: false, eps: new Set(['101', '105']), scenes: new Map([scene('101_040', '101'), scene('105_027', '105')]) };
     expect(nextSceneCodes(registry, 1)).toEqual(['105_028']);
+    // El código interno (lo que se guarda y compara); se muestra y se titula con la forma de la post.
+    expect(sceneLabel(nextSceneCodes(registry, 1)[0])).toBe('5028');
   });
 });

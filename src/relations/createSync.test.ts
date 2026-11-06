@@ -62,7 +62,8 @@ async function two(): Promise<{ server: FakeServer; built: Built; A: Side; B: Si
   return { server, built, A, B };
 }
 
-const scenePages = (d: Device, built: Built) => d.tree.children(built.ids.ep5).filter((p) => p.title === '105_120');
+// Las creadas por *Create* se titulan como se muestra (`5120`); las del «+», como se escribieron (`105_120`).
+const scenePages = (d: Device, built: Built) => d.tree.children(built.ids.ep5).filter((p) => p.title === '5120' || p.title === '105_120');
 const textOf = async (d: Device, pageId: string) => {
   const doc = await d.docs.open(pageId);
   const out = unitsFromYDoc(doc).map((u) => u.text).join(' | ');

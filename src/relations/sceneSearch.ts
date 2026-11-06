@@ -1,5 +1,5 @@
 import { sceneTitleOf } from './dayLive';
-import { fold, pad3, scan, type Registry } from './reader';
+import { episodeOfCode, fold, pad3, scan, type Registry } from './reader';
 
 // Buscar una escena o una locación por lo que se escribe (Docs/Doc_Relaciones.md, sección 12; Docs/Doc_Buscar.md,
 // «Escenas y locaciones primero»). Puro y con el mismo lector que el texto (`scan`): ninguna gramática nueva. Lo usan la
@@ -172,6 +172,16 @@ export function searchScenes(
   return out.slice(0, limit);
 }
 
+/**
+ * La escena exacta que nombra el `scene=` de una dirección del Panorama (Docs/Doc_Link_Escena.md), o `null`: el código
+ * interno (`101_013`), la forma de la post (`1013`, la que copia *Copy link*), el nombre de un plano (`ERSO_1066_010`,
+ * `ERSO_101_066_010`) o cualquier forma que entienda la lupa, con el mismo lector.
+ */
+export function resolveSceneParam(src: SearchSource, q: string): string | null {
+  if (src.snap.registry.scenes.has(q)) return q;
+  return searchScenes(src, q, { loose: false, limit: 1 })[0]?.code ?? null;
+}
+
 /** Las locaciones: lo que el lector reconoce (palabra entera, alias), después las que empiezan y las que contienen. */
 export function searchLocations(src: SearchSource, query: string, options: { limit?: number } = {}): LocationOption[] {
   const R = src.snap.registry;
@@ -218,7 +228,7 @@ export function findEntities(
     episode: s.episode,
     why: s.why,
   }));
-  for (const code of exact(R, q, ep).pending.filter((c) => options.named?.has(c))) out.push({ kind: 'pending', ref: code, pageId: null, title: '', episode: code.includes('_') ? code.slice(0, 3) : null, why: 'number' });
+  for (const code of exact(R, q, ep).pending.filter((c) => options.named?.has(c))) out.push({ kind: 'pending', ref: code, pageId: null, title: '', episode: episodeOfCode(code), why: 'number' });
   for (const l of searchLocations(src, q)) out.push({ kind: 'loc', ref: l.name, pageId: l.pageId, title: '', episode: null, why: l.why });
   return out.slice(0, options.limit ?? 8);
 }

@@ -29,6 +29,7 @@ import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
 import { pageDocTitle, setDocumentTitle } from './titleBadge';
 import { kindReader } from '../relations/kind';
+import { sceneLabelIn } from './relationsUi';
 import { sceneTitleJoin, sceneTitleName } from './sceneTitle';
 import { listenBackToTable } from './tableReturn';
 
@@ -160,7 +161,7 @@ export function PageView({ id, registerTitle }: { id: string; registerTitle?: Re
       <LinkAsideNotice pageId={id} />
       <LinkVisitorAsideNotice pageId={id} />
       <PageHeader id={id} editable={perms.canEditRow(id)} />
-      <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} registerTitle={registerTitle} code={sceneCodeOf(tree, id)} />
+      <TitleInput id={id} title={page.title} readOnly={!perms.canEditRow(id)} registerTitle={registerTitle} code={sceneCodeOf(tree, id, services)} />
       {/* La cabecera viva de una escena o una locación (Docs/Doc_Relaciones.md, 10): interfaz, fuera del documento. */}
       <LiveHeader pageId={id} />
       {/* La página de una carpeta de escenas o de locaciones: crear una y la tabla armada sola (D818). */}
@@ -238,9 +239,14 @@ function CommentsSlot({ pageId }: { pageId: string }) {
  * El número de la escena, si la página es una (el título se ve partido, D818): `null` si es una escena todavía sin número
  * (una página nueva en una carpeta de escenas), `undefined` si no es una escena.
  */
-function sceneCodeOf(tree: ReturnType<typeof useTree>, id: string): string | null | undefined {
+function sceneCodeOf(tree: ReturnType<typeof useTree>, id: string, services: Parameters<typeof sceneLabelIn>[0]): string | null | undefined {
   const kind = kindReader(tree).kindOf(id);
-  return kind.kind === 'scene' ? kind.code : undefined;
+  if (kind.kind !== 'scene') return undefined;
+  if (!kind.code) return null;
+  // El número con la forma que tiene el título: `1013 | Plaza` (la de la post, en una serie) o `101_013 | Plaza`. Editar
+  // el nombre no le cambia la forma al número.
+  const label = sceneLabelIn(services, tree.get(id)?.workspace_id, kind.code);
+  return sceneTitleName(tree.get(id)?.title ?? '', label) !== null ? label : kind.code;
 }
 
 function TitleInput({

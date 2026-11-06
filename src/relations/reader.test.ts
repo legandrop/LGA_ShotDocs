@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRegistry, foldSameLength, scan, sceneCode, type Registry, type ScanContext } from './reader';
+import { buildRegistry, episodeOfCode, foldSameLength, normalizeSceneCode, scan, sceneCode, sceneLabel, type Registry, type ScanContext } from './reader';
 
 // El lector de escenas y locaciones (Docs/Doc_Relaciones.md, sección 2). Las tablas de la propuesta D (sección 6) y de
 // la auditoría técnica (secciones 5 y 10: los 25 casos para romperlo), con escenas inventadas que imitan las de ERSO.
@@ -39,6 +39,85 @@ describe('sceneCode', () => {
     expect(sceneCode('0')).toBeNull();
     expect(sceneCode('1074')).toBeNull();
     expect(sceneCode('Escena 5')).toBeNull();
+  });
+});
+
+describe('la forma de la post (PipeSync, Flow): `1013`, `ERSO_1066_010` (v0.319)', () => {
+  const film = buildRegistry({ scenes: [{ code: '009' }, { code: '180' }, { code: '074A' }], locations: [] });
+  const twins = buildRegistry({ scenes: [{ code: '101_013' }, { code: '201_013' }, { code: '105_027' }], locations: [] });
+
+  it('normalizeSceneCode: la canónica como antes y la de la post con contexto de serie', () => {
+    // Lo de siempre.
+    expect(normalizeSceneCode('101-13a')).toBe('101_013A');
+    expect(normalizeSceneCode('74')).toBe('074');
+    // La de la post: con el registro, sin contexto (`10D`) y con el episodio de la carpeta.
+    expect(normalizeSceneCode('1013', { R: series })).toBe('101_013');
+    expect(normalizeSceneCode('2016a', { R: series })).toBe('102_016A');
+    expect(normalizeSceneCode('H1067', { R: series })).toBe('101_067');
+    expect(normalizeSceneCode('5027')).toBe('105_027');
+    expect(normalizeSceneCode('1013', { ep: '201' })).toBe('201_013');
+    expect(normalizeSceneCode('1000')).toBeNull();
+    expect(normalizeSceneCode('10130')).toBeNull();
+    // Un largo no tiene episodio para la cifra: 4 cifras no son una escena.
+    expect(normalizeSceneCode('1013', { R: film })).toBeNull();
+    // 101 y 201 terminan igual: no se adivina (salvo con el episodio de la página).
+    expect(normalizeSceneCode('1013', { R: twins })).toBeNull();
+    expect(normalizeSceneCode('1013', { R: twins, ep: '201' })).toBe('201_013');
+    // Un episodio que no existe en el proyecto, con registro, tampoco.
+    expect(normalizeSceneCode('6013', { R: series })).toBeNull();
+  });
+
+  it('sceneLabel: muestra la forma de la post solo si es inequívoca, y se lee de vuelta', () => {
+    expect(sceneLabel('101_013')).toBe('1013');
+    expect(sceneLabel('101_033A')).toBe('1033A');
+    expect(sceneLabel('105_027', series)).toBe('5027');
+    // Un largo, igual.
+    expect(sceneLabel('009')).toBe('009');
+    expect(sceneLabel('074A', film)).toBe('074A');
+    // Fuera de 101–109, o con la cifra de dos episodios, la canónica.
+    expect(sceneLabel('110_013')).toBe('110_013');
+    expect(sceneLabel('201_013')).toBe('201_013');
+    expect(sceneLabel('101_013', twins)).toBe('101_013');
+    expect(sceneLabel('105_027', twins)).toBe('5027');
+    // Lo que no es un código queda como está.
+    expect(sceneLabel('2026-02-19 | Día 59')).toBe('2026-02-19 | Día 59');
+    for (const code of SERIES) expect(normalizeSceneCode(sceneLabel(code, series), { R: series }), code).toBe(code);
+    for (const code of ['101_013', '201_013', '105_027']) expect(normalizeSceneCode(sceneLabel(code, twins), { R: twins }), code).toBe(code);
+    // Dos letras, como el código interno: ida y vuelta.
+    expect(sceneLabel('101_013AB')).toBe('1013AB');
+    expect(normalizeSceneCode('1013AB')).toBe('101_013AB');
+  });
+
+  it('episodeOfCode: el episodio de un código interno', () => {
+    expect(episodeOfCode('101_013')).toBe('101');
+    expect(episodeOfCode('105_027A')).toBe('105');
+    expect(episodeOfCode('074')).toBeNull();
+    expect(episodeOfCode(null)).toBeNull();
+    expect(episodeOfCode('')).toBeNull();
+  });
+
+  it('el nombre de plano de la post, también con más pedazos; nunca el nombre de una foto', () => {
+    expect(read(series, 'ERSO_1067_010')).toBe('101_067');
+    // Como el nombre de plano de siempre, es una forma débil: no deja un pendiente.
+    expect(read(series, 'ERSO_1066_010')).toBe('—');
+    expect(read(series, 'ERSO_101_066_010')).toBe('—');
+    expect(read(series, 'ERSO_5027_010')).toBe('105_027');
+    expect(read(series, 'Ver ERSO_5027_0160_WAN mañana')).toBe('105_027');
+    expect(read(series, 'ERSO_1016A_010')).toBe('101_016A');
+    expect(read(series, 'ERSO_105_027_010')).toBe('105_027');
+    // Sin número de plano es el nombre de una foto de cámara.
+    expect(read(series, 'IMG_1066.jpg y DSC_5027')).toBe('—');
+    // Ni con número de plano: fotos de cámara y fechas (auditoría de v0.319).
+    for (const t of ['IMG_1067_01.jpg', 'DSC_1067_002.NEF', 'ERSO_2014_02_19', 'PLAN_2012_10_01']) expect([t, read(series, t)]).toEqual([t, '—']);
+    // El inserto es parte de su escena, en las dos formas.
+    expect(read(series, 'ERSO_1033A-INS_010')).toBe('101_033(A)');
+    expect(read(series, 'ERSO_101_033A-INS_010')).toBe('101_033(A)');
+    expect(read(series, 'ERSO_1033B-INS_010')).toBe('101_033B');
+    // Un largo no lo lee como serie: el plano de VLLF sigue siendo de su escena de 3 cifras.
+    expect(read(film, 'VLLF_180_010')).toBe('180');
+    expect(read(film, 'ERSO_1066_010')).toBe('—');
+    // 101 y 201: no se adivina.
+    expect(read(twins, 'ERSO_1013_010')).toBe('—');
   });
 });
 

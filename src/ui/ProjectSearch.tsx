@@ -4,6 +4,7 @@ import '../i18n/lazy/search';
 import { mapPath, navigate, pagePath, useRoute } from '../router';
 import { pendingRelations } from '../relations/relationIndex';
 import { findEntities, type EntityHit } from '../relations/sceneSearch';
+import { sceneLabel } from '../relations/reader';
 import { normalize } from '../search/normalize';
 import { nameMatches, parseWords, rangesOf, titlesOnly, type PageHit, type SearchWord, type Snippet } from '../search/projectIndex';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
@@ -420,7 +421,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
                     itemOf((i) => i.kind === 'entity' && i.entity === e),
                     'search-entity',
                     <>
-                      <span className={`search-entity-chip ${e.kind}`}>{e.ref}</span>
+                      <span className={`search-entity-chip ${e.kind}`}>{e.kind === 'loc' ? e.ref : sceneLabel(e.ref, relations?.snapshot(projectId)?.registry)}</span>
                       <span className="search-entity-title">{e.title}</span>
                       <span className="search-entity-why muted">
                         {e.kind === 'loc'

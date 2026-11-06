@@ -2,6 +2,7 @@ import type { PageTree } from '../sync/tree';
 import type { PageRow } from '../sync/types';
 import { dateAtStart, datedPlanTitle, dayInTitle, dayReportsMark, isDayReportFolder, isReportPage } from '../templates/dayReport';
 import { isTemplatePage, isTemplatesFolder } from '../templates/own';
+import { episodeOfDigit, postSceneCode } from './reader';
 
 // Qué ES cada página (Docs/Doc_Estructura_Proyecto.md, «Tipo de página»): una escena, una locación, un decorado, un día de rodaje,
 // «parte de» una de esas (las fichas adentro de una escena, el scouting adentro de su locación, el planning adentro de su
@@ -74,7 +75,11 @@ export function entityMark(row: PageRow | undefined): EntityMarkRead {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const { kind, code } = value as { kind?: unknown; code?: unknown };
   if (!isEntityKind(kind)) return 'other';
-  return kind === 'scene' && typeof code === 'string' && SCENE_CODE.test(code) ? { kind, code } : { kind };
+  if (kind !== 'scene' || typeof code !== 'string') return { kind };
+  // Un código guardado con la forma de la post (`1013`; ninguna versión lo escribe, pero alguien o un import podría) se
+  // lee como el interno (`101_013`) en vez de descartarlo. El canónico sigue siendo lo único que se escribe.
+  const read = SCENE_CODE.test(code) ? code : postSceneCode(code);
+  return read && SCENE_CODE.test(read) ? { kind, code: read } : { kind };
 }
 
 /** El documento que marca `settings.entity` de la página (scouting, prueba o plan), o `null`. */
@@ -164,15 +169,24 @@ const SHORT_CODE = /^(?:(?:escena|esc|scene|sc)\.?\s*)?(\d{1,3})([A-Za-z]{0,2})$
  * una letra pegada a 1–2 cifras sola: «3D | Tracking» o «4K | Plates» no son escenas.
  */
 const FLAT_CODE = /^(?:(?:escena|esc|scene|sc)\.?\s*(\d{1,3})|(\d{3}))([A-Za-z]{0,2})$/i;
+/**
+ * La forma de la post como toda la primera parte (`1013 | título`, `2016A`, `1033A-INS`): la última cifra del episodio y
+ * las 3 de la escena, con letra y un sufijo de inserto. Toda la parte, como el número corto: «1920 x 1080» o «1500
+ * extras» no son escenas.
+ */
+const POST_PART = /^(?:(?:escena|esc|scene|sc)\.?\s*)?[hH]?([1-9])(\d{3})([A-Za-z]{0,2})(?:-[A-Za-z]+)?$/i;
+/** Lo que va pegado a un número y es una unidad, no la letra de una escena («1080p», «4096K», «1080px», «2030h»). */
+const UNIT = /^(?:[pikh]|px|pt|mm|cm|ms|hz|kb|mb|gb|tb|hs|mp|ft)$/i;
 
 /**
  * El número canónico de escena que trae un título (`101_074`, siempre con guion bajo y la letra en mayúscula), o `null`.
  * En orden: un número completo al principio de la primera parte (`101_074 | título`); un número corto que es toda la
- * primera parte, con el episodio de la carpeta (`074 | título` adentro de `101`); una última parte que es entera un
- * número completo (`074 | título | 101-074`, la forma de Doc_Estructura_Proyecto.md). Un número en el medio del texto
- * nombra otra escena y no cuenta. Sin episodio de contexto, al final, un número de 3 cifras es la escena de un proyecto
- * sin episodios (`074`, D383); `flat: false` lo apaga (la carpeta de escenas de una serie: «100 | Notas» no es una
- * escena; auditoría de E1, O9).
+ * primera parte, con el episodio de la carpeta (`074 | título` adentro de `101`); con el episodio de la carpeta, la forma
+ * de la post como toda la primera parte, si la cifra es la del episodio (`1013 | título` adentro de `101` → `101_013`);
+ * una última parte que es entera un número completo (`074 | título | 101-074`, la forma de Doc_Estructura_Proyecto.md).
+ * Un número en el medio del texto nombra otra escena y no cuenta. Sin episodio de contexto, al final, un número de 3
+ * cifras es la escena de un proyecto sin episodios (`074`, D383); `flat: false` lo apaga (la carpeta de escenas de una
+ * serie: «100 | Notas» no es una escena; auditoría de E1, O9).
  */
 export function sceneCode(title: string | null | undefined, episode: string | null = null, flat = true): string | null {
   const parts = (title ?? '').split('|').map((p) => p.trim());
@@ -181,6 +195,12 @@ export function sceneCode(title: string | null | undefined, episode: string | nu
   if (first) return first;
   const short = episode ? SHORT_CODE.exec(parts[0]) : null;
   if (short) return `${episode}_${short[1].padStart(3, '0')}${short[2].toUpperCase()}`;
+  // La forma de la post (`1013 | título`), SOLO adentro de la carpeta de un episodio y con su cifra (`1013` adentro de
+  // `102` no es nada): en la raíz de escenas de una serie o en un largo, un año o una cantidad de 4 cifras no es una
+  // escena. Una unidad pegada no es una letra: como en el lector, sin el registro para saber si existe con esa letra
+  // (una escena `1080P` sigue valiendo por su marca). `013 | título | 1013` ya lo da el número corto.
+  const post = episode ? POST_PART.exec(parts[0]) : null;
+  if (post && +post[2] > 0 && !UNIT.test(post[3]) && episodeOfDigit(post[1], { ep: episode }) === episode) return `${episode}_${post[2]}${post[3].toUpperCase()}`;
   const last = parts.length > 1 ? code(FULL_EXACT.exec(parts.at(-1)!)) : null;
   if (last) return last;
   // Sin episodio de contexto, al final: la escena de un proyecto sin episodios (`074 | título` → `074`, D383).

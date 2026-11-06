@@ -13,7 +13,8 @@ import type { CreateWant } from './createEntity';
 import { holdsOf } from './kind';
 import { Thumb } from './LiveHeader';
 import { locationLive, rowPhoto, sceneLive, type LiveSource, type PhotoRef } from './liveView';
-import type { Registry } from './reader';
+import { sceneTitleOf } from './dayLive';
+import { sceneLabel, type Registry } from './reader';
 import { sceneTitleName } from '../ui/sceneTitle';
 import { useColumnWidths, type ColumnSpec } from '../ui/columnWidths';
 import './folderIndex.css';
@@ -108,7 +109,10 @@ const LOCATION_COLS: ColumnSpec[] = [
 
 interface Row {
   pageId: string;
+  /** El código interno (`101_013`): el orden. */
   code: string | null;
+  /** Como se muestra (`1013` en una serie, la forma de la post). */
+  label: string | null;
   name: string;
   photo: string | null;
   /** Las fotos de la fila, las que muestra su carrete (D824). */
@@ -162,7 +166,9 @@ function FolderIndexFor({
         out.push({
           pageId: s.pageId,
           code: s.code,
-          name: (sceneTitleName(title, s.code) ?? title).trim(),
+          label: sceneLabel(s.code, snap.registry),
+          // El nombre sin el número: `1013 | Plaza` (la forma nueva) o `013 | Plaza | 101_013` (la vieja).
+          name: (sceneTitleName(title, sceneLabel(s.code, snap.registry)) ?? sceneTitleName(title, s.code) ?? sceneTitleOf(title)).trim(),
           photo: rowPhoto(photos, s.pageId, tree.get(s.pageId)?.settings?.thumb),
           photos,
           first: v.plannedAt.map((l) => ({ title: l.title, pageId: l.pageId })),
@@ -177,11 +183,12 @@ function FolderIndexFor({
         out.push({
           pageId: l.pageId,
           code: null,
+          label: null,
           name: tree.get(l.pageId)?.title || l.name,
           photo: rowPhoto(v.photos, l.pageId, tree.get(l.pageId)?.settings?.thumb),
           photos: v.photos,
           first: v.sets.map((x) => ({ title: x.title, pageId: x.pageId })),
-          second: v.planned.map((s) => ({ title: s.code, pageId: s.pageId })),
+          second: v.planned.map((s) => ({ title: sceneLabel(s.code, snap.registry), pageId: s.pageId })),
         });
       }
       out.sort((a, b) => a.name.localeCompare(b.name));
@@ -347,7 +354,7 @@ function FolderIndexFor({
                     />
                   </td>
                 )}
-                {scenes && <td className="fi-code">{r.code}</td>}
+                {scenes && <td className="fi-code">{r.label}</td>}
                 <td className={scenes ? 'fi-name-cell' : 'fi-name-cell loc'}>
                   <a href={pagePath(r.pageId)} onClick={(e) => (e.preventDefault(), open(e, r.pageId))}>
                     {r.name || (scenes ? '' : tr('common.untitled'))}
@@ -374,7 +381,7 @@ function FolderIndexFor({
               // elegir (la estrella pasa a esa foto, y un aviso quedaría debajo del carrete): solo si no se pudo guardar.
               onChoose: perms.canEditRow(viewed.row.pageId)
                 ? (id) => {
-                    const name = viewed.row.code ?? viewed.row.name;
+                    const name = viewed.row.label ?? viewed.row.name;
                     tree.setSetting(viewed.row.pageId, 'thumb', id).catch(() => notify(tr('folder.thumbFailed', { name })));
                   }
                 : undefined,

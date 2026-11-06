@@ -3,7 +3,7 @@ import type { PageRow } from '../sync/types';
 import { LEVEL_VIEW } from '../sync/access';
 import { BUILTIN_LOCATION, BUILTIN_SCENE } from '../templates/builtinIds';
 import { entityMark, episodeOf, isEpisodeTitle, kindReader, type KindTree } from './kind';
-import { fold, recognizedAlone, sceneCode as canonicalCode, type Registry } from './reader';
+import { episodeOfCode, fold, normalizeSceneCode, recognizedAlone, sceneCode as canonicalCode, sceneLabel, type Registry } from './reader';
 import { bareLocationName, locationFromTitle } from './register';
 
 // Crear una escena o una locación que el texto nombra y no existe (Docs/Doc_Relaciones.md, sección 15; E7, D512–D517,
@@ -130,7 +130,7 @@ function sceneCodesInTree(tree: GuardTree, projectId: string): { code: string; r
     const fromTitle = reader.titleCode(row.id);
     if (fromTitle) codes.add(fromTitle);
     for (const c of codes) {
-      const code = canonicalCode(c) ?? c;
+      const code = normalizeSceneCode(c) ?? c;
       out.push({ code, row });
     }
   }
@@ -168,7 +168,7 @@ function typedFolders(tree: GuardTree, projectId: string, holds: 'scene' | 'loca
 
 /** Dónde va una escena nueva (G5): la carpeta de sus hermanas del episodio, su grupo de episodio o la única *Scenes*. */
 function sceneFolder(tree: GuardTree, projectId: string, registry: Registry, code: string): { id: string } | { reason: 'noFolder' | 'twoFolders' } {
-  const ep = code.includes('_') ? code.slice(0, 3) : '';
+  const ep = episodeOfCode(code) ?? '';
   const siblings = [...registry.scenes.values()].filter((s) => s.ep === ep && s.pageId).map((s) => s.pageId!);
   const common = mostCommonParent(tree, siblings);
   if (common.id) return { id: common.id };
@@ -216,8 +216,8 @@ function setFolder(tree: GuardTree, projectId: string): { id: string } | { reaso
 export function folderChoices(tree: GuardTree, projectId: string, want: CreateWant): PageRow[] {
   const holds = want.kind;
   const folders = typedFolders(tree, projectId, holds);
-  if (want.kind !== 'scene' || !want.code.includes('_')) return folders;
-  const ep = want.code.slice(0, 3);
+  const ep = want.kind === 'scene' ? episodeOfCode(want.code) : null;
+  if (!ep) return folders;
   const groups = folders.flatMap((f) => tree.children(f.id).filter((c) => isEpisodeTitle(c.title) && episodeOf(c.title) === ep));
   return groups.length ? groups : folders;
 }
@@ -255,7 +255,7 @@ export function createGuard(ctx: GuardContext, want: CreateWant): GuardResult {
   if (want.kind === 'scene') {
     const code = canonicalCode(want.code);
     if (!code || code !== want.code) return { ok: false, reason: 'invalid' };
-    const ep = code.includes('_') ? code.slice(0, 3) : '';
+    const ep = episodeOfCode(code) ?? '';
     // Un episodio que no existe no se ofrece (el lector tampoco lo da por pendiente).
     if (ep ? !snap.registry.eps.has(ep) : !snap.registry.flat && snap.registry.eps.size > 0) return { ok: false, reason: 'invalid' };
     const base = baseOf(code);
@@ -270,7 +270,9 @@ export function createGuard(ctx: GuardContext, want: CreateWant): GuardResult {
     const folder = chosenFolder(tree, want) ?? sceneFolder(tree, projectId, snap.registry, code);
     if ('reason' in folder) return { ok: false, reason: folder.reason };
     if (!perms.canCreateIn(folder.id, projectId)) return { ok: false, reason: 'cantCreate', pageId: folder.id };
-    return { ok: true, parentId: folder.id, before: beforeSibling(tree, folder.id, code), title: code };
+    // El título con la forma de la post en una serie (`1028`, se lee de vuelta con el episodio de la carpeta); la marca
+    // guarda el código interno (`101_028`, `createEntity`).
+    return { ok: true, parentId: folder.id, before: beforeSibling(tree, folder.id, code), title: sceneLabel(code, snap.registry) };
   }
   const name = want.name.replace(/\s+/g, ' ').trim();
   if (fold(name).replace(/[^\p{L}\p{N}]/gu, '').length < 2) return { ok: false, reason: 'invalid' };

@@ -13,8 +13,10 @@ import { clickedByKeys, goToRow, markOpenedFromOverview, openedFromOverview, OVE
 import { dayList, dayShortLabel } from './dayLive';
 import { setIndex } from './liveView';
 import { mergeRows } from './merge';
+import { sceneLabel } from './reader';
 import { pendingSummary } from './projectMap';
 import { entityMapPath, mapPathFrom, sceneEpisodes, sceneMapPath } from './sceneMentions';
+import { resolveSceneParam } from './sceneSearch';
 import { useSlashDraft } from './slashDraft';
 import './mapNav.css';
 import './scenesNav.css';
@@ -128,7 +130,8 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
   }, [snap, revision, tree, treeRevision]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tab: MapTab | null = route.name === 'map' ? route.tab : null;
-  const activeScene = tab === 'scenes' ? sceneQuery : null;
+  // La escena de la dirección en cualquier forma (`1013`, `101_013`, `ERSO_1066_010`): la fila se marca por el código interno.
+  const activeScene = tab === 'scenes' && sceneQuery ? (snap ? (resolveSceneParam({ snap, title: (id) => tree.get(id)?.title }, sceneQuery) ?? sceneQuery) : sceneQuery) : null;
   // El resumen abierto de una locación o un decorado (`/map/locations?page=…`).
   const activeEntity = (tab === 'locations' || tab === 'sets') && pageQuery ? pageQuery : null;
   /** Abierta la vista entera de una parte, no el resumen de una de sus filas. */
@@ -365,7 +368,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
               aria-current={s.code === activeScene ? 'page' : undefined}
               onClick={(e) => openScene(e, s.code)}
             >
-              <span className="code">{s.code}</span>
+              <span className="code">{sceneLabel(s.code, snap.registry)}</span>
               {/* Sin tooltip: el nombre ya se ve (D794). */}
               <span className="title">{s.title}</span>
             </a>
@@ -550,7 +553,7 @@ function OverviewFor({ session }: { session: NonNullable<ReturnType<typeof exist
     );
   };
 
-  const codeWidth = Math.max(0, ...lists.scenes.flatMap((g) => g.scenes.map((s) => s.code.length)));
+  const codeWidth = Math.max(0, ...lists.scenes.flatMap((g) => g.scenes.map((s) => sceneLabel(s.code, snap.registry).length)));
   // Todas las partes, siempre (D825); una vacía dice 0 y no se despliega (no hay nada adentro). Mientras lee, un cero no
   // se afirma (D402): sin número hasta terminar. Con una vista parcial, solo las partes con algo (D401).
   const parts: ReactNode[] = [];

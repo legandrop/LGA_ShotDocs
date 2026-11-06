@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { IndexDocs, IndexTree, ProjectIndex } from '../search/projectIndex';
-import { buildRegistry, scan } from '../relations/reader';
+import { buildRegistry, scan, sceneLabel } from '../relations/reader';
 import { entityRelations, indexPages, pageRelations, pendingRelations, RelationIndex } from '../relations/relationIndex';
 import type { RegisterTree } from '../relations/register';
 import { useServices, useSyncStatus, useTree } from '../services';
@@ -99,6 +99,14 @@ export function relationsSession(services: RelationServices): RelationsSession {
 /** Las relaciones ya arrancadas (por `RelationsRunner`), sin arrancarlas: para quien solo las muestra (la cabecera viva). */
 export function existingRelationsSession(services: { docs: IndexDocs }): RelationsSession | null {
   return sessions.get(services.docs) ?? null;
+}
+
+/**
+ * Un código de escena como se muestra (`1013` en una serie, la forma de la post), con el registro del proyecto si ya está
+ * leído (para no acortar uno ambiguo: 101 y 201); sin él, `sceneLabel` sin registro.
+ */
+export function sceneLabelIn(services: { docs: IndexDocs }, projectId: string | null | undefined, code: string): string {
+  return sceneLabel(code, projectId ? (existingRelationsSession(services)?.relations.snapshot(projectId)?.registry ?? null) : null);
 }
 
 /** Suelta las relaciones de una instancia de servicios (cerrar sesión, cambiar de workspace). Antes que la búsqueda. */

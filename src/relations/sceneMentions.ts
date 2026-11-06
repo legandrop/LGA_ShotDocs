@@ -4,7 +4,7 @@ import { sceneTitleOf } from './dayLive';
 import { dayIdOf, type LiveSource } from './liveView';
 import { INDEX_PAGE_MIN } from './pageRelations';
 import type { MapMention, MapSectionRef, ProjectMapData } from './projectMap';
-import { scan, type SceneEntry } from './reader';
+import { scan, sceneLabel, type Registry, type SceneEntry } from './reader';
 import type { Stage } from './register';
 
 // La sección *Scenes* (Docs/Doc_Relaciones.md, sección 21): todas las páginas que hablan de una escena, agrupadas por
@@ -362,12 +362,13 @@ export function sceneMapPath(code: string): string {
 /**
  * El link para compartir una escena (Docs/Doc_Link_Escena.md): la misma vista, con el proyecto y el workspace en la
  * dirección para que abra esa escena de ese proyecto en cualquier dispositivo, no la del último proyecto elegido.
- * No da acceso: quien lo abre tiene que poder ver el proyecto.
+ * No da acceso: quien lo abre tiene que poder ver el proyecto. La escena va como se muestra (`1013` en una serie, la
+ * forma de la post; `074` en un largo): `R` (el registro, o lo que tenga `epByDigit`) evita la forma corta si es ambigua.
  */
-export function sceneShareLink(appOrigin: string, localKey: string, projectId: string, code: string): string {
+export function sceneShareLink(appOrigin: string, localKey: string, projectId: string, code: string, R?: Pick<Registry, 'epByDigit'> | null): string {
   const url = new URL(mapPath('scenes'), appOrigin);
   url.searchParams.set('project', projectId);
-  url.searchParams.set('scene', code);
+  url.searchParams.set('scene', sceneLabel(code, R));
   url.searchParams.set('w', localKey);
   return url.href;
 }

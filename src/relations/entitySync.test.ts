@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { BUILTIN_LOCATION, BUILTIN_SCENE, BUILTIN_TECH_SCOUT, BUILTIN_TEST } from '../templates/builtinIds';
-import { installEntityMarks, markFolderHolds, markFromTemplate, placedEntity, setPageType, templateEntity } from './entitySync';
-import { pageKind } from './kind';
+import { installEntityMarks, markFolderHolds, markFromTemplate, placedEntity, setPageType, templateEntity, wantedMark } from './entitySync';
+import { pageKind, SCENE_CODE } from './kind';
+import * as oldSync from './fixtures/v0317/entitySync';
+import * as oldKind from './fixtures/v0317/kind';
 
 // Las marcas de tipo con el árbol de verdad (PageTree con su cola y el servidor en memoria): marcar una carpeta, crear,
 // renombrar y mover adentro, desmarcar, los días como carpeta de reportes, las plantillas, y que un cambio de otro ajuste
@@ -250,6 +252,51 @@ describe('compatibilidad y sincronización', () => {
     await a.engine.syncNow();
     expect(server.pages.get(cenade)?.settings).toEqual({ entity: { kind: 'location' } });
     expect(server.pages.get(locs)?.settings).toEqual({ holds: 'location' });
+  });
+});
+
+describe('la forma de la post en el título y una versión vieja abierta (v0.319)', () => {
+  it('el título viejo y el nuevo guardan el mismo código interno; pasar al nuevo no reescribe la marca, y la vieja tampoco', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const desglose = await a.tree.create(null, 'Desglose');
+    await markFolderHolds(a.tree, desglose, 'scene');
+    const ep = await a.tree.create(desglose, '101 | Episodio 1');
+    const vieja = await a.tree.create(ep, '013 | Llegan al bar | 101_013');
+    const nueva = await a.tree.create(ep, '1014 | Salen del bar');
+    expect(entity(a, vieja)).toEqual({ kind: 'scene', code: '101_013' });
+    expect(entity(a, nueva)).toEqual({ kind: 'scene', code: '101_014' });
+    await a.engine.syncNow();
+    // Lega renombra la vieja a la forma nueva: la marca queda como estaba (nada que subir).
+    await a.tree.rename(vieja, '1013 | Llegan al bar');
+    expect(wantedMark(a.tree, vieja)).toBeUndefined();
+    expect(entity(a, vieja)).toEqual({ kind: 'scene', code: '101_013' });
+    await a.engine.syncNow();
+    expect(server.pages.get(vieja)?.settings).toEqual({ entity: { kind: 'scene', code: '101_013' } });
+    // Una pestaña vieja (el código real de v0.317, fixtures/v0317): lee la marca guardada, del título nuevo no saca ningún
+    // número y no quiere escribir nada, así que no pisa la marca (si sacara otro, las dos versiones se la pisarían).
+    expect(SCENE_CODE.test('101_013') && SCENE_CODE.test('101_014')).toBe(true);
+    expect(oldKind.entityMark(a.tree.get(vieja))).toEqual({ kind: 'scene', code: '101_013' });
+    expect(oldKind.kindReader(a.tree).titleCode(vieja)).toBeNull();
+    expect(oldKind.kindReader(a.tree).kindOf(vieja)).toMatchObject({ kind: 'scene', code: '101_013' });
+    expect(oldSync.wantedMark(a.tree, vieja)).toBeUndefined();
+    expect(oldSync.wantedMark(a.tree, nueva)).toBeUndefined();
+    // El código sigue al título también con la forma nueva.
+    await a.tree.rename(nueva, '1015 | Salen del bar');
+    expect(entity(a, nueva)).toEqual({ kind: 'scene', code: '101_015' });
+    // Si el título deja de traer un número, el guardado se queda.
+    await a.tree.rename(nueva, 'Salen del bar');
+    expect(entity(a, nueva)).toEqual({ kind: 'scene', code: '101_015' });
+  });
+
+  it('un largo (VLLF) no cambia: `009 | Aeroparque` sigue siendo 009 y `1013 | …` no es una escena con número', async () => {
+    const a = await device(new FakeServer());
+    const bd = await a.tree.create(null, 'Breakdown');
+    await markFolderHolds(a.tree, bd, 'scene');
+    const s009 = await a.tree.create(bd, '009 | Aeroparque');
+    const cuatro = await a.tree.create(bd, '1013 | Otra cosa');
+    expect(entity(a, s009)).toEqual({ kind: 'scene', code: '009' });
+    expect(entity(a, cuatro)).toEqual({ kind: 'scene' });
   });
 });
 

@@ -7,7 +7,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from '../ui/editorSchema';
 import type { LinkTarget } from './pageRelations';
 import { prepareInDoc, undoInDoc, type PrepareOptions } from './prepareDay';
-import { buildRegistry } from './reader';
+import { buildRegistry, sceneLabel } from './reader';
 
 // Los casos de la auditoría de *Prepare* (Docs/Doc_Relaciones.md, sección 11; D436, D437), sobre dos Y.Doc: un título a
 // mano nunca se saca (B4), y ni *Undo* ni la limpieza de repetidos pierden lo que otro escribe a la vez, también con dos o
@@ -99,13 +99,13 @@ describe('Prepare con dos dispositivos: los casos de la auditoría', () => {
     const before = headings(doc);
     const out = prepareInDoc(doc, opts(['104_008']));
     expect(out.merged).toBe(0);
-    expect(headings(doc)).toEqual([...before, 'Escena 104_008']);
+    expect(headings(doc)).toEqual([...before, 'Escena 4008']);
   });
   it('B4 sin romper D436: el par de dos dispositivos se sigue limpiando', () => {
     const a = report(); const b = fork(a);
     prepareInDoc(a, opts(['104_008'])); prepareInDoc(b, opts(['104_008'])); sync(a, b);
     expect(prepareInDoc(a, opts(['104_008'])).merged).toBe(1);
-    expect(headings(a).filter((h) => h === 'Escena 104_008')).toHaveLength(1);
+    expect(headings(a).filter((h) => h === 'Escena 4008')).toHaveLength(1);
   });
   it('B4: dos títulos a mano iguales con la forma de Prepare, vacíos', () => {
     const doc = report();
@@ -143,7 +143,7 @@ describe('Prepare con dos dispositivos: los casos de la auditoría', () => {
     sync(a, b);
     // los títulos 104_008 en orden del documento: el segundo es el que la limpieza saca (deja el primero)
     const e = mount(a); const docs = e.document; editors.splice(editors.indexOf(e), 1); e.unmount();
-    const idx = docs.map((x, i) => [x, i] as const).filter(([x]) => x.type === 'heading' && JSON.stringify(x.content).includes('104_008')).map(([, i]) => i);
+    const idx = docs.map((x, i) => [x, i] as const).filter(([x]) => x.type === 'heading' && JSON.stringify(x.content).includes(sceneLabel('104_008'))).map(([, i]) => i);
     const c = fork(a);
     writeIn(c, docs[idx[1] + 1].id, 'Texto de C bajo el segundo 104_008.');
     expect(prepareInDoc(a, opts(['104_008', '104_009'])).merged).toBe(2);
@@ -192,7 +192,7 @@ describe('tres secciones: lo que otro escribe bajo la primera, la del medio o la
       const docs = e.document;
       editors.splice(editors.indexOf(e), 1);
       e.unmount();
-      const idx = docs.map((x, i) => [x, i] as const).filter(([x]) => x.type === 'heading' && JSON.stringify(x.content).includes(three[k])).map(([, i]) => i);
+      const idx = docs.map((x, i) => [x, i] as const).filter(([x]) => x.type === 'heading' && JSON.stringify(x.content).includes(sceneLabel(three[k]))).map(([, i]) => i);
       const c = fork(a);
       writeIn(c, docs[idx[1] + 1].id, `C bajo el repetido de ${three[k]}.`);
       const again = prepareInDoc(a, opts(three));
@@ -200,7 +200,7 @@ describe('tres secciones: lo que otro escribe bajo la primera, la del medio o la
       sync(a, c);
       expect(read(a)).toEqual(read(c));
       expect(read(a).map((x) => x.text)).toContain(`C bajo el repetido de ${three[k]}.`);
-      for (const code of three) expect(headings(a).filter((h) => h === `Escena ${code}`)).toHaveLength(1);
+      for (const code of three) expect(headings(a).filter((h) => h === `Escena ${sceneLabel(code)}`)).toHaveLength(1);
     });
   }
   it('si la estructura no es la esperada (el título quedó adentro de otro bloque), Undo no borra nada y lo dice', () => {

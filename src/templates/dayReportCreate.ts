@@ -18,6 +18,7 @@ import { fillReport, readFacts, type ReportFacts } from './dayReportFacts';
 import { isTemplatePage } from './own';
 import { readOwnTemplate } from './ownCopy';
 import { onlyTitleRests, TITLE_REST_PREFIX } from '../sync/titleRest';
+import { sceneLabel } from '../relations/reader';
 import { isDayPlanRow } from '../relations/kind';
 
 // Crear el reporte del día (Docs/Doc_Plantillas.md, 6.3 a 6.6): leer los reportes de la carpeta (todo está en el
@@ -349,6 +350,8 @@ export interface PlanScene {
   code: string;
   pageId: string | null;
   name: string;
+  /** El número como se muestra (`1013` en una serie, `sceneLabel` con el registro); sin él, `sceneLabel` sin registro. */
+  label?: string;
 }
 
 /**
@@ -374,8 +377,10 @@ export function withPlanScenes(blocks: TemplateBlock[], scenes: (string | PlanSc
 function planSceneCell(s: string | PlanScene): unknown {
   if (typeof s === 'string') return s;
   if (!s.pageId) return s.name ? `${s.code} | ${s.name}` : s.code;
+  // Con link, el número como se muestra (`1013` en una serie); sin página queda el interno: un `1013` suelto en una celda
+  // no lo lee el índice (como un año) y la escena dejaría de verse pendiente.
   return [
-    { type: 'link', href: `/p/${s.pageId}`, content: [{ type: 'text', text: s.code, styles: {} }] },
+    { type: 'link', href: `/p/${s.pageId}`, content: [{ type: 'text', text: s.label ?? sceneLabel(s.code), styles: {} }] },
     ...(s.name ? [{ type: 'text', text: ` | ${s.name}`, styles: {} }] : []),
   ];
 }

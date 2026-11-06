@@ -125,7 +125,7 @@ describe('Type en el menú de la página', () => {
     expect(button(host, 'Type')?.querySelector('.check')?.textContent).toBe('Scene');
     act(() => button(host, 'Type')!.click());
     expect(button(host, 'Scene')?.getAttribute('aria-checked')).toBe('true');
-    expect(button(host, 'Scene')?.querySelector('.check')?.textContent).toBe('101_074');
+    expect(button(host, 'Scene')?.querySelector('.check')?.textContent).toBe('1074');
     act(() => button(host, 'None of these')!.click());
     await shown(() => expect(device.tree.get(scene)?.settings?.entity).toBe(false));
   });

@@ -502,8 +502,8 @@ export const relations = {
   'create.why.invalid': { en: "Not a number this project uses", es: "No es un número que use este proyecto" },
   'assign.button': { en: "Assign", es: "Asignar" },
   'assign.headingTip': {
-    en: "Say which scene this section is: adds « · 105_025» with a link at the end of its title",
-    es: "Decir de qué escena es esta sección: agrega « · 105_025» con link al final de su título",
+    en: "Say which scene this section is: adds « · 5025» with a link at the end of its title",
+    es: "Decir de qué escena es esta sección: agrega « · 5025» con link al final de su título",
   },
   'assign.pendingTip': {
     en: "Link this number to the scene it means; the text stays as written",

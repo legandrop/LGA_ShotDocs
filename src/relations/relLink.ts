@@ -180,9 +180,10 @@ export const relLinkKeyExtension = createExtension({
 /**
  * Vuelve link un texto recién escrito en un bloque (crear desde el `/`, E7: el número se escribe enseguida y queda link
  * cuando la página existe). Busca en ese bloque, por su id, la aparición de `text` sin link más cercana al lugar donde se
- * escribió; si el bloque ya no está o el texto cambió, no hace nada. Su propio paso de deshacer.
+ * escribió; si el bloque ya no está o el texto cambió, no hace nada. Su propio paso de deshacer. Con `shown`, lo
+ * reemplaza por ese texto en el mismo paso (el número de una escena recién creada, `105_028` → `5028`, en una serie).
  */
-export function linkTextInBlock(view: EditorView, at: { blockId: string; offset: number }, text: string, href: string): boolean {
+export function linkTextInBlock(view: EditorView, at: { blockId: string; offset: number }, text: string, href: string, shown?: string): boolean {
   const linkType = view.state.schema.marks.link;
   if (!linkType || !text) return false;
   let block: { start: number; node: import('@tiptap/pm/model').Node } | null = null;
@@ -213,7 +214,10 @@ export function linkTextInBlock(view: EditorView, at: { blockId: string; offset:
   });
   if (best === null) return false;
   const from: number = best;
-  const tr = view.state.tr.addMark(from, from + text.length, linkType.create({ href }));
+  const tr = view.state.tr;
+  const final = shown || text;
+  if (final !== text) tr.insertText(final, from, from + text.length);
+  tr.addMark(from, from + final.length, linkType.create({ href }));
   tr.setMeta(underlineKey, UNDERLINE_NOW);
   asOneUndoStep(view.state, () => view.dispatch(tr));
   return true;

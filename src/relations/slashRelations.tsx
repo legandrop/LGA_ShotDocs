@@ -11,7 +11,7 @@ import type { CreateWant } from './createEntity';
 import { createTypedFolder, FOLDER, typedSceneCode } from './typedFolder';
 import { planOf } from './dayLive';
 import { dayIdOf, dayRef } from './liveView';
-import { fold, scan, type Registry } from './reader';
+import { fold, scan, sceneLabel, type Registry } from './reader';
 import { anchorOf, linkTextInBlock } from './relLink';
 import { setSlashDraft, textWithout } from './slashDraft';
 import type { RelationSnapshot } from './relationIndex';
@@ -186,7 +186,7 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
       const label = tr(FOLDER[part]);
       const name = want.kind === 'scene' ? want.code : want.name.replace(/\s+/g, ' ').trim();
       return {
-        title: want.kind === 'scene' ? tr('create.scene', { code: want.code }) : tr('create.location', { name }),
+        title: want.kind === 'scene' ? tr('create.scene', { code: sceneLabel(want.code, p.snap.registry) }) : tr('create.location', { name }),
         subtext: tr('create.inNew', { folder: label }),
         group,
         icon: <PlusIcon />,
@@ -221,7 +221,7 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
     }
     const folder = services.tree.get(guard.parentId)?.title ?? '';
     return {
-      title: want.kind === 'scene' ? tr('create.scene', { code: want.code }) : tr('create.location', { name: guard.title }),
+      title: want.kind === 'scene' ? tr('create.scene', { code: sceneLabel(want.code, p.snap.registry) }) : tr('create.location', { name: guard.title }),
       subtext: guard.generic ? `${tr('create.in', { folder })} · ${tr('create.generic')}` : tr('create.in', { folder }),
       group,
       icon: <PlusIcon />,
@@ -235,7 +235,9 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
           inPage: pageId,
           onCreated: (id) => {
             const view = editor.prosemirrorView;
-            if (view && at && view.editable) linkTextInBlock(view, at, text, `/p/${id}`);
+            // El número escrito es el interno (mientras no hay página, el índice lo lee como pendiente); al crearse, el
+            // que anunció el menú (`5028` en una serie), con su link.
+            if (view && at && view.editable) linkTextInBlock(view, at, text, `/p/${id}`, want.kind === 'scene' ? sceneLabel(want.code, p.snap.registry) : undefined);
           },
         });
       },
@@ -247,11 +249,12 @@ export function relationSlash(env: { editor: Editor; services: Services; pageId:
     const options = q ? searchScenes(p.src, q, { ep: p.ep, near: p.near, loose: true, limit: 7 }).filter((o) => o.pageId) : pickerOptions(p.src, '', { near: p.near, ep: p.ep, limit: 7 });
     const items: DefaultReactSuggestionItem[] = options.map((o) => {
       // Una parte (`/e 105_027a` sin escena `105_027A`): el link va a la escena y el texto conserva la letra como se
-      // escribió (O6 de la auditoría de E7, D569).
-      const text = o.code + partLetter(q, o.part);
+      // escribió (O6 de la auditoría de E7, D569). El número como se muestra (`1013` en una serie): va con su link.
+      const shown = sceneLabel(o.code, p.snap.registry);
+      const text = shown + partLetter(q, o.part);
       return {
         title: text,
-        subtext: [o.part ? tr('slash.partOf', { code: o.code }) : '', o.title, o.episode && o.episode !== p.ep ? `EP ${o.episode}` : ''].filter(Boolean).join(' · '),
+        subtext: [o.part ? tr('slash.partOf', { code: shown }) : '', o.title, o.episode && o.episode !== p.ep ? `EP ${o.episode}` : ''].filter(Boolean).join(' · '),
         group,
         icon: <SceneIcon />,
         onItemClick: () => insertPageLink(editor, text, o.pageId!),

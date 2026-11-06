@@ -12,6 +12,7 @@ import { buildProject } from './fixtures/proyectoSintetico';
 import type { LiveSource } from './liveView';
 import { prepareReport, undoPrepared } from './prepareDay';
 import { RelationIndex } from './relationIndex';
+import { sceneLabel } from './reader';
 
 // *Undo* y la limpieza de repetidos de *Prepare* de punta a punta (D436, D437): dos o tres dispositivos con el mismo
 // servidor de prueba; lo que otro escribe mientras tanto llega a todos (R1 y R2 de la re-verificación).
@@ -149,7 +150,7 @@ describe('tres secciones con el servidor de prueba: lo que B escribe bajo la pri
       for (const dev of [A, B, C]) {
         const t = await textsOf(dev, built.ids.d60);
         expect(t).toContain(`paragraph:B bajo ${three[k]}.`);
-        expect(t.filter((x) => x.startsWith('heading:Escena 10') && !x.includes('105_029'))).toEqual([]);
+        expect(t.filter((x) => three.some((code) => x === `heading:Escena ${sceneLabel(code)}`))).toEqual([]);
       }
     });
     it(`D436 de punta a punta: A y B preparan sin red, C escribe bajo el repetido ${k + 1} y A limpia`, async () => {
@@ -176,7 +177,7 @@ describe('tres secciones con el servidor de prueba: lo que B escribe bajo la pri
       const docC = await C.docs.open(built.ids.d60);
       const { e, done } = editorOn(docC, 'c');
       const blocks = e.document;
-      const idx = blocks.map((x, i) => [x, i] as const).filter(([x]) => x.type === 'heading' && JSON.stringify(x.content).includes(three[k])).map(([, i]) => i);
+      const idx = blocks.map((x, i) => [x, i] as const).filter(([x]) => x.type === 'heading' && JSON.stringify(x.content).includes(sceneLabel(three[k]))).map(([, i]) => i);
       expect(idx).toHaveLength(2);
       e.updateBlock(blocks[idx[1] + 1].id, { content: `C bajo el repetido de ${three[k]}.` } as never);
       done();
@@ -191,7 +192,7 @@ describe('tres secciones con el servidor de prueba: lo que B escribe bajo la pri
       for (const dev of [A, B, C]) {
         const t = await textsOf(dev, built.ids.d60);
         expect(t).toContain(`paragraph:C bajo el repetido de ${three[k]}.`);
-        for (const code of three) expect(t.filter((x) => x === `heading:Escena ${code}`)).toHaveLength(1);
+        for (const code of three) expect(t.filter((x) => x === `heading:Escena ${sceneLabel(code)}`)).toHaveLength(1);
       }
     });
   }

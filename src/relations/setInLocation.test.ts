@@ -216,7 +216,8 @@ describe('la locación dice qué escenas van ahí (campo Escenas)', () => {
     const locs = await d.tree.create(null, '1.2 | Locaciones', projectId);
     await d.tree.setSetting(locs, 'holds', 'location');
     const plaza = await d.tree.create(locs, 'Plaza de Mayo', projectId);
-    await writeBlocks(d, plaza, [{ table: [['Otros nombres', 'Plaza'], ['Escenas', '027, 31b y 099']] }, { h: 2, text: 'Scenes' }, { p: [{ link: s040, text: '040 | La ruta' }] }]);
+    // `1027` (la forma de la post, v0.319) no es nada en un largo: no hay episodio para la cifra.
+    await writeBlocks(d, plaza, [{ table: [['Otros nombres', 'Plaza'], ['Escenas', '027, 31b, 1027 y 099']] }, { h: 2, text: 'Scenes' }, { p: [{ link: s040, text: '040 | La ruta' }] }]);
     const index = new ProjectIndex(d.tree, d.docs);
     const relations = new RelationIndex(d.tree, index);
     await index.refresh(projectId);
@@ -230,6 +231,33 @@ describe('la locación dice qué escenas van ahí (campo Escenas)', () => {
     ]);
     expect(sceneLive(s, '031').plannedAt.map((x) => x.pageId)).toEqual([plaza]);
   });
+  it('en una serie, el campo Escenas entiende la forma de la post (`1013`, `1015b`) y el título nuevo (v0.319)', async () => {
+    const d = await makeDevice(new FakeServer());
+    devices.push(d);
+    const projectId = await d.tree.createProject('Serie de prueba');
+    const escenas = await d.tree.create(null, '1.1 | Desglose', projectId);
+    await d.tree.setSetting(escenas, 'holds', 'scene');
+    const ep = await d.tree.create(escenas, '101 | Episodio 1', projectId);
+    const s013 = await d.tree.create(ep, '1013 | La plaza', projectId);
+    const s014 = await d.tree.create(ep, '014 | El bar | 101_014', projectId);
+    const s015 = await d.tree.create(ep, '1015 | La ruta', projectId);
+    const locs = await d.tree.create(null, '1.2 | Locaciones', projectId);
+    await d.tree.setSetting(locs, 'holds', 'location');
+    const plaza = await d.tree.create(locs, 'Plaza de Mayo', projectId);
+    await writeBlocks(d, plaza, [{ table: [['Escenas', '1013, 101_014 y 1015b, 1099']] }]);
+    const index = new ProjectIndex(d.tree, d.docs);
+    const relations = new RelationIndex(d.tree, index);
+    await index.refresh(projectId);
+    await relations.update(projectId);
+    const snap = relations.snapshot(projectId)!;
+    const s: LiveSource = { snap, title: (id) => d.tree.get(id)?.title, content: (id) => index.content(id) };
+    expect(locationLive(s, 'Plaza de Mayo').planned.map((x) => [x.code, x.pageId])).toEqual([
+      ['101_013', s013],
+      ['101_014', s014],
+      ['101_015', s015],
+    ]);
+  });
+
   it('la locación escrita en la escena que no existe se ofrece para crear; una conocida con otra forma o la de una ficha, no', async () => {
     const d = await makeDevice(new FakeServer());
     devices.push(d);

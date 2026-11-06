@@ -2,6 +2,7 @@ import { fieldDate, fieldValues, normLabel, emptyValue, openQuestionText, type F
 import { INDEX_PAGE_MIN, type LinkTarget, type Section } from './pageRelations';
 import { cardFields, findFields } from './relationIndex';
 import { plansOfDay } from './planDay';
+import { sceneLabel } from './reader';
 import { dayRef, GENERAL_SECTION, pageBlocks, sectionText, type DayRef, type LiveSource, type PageChip, type PhotoRef, type Place } from './liveView';
 
 // Lo que muestra la cabecera viva de un día de rodaje y su tarjeta *Tomorrow* (Docs/Doc_Relaciones.md, sección 11;
@@ -108,12 +109,14 @@ export interface DayLive {
 /** Las palabras que van antes del número en un título de sección («Escena 105_029»), en el orden del proyecto. */
 const SCENE_WORD = /^\s*(escena|esc\.?|scene|sc\.?)\s/i;
 
-/** El título de una escena sin su número: «027 | La ambulancia…» → «La ambulancia…». */
+/** El título de una escena sin su número: «027 | La ambulancia…» → «La ambulancia…», «1013 | El vuelco» → «El vuelco». */
 export function sceneTitleOf(title: string | undefined): string {
   if (!title) return '';
   const parts = title.split('|').map((p) => p.trim()).filter(Boolean);
-  // Sin el número de adelante («027 |») ni el código entero al final («| 105_027», la forma de ERSO; O3 de la auditoría).
-  const rest = parts.filter((p, i) => !(i === 0 && /^\d/.test(p) && parts.length > 1) && !/^\d{3}[_-]\d{2,3}[A-Za-z]{0,2}$/.test(p));
+  // Sin el número de adelante («027 |», «1013 |») ni el código entero al final («| 105_027», la forma vieja de ERSO; O3
+  // de la auditoría; o «| 1013», la de la post).
+  const code = (p: string) => /^\d{3}[_-]\d{2,3}[A-Za-z]{0,2}$/.test(p) || /^[hH]?[1-9]\d{3}[A-Za-z]{0,2}$/.test(p);
+  const rest = parts.filter((p, i) => !(i === 0 && /^[hH]?\d/.test(p) && parts.length > 1) && !(i > 0 && code(p)));
   return rest.length ? rest.join(' | ') : title.trim();
 }
 
@@ -225,11 +228,12 @@ export function plannedSceneLines(src: Pick<LiveSource, 'snap' | 'title'>, date:
 }
 
 /** Una escena como renglón del plan: su número, su página (el link) y el nombre de su título. */
-export function planSceneLine(src: Pick<LiveSource, 'snap' | 'title'>, code: string): { code: string; pageId: string | null; name: string } {
+export function planSceneLine(src: Pick<LiveSource, 'snap' | 'title'>, code: string): { code: string; pageId: string | null; name: string; label: string } {
   const pageId = src.snap.registry.scenes.get(code)?.pageId ?? null;
   const title = (pageId && src.title(pageId)?.trim()) || '';
   const rest = title.startsWith(code) ? title.slice(code.length) : /^\s*\d+[a-z]?\s*[|·:\-–]/i.test(title) ? title.replace(/^\s*\d+[a-z]?/i, '') : '';
-  return { code, pageId, name: rest.replace(/^\s*[|·:\-–]\s*/, '').trim() };
+  // El número como se muestra (`1013` en una serie), con el registro del proyecto: lo escribe el plan nuevo con su link.
+  return { code, pageId, name: rest.replace(/^\s*[|·:\-–]\s*/, '').trim(), label: sceneLabel(code, src.snap.registry) };
 }
 
 /**

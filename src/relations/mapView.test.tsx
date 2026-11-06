@@ -280,7 +280,7 @@ describe('el mapa en la app', () => {
     // El filtro: el número de escena como en *Scenes* («Escena 29» en el episodio, `5029`), y si no, el texto.
     type(host.querySelector<HTMLInputElement>('.mp-filter input')!, '5029');
     expect(shotsOf().length).toBeGreaterThan(0);
-    expect([...host.querySelectorAll('.mp-shots tbody tr')].every((r) => r.children[0].textContent === '105_029')).toBe(true);
+    expect([...host.querySelectorAll('.mp-shots tbody tr')].every((r) => r.children[0].textContent === '5029')).toBe(true);
     type(host.querySelector<HTMLInputElement>('.mp-filter input')!, 'rueda');
     expect(shotsOf()).toEqual(['ERSO_105_029_020']);
     // Un clic en el plano lleva a su sección en la escena.
@@ -319,7 +319,7 @@ describe('el mapa en la app', () => {
     );
     const count = () => host.querySelector('.map-nav-count')?.textContent;
     await shown(() => expect(count()).toBe('2 pending'));
-    await shown(() => expect(host.textContent).toContain('105_141 doesn’t exist yet'));
+    await shown(() => expect(host.textContent).toContain('5141 doesn’t exist yet'));
     // El bloque de la nota (donde está la consulta).
     const { existingRelationsSession } = await import('../ui/relationsUi');
     const { pendingRelations } = await import('./relationIndex');
@@ -328,10 +328,10 @@ describe('el mapa en la app', () => {
     const where = pendingRelations(snap).find((p) => p.ref === '105_141')!.pages[0];
     act(() => setSlashDraft({ pageId: where.pageId, blockId: where.blockIds[0], codes: ['105_141'], query: '/e 105_141' }));
     await shown(() => expect(count()).toBe('1 pending'));
-    await shown(() => expect(host.textContent).not.toContain('105_141 doesn’t exist yet'));
+    await shown(() => expect(host.textContent).not.toContain('5141 doesn’t exist yet'));
     act(() => setSlashDraft(null));
     await shown(() => expect(count()).toBe('2 pending'));
-    await shown(() => expect(host.textContent).toContain('105_141 doesn’t exist yet'));
+    await shown(() => expect(host.textContent).toContain('5141 doesn’t exist yet'));
   });
 
   it('Pending: Assign sobre un número que no existe lo linkea en cada página que lo nombra, con Undo (D567)', async () => {
@@ -353,7 +353,7 @@ describe('el mapa en la app', () => {
       expect(await linkedRuns(d, built.ids.notas)).toContain(`[105_120](${href})`);
       expect(await linkedRuns(d, built.ids.d58)).toContain(`[105_120](${href})`);
     });
-    await shown(() => expect(host.textContent).toContain('105_120 now links to 105_026 in 2 pages'));
+    await shown(() => expect(host.textContent).toContain('5120 now links to 5026 in 2 pages'));
     // El número deja de estar pendiente.
     await shown(() => expect(card()).toBeUndefined());
     click([...host.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent === 'Undo'));
@@ -361,7 +361,7 @@ describe('el mapa en la app', () => {
       expect(await linkedRuns(d, built.ids.notas)).not.toContain(href);
       expect(await linkedRuns(d, built.ids.d58)).not.toContain(href);
     });
-    await shown(() => expect(card()?.textContent).toContain('105_120 doesn’t exist yet'));
+    await shown(() => expect(card()?.textContent).toContain('5120 doesn’t exist yet'));
   });
 
   it('Pending: Assign dice qué páginas que nombran el número no se pueden editar (D666)', async () => {
@@ -390,7 +390,7 @@ describe('el mapa en la app', () => {
     click(card()!.querySelector('.rel-assign'));
     type(host.querySelector<HTMLInputElement>('.lh-picker input')!, '5026');
     click(host.querySelector('.lh-picker-list button'));
-    await shown(() => expect(host.textContent).toContain('105_120 now links to 105_026 in 1 page · also in «Notas de dirección», which you can’t edit'));
+    await shown(() => expect(host.textContent).toContain('5120 now links to 5026 in 1 page · also in «Notas de dirección», which you can’t edit'));
     // La página que no podía editar quedó como estaba.
     expect(await linkedRuns(beto, built.ids.notas)).not.toContain(`/p/${built.ids.s026}`);
   });
@@ -406,24 +406,24 @@ describe('el mapa en la app', () => {
     );
     await until(() => complete(host) && rows(host, '.mp-srow').length === 6, 'las escenas');
     expect([...host.querySelectorAll('.mp-ghead')].map((x) => x.textContent)).toEqual(['Episode 104 · 2 scenes', 'Episode 105 · 4 scenes']);
-    const s027 = rows(host, '.mp-srow').find((r) => r.textContent!.startsWith('105_027'))!;
+    const s027 = rows(host, '.mp-srow').find((r) => r.textContent!.startsWith('5027'))!;
     expect(s027.querySelector('.mp-st')!.textContent).toBe('La ambulancia empieza a zigzaguear');
     expect(s027.querySelector('.mp-ls')!.textContent).toContain('CENADE · report');
     expect(s027.querySelector('.mp-dd')!.textContent).toBe('Día 59, Día 70, Día 76');
     // Nunca «not shot»: sin sección dice eso, o que está en un plan.
-    const s026 = rows(host, '.mp-srow').find((r) => r.textContent!.startsWith('105_026'))!;
+    const s026 = rows(host, '.mp-srow').find((r) => r.textContent!.startsWith('5026'))!;
     expect(s026.querySelector('.mp-dd')!.textContent).toBe('No report section');
-    expect(rows(host, '.mp-srow').find((r) => r.textContent!.startsWith('104_008'))!.querySelector('.mp-dd')!.textContent).toBe('in a plan');
+    expect(rows(host, '.mp-srow').find((r) => r.textContent!.startsWith('4008'))!.querySelector('.mp-dd')!.textContent).toBe('in a plan');
     expect(host.textContent).not.toMatch(/not shot/i);
     // El filtro entiende el número compacto.
     // El filtro entiende cualquier forma del número, con el lector (O6).
     for (const q of ['5027', '105_027b', 'Escena 27', '105-027']) {
       type(host.querySelector<HTMLInputElement>('.mp-filter input')!, q);
-      expect(rows(host, '.mp-srow').map((r) => r.querySelector('.mp-code')!.textContent), q).toEqual(['105_027']);
+      expect(rows(host, '.mp-srow').map((r) => r.querySelector('.mp-code')!.textContent), q).toEqual(['5027']);
     }
     // Y la fecha de un día con sección.
     type(host.querySelector<HTMLInputElement>('.mp-filter input')!, '2026-03-14');
-    expect(rows(host, '.mp-srow').map((r) => r.querySelector('.mp-code')!.textContent)).toEqual(['105_027']);
+    expect(rows(host, '.mp-srow').map((r) => r.querySelector('.mp-code')!.textContent)).toEqual(['5027']);
 
     // Shoot days.
     click(host.querySelector('.mp-tab[href="/map/days"]'));
@@ -441,11 +441,11 @@ describe('el mapa en la app', () => {
     click(host.querySelector('.mp-tab[href="/map/pending"]'));
     await until(() => host.querySelectorAll('.mp-pcard').length === 2, 'los pendientes');
     const cards = [...host.querySelectorAll<HTMLElement>('.mp-pcard')];
-    expect(cards[0].textContent).toContain('105_120 doesn’t exist yet');
+    expect(cards[0].textContent).toContain('5120 doesn’t exist yet');
     expect(cards[0].textContent).toContain('Notas de dirección: «Falta la Escena 105_120 en el desglose.»');
     // Los botones de E7: *Create* (acá sin permisos conocidos, el rótulo con el motivo) y, en la sección sin número,
     // *Assign* y *Open section*.
-    expect(cards[0].querySelector('.mp-pact')!.textContent).toBe('Create scene 105_120Assign');
+    expect(cards[0].querySelector('.mp-pact')!.textContent).toBe('Create scene 5120Assign');
     expect(cards[0].querySelector('.mp-pact .rel-cant')!.getAttribute('data-tip')).toContain('whole project');
     expect([...cards[1].querySelectorAll('.mp-pact button')].map((b) => b.textContent)).toEqual(['Assign', 'Open section']);
     expect(cards[1].textContent).toContain('«Plates ambulancia» has no scene number');
@@ -552,7 +552,7 @@ describe('el mapa en la app', () => {
     click(host.querySelector('.mp-tab[href="/map/pending"]'));
     await until(() => host.querySelector('.mp-pcard'), 'el pendiente');
     const card = host.querySelector<HTMLElement>('.mp-pcard')!;
-    expect(card.textContent).toContain('105_029 isn’t in the pages you can see');
+    expect(card.textContent).toContain('5029 isn’t in the pages you can see');
     expect(card.textContent).toContain('may exist in a page you can’t see');
     expect(host.textContent).not.toMatch(/doesn.t exist/);
     // La cabecera del día (la misma causa, DayHeader).
@@ -600,16 +600,16 @@ describe('la lupa ⌘K: escenas y locaciones primero', () => {
   it('cualquier forma del número pone la escena primero; Enter la abre; el texto se sigue buscando', async () => {
     const { built, host } = await app((b) => pagePath(b.ids.d59));
     await until(() => host.querySelector('.ov-nav'), 'las relaciones');
-    for (const q of ['105_027', '105-027', '5027', '5027b']) {
+    for (const q of ['105_027', '105-027', '5027', '5027b', 'PRUEBA_5027_010']) {
       await search(host, q);
       await until(() => first()?.classList.contains('search-entity'), `la escena con «${q}»`);
-      expect(first()!.querySelector('.search-entity-chip')!.textContent, q).toBe('105_027');
+      expect(first()!.querySelector('.search-entity-chip')!.textContent, q).toBe('5027');
       expect(first()!.textContent).toContain('La ambulancia empieza a zigzaguear');
       expect(first()!.getAttribute('aria-selected')).toBe('true');
     }
     // «Escena 27» dentro del episodio de la página abierta (un día no tiene episodio: busca en todos y hay uno).
     await search(host, 'Escena 29');
-    await until(() => first()?.textContent?.includes('105_029'), 'Escena 29');
+    await until(() => first()?.textContent?.includes('5029'), 'Escena 29');
     // La locación por una parte del nombre.
     await search(host, 'cenad');
     await until(() => first()?.querySelector('.search-entity-chip.loc'), 'la locación');
@@ -651,7 +651,7 @@ describe('Merge en la app (E16)', () => {
     b.ids.s029b = second;
     b.ids.s029b_card = card;
   };
-  const dupCard = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('105_029 is in 2 pages'));
+  const dupCard = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('5029 is in 2 pages'));
   const button = (host: HTMLElement, text: string) => [...host.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent === text);
 
   it('Pending: Merge… abre el adelanto con las dos, une, avisa con Open y Undo; Undo trae todo de vuelta', async () => {
@@ -662,7 +662,7 @@ describe('Merge en la app (E16)', () => {
     click(dupCard(host)!.querySelector('.rel-merge'));
     const dialog = () => document.querySelector<HTMLElement>('.merge-dialog')!;
     await shown(() => expect(dialog().querySelector('.merge-actions .primary')!.hasAttribute('disabled')).toBe(false));
-    expect(dialog().querySelector('h2')!.textContent).toBe('Merge the two pages of 105_029');
+    expect(dialog().querySelector('h2')!.textContent).toBe('Merge the two pages of 5029');
     expect([...dialog().querySelectorAll('.merge-title')].map((x) => x.textContent)).toEqual(['029 | El fugitivo abre los ojos', '029 | El fugitivo (otra)']);
     // La primera del árbol queda; la otra tiene una subpágina que pasa.
     expect(dialog().querySelector('.merge-card.on .merge-title')!.textContent).toBe('029 | El fugitivo abre los ojos');
@@ -777,7 +777,7 @@ describe('Merge: dos páginas con el mismo título, y mientras une (E19)', () =>
     b.ids.s029b_card = card;
   };
   const T = '029 | El fugitivo abre los ojos';
-  const dupCard = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('105_029 is in 2 pages'));
+  const dupCard = (host: HTMLElement) => [...host.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('5029 is in 2 pages'));
 
   it('D706: Pending las numera «· 1» y «· 2» (con un tooltip) y dice cuánto tiene escrito cada una', async () => {
     const { host } = await app(() => mapPath('pending'), same);
@@ -883,7 +883,7 @@ describe('Merge: dos páginas con el mismo título, y mientras une (E19)', () =>
       b.ids.s029c = await dev.tree.create(b.ids.ep5, T, b.projectId);
       await writeBlocks(dev, b.ids.s029c, [{ p: 'La tercera.' }, { p: 'Con tres renglones.' }, { p: 'Y algo más.' }]);
     });
-    const threeCard = (h: HTMLElement) => [...h.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('105_029 is in 3 pages'));
+    const threeCard = (h: HTMLElement) => [...h.querySelectorAll<HTMLElement>('.mp-pcard')].find((c) => c.textContent?.includes('5029 is in 3 pages'));
     await shown(() => expect(threeCard(host)?.querySelectorAll('.mp-plink').length).toBe(3));
     expect([...threeCard(host)!.querySelectorAll('.mp-plink')].map((l) => l.textContent)).toEqual([`${T} · 1`, `${T} · 2`, `${T} · 3`]);
     // La cabecera de la tercera ofrece unirla con la primera: se llama «· 3» y no «· 2».

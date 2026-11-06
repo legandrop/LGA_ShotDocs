@@ -31,6 +31,29 @@ Es la gramática de la maqueta S3/S4 (`engine.js`), portada a TypeScript y medid
   continuaciones `+ 029B`, `/46`, `+C`, `+14` y rangos `105_70-72` (las del medio, `hidden`: cuentan, no se dibujan).
 - **El dígito de la forma compacta** sale de los episodios que existen (101…109 → 1…9, también 201…); si dos
   terminan igual (110 y 210), la forma compacta se apaga y queda la canónica.
+- **La forma de la post (v0.319):** PipeSync y Flow escriben la escena con la última cifra del episodio y las 3 de la
+  escena (`101_013` → `1013`, `102_016A` → `2016A`) y el plano como `ERSO_1066_010` (también `ERSO_1066_0160_WAN`).
+  - **El código interno no cambia:** `settings.entity.code`, las claves del registro, las comparaciones y el orden siguen
+    con la canónica (`101_013`). Una versión vieja abierta no entiende `1013` (`SCENE_CODE` en `kind.ts`) y lo volvería
+    a escribir desde el título: las dos se pisarían.
+  - **Entra** por `normalizeSceneCode` (`reader.ts`): la canónica y, con contexto de serie, la de la post (el registro
+    con `epByDigit`, o el episodio de la página o la carpeta; sin nada, `10D`). En un largo, o con dos episodios que
+    terminan igual (101 y 201), 4 cifras no dan escena (salvo con el episodio de la página). Lo usan el registro, la
+    marca de una página (un `1013` guardado se lee `101_013` en vez de descartarse), crear una escena y el campo
+    *Escenas*. `scan` suma el plano de la post en una serie, con el inserto (`ERSO_1033A-INS_010` es de la `101_033A`),
+    el número de plano obligatorio y nunca una foto de cámara (`IMG_1066_01.jpg`, `DSC_…`, `DJI_…`, `PXL_…`) ni una
+    fecha (`ERSO_2026_02_19`); como el plano de siempre, es una forma débil (no deja pendientes). Los títulos: `kind.ts` (sección de abajo).
+  - **Sale** por `sceneLabel(code, R?)`: `101_013` → `1013` solo en los episodios 101–109 y, con el registro, si la
+    cifra no es de dos episodios; si no, la canónica, igual que un largo (`074`). Se lee de vuelta con
+    `normalizeSceneCode` y el mismo registro. La usan la barra (*Overview › Scenes*), el Panorama (escenas, locaciones,
+    decorados, pendientes, repetidas, *Copy overview* en texto; el JSON sigue con la interna), la cabecera viva, la
+    del día, el adelanto, la lupa, la tabla de planos y su copia, el índice de la carpeta, el `/e`, los avisos de crear
+    y asignar, y lo que se escribe con link: *Prepare* («Escena 5029»), *Assign* (« · 5025»), el plan del día y el
+    `/e` de una escena que existe o que se acaba de crear (mientras se crea queda la canónica sin link y, al crearse,
+    pasa a la de la post con su link). Lo que se escribe **sin link** sigue con la canónica: *Keep … as text*, el número
+    de una escena que no se pudo crear, la barra *Today* y la celda del
+    plan de una escena sin página: un `1013` suelto en el texto no se lee (como un año) y dejaría de verse pendiente.
+  - **El episodio de un código** interno: `episodeOfCode` (`reader.ts`), en vez de copias de `slice(0, 3)`.
 - **Regla de títulos:** en un título, una forma compacta o corta cuenta solo si es lo primero o va tras
   «Escena/Sc». En el texto, solo con «Escena/Sc/plano/toma» delante, con letra pegada, con H delante o con «plano»
   después: años, direcciones, horas, cantidades e ids no cuentan.

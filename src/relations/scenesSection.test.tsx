@@ -149,10 +149,10 @@ describe('Overview y Scenes en la barra lateral', () => {
     // Abrir el 105: número y título en vivo.
     click(eps(host)[2]);
     expect(sceneRows(host).map((r) => [r.querySelector('.code')!.textContent, r.querySelector('.title')!.textContent])).toEqual([
-      ['105_025', 'El fugitivo espera escondido'],
-      ['105_026', 'El fugitivo cruza la ruta'],
-      ['105_027', 'La ambulancia empieza a zigzaguear'],
-      ['105_029', 'El fugitivo abre los ojos'],
+      ['5025', 'El fugitivo espera escondido'],
+      ['5026', 'El fugitivo cruza la ruta'],
+      ['5027', 'La ambulancia empieza a zigzaguear'],
+      ['5029', 'El fugitivo abre los ojos'],
     ]);
     // El título cambia en vivo.
     await act(() => d.tree.rename(built.ids.s026, '026 | El fugitivo cruza la autopista'));
@@ -166,7 +166,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     expect(location.pathname + location.search).toBe('/map/scenes?scene=105_027');
     expect(sceneRows(host)[2].classList.contains('active')).toBe(true);
     const view = host.querySelector<HTMLElement>('.mp-scene')!;
-    expect(view.querySelector('.mp-sh')!.textContent).toBe('105_027La ambulancia empieza a zigzaguear');
+    expect(view.querySelector('.mp-sh')!.textContent).toBe('5027La ambulancia empieza a zigzaguear');
     expect(view.querySelector('.mp-smeta')!.textContent).toBe('Episode 105 · INT-EXT/NOCHE · 3 shots · shot on 3 days');
     // Un renglón por tipo, «Etapa | Tipo» y sus links; vacío, lo dice (ya leyó todo).
     expect([...view.querySelectorAll('.ss-row')].map((r) => r.textContent)).toEqual([
@@ -201,7 +201,7 @@ describe('Overview y Scenes en la barra lateral', () => {
       window.removeEventListener('shotdocs:export', onExport);
     }
     expect(exported).toHaveLength(1);
-    expect(exported[0]).toMatchObject({ kind: 'pages', id: 'scene:105_027', title: 'Scene 105_027' });
+    expect(exported[0]).toMatchObject({ kind: 'pages', id: 'scene:105_027', title: 'Scene 5027' });
     expect(exported[0].ids).toHaveLength(9);
     expect(exported[0].ids).toEqual(expect.arrayContaining([built.ids.s027, built.ids.d59, built.ids.d70, built.ids.d76, built.ids.notas]));
     // El filtro de la lista no está en la vista de una escena.
@@ -234,7 +234,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     // Un episodio a la vez (D745): abrir el 104 cierra el 105, así Pages no queda muy abajo.
     click(eps(again)[1]);
     expect(eps(again).map((b) => b.getAttribute('aria-expanded'))).toEqual(['false', 'true', 'false']);
-    expect(sceneRows(again).map((r) => r.querySelector('.code')!.textContent)).toEqual(['104_008', '104_009']);
+    expect(sceneRows(again).map((r) => r.querySelector('.code')!.textContent)).toEqual(['4008', '4009']);
   });
 
   it('Overview y Pages son títulos iguales; Pages se pliega, se recuerda por proyecto y abrir una página la despliega', async () => {
@@ -396,7 +396,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     await shown(() => expect(host.querySelector('.ov-nav')).toBeTruthy());
     act(() => navigate(mapPath('scenes')));
     await shown(() => expect(complete(host) && host.querySelectorAll('.mp-srow:not(.head)').length).toBe(24));
-    const row = [...host.querySelectorAll<HTMLElement>('.mp-srow:not(.head)')].find((r) => r.textContent!.startsWith('105_027'))!;
+    const row = [...host.querySelectorAll<HTMLElement>('.mp-srow:not(.head)')].find((r) => r.textContent!.startsWith('5027'))!;
     const btn = row.querySelector<HTMLButtonElement>('.mp-pages')!;
     expect(btn.textContent).toBe('9 pages');
     expect(btn.getAttribute('aria-expanded')).toBe('false');
@@ -414,7 +414,7 @@ describe('Overview y Scenes en la barra lateral', () => {
       'Other | Also named inNotas de dirección1 index page ▾',
     ]);
     // Una escena de la página índice que nadie más nombra: la escena sola, y lo dice.
-    const lone = [...host.querySelectorAll<HTMLElement>('.mp-srow:not(.head)')].find((r) => r.textContent!.startsWith('101_005'))!;
+    const lone = [...host.querySelectorAll<HTMLElement>('.mp-srow:not(.head)')].find((r) => r.textContent!.startsWith('1005'))!;
     expect(lone.querySelector('.mp-pages')!.textContent).toBe('1 page');
     click(lone.querySelector('.mp-pages'));
     // Sin nada en cada etapa, cada renglón lo dice (ya leyó todo); la página índice, plegada.
@@ -429,9 +429,9 @@ describe('Overview y Scenes en la barra lateral', () => {
     await shown(() => expect(host.querySelectorAll('.mp-srow:not(.head)').length).toBe(24));
     expect(location.search).toBe('');
     // El número de la dirección se lee con el lector de la lupa (O3): otra forma lleva a la misma escena.
-    for (const q of ['105-027', '5027', '105_027b']) {
+    for (const q of ['105-027', '5027', '105_027b', 'PRUEBA_5027_010', 'PRUEBA_105_027_010']) {
       act(() => navigate(`/map/scenes?scene=${q}`));
-      await shown(() => expect(host.querySelector('.mp-scene .mp-sh')?.textContent, q).toBe('105_027La ambulancia empieza a zigzaguear'));
+      await shown(() => expect(host.querySelector('.mp-scene .mp-sh')?.textContent, q).toBe('5027La ambulancia empieza a zigzaguear'));
     }
     // Desde la vista de una escena, la pestaña Scenes vuelve a la lista y Locations de la barra a su pestaña (O1).
     click(host.querySelector('.mp-tab[href="/map/scenes"]'));
@@ -467,7 +467,7 @@ describe('Overview y Scenes en la barra lateral', () => {
     await guest.engine.syncNow();
     const { host } = mount(guest, pagePath(built.ids.d70));
     // Una sola escena: va directo, sin renglón de episodio.
-    await shown(() => expect(sceneRows(host).map((r) => r.querySelector('.code')!.textContent)).toEqual(['105_027']));
+    await shown(() => expect(sceneRows(host).map((r) => r.querySelector('.code')!.textContent)).toEqual(['5027']));
     expect(eps(host)).toEqual([]);
     click(sceneRows(host)[0]);
     await shown(() => expect(complete(host) && host.querySelector('.mp-scene .ss')).toBeTruthy());
@@ -538,7 +538,7 @@ describe('Overview y Scenes en la barra lateral', () => {
       act(() => navigate('/map/scenes?scene=105_027'));
       await shown(() => expect(host.querySelector('.mp-scene .ss')).toBeTruthy());
       act(() => navigate('/map/scenes?scene=105_029'));
-      await shown(() => expect(host.querySelector('.mp-sh')!.textContent).toContain('105_029'));
+      await shown(() => expect(host.querySelector('.mp-sh')!.textContent).toContain('5029El fugitivo'));
       await shown(() => expect(host.querySelector('.mp-scene .ss-row[data-row="breakdown"] a')).toBeTruthy());
       click(host.querySelector('.mp-scene .ss-row[data-row="breakdown"] a'));
       await shown(() => expect(host.querySelector('.page-title')).toBeTruthy());

@@ -137,19 +137,19 @@ describe('el / en el editor', () => {
     const { e } = await editorOn(d, built.ids.notas);
     const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => built.ids.notas, tr: t as never });
     const items = slash.items('e 027')!;
-    expect(items[0].title).toBe('105_027');
+    expect(items[0].title).toBe('5027');
     expect(items[0].subtext).toContain('La ambulancia empieza a zigzaguear');
-    expect(slash.items('e5027')![0].title).toBe('105_027');
-    expect(slash.items('escena 105-027')![0].title).toBe('105_027');
-    expect(slash.items('e zigza')!.map((i) => i.title)).toEqual(['105_027']);
-    expect(slash.items('e cami')!.map((i) => i.title)).toEqual(['104_008']);
+    expect(slash.items('e5027')![0].title).toBe('5027');
+    expect(slash.items('escena 105-027')![0].title).toBe('5027');
+    expect(slash.items('e zigza')!.map((i) => i.title)).toEqual(['5027']);
+    expect(slash.items('e cami')!.map((i) => i.title)).toEqual(['4008']);
     const id = typeLine(e, 'Revisar la ');
     items[0].onItemClick();
-    expect(inline(e, id)).toBe(`Revisar la [105_027](/p/${built.ids.s027}) `);
-    // Sin espacio antes: lo agrega (no deja «la105_027»).
+    expect(inline(e, id)).toBe(`Revisar la [5027](/p/${built.ids.s027}) `);
+    // Sin espacio antes: lo agrega (no deja «la5027»).
     const id2 = typeLine(e, 'Vuelco');
     slash.items('e 026')![0].onItemClick();
-    expect(inline(e, id2)).toBe(`Vuelco [105_026](/p/${built.ids.s026}) `);
+    expect(inline(e, id2)).toBe(`Vuelco [5026](/p/${built.ids.s026}) `);
   });
 
   it('/e 105_027a (una parte, sin escena 105_027A): link a 105_027 y el texto conserva la letra como se escribió (O6, D569)', async () => {
@@ -157,15 +157,15 @@ describe('el / en el editor', () => {
     const { e } = await editorOn(d, built.ids.notas);
     const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => built.ids.notas, tr: t as never });
     const items = slash.items('e 105_027a')!;
-    expect(items[0].title).toBe('105_027a');
-    expect(items[0].subtext).toContain('part of 105_027');
+    expect(items[0].title).toBe('5027a');
+    expect(items[0].subtext).toContain('part of 5027');
     const id = typeLine(e, 'Ver la ');
     items[0].onItemClick();
-    expect(inline(e, id)).toBe(`Ver la [105_027a](/p/${built.ids.s027}) `);
+    expect(inline(e, id)).toBe(`Ver la [5027a](/p/${built.ids.s027}) `);
     // Igual con la forma compacta y en mayúscula, como se escribió.
-    expect(slash.items('e5027B')![0].title).toBe('105_027B');
+    expect(slash.items('e5027B')![0].title).toBe('5027B');
     // Sin letra, lo de siempre.
-    expect(slash.items('e 105_027')![0].title).toBe('105_027');
+    expect(slash.items('e 105_027')![0].title).toBe('5027');
   });
 
   it('/e con la escena con letra que existe: esa primero, no la base (O6)', () => {
@@ -245,7 +245,7 @@ describe('el / en el editor', () => {
     const { d, built } = await world();
     const { e } = await editorOn(d, built.ids.d59);
     const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => built.ids.d59, tr: t as never });
-    expect(slash.items('e ')![0].title).toBe('105_027');
+    expect(slash.items('e ')![0].title).toBe('5027');
     const loc = slash.items('l cen')!;
     expect(loc[0].title).toBe('CENADE');
     const id = typeLine(e, 'Plates ', 'heading');
@@ -268,22 +268,23 @@ describe('el / en el editor', () => {
     expect(d.tree.children(built.ids.ep5).some((p) => p.title === '105_120')).toBe(false);
   });
 
-  it('con las guardas: «Create scene 105_120»; ↵ escribe el número, crea la escena y lo vuelve link', async () => {
+  it('con las guardas: «Create scene 5120»; ↵ escribe el número, crea la escena y lo vuelve link con el número anunciado', async () => {
     const { d, built } = await world({ team: true });
     const { e } = await editorOn(d, built.ids.notas);
     const slash = relationSlash({ editor: e as never, services: services(d), pageId: () => built.ids.notas, tr: t as never });
     const last = slash.items('e 105_120')!.at(-1)!;
-    expect(last.title).toBe('Create scene 105_120');
+    expect(last.title).toBe('Create scene 5120');
     expect(last.subtext).toBe('In «105 | Episodio 5»');
     const id = typeLine(e, 'Falta la ');
     last.onItemClick();
     // El texto queda enseguida.
     expect(inline(e, id)).toBe('Falta la 105_120 ');
-    await until(() => d.tree.children(built.ids.ep5).find((p) => p.title === '105_120'), 'la escena creada');
-    const created = d.tree.children(built.ids.ep5).find((p) => p.title === '105_120')!;
+    await until(() => d.tree.children(built.ids.ep5).find((p) => p.title === '5120'), 'la escena creada');
+    const created = d.tree.children(built.ids.ep5).find((p) => p.title === '5120')!;
     await until(() => inline(e, id).includes('/p/'), 'el link');
-    expect(inline(e, id)).toBe(`Falta la [105_120](/p/${created.id}) `);
-    expect(d.tree.children(built.ids.ep5).filter((p) => p.title === '105_120')).toHaveLength(1);
+    // Lo que queda escrito coincide con lo que anunció el menú (la forma de la post, auditoría de v0.319).
+    expect(inline(e, id)).toBe(`Falta la [5120](/p/${created.id}) `);
+    expect(d.tree.children(built.ids.ep5).filter((p) => p.title === '5120')).toHaveLength(1);
   });
 
   it('un proyecto sin carpeta de escenas: /e 001 ofrece crearla; ↵ crea «Scenes» con su tipo, la escena adentro y el link (simulación de D813)', async () => {
@@ -345,8 +346,8 @@ describe('el / en el editor', () => {
       const id = typeLine(e, 'Falta la ');
       slash.items('e 105_120')!.at(-1)!.onItemClick();
       await until(() => inline(e, id).includes('/p/'), 'el link');
-      await until(() => notices.some((n) => typeof n === 'object' && n.message?.startsWith('Created scene 105_120')), 'el aviso');
-      const created = d.tree.children(built.ids.ep5).find((p) => p.title === '105_120')!;
+      await until(() => notices.some((n) => typeof n === 'object' && n.message?.startsWith('Created scene 5120')), 'el aviso');
+      const created = d.tree.children(built.ids.ep5).find((p) => p.title === '5120')!;
       notices.find((n) => typeof n === 'object' && n.message?.startsWith('Created'))!.second!.run();
       await until(() => d.tree.isTrashed(created.id), 'a la papelera');
       await until(() => !inline(e, id).includes('/p/'), 'sin link');
@@ -417,7 +418,7 @@ describe('el / en el editor', () => {
     slash.items('e 027')![0].onItemClick();
     const { audio: _a, file: _f, video: _v, ...oldSpecs } = defaultBlockSpecs;
     const { e: old } = await editorOn(d, built.ids.notas, BlockNoteSchema.create({ blockSpecs: oldSpecs }));
-    expect(inline(old, id)).toBe(`Ver [105_027](/p/${built.ids.s027}) `);
-    expect(inline(e, id)).toBe(`Ver [105_027](/p/${built.ids.s027}) `);
+    expect(inline(old, id)).toBe(`Ver [5027](/p/${built.ids.s027}) `);
+    expect(inline(e, id)).toBe(`Ver [5027](/p/${built.ids.s027}) `);
   });
 });

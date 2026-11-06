@@ -149,6 +149,14 @@ describe('la cabecera del día', () => {
     expect(sceneTitleOf('027 | El vehículo comienza a zigzaguear | 105_027')).toBe('El vehículo comienza a zigzaguear');
     expect(sceneTitleOf('074 | Voces | 101-074')).toBe('Voces');
     expect(sceneTitleOf('La escena sin número')).toBe('La escena sin número');
+    // La forma de la post (v0.319): adelante o como última parte, el número no se muestra.
+    expect(sceneTitleOf('1013 | Llegan al bar')).toBe('Llegan al bar');
+    expect(sceneTitleOf('1033A-INS | Inserto')).toBe('Inserto');
+    expect(sceneTitleOf('013 | Llegan al bar | 1013')).toBe('Llegan al bar');
+    expect(sceneTitleOf('H1067 | Hotel')).toBe('Hotel');
+    expect(sceneTitleOf('1013')).toBe('1013');
+    // Un largo, igual que antes.
+    expect(sceneTitleOf('009 | Aeroparque')).toBe('Aeroparque');
   });
 
   it('B4: el aviso de repetidos solo con dos títulos de Prepare de la misma escena, no ante una sección escrita a mano', async () => {

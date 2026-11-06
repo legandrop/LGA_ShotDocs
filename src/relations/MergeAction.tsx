@@ -13,6 +13,7 @@ import { existingRelationsSession } from '../ui/relationsUi';
 import { restorePage, audienceOk, canOffer, contentCounts, defaultKeep, dialogHint, mergeGuard, mergeRows, type AudienceInfo, type MergeBlock, type MergeRow } from './merge';
 import type { MergeDeps, MergeFailure, MergeJob, MergeOutcome } from './mergeJob';
 import type { CopyPlan } from './mergeWrite';
+import { sceneLabel } from './reader';
 import { roleNames, twinLabels } from './twinNames';
 import './merge.css';
 
@@ -294,7 +295,7 @@ export function MergeDialog({ pair, onClose }: { pair: MergePair; onClose: () =>
   return createPortal(
     <div className="modal-backdrop" onClick={() => !busy && onClose()}>
       <div className="modal merge-dialog" role="dialog" aria-label={tr('merge.aria')} onClick={(e) => e.stopPropagation()}>
-        <h2>{pair.kind === 'day' ? tr('merge.titleDay', { title: pair.code }) : tr('merge.title', { code: pair.code })}</h2>
+        <h2>{pair.kind === 'day' ? tr('merge.titleDay', { title: pair.code }) : tr('merge.title', { code: sceneLabel(pair.code, projectId ? session?.relations.snapshot(projectId)?.registry : null) })}</h2>
         <div className="merge-cards">{[first, second].map(card)}</div>
         <div className="merge-what">
           <b>{tr('merge.what')}</b>

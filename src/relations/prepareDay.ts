@@ -8,7 +8,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions } from '../ui/editorSchema';
 import { findUnknownContent } from '../ui/unknownContent';
 import { readPageRelations, type LinkTarget } from './pageRelations';
-import type { Registry } from './reader';
+import { sceneLabel, type Registry } from './reader';
 
 // *Prepare tomorrow's report* (Docs/Doc_Relaciones.md, sección 11; S4 «D», §5). Escribe en el reporte del día
 // siguiente, SOLO AGREGANDO al final, por cada escena del plan que todavía no tiene una sección ahí: un título
@@ -351,7 +351,7 @@ export function sectionsSpot(blocks: readonly SpotBlock[], sceneHeadingIds: Read
  * La sección que agrega *Prepare* para una escena: el título («Escena» + el número como link) y un renglón vacío. Con
  * `ids`, esos ids (el reporte de mañana creado de una vez, `tomorrowNew.ts`, los escribe junto con la plantilla).
  */
-export function sectionBlocks(s: PrepareScene, word: string, level: 1 | 2 | 3, ids?: { heading: string; paragraph: string }): Record<string, unknown>[] {
+export function sectionBlocks(s: PrepareScene, word: string, level: 1 | 2 | 3, ids?: { heading: string; paragraph: string }, R?: Pick<Registry, 'epByDigit'> | null): Record<string, unknown>[] {
   return [
     {
       ...(ids ? { id: ids.heading } : {}),
@@ -359,7 +359,7 @@ export function sectionBlocks(s: PrepareScene, word: string, level: 1 | 2 | 3, i
       props: { level },
       content: [
         { type: 'text', text: `${word} `, styles: {} },
-        { type: 'link', href: `/p/${s.pageId}`, content: [{ type: 'text', text: s.code, styles: {} }] },
+        { type: 'link', href: `/p/${s.pageId}`, content: [{ type: 'text', text: sceneLabel(s.code, R), styles: {} }] },
       ],
     },
     { ...(ids ? { id: ids.paragraph } : {}), type: 'paragraph', content: [] },
@@ -386,7 +386,7 @@ export function prepareInDoc(doc: Y.Doc, opts: PrepareOptions): PrepareOutcome {
       continue;
     }
     want.push(s);
-    blocks.push(...sectionBlocks(s, opts.word, opts.level));
+    blocks.push(...sectionBlocks(s, opts.word, opts.level, undefined, opts.registry));
   }
   if (blocks.length) {
     withEditor(doc, (editor) => {
@@ -402,7 +402,7 @@ export function prepareInDoc(doc: Y.Doc, opts: PrepareOptions): PrepareOutcome {
             ? editor.insertBlocks(blocks as never[], last.id, 'before')
             : editor.insertBlocks(blocks as never[], last.id, 'after')
       ) as unknown as DocBlock[];
-      want.forEach((s, k) => added.push({ code: s.code, headingId: inserted[2 * k].id, paragraphId: inserted[2 * k + 1].id, text: `${opts.word} ${s.code}` }));
+      want.forEach((s, k) => added.push({ code: s.code, headingId: inserted[2 * k].id, paragraphId: inserted[2 * k + 1].id, text: `${opts.word} ${sceneLabel(s.code, opts.registry)}` }));
     });
   }
   return { added, skipped, merged, origin };

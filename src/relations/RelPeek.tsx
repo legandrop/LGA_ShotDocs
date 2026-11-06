@@ -5,10 +5,11 @@ import { t as tTr, useT, type Translate } from '../i18n';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import { isPhoneLayout } from '../ui/commentsUi';
-import { existingRelationsSession } from '../ui/relationsUi';
+import { existingRelationsSession, sceneLabelIn } from '../ui/relationsUi';
 import { keyLabel, shortcut } from '../ui/shortcuts';
 import { touchDevice } from '../ui/camera';
 import { sceneTitleOf } from './dayLive';
+import { episodeOfCode, sceneLabel } from './reader';
 import { Chip, DayChip, Ic, Thumb } from './LiveHeader';
 import { locationLive, rowPhoto, sceneLive, type LiveSource, type PhotoRef } from './liveView';
 import { anchorOf, locateUnderline, makeLinkAt, type UnderlineAnchor } from './relLink';
@@ -40,6 +41,7 @@ interface Open {
 }
 
 export function RelPeek({ eventsRef, view, pageId, editable }: { eventsRef: MutableRefObject<PeekEvents | null>; view: () => EditorView | null; pageId: string; editable: boolean }) {
+  const services = useServices();
   const [open, setOpenState] = useState<Open | null>(null);
   const openRef = useRef<Open | null>(null);
   const timers = useRef<{ open?: ReturnType<typeof setTimeout>; close?: ReturnType<typeof setTimeout> }>({});
@@ -188,7 +190,8 @@ export function RelPeek({ eventsRef, view, pageId, editable }: { eventsRef: Muta
         const ok = spans !== null;
         close();
         if (ok) v!.focus();
-        const message = ok ? tTr('assign.doneMention', { pending: open.target.ref, code: scene.code }) : tTr('assign.changedMention');
+        const label = (code: string) => sceneLabelIn(services, services.tree.get(pageId)?.workspace_id, code);
+        const message = ok ? tTr('assign.doneMention', { pending: label(open.target.ref), code: label(scene.code) }) : tTr('assign.changedMention');
         // Sin lo agregado ubicado (no debería pasar), sin *Undo* en el aviso: queda ⌘Z.
         notify(message, ok && spans!.length && doc ? undoAction(tTr as unknown as Translate, async () => undoAssignInDoc(doc, spans!)) : undefined);
       }}
@@ -269,7 +272,7 @@ function PeekCard({
           src={{ snap, title: (id) => tree.get(id)?.title }}
           // Sin filtro, primero las escenas que nombra la página y las del episodio del número escrito (105_120 → 105).
           near={[...new Set((snap.pages.get(pageId)?.mentions ?? []).filter((m) => m.kind === 'scene').map((m) => m.ref))]}
-          ep={target.ref.includes('_') ? target.ref.slice(0, 3) : null}
+          ep={episodeOfCode(target.ref)}
           label={tr('assign.button')}
           onClose={() => setAssigning(false)}
           onPick={onAssign}
@@ -332,7 +335,7 @@ function PeekCard({
         </div>
         <div className="rp-r">
           <span>{tr('peek.scenesShot')}</span>
-          <div className="v mono">{scenes.length ? scenes.join(' · ') : <span className="lh-none">{reading ? tr('live.reading') : '—'}</span>}</div>
+          <div className="v mono">{scenes.length ? scenes.map((c) => sceneLabel(c, snap?.registry)).join(' · ') : <span className="lh-none">{reading ? tr('live.reading') : '—'}</span>}</div>
         </div>
         {v.scouts.length > 0 && (
           <div className="rp-r">
@@ -344,7 +347,7 @@ function PeekCard({
     );
   }
 
-  const label = target.kind === 'loc' ? target.ref : `${target.ref}${target.part ? target.part.toLowerCase() : ''}`;
+  const label = target.kind === 'loc' ? target.ref : `${sceneLabel(target.ref, snap?.registry)}${target.part ? target.part.toLowerCase() : ''}`;
   const head = (
     <>
       {photo && <Thumb id={photo} className="rp-img" />}

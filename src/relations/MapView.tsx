@@ -13,9 +13,9 @@ import { shownParam, storeProject, useCurrentProject, useProjectParam } from '..
 import { existingRelationsSession, useIndexProgress } from '../ui/relationsUi';
 import { goToPlace } from './goToPlace';
 import type { Place } from './liveView';
-import { fold, type Registry } from './reader';
+import { episodeOfCode, fold, sceneLabel, type Registry } from './reader';
 import { mapCounts, mapJson, mapText, projectMap, sceneFilterText, titlePlace, type MapDay, type MapLocation, type MapScene, type ProjectMapData } from './projectMap';
-import { searchScenes } from './sceneSearch';
+import { resolveSceneParam, searchScenes } from './sceneSearch';
 import { useSlashDraft } from './slashDraft';
 import { AssignButton, CreateEntityButton } from './EntityActions';
 import { titleFragment, titleFragmentWhy } from './aliasAction';
@@ -207,11 +207,7 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   // Los decorados (D804), por nombre como las locaciones.
   const sets = useMemo(() => (src ? [...setIndex(src).rows].sort((a, b) => a.name.localeCompare(b.name, locale())) : []), [src, revision]); // eslint-disable-line react-hooks/exhaustive-deps
   // El número de la dirección leído con el mismo lector que la lupa (`105_055a`, `101-012`, `5055`): la escena exacta.
-  const resolve = (q: string): string | null => {
-    if (!snap) return null;
-    if (snap.registry.scenes.has(q)) return q;
-    return searchScenes({ snap, title: (id) => tree.get(id)?.title }, q, { loose: false, limit: 1 })[0]?.code ?? null;
-  };
+  const resolve = (q: string): string | null => (snap ? resolveSceneParam({ snap, title: (id) => tree.get(id)?.title }, q) : null);
 
   // Quien no ve el proyecto entero (un invitado a una rama) no puede saber qué falta (D401).
   const partial = perms.known && perms.role !== 'owner' && perms.role !== 'admin' && perms.projectLevel(projectId) === 0;
@@ -616,10 +612,10 @@ function Scenes({
                 <span className="mp-code mono" role="cell">
                   {s.pageId ? (
                     <PageLink pageId={s.pageId} className="mp-link">
-                      {s.code}
+                      {sceneLabel(s.code, data)}
                     </PageLink>
                   ) : (
-                    s.code
+                    sceneLabel(s.code, data)
                   )}
                 </span>
                 <span className="mp-st" role="cell">
@@ -708,9 +704,10 @@ function SceneDetail({
   const projectName = useTree().project(projectId)?.name ?? tr('project.defaultName');
   const top = useRef<HTMLDivElement>(null);
   // El link de esta escena en este proyecto (Docs/Doc_Link_Escena.md): para pasárselo a alguien del equipo.
+  // La escena va en la forma de la post (`scene=1013`), como la nombran PipeSync y Flow; el link lee las tres.
   const copyLink = async (sceneCode: string) => {
-    const ok = await copyText(sceneShareLink(location.origin, workspace.config.localKey, projectId, sceneCode));
-    notify(ok ? tr('map.linkCopied', { code: sceneCode }) : tr('map.copyFailed'));
+    const ok = await copyText(sceneShareLink(location.origin, workspace.config.localKey, projectId, sceneCode, data));
+    notify(ok ? tr('map.linkCopied', { code: sceneLabel(sceneCode, data) }) : tr('map.copyFailed'));
   };
   // Al abrir otra escena (desde la barra lateral, ya en el mapa), la vista vuelve arriba, con las pestañas a la vista.
   // Con llaves y sin `scrollIntoView`/`scrollTo`: en Chromium pueden devolver una promesa, y React tomaría lo devuelto
@@ -749,11 +746,11 @@ function SceneDetail({
           <h2 className="mp-sh">
             <span className="mp-chip mono">
               <Ic name="scene" small />
-              {scene.code}
+              {sceneLabel(scene.code, data)}
             </span>
             {scene.pageId ? (
               <PageLink pageId={scene.pageId} className="mp-link">
-                {scene.title || scene.code}
+                {scene.title || sceneLabel(scene.code, data)}
               </PageLink>
             ) : (
               <span>{scene.title}</span>
@@ -769,7 +766,7 @@ function SceneDetail({
               </button>
               {/* Todas las páginas de la lista en un PDF o un zip, sin las páginas índice (nombran decenas de escenas). Mientras el
                   índice lee, apagado: la lista todavía puede crecer y la ventana se lleva la de ese momento. */}
-              <button className="mp-btn" data-tip={tr('map.sceneExportTip')} disabled={!complete || exportIds.length === 0} onClick={() => openExportPages(`scene:${scene.code}`, tr('map.sceneExportTitle', { code: scene.code }), exportIds)}>
+              <button className="mp-btn" data-tip={tr('map.sceneExportTip')} disabled={!complete || exportIds.length === 0} onClick={() => openExportPages(`scene:${scene.code}`, tr('map.sceneExportTitle', { code: sceneLabel(scene.code, data) }), exportIds)}>
                 <svg className="mp-i s" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
                 </svg>
@@ -1057,7 +1054,7 @@ function Sets({ rows, data, fq, complete }: { rows: SetRow[]; data: ProjectMapDa
   const scenePage = useMemo(() => new Map(data.scenes.map((s) => [s.code, s.pageId])), [data]);
   const grid = useGridCols('map.sets', SET_COLS);
   if (!rows.length) return <p className="mp-empty">{complete ? tr('map.noSets') : tr('live.reading')}</p>;
-  const shown = rows.filter((s) => !fq || fold(`${s.name} ${s.aliases.join(' ')} ${s.scenes.join(' ')} ${s.locs.map((l) => l.name).join(' ')}`).includes(fq));
+  const shown = rows.filter((s) => !fq || fold(`${s.name} ${s.aliases.join(' ')} ${s.scenes.join(' ')} ${s.scenes.map((c) => sceneLabel(c, data)).join(' ')} ${s.locs.map((l) => l.name).join(' ')}`).includes(fq));
   if (!shown.length) return <p className="mp-empty">{tr('map.noMatch')}</p>;
   return (
     <div ref={grid.ref} className="mp-grid mp-sets cols" style={grid.style} role="table">
@@ -1088,10 +1085,10 @@ function Sets({ rows, data, fq, complete }: { rows: SetRow[]; data: ProjectMapDa
                     {i > 0 && ', '}
                     {pageId ? (
                       <PageLink pageId={pageId} className="mp-link mp-code">
-                        {code}
+                        {sceneLabel(code, data)}
                       </PageLink>
                     ) : (
-                      code
+                      sceneLabel(code, data)
                     )}
                   </span>
                 );
@@ -1216,17 +1213,17 @@ function Pending({
               actions={
                 <>
                   <CreateEntityButton want={{ kind: 'scene', code: p.code }} projectId={projectId} className="mp-btn" />
-                  {src && places.length > 0 && <AssignButton src={src} target={{ kind: 'everywhere', pending: p.code, places, locked: p.mentions.filter((m) => !perms.canEditPage(m.pageId)).map((m) => m.pageId) }} near={nearOf(p.code)} ep={p.code.includes('_') ? p.code.slice(0, 3) : null} className="mp-btn" />}
+                  {src && places.length > 0 && <AssignButton src={src} target={{ kind: 'everywhere', pending: p.code, places, locked: p.mentions.filter((m) => !perms.canEditPage(m.pageId)).map((m) => m.pageId) }} near={nearOf(p.code)} ep={episodeOfCode(p.code)} className="mp-btn" />}
                 </>
               }
               head={
                 <>
                   <span className="mp-chip out mono">
                     <Ic name="scene" small />
-                    {p.code}
+                    {sceneLabel(p.code, data)}
                   </span>
                   {/* Quien ve una parte del proyecto no puede saber si existe en una página que no ve (D401, O1). */}
-                  <span>{tr(partial ? 'map.pendingSceneSeen' : 'map.pendingScene', { code: p.code })}</span>
+                  <span>{tr(partial ? 'map.pendingSceneSeen' : 'map.pendingScene', { code: sceneLabel(p.code, data) })}</span>
                 </>
               }
             >
@@ -1259,9 +1256,9 @@ function Pending({
                 <>
                   <span className={`mp-chip mono${d.kind === 'day' ? ' day' : ''}`}>
                     <Ic name={d.kind === 'day' ? 'day' : 'scene'} small />
-                    {d.code}
+                    {d.kind === 'day' ? d.code : sceneLabel(d.code, data)}
                   </span>
-                  <span>{tr('map.duplicate', { code: d.code, count: d.pageIds.length })}</span>
+                  <span>{tr('map.duplicate', { code: d.kind === 'day' ? d.code : sceneLabel(d.code, data), count: d.pageIds.length })}</span>
                 </>
               }
             >

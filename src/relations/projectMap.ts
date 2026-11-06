@@ -2,7 +2,7 @@ import { SEPARATOR } from '../search/extract';
 import { dayList, planOf, sceneTitleOf, type PlanSource } from './dayLive';
 import { GENERAL_SECTION, scoutLocations, type LiveSource } from './liveView';
 import { INDEX_PAGE_MIN, type MentionVia, type Section } from './pageRelations';
-import { fold } from './reader';
+import { episodeOfCode, fold, sceneLabel, type Registry } from './reader';
 import { pendingRelations } from './relationIndex';
 import { scoutList, type ScoutRow } from './scoutList';
 import { planLinks, unlinkedPlans } from './planDay';
@@ -147,6 +147,8 @@ export interface ProjectMapData {
   pages: Map<string, MapPage>;
   /** Todo leído y nada por bajar (si es `false`, lo que falta puede aparecer: no se afirman ceros, D402). */
   complete: boolean;
+  /** La cifra de la forma de la post → su episodio (el del registro): para mostrar los códigos con `sceneLabel`. */
+  epByDigit: Registry['epByDigit'];
 }
 
 const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -425,7 +427,7 @@ export function projectMap(src: LiveSource): ProjectMapData {
       for (const id of ids) for (const m of snap.pages.get(id)?.mentions ?? []) if (m.kind === 'scene' && !codes.includes(m.ref)) codes.push(m.ref);
       return { date, plans: ids, scenes: codes };
     });
-  return { scenes, locations, days, scoutings, plans, plannedDates, pending, duplicates: allDuplicates, unnumbered, pages, complete: snap.complete };
+  return { scenes, locations, days, scoutings, plans, plannedDates, pending, duplicates: allDuplicates, unnumbered, pages, complete: snap.complete, epByDigit: snap.registry.epByDigit };
 }
 
 /**
@@ -555,6 +557,8 @@ export function mapText(m: ProjectMapData, meta: MapMeta): string {
     // «Día 59 (2026-02-19)»; un día sin número en el título («2026-03-15 | Sin reporte | …») va con su título solo.
     return d ? (d.date && !d.label.startsWith(d.date) ? `${d.label} (${d.date})` : d.label) : title(id);
   };
+  // Los códigos como se muestran (`1013`, la forma de la post en una serie; un largo, igual): el texto es para leer.
+  const lab = (code: string) => sceneLabel(code, m);
   const out: string[] = [];
   out.push(`# ${meta.project.name} — map`);
   out.push(
@@ -577,9 +581,9 @@ export function mapText(m: ProjectMapData, meta: MapMeta): string {
     const parts = [plural(scenes.length, 'scene', 'scenes'), plural(l.days.length, 'day', 'days')];
     out.push(`- ${l.name}${l.aliases.length ? ` (also ${l.aliases.join(', ')})` : ''}: ${parts.join(' · ')}`);
     if (l.days.length) out.push(`  days: ${l.days.map(day).join(', ')}`);
-    if (l.shot.length) out.push(`  shot here: ${list(l.shot)}`);
+    if (l.shot.length) out.push(`  shot here: ${list(l.shot.map(lab))}`);
     const plannedOnly = l.planned.filter((s) => !l.shot.includes(s));
-    if (plannedOnly.length) out.push(`  planned here (breakdown), no report section here: ${list(plannedOnly)}`);
+    if (plannedOnly.length) out.push(`  planned here (breakdown), no report section here: ${list(plannedOnly.map(lab))}`);
     if (l.scouts.length) out.push(`  scouting: ${l.scouts.map(title).join(', ')}`);
   }
   out.push('');
@@ -592,15 +596,15 @@ export function mapText(m: ProjectMapData, meta: MapMeta): string {
     if (s.plannedDays.length) bits.push(`in the plan of ${s.plannedDays.map(day).join(', ')}`);
     const others = s.mentions.filter((x) => !x.own && !x.index && !s.shot.some((y) => y.dayId === x.pageId)).length;
     if (others) bits.push(`named in ${others} other ${others === 1 ? 'page' : 'pages'}`);
-    out.push(`- ${s.code}${s.title ? ` ${s.title}` : ''}: ${bits.join(' · ')}`);
+    out.push(`- ${lab(s.code)}${s.title ? ` ${s.title}` : ''}: ${bits.join(' · ')}`);
   }
   out.push('');
   out.push('## Shoot days');
   for (const d of m.days) {
     const bits = [d.locs.length ? d.locs.join(' + ') : 'no location in the title'];
-    if (d.scenes.length) bits.push(`sections: ${d.scenes.join(', ')}`);
+    if (d.scenes.length) bits.push(`sections: ${d.scenes.map(lab).join(', ')}`);
     else bits.push(d.written ? 'no scene section' : 'nothing written');
-    if (d.planned.length) bits.push(`plan (${d.planSource === 'plan' ? 'Plan page' : 'breakdown date'}): ${list(d.planned)}`);
+    if (d.planned.length) bits.push(`plan (${d.planSource === 'plan' ? 'Plan page' : 'breakdown date'}): ${list(d.planned.map(lab))}`);
     if (d.unnumbered.length) bits.push(`without a scene number: ${d.unnumbered.map((u) => `«${u.title}»`).join(', ')}`);
     // El título ya empieza con la fecha en la forma de los reportes («2026-02-19 | Día 59 | Cenade»): no se repite.
     const t = title(d.pageId);
@@ -618,7 +622,7 @@ export function mapText(m: ProjectMapData, meta: MapMeta): string {
   if (m.plannedDates.length) {
     out.push('');
     out.push('## Planned dates without a shoot day yet');
-    for (const p of m.plannedDates) out.push(`- ${p.date}: ${p.plans.map(title).join(', ')}${p.scenes.length ? ` · scenes ${list(p.scenes)}` : ''}`);
+    for (const p of m.plannedDates) out.push(`- ${p.date}: ${p.plans.map(title).join(', ')}${p.scenes.length ? ` · scenes ${list(p.scenes.map(lab))}` : ''}`);
   }
   if (m.plans.length) {
     out.push('');
@@ -632,12 +636,12 @@ export function mapText(m: ProjectMapData, meta: MapMeta): string {
     out.push('');
     // Quien ve una parte del proyecto no puede saber si la escena existe en una página que no ve (D401).
     out.push(meta.partial ? '## Scene numbers named that are not in the pages I can see (they may exist elsewhere)' : '## Pending (named, not created)');
-    for (const p of m.pending) out.push(`- ${p.code}: named in ${p.mentions.map((x) => title(x.pageId)).join(', ')}`);
+    for (const p of m.pending) out.push(`- ${lab(p.code)}: named in ${p.mentions.map((x) => title(x.pageId)).join(', ')}`);
   }
   if (m.duplicates.length) {
     out.push('');
     out.push('## Scenes in more than one page');
-    for (const d of m.duplicates) out.push(`- ${d.code}: ${d.pageIds.map(title).join(' / ')} (the first one counts)`);
+    for (const d of m.duplicates) out.push(`- ${lab(d.code)}: ${d.pageIds.map(title).join(' / ')} (the first one counts)`);
   }
   return out.join('\n') + '\n';
 }
@@ -658,7 +662,8 @@ export function titlePlace(d: Pick<MapDay, 'title' | 'label' | 'date'>): string 
 
 /** Para pruebas y el filtro del mapa: el texto de una escena con sus otras formas sin separador (`105_027` → `105027 5027`). */
 export function sceneFilterText(s: MapScene): string {
-  const [ep, n] = s.code.includes('_') ? s.code.split('_') : ['', s.code];
+  const ep = episodeOfCode(s.code) ?? '';
+  const n = ep ? s.code.slice(4) : s.code;
   return fold(
     `${s.code} ${s.code.replace('_', '-')} ${ep}${n} ${ep ? ep.slice(-1) + n : ''} ${s.title} ${s.plannedAt.join(' ')} ${s.shot.flatMap((x) => [...x.locs, x.label, x.date ?? '']).join(' ')}`,
   );

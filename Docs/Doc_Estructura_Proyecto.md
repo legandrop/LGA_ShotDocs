@@ -63,6 +63,13 @@ relaciones (`graph: false`, D406; desde la v0.247 se marca con *Leave out of rel
   títulos con `MAX_CODE_LENGTH`); el número completo en la tercera parte hace que buscar `101_074` encuentre la
   escena (hoy sale después de las fichas `ERSO_101_074_010…`, que también lo llevan en el título; que salga primero está
   en `Doc_Roadmap.md`, grupo R). La locación **no** va en el título de la escena: cambia y es muchos a muchos.
+- **La forma de la post (v0.319):** en una serie, la app muestra la escena como la escriben PipeSync y Flow, la última
+  cifra del episodio y las 3 de la escena (`101_074` → `1074`), y entiende el título `1074 | <título corto>` adentro de
+  la carpeta del episodio (solo ahí, y con su cifra), igual que `074 | <título corto> | 101_074`, y los planos
+  `ERSO_1074_010` (el inserto `ERSO_1074A-INS_010` es parte de la `101_074A`). El número que se guarda en la marca y con el que se
+  compara sigue siendo el completo (`101_074`): una versión vieja de la app no entiende `1074`. *Create scene* titula la
+  escena nueva de una serie con la forma de la post (`1028`). Un largo no cambia (`074`). Detalle:
+  `Doc_Relaciones.md`, sección 2.
 - **Sin primera línea de identidad** (D408): la de escena (`Escena 101-074 · también: …`) y la de locación (`Locación X ·
   también: …`) se borraron al pasar a vivo; la de locación juntaba lugares que el armado había separado. La escena se
   reconoce por su título y el lector de relaciones conoce las formas alternativas; ⌘K busca por subcadena, así que hoy
@@ -167,7 +174,11 @@ proyecto. Un plan adentro de su día sigue siendo de ese día, y una subpágina 
 
 **El número de escena** sale del título, en este orden: uno completo al principio de la primera parte
 (`101_074 | título`, `Escena 101_069A`); uno corto que es toda la primera parte, con el episodio de la carpeta
-(`074 | título` adentro de `105`); una última parte que es entera un número completo (`074 | título | 101_074`). Un
+(`074 | título` adentro de `105`, también `074 | título | 1074`); la forma de la post como toda la primera parte, solo
+adentro de la carpeta de un episodio y con su cifra (`1074 | título` adentro de `101`; `1033A-INS` es la `101_033A`;
+nunca con una unidad pegada, `1080p`, `1080px`, ni en la raíz de escenas de la serie o en un largo: «2026 |
+Calendario», «1920 x 1080» o «1500 extras» no son escenas); una última parte que es entera un número completo
+(`074 | título | 101_074`). Un
 número en el medio del texto nombra otra escena y no cuenta (`075 | Persecución, sigue en 105_076` es `105_075`). Sin
 episodio, un número corto no alcanza y la página queda escena sin número (los largos, por ahora).
 
