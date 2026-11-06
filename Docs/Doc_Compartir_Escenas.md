@@ -5,9 +5,9 @@
 lo que ven personas de afuera, sus avisos y el freno en la base para que nada marcado entre en una escena compartida.
 Pasó por dos auditorías (la de la propuesta y la de la entrega, las dos «aprobado con condiciones»; sección 8).
 **B-2 hecha en la v0.324** (D847): pedir una escena desde su link (sección 10; migración
-`20261119120000_pedir_escena.sql`, base 29, **aplicada** con la v0.324, 2026-11-06). **Pendiente:**
-B-3 (prender la privacidad de lo borrado, D14), sección 9. Hasta B-3, *Share scenes* y dar una escena pedida están
-**frenados**: la base rechaza guardar (`clean_off`) y las ventanas lo dicen.
+`20261119120000_pedir_escena.sql`, base 29, **aplicada** con la v0.324, 2026-11-06). **B-3 hecha el 2026-11-06:**
+la privacidad de lo borrado (D14) está prendida, así que *Share scenes* y dar una escena pedida ya guardan. Falta
+probarlo con una persona real (sección 9).
 
 Pedido de Lega (2026-11-05): dentro de un proyecto, además de *Share “<proyecto>”…*, **«Share scenes of “<proyecto>”…»**.
 Un vendor tiene asignadas algunas escenas: se elige a quién, aparecen las escenas con las que ya tiene marcadas, se marcan
@@ -338,8 +338,10 @@ sin opción de seguir.
 **B-3 (D14):** contar invitados y permisos Ver/Comentar vivos; **el orden de la restauración**: el script de restaurar
 del repo privado tiene que cargar las páginas antes que los permisos y las invitaciones (o correr con
 `session_replication_role = replica`, que apaga los triggers), porque si no `pages_scene_share_guard` frena una página
-marcada adentro de una escena ya compartida o la escena compartida que cambia de ajustes; copia; `min_app_version`; prender el interruptor con un editor abierto. Si algo falta, queda
-para Lega y *Share scenes* sigue frenado.
+marcada adentro de una escena ya compartida o la escena compartida que cambia de ajustes; copia; `min_app_version`; prender el interruptor con un editor abierto.
+**Hecho el 2026-11-06:** los dos scripts de restaurar cargan con los triggers apagados (verificado), copia de
+seguridad antes, y `clean_min_version` = 0.319 (2 invitados, 3 permisos Ver/Comentar, 1128 páginas con lectores).
+Falta la prueba de punta a punta con una persona real (un mail de prueba de Lega).
 
 **Observación previa (no cambia con B-1):** *Share* (`share`) e invitar desde *Members* (`create_invitation`) sobre una
 escena no pasan por `scene_contains_entities`: con ellos se puede compartir una escena que tiene adentro una locación o

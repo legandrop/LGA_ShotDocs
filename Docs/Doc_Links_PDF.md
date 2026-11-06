@@ -259,8 +259,8 @@ el pase no coincidirían.
   (con un link de una página de arriba, más que la rama exportada); con *Can edit* deja editar; y `set_public_link`
   cambia el nivel **conservando el token**, así un PDF repartido con un link *Can view* pasa a editar si después se sube
   el link.
-- **Hoy (D14 apagado) no se puede crear un link público en Wanka:** la parte del link de E1 se prueba con el servidor
-  falso y la prueba de aceptación 3 espera a que se prenda el interruptor (O9).
+- **Hasta el 2026-11-06 (D14 apagado) no se podía crear un link público en Wanka:** la parte del link de E1 se probó
+  con el servidor falso. Con el interruptor prendido, la prueba de aceptación 3 ya se puede correr (O9).
 - **Sin red al exportar** no se puede saber si hay link: los links van con `#ws=` y la ventana lo dice (v0.165): *No connection: file links in this PDF can't use the public link of the page, even if it has one. They ask to sign in.* Sale solo en la ventana del PDF, con archivos en Drive conectados, sin red (o con la red caída del navegador), sin los links ya pedidos **y solo si las páginas que se exportan usan algún adjunto, video o carpeta** (hecho en v0.174: la ventana lee de lo guardado en el dispositivo, `planFiles`, qué `sdmedia://` usan, sin los borrados ni las fotos; una página que no se puede leer (excepción o snapshot marcado como no soportado/ilegible) deja el aviso por las dudas, conservando el conteo de los archivos que sí se pueden leer; mientras lee, no sale); un visitante del link no lo ve (usa el suyo). Un PDF sin ningún archivo no tiene links que arreglar. Pruebas: `exportFileLinks.test.tsx` (sin archivos, con fotos cuyo original está o falta y con un adjunto) y `planFiles.test.ts`.
 - **Revocar, *Reset link*, vencer, la página a la papelera o quien lo creó sin permiso de compartir:** el token deja de
   valer en el acto (lo valida la base en cada pedido); el link del PDF abre la pantalla del link muerto, que para una

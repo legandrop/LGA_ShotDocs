@@ -1,11 +1,13 @@
 # Privacidad de lo borrado (D14)
 
 **Estado: entregas 0 y 1 implementadas (v0.104), con la migración `20261010120000_privacidad_borrado.sql` aplicada (2026-10-02)
-y el interruptor apagado** (roadmap B.18; diseño del 2026-10-02, revisado el mismo día con la auditoría independiente:
+y el interruptor prendido el 2026-11-06** (roadmap B.18; diseño del 2026-10-02, revisado el mismo día con la auditoría independiente:
 ver "Correcciones de la auditoría"; lo implementado y lo que cambió al implementar, en "Cómo quedó (entregas 0 y 1)",
 al final). Toca los permisos (quién recibe qué bytes de
 una página) y el contrato de datos (qué viaja en `page_updates`), así que cada entrega va con sus pruebas de permisos y
 su auditoría. Lo medido está en prototipos fuera del repo (sección "Cómo se midió").
+
+**Prendido el 2026-11-06** (pedido de Lega): `clean_min_version` = 0.319, igual a `min_app_version`, con copia de seguridad antes. Al prenderlo había 2 invitados, 3 permisos Ver/Comentar vivos y 1128 páginas con lectores (ERSO 636, VLLF 492), sin ninguna base. **La prueba 7 (de punta a punta con usuarios de verdad) no se corrió:** queda para Lega, con un mail suyo de prueba. Para apagarlo: `clean_min_version = null` (no pierde nada, D4).
 
 ## En corto
 
@@ -424,7 +426,7 @@ una página compartida pase de 100 KB y se edite mucho todos los días con lecto
 
 ## 7. Migración (borrador, sin aplicar)
 
-*Hoy: la migración real es `20261010120000_privacidad_borrado.sql`, aplicada; el interruptor `clean_min_version` sigue nulo, apagado (verificado en la base el 2026-10-06).*
+*Hoy: la migración real es `20261010120000_privacidad_borrado.sql`, aplicada; el interruptor `clean_min_version` se prendió el 2026-11-06 en 0.319 (ver el estado, arriba).*
 
 Va como `supabase/migrations/<fecha>_privacidad_borrado.sql`, con su prueba
 `supabase/tests/privacidad_borrado_permisos.sql`, en la entrega 1. Deja el interruptor apagado. Necesita `pgcrypto`
@@ -817,7 +819,7 @@ punta con usuarios de verdad) está escrita para la carpeta privada de pruebas y
 - **La prueba SQL suma** las hijas de una página compartida con Ver, la página que solo ve un invitado con Editar,
   `clean_seq` en 0 al reiniciar el proyecto, una base que llega más allá de `update_seq` y una página sin lectores.
 
-**Para prender el interruptor** (hoy la migración está aplicada y `clean_min_version` es nulo; verificado en la base el 2026-10-06; antes de invitar al primer cliente de verdad): aplicar la migración (con copia de
+**Para prender el interruptor** (hecho el 2026-11-06, salvo la prueba 7; ver el estado, arriba): aplicar la migración (con copia de
 seguridad); que el script de restaurar del repo de copias vacíe `page_clean_bases` y deje `clean_seq` en 0 y
 `clean_reset_seq` en el `update_seq` restaurado; publicar esta versión y subir `min_app_version` a ella (la base no deja prender el interruptor
 antes); correr la prueba 7; y recién ahí `update public.workspace_settings set clean_min_version = <esta versión> where id`.

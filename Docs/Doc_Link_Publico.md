@@ -292,8 +292,8 @@ misma recorrida por los padres que `user_page_level` (una sola pasada, PL/pgSQL)
   está en `clean_seq`, la llamada no devuelve nada y no escribe nada); quien pide en bucle desde cero sí, y lo corta el
   tope de bytes por link y del total de links (P11).
 - **Con el interruptor de D14 apagado no se puede crear un link** (`create_public_link` da `clean_off`, P5): con el
-  interruptor apagado los editores no arman bases y no habría qué servir sin mandar filas. Prender el interruptor en Wanka
-  es requisito de la entrega 1 (`Doc_Privacidad_Borrado.md`, sección 10).
+  interruptor apagado los editores no arman bases y no habría qué servir sin mandar filas. En Wanka se prendió el
+  2026-11-06 (`Doc_Privacidad_Borrado.md`), así que desde entonces se pueden crear links.
 - **Las bases se arman para las páginas con link:** `private.has_plain_readers(p)` suma "hay un link vivo que cubre `p`" y
   `clean_work` suma las raíces de los links vivos a las ramas con lectores. **Crear un link reinicia la rama**
   (`clean_reset_seq = update_seq`, `clean_seq = 0`), como `share()`; antes, la app de quien comparte sube lo pendiente y
