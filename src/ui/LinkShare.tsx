@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT, type Translate } from '../i18n';
 import '../i18n/lazy/teamDialogs';
 import { copyText, copyWhenReady } from '../invite';
@@ -121,6 +121,13 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
   const linkId = link?.id ?? null;
   useEffect(() => setNewDate(null), [linkId]);
 
+  // *Retry* y *Share anyway* mandan el formulario de ese momento, y cambiar el nivel o el vencimiento borra el aviso: era
+  // del pedido de antes (compartir con la persona equivocada; auditoría de Doc_Compartir_Escenas.md).
+  const latestTurnOn = useRef<(anyway?: boolean) => void>(() => undefined);
+  useEffect(() => {
+    gate.clearBlocked();
+  }, [level, expiry, date]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!supported || info === null) return null;
 
   const urlOf = (l: Pick<PublicLink, 'token'>) =>
@@ -172,7 +179,7 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
     }
     if (anyway) gate.clearBlocked();
     const scope = { pageId };
-    const created = (anyway ? Promise.resolve(true) : gate.ready(scope, true, () => turnOn(), () => turnOn(true))).then((ok) => {
+    const created = (anyway ? Promise.resolve(true) : gate.ready(scope, true, () => latestTurnOn.current(), () => latestTurnOn.current(true))).then((ok) => {
       if (!ok) throw UNSYNCED_BEFORE_SHARE;
       return createPublicLink(client, pageId, expires, level);
     });
@@ -185,6 +192,7 @@ export function LinkShare({ pageId, onClose }: { pageId: string; onClose: () => 
       expiry === 'date',
     );
   }
+  latestTurnOn.current = turnOn;
 
   /** Pone el vencimiento en la fecha elegida (*Set date*, o Enter en el campo: es un formulario); una fecha pasada o vacía avisa y no manda nada. */
   function confirmDate() {

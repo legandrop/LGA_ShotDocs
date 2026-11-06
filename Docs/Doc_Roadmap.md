@@ -33,6 +33,10 @@ invitado: ve el desglose y sus fichas, no los días. Opciones a decidir por Lega
 lo que junta el panorama (simple, pero copia texto y envejece, contra R6), o un permiso por escena en el que el
 servidor entrega solo las secciones de esa escena de cada reporte (lo correcto; toca permisos, auditoría obligatoria, y
 lleva al servidor la lectura de secciones que hoy hace el dispositivo, `src/relations/`). Grande.
+**Desde la v0.323 (D843), *Share scenes*** comparte de a muchas las páginas de escena con una persona (ve la escena y sus
+fichas; ni los días ni los reportes): `Doc_Compartir_Escenas.md`. Siguen pendientes ahí B-2 (pedir una escena desde
+este link sin acceso) y B-3 (prender D14, que hoy frena *Share scenes*); las secciones de una escena dentro de un
+reporte siguen sin compartirse.
 
 ## Regla para todo lo que se haga: cada workspace es una isla
 

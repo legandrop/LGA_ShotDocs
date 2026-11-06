@@ -46,6 +46,13 @@ export function AccessRequestForm({
   /** Quien recibe Ver o Comentar, o es invitado, no ve lo borrado: lo pendiente de la página sube antes. */
   const reader = level === 'view' || level === 'comment' || request.role === 'guest';
 
+  // *Retry* y *Share anyway* mandan el formulario de ese momento, y cambiar la página o el nivel borra el aviso: era
+  // del pedido de antes (compartir con la persona equivocada; auditoría de Doc_Compartir_Escenas.md).
+  const latestDecide = useRef<(accept: boolean, anyway?: boolean) => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    gate.clearBlocked();
+  }, [page, level]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function decide(accept: boolean, anyway = false) {
     if (!accessRequests || busy) return;
     setBusy(true);
@@ -53,7 +60,7 @@ export function AccessRequestForm({
     if (anyway) gate.clearBlocked();
     const scope = { pageId: page };
     try {
-      if (accept && !anyway && !(await gate.ready(scope, reader, () => void decide(true), () => void decide(true, true)))) return;
+      if (accept && !anyway && !(await gate.ready(scope, reader, () => void latestDecide.current(true), () => void latestDecide.current(true, true)))) return;
       await accessRequests.decide(request.id, accept, accept ? page : null, level);
       if (accept) gate.after(scope, reader, request.email);
       onDone();
@@ -64,6 +71,7 @@ export function AccessRequestForm({
       setBusy(false);
     }
   }
+  latestDecide.current = decide;
 
   const offline = !status.online;
   return (

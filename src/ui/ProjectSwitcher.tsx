@@ -4,7 +4,7 @@ import { locale, t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
 import { usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
 import { isOnlyActiveProject, nextProjectAfter } from '../sync/projectStates';
-import { PROJECT_COLOR_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION } from '../sync/remote';
+import { PROJECT_COLOR_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION, SCENE_SHARES_SCHEMA_VERSION } from '../sync/remote';
 import { pagePath } from '../router';
 import { modPressed } from './findUi';
 import { newTab, openInNewTab, tabsOn } from './tabs';
@@ -35,7 +35,7 @@ import { defaultProjectColor, loadRecentColors, previewColor, PROJECT_PRESETS, p
 import { ColorPicker } from './ColorPicker';
 import { useSearchSession } from './projectSearchUi';
 import { tipRows } from './tipRows';
-import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, TrashPanel } from './lazyDialogs';
+import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, ShareScenesDialog, TrashPanel } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { OfflineBadge, offlineSupported, openOffline } from './SpaceHost';
 import { openExport } from './ExportHost';
@@ -148,6 +148,8 @@ export function ProjectSwitcher() {
   // Con qué lista se abre el selector: la de siempre o la papelera (`openProjectTrash`).
   const [startIn, setStartIn] = useState<'list' | 'trash'>('list');
   const [sharing, setSharing] = useState<string | null>(null);
+  // *Share scenes of “<proyecto>”…* (Doc_Compartir_Escenas.md): el proyecto cuyas escenas se comparten.
+  const [sharingScenes, setSharingScenes] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
   const switchTo = useSwitchProject();
   const [workspaces, setWorkspaces] = useState<WorkspacesMode | null>(null);
@@ -218,6 +220,7 @@ export function ProjectSwitcher() {
               anchor={button.current}
               onClose={() => setPosition(null)}
               onShare={(id) => setSharing(id)}
+              onShareScenes={(id) => setSharingScenes(id)}
               onDelete={(id, name) => setDeleting({ id, name })}
               onWorkspaces={(mode) => setWorkspaces(mode)}
               onRemoveWorkspace={() => setRemoving(true)}
@@ -231,6 +234,13 @@ export function ProjectSwitcher() {
         createPortal(
           <Part onClose={() => setSharing(null)}>
             <ShareDialog target={{ projectId: sharing }} onClose={() => setSharing(null)} />
+          </Part>,
+          document.body,
+        )}
+      {sharingScenes &&
+        createPortal(
+          <Part onClose={() => setSharingScenes(null)}>
+            <ShareScenesDialog projectId={sharingScenes} onClose={() => setSharingScenes(null)} />
           </Part>,
           document.body,
         )}
@@ -289,6 +299,8 @@ function ProjectMenu(props: {
   anchor: HTMLElement | null;
   onClose: () => void;
   onShare: (projectId: string) => void;
+  /** *Share scenes of “<proyecto>”…* (Doc_Compartir_Escenas.md): dueño y admins, con la base en la 28. */
+  onShareScenes: (projectId: string) => void;
   onDelete: (projectId: string, name: string) => void;
   onWorkspaces: (mode: WorkspacesMode) => void;
   onRemoveWorkspace: () => void;
@@ -323,6 +335,9 @@ function ProjectMenu(props: {
   const statesReady = (status.schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION;
   // El color, con la base en la versión 27 (una más vieja no tiene dónde guardarlo).
   const colorReady = (status.schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION;
+  // *Share scenes* (Doc_Compartir_Escenas.md, B-1): solo dueño y admins que pueden compartir el proyecto, con la base en la
+  // 28. La base vuelve a pedir todo (`set_page_shares`).
+  const scenesReady = (status.schemaVersion ?? 0) >= SCENE_SHARES_SCHEMA_VERSION && perms.canInvite;
   const { workspace } = useServices();
   const keys = workspace.config.storage;
   const offline = !status.online;
@@ -827,6 +842,17 @@ function ProjectMenu(props: {
             >
               <ShareIcon size={16} />
               {tr('project.share', { name: currentName })}
+            </button>
+          )}
+          {scenesReady && perms.canShareProject(props.current) && (
+            <button
+              onClick={() => {
+                props.onClose();
+                props.onShareScenes(props.current);
+              }}
+            >
+              <ShareIcon size={16} />
+              {tr('project.shareScenes', { name: currentName })}
             </button>
           )}
           {perms.canCreateProject && (

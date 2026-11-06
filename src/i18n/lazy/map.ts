@@ -64,6 +64,8 @@ export const map = {
     es: { one: "Se copió {count} plano: pegalo en una planilla", other: "Se copiaron {count} planos: pegalos en una planilla" },
   },
   'map.copy': { en: "Copy overview", es: "Copiar panorama" },
+  // *Share scenes* (Docs/Doc_Compartir_Escenas.md), al lado de *Copy overview* en *Scenes*: dueño y admins.
+  'map.shareScenes': { en: "Share scenes…", es: "Compartir escenas…" },
   'map.copyTip': {
     en: "Every scene, location and shoot day as text, to paste into an assistant or a document. Only what you can see.",
     es: "Todas las escenas, locaciones y días como texto, para pegar en un asistente o un documento. Solo lo que ves.",

@@ -91,6 +91,47 @@ export const sidebar = {
   'color.hex': { en: "Hex color", es: "Color en hex" },
   'color.reset': { en: "Back to the default color", es: "Volver al color de fábrica" },
   'project.share': { en: "Share “{name}”…", es: "Compartir “{name}”…" },
+  // *Share scenes* (Docs/Doc_Compartir_Escenas.md): la entrada del selector y lo que ven personas de afuera en el árbol.
+  'project.shareScenes': { en: "Share scenes of “{name}”…", es: "Compartir escenas de “{name}”…" },
+  'outside.tree.direct': {
+    en: {
+      one: "Seen by {count} person outside the team (a guest, or View or Comment), with the pages inside",
+      other: "Seen by {count} people outside the team (guests, or View or Comment), with the pages inside",
+    },
+    es: {
+      one: "La ve {count} persona de afuera del equipo (un invitado, o con Ver o Comentar), con las páginas de adentro",
+      other: "La ven {count} personas de afuera del equipo (invitados, o con Ver o Comentar), con las páginas de adentro",
+    },
+  },
+  'outside.tree.inside': {
+    en: "Seen by people outside the team through “{title}”",
+    es: "La ven personas de afuera del equipo por “{title}”",
+  },
+  // Para quien edita sin poder compartir el proyecto: solo sí o no (`page_has_outside_readers`).
+  'outside.tree.seen': {
+    en: "People outside the team (a guest, or View or Comment) see this page",
+    es: "Personas de afuera del equipo (un invitado, o con Ver o Comentar) ven esta página",
+  },
+  'outside.mergeConfirm': {
+    en: "People outside the team (guests, or View or Comment) see “{title}”. Merging brings the text and the pages inside of the other one into it: they will see them too. Merge?",
+    es: "Personas de afuera del equipo (invitados, o con Ver o Comentar) ven “{title}”. Al unir, el texto y las páginas de adentro de la otra pasan ahí: también los van a ver. ¿Las unís?",
+  },
+  'outside.moveIntoShared': {
+    en: "The scene “{title}” is shared with people outside the team. To move a page into it, stop sharing it first.",
+    es: "La escena “{title}” está compartida con personas de afuera del equipo. Para mover una página adentro, primero dejá de compartirla.",
+  },
+  'outside.mergeIntoShared': {
+    en: "The scene “{title}” is shared with people outside the team. To merge a card from outside it into one inside it, stop sharing it first.",
+    es: "La escena “{title}” está compartida con personas de afuera del equipo. Para unir una ficha de afuera con una de adentro, primero dejá de compartirla.",
+  },
+  'outside.moveConfirm': {
+    en: "People outside the team (guests, or View or Comment) see “{title}”. If you move this page inside it, they will see it too, with everything inside. Move it?",
+    es: "Personas de afuera del equipo (invitados, o con Ver o Comentar) ven “{title}”. Si movés esta página adentro, también la van a ver, con todo lo de adentro. ¿La movés?",
+  },
+  'outside.created': {
+    en: "People outside the team see “{title}”: they will see this new page too.",
+    es: "Personas de afuera del equipo ven “{title}”: también van a ver esta página nueva.",
+  },
   'project.name': { en: "Project name", es: "Nombre del proyecto" },
   'project.newName': { en: "New project name", es: "Nombre del proyecto nuevo" },
   'project.saveFailed': {

@@ -24,6 +24,8 @@ import { HoldsTag } from '../relations/HoldsTag';
 import { holdsOf, kindReader } from '../relations/kind';
 import { LinkAsideTreeIcon } from './LinkAsideTreeIcon';
 import { LinkTreeIcon } from './LinkTreeIcon';
+import { OutsideTreeMark } from './OutsideTreeMark';
+import { confirmOutsideMove, noticeOutsideCreate, useOutsidePage, useOutsideReaders } from './outsideReaders';
 import { useLinkMode } from '../linkMode';
 import { useSearchSession } from './projectSearchUi';
 import { useIndexProgress } from './relationsUi';
@@ -159,12 +161,17 @@ function useScrollbarReveal(ref: RefObject<HTMLDivElement | null>) {
 export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) {
   const tree = useTree();
   const perms = usePermissions();
-  const { user } = useServices();
+  const services = useServices();
+  const { user } = services;
   const route = useRoute();
   const activeId = route.name === 'page' ? route.id : null;
   const projectId = useCurrentProject();
   const search = useSearchSession();
   const tr = useT();
+  // Lo que ven personas de afuera (Doc_Compartir_Escenas.md, condición 8): la marca y los avisos al crear y al mover.
+  const outside = useOutsideReaders(projectId);
+  // Quien edita sin poder compartir el proyecto: sí o no de la página abierta (la base no le dice más).
+  const activeSeen = useOutsidePage(activeId);
   // Un punto en el "?" mientras haya una recorrida para ver y la ayuda nunca se haya abierto acá.
   const { expandSubpages } = usePrefs();
 
@@ -427,6 +434,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     const id = await tree.create(parentId, '', projectId);
     if (parentId) expand(parentId);
     navigate(pagePath(id));
+    noticeOutsideCreate(services, parentId);
   }
 
   function canDrop(targetId: string): boolean {
@@ -468,6 +476,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     setDragging(null);
     setDrop(null);
     if (!id || !zone || !canDrop(page.id) || !perms.canMove(id, dropParent(page, zone))) return;
+    // Adentro de lo que ven personas de afuera: pregunta antes (lo que entra, lo ven ellos).
+    if (!(await confirmOutsideMove(services, id, dropParent(page, zone)))) return;
     if (zone === 'inside') {
       await tree.move(id, page.id);
       expand(page.id);
@@ -706,6 +716,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           <HoldsTag pageId={page.id} />
           <MentionTreeDot pageId={page.id} collapsed={children.length > 0 && !open} />
           <LinkTreeIcon pageId={page.id} />
+          <OutsideTreeMark pageId={page.id} marks={outside} seen={page.id === activeId && activeSeen} />
           <LinkAsideTreeIcon pageId={page.id} />
           <OfflineBadge kind="page" id={page.id} />
           <span className="row-actions">

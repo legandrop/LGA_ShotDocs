@@ -10,29 +10,36 @@ import { useServices, useSyncStatus, useTree } from '../services';
 /** Lo que tira el paso previo cuando no se pudo subir lo pendiente (la ventana muestra el aviso, no un error). */
 export const UNSYNCED_BEFORE_SHARE = new Error('unsynced_before_share');
 
-export type ShareScope = { projectId: string } | { pageId: string };
+/** Lo que se comparte: un proyecto, una página, o varias páginas (*Share scenes*, cada una con su rama). */
+export type ShareScope = { projectId: string } | { pageId: string } | { pageIds: string[] };
 
 export function useShareGate() {
   const { engine } = useServices();
   const status = useSyncStatus();
   const tree = useTree();
-  const [blocked, setBlocked] = useState<null | { retry: () => void; anyway: () => void }>(null);
+  // `anyway` nulo: el aviso va sin *Share anyway* (*Share scenes*, M4 de la auditoría: con material de un vendor no se
+  // comparte sin haber subido lo pendiente).
+  const [blocked, setBlocked] = useState<null | { retry: () => void; anyway: (() => void) | null }>(null);
   const [progress, setProgress] = useState<null | { done: number; total: number; email: string }>(null);
 
-  /** Las páginas que alcanza compartir: la página y su rama, o todo el proyecto. */
+  /** Las páginas que alcanza compartir: la página y su rama, las páginas y sus ramas, o todo el proyecto. */
   const pagesOf = useCallback(
     (scope: ShareScope): string[] =>
-      'pageId' in scope ? engine.branchOf(scope.pageId) : tree.roots(scope.projectId).flatMap((r) => engine.branchOf(r.id)),
+      'pageId' in scope
+        ? engine.branchOf(scope.pageId)
+        : 'pageIds' in scope
+          ? [...new Set(scope.pageIds.flatMap((id) => engine.branchOf(id)))]
+          : tree.roots(scope.projectId).flatMap((r) => engine.branchOf(r.id)),
     [engine, tree],
   );
 
   /**
    * Antes de compartir con alguien que no ve lo borrado: sube lo pendiente de esas páginas. Devuelve si se puede
-   * compartir; si no, deja el aviso con Retry y Share anyway. Con el interruptor apagado, o para quien ve lo borrado,
-   * no hace falta.
+   * compartir; si no, deja el aviso con Retry y, si se pasa `anyway`, Share anyway. Con el interruptor apagado, o para
+   * quien ve lo borrado, no hace falta.
    */
   const ready = useCallback(
-    async (scope: ShareScope, reader: boolean, retry: () => void, anyway: () => void): Promise<boolean> => {
+    async (scope: ShareScope, reader: boolean, retry: () => void, anyway: (() => void) | null): Promise<boolean> => {
       setBlocked(null);
       if (!reader || !status.cleanOn) return true;
       if (await engine.uploadPagesFirst(pagesOf(scope))) return true;
@@ -67,10 +74,15 @@ export function ShareGateNotes({ gate, reader }: { gate: ReturnType<typeof useSh
           <span>{tr('share.unsynced')}</span>{' '}
           <button type="button" className="link" onClick={gate.blocked.retry}>
             {tr('share.retry')}
-          </button>{' '}
-          <button type="button" className="link" onClick={gate.blocked.anyway}>
-            {tr('share.anyway')}
           </button>
+          {gate.blocked.anyway && (
+            <>
+              {' '}
+              <button type="button" className="link" onClick={gate.blocked.anyway}>
+                {tr('share.anyway')}
+              </button>
+            </>
+          )}
         </div>
       )}
       {gate.progress && (

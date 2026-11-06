@@ -108,6 +108,39 @@ export const team = {
     es: "No se puede dar acceso en esa página. Elegí otra.",
   },
   'teamError.decisionInvalid': { en: "Choose Give access or Decline.", es: "Elegí Dar acceso o Rechazar." },
+  // *Share scenes* (20261118120000_compartir_escenas.sql).
+  'teamError.cleanOff': {
+    en: "This needs the workspace setting that keeps deleted text out of shared pages, and it isn't on yet.",
+    es: "Esto pide el ajuste del workspace que deja afuera de lo compartido lo que se borró, y todavía no está prendido.",
+  },
+  'teamError.pagesInvalid': {
+    en: "Choose at least one scene to add or take away.",
+    es: "Elegí por lo menos una escena para sumar o sacar.",
+  },
+  'teamError.tooManyPages': {
+    en: "Up to 200 pages at a time, and up to 200 in one invitation.",
+    es: "Hasta 200 páginas por vez, y hasta 200 en una invitación.",
+  },
+  'teamError.invitationRemove': {
+    en: "This person hasn't joined yet. To take a scene away, revoke the invitation in Members and invite again.",
+    es: "Esta persona todavía no entró. Para sacarle una escena, revocá la invitación en Miembros y volvé a invitarla.",
+  },
+  'teamError.invitationRole': {
+    en: "This email has a pending invitation with another role. Revoke it in Members and invite again.",
+    es: "Este correo tiene una invitación pendiente con otro rol. Revocala en Miembros y volvé a invitar.",
+  },
+  'teamError.sceneContainsEntities': {
+    en: "A scene to share has another scene, a location, a day or a set inside. Move that page out first.",
+    es: "Una escena para compartir tiene adentro otra escena, una locación, un día o un decorado. Primero sacá esa página de ahí.",
+  },
+  'teamError.movedIntoSharedScene': {
+    en: "That scene is shared with people outside the team. To move a page into it, stop sharing it first.",
+    es: "Esa escena está compartida con personas de afuera del equipo. Para mover una página adentro, primero dejá de compartirla.",
+  },
+  'teamError.entityInSharedScene': {
+    en: "People outside the team see that scene: a scene, a location, a day or a set can't go inside it.",
+    es: "Personas de afuera del equipo ven esa escena: adentro no puede ir una escena, una locación, un día ni un decorado.",
+  },
   // Los pedidos de acceso a un archivo o a una página (Doc_Links_PDF.md, 5.3 y entrega 3): en la campana, en Share y en la ventana de decidir.
   'requests.title': { en: "Access requests", es: "Pedidos de acceso" },
   'requests.count': {

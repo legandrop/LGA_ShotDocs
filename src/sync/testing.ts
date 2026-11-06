@@ -18,8 +18,12 @@ import {
   PROJECT_DRIVE_SCHEMA_VERSION,
   PROJECT_PURGE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
+  SCENE_SHARES_SCHEMA_VERSION,
   SNAPSHOT_SCHEMA_VERSION,
   type AccessRow,
+  type PageShareRow,
+  type PageSharesResult,
+  type SceneSharesRemote,
   type CompactionClaim,
   type NewSnapshot,
   type SnapshotPushResult,
@@ -167,6 +171,107 @@ export interface FakeRoomRow {
   admittedSeq: number | null;
 }
 
+/**
+ * Los chequeos de seguridad de *Share scenes* que las pruebas sacan de a uno (`FakeServer.sceneShareMutants`): con
+ * cualquiera de ellos afuera, una prueba de `src/ui/shareScenes.test.tsx` tiene que fallar.
+ */
+export const SCENE_SHARE_MUTANTS = [
+  /** Dueño o admin del workspace (en las tres funciones de compartir, no en la marca). */
+  'role',
+  /** `can_share` del proyecto. */
+  'canShare',
+  /** El interruptor de lo borrado (`clean_off`). */
+  'clean',
+  /** Nivel `view` o `comment`. */
+  'level',
+  /** Hasta 200 páginas por llamada. */
+  'cap',
+  /** El correo tiene que ser un correo (`email_invalid`). */
+  'email',
+  /** Algo que hacer, sin repetidas (`pages_invalid`). */
+  'pagesList',
+  /** Cada página es del proyecto. */
+  'project',
+  /** Cada página que se agrega está viva. */
+  'alive',
+  /** Quien llama puede compartir cada página. */
+  'sharePage',
+  /** Cada página que se agrega tiene la marca de escena. */
+  'mark',
+  /** Nada adentro marcado como otra escena, locación, día o decorado (`scene_contains_entities`). */
+  'entities',
+  /** Una escena que es ella misma carpeta de entidades no se comparte, aunque no tenga nada adentro. */
+  'entitiesSelf',
+  /** Todo o nada: valida todas antes de escribir. */
+  'allOrNothing',
+  /** Agregar no crea un permiso si ya lo ve con ese nivel o más (la comparación antes del upsert). */
+  'lowers',
+  /** El upsert no baja la fila (`where … revoked_at is not null or excluded > g.level`). */
+  'upsert',
+  /** A un miembro con una invitación viva para su correo, no (`invitation_exists`). */
+  'memberInvitation',
+  /** Sacar solo revoca Ver o Comentar. */
+  'removesHigher',
+  /** Sacar solo toca el permiso sobre esa página (no el del proyecto). */
+  'removesProject',
+  /** Sumar a una invitación viva solo si es propia. */
+  'inviteOwner',
+  /** Sumar a una invitación viva solo si es de invitado. */
+  'inviteRole',
+  /** Sacar de una invitación pendiente no se hace. */
+  'inviteRemove',
+  /** Hasta 200 permisos por invitación. */
+  'inviteCap',
+  /** `project_page_shares`: solo este proyecto. */
+  'listProject',
+  /** `project_page_shares`: de las invitaciones, solo páginas vivas. */
+  'listAlive',
+  /** `project_page_shares`: un permiso sobre una página en la papelera va con `in_trash`. */
+  'listTrash',
+  /** `pages_with_outside_readers`: solo quien puede compartir el proyecto. */
+  'readersCanShare',
+  /** `pages_with_outside_readers`: solo páginas de este proyecto. */
+  'readersProject',
+  /** `pages_with_outside_readers`: un invitado no (aunque haya creado el proyecto). */
+  'readersGuest',
+  /** `page_has_outside_readers`: solo quien edita la página y no es invitado. */
+  'hasEdit',
+  /** El trigger `pages_scene_share_guard` entero: nada marcado adentro de una escena compartida. */
+  'guard',
+  /** El trigger: la escena compartida no deja de ser escena, y una página que ven de afuera no pasa a escena con entidades. */
+  'guardUnmark',
+  /** El trigger: nada entra moviéndolo a una escena compartida desde afuera de ella (`moved_into_shared_scene`). */
+  'guardMove',
+] as const;
+export type SceneShareMutant = (typeof SCENE_SHARE_MUTANTS)[number];
+
+/** La marca de escena de la fila, como la mira la base (`settings -> 'entity' ->> 'kind' = 'scene'`). */
+function isSceneRow(page: PageRow): boolean {
+  const entity: unknown = (page.settings as Record<string, unknown> | undefined)?.entity;
+  return !!entity && typeof entity === 'object' && !Array.isArray(entity) && (entity as { kind?: unknown }).kind === 'scene';
+}
+
+/** `private.folder_marked`: una carpeta de entidades (`holds`, un texto no vacío, o `dayReports`, un objeto). */
+function isFolderMarked(settings: unknown): boolean {
+  const s = settings && typeof settings === 'object' ? (settings as Record<string, unknown>) : {};
+  const reports = s.dayReports;
+  return (typeof s.holds === 'string' && s.holds !== '') || (!!reports && typeof reports === 'object' && !Array.isArray(reports));
+}
+
+/** La marca de escena en los ajustes (`settings.entity.kind = 'scene'`). */
+function isSceneSettings(settings: unknown): boolean {
+  const entity = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).entity : undefined;
+  return !!entity && typeof entity === 'object' && !Array.isArray(entity) && (entity as { kind?: unknown }).kind === 'scene';
+}
+
+/** `private.entity_marked`: escena, locación, día o decorado (`settings.entity.kind`), o una carpeta de entidades. */
+function isEntityMarked(settings: unknown): boolean {
+  const s = settings && typeof settings === 'object' ? (settings as Record<string, unknown>) : {};
+  const entity = s.entity;
+  const kind = entity && typeof entity === 'object' && !Array.isArray(entity) ? (entity as { kind?: unknown }).kind : undefined;
+  return (typeof kind === 'string' && ['scene', 'location', 'day', 'set'].includes(kind)) || isFolderMarked(settings);
+}
+
 export class FakeServer {
   online = true;
   /** Guarda el próximo update pero hace como si la respuesta se hubiera perdido. */
@@ -247,6 +352,8 @@ export class FakeServer {
     used_at: string | null;
     invited_by?: string;
     revoked_at?: string | null;
+    /** Cuándo vence (`expires_at`); sin el dato, no vence. */
+    expires_at?: string;
     /** Quien entró con ella (para las menciones de un invitado, ME3). */
     used_by?: string;
   }[] = [];
@@ -965,6 +1072,34 @@ export class FakeServer {
   enableProjectColor(): void {
     this.enableProjectPurge();
     this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_COLOR_SCHEMA_VERSION) };
+  }
+
+  // --- Share scenes (20261118120000_compartir_escenas.sql, Docs/Doc_Compartir_Escenas.md) ---------------------------
+  /**
+   * Mutantes de *Share scenes* para las pruebas: cada nombre saca un chequeo de seguridad de las tres funciones, y alguna
+   * prueba de `src/ui/shareScenes.test.tsx` tiene que fallar con él (la lista, en `SCENE_SHARE_MUTANTS`).
+   */
+  readonly sceneShareMutants = new Set<SceneShareMutant>();
+  /**
+   * Los permisos que sacó *Share scenes* (como `unshare` en la base: la fila queda con `revoked_at`). Fuera de `grants`,
+   * que tiene solo los vivos; al volver a compartir, la fila vuelve con el mismo id.
+   */
+  readonly revokedGrants: (FakeServer['grants'][number] & { revoked_at: string; revoked_by: string })[] = [];
+
+  /** Prende *Share scenes*: la base en la versión 28. Llamarlo después de los otros `enable` (y de `enableClean`). */
+  enableSceneShares(): void {
+    this.settings = {
+      ...(this.settings ?? { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null }),
+      schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, SCENE_SHARES_SCHEMA_VERSION),
+    };
+  }
+
+  /** `private.user_can_share_page`: 4 sobre la página, miembro activo que no es invitado, y dueño o admin o creador. */
+  userCanSharePage(uid: string, pageId: string): boolean {
+    const role = this.role(uid);
+    const page = this.pages.get(pageId);
+    if (!role || role === 'guest' || !page) return false;
+    return this.pageLevel(uid, pageId) >= 4 && (role === 'owner' || role === 'admin' || this.projects.get(page.workspace_id)?.owner_id === uid);
   }
 
   /** Prende archivar y borrar proyectos: la base en la versión 9. */
@@ -1755,7 +1890,8 @@ export class FakeRemote
     HistoryRemote,
     NamedVersionsRemote,
     SnapshotsRemote,
-    FilesBySizeRemote
+    FilesBySizeRemote,
+    SceneSharesRemote
 {
   /** La sesión: por defecto, el dueño del workspace. */
   readonly userId: string;
@@ -2146,6 +2282,8 @@ export class FakeRemote
         if (cur === id) throw new RemoteError('page_cycle', true, '23514');
       }
     }
+    // `pages_scene_share_guard` (20261118120000_compartir_escenas.sql): nada marcado adentro de una escena compartida.
+    this.sceneShareGuard(page, patch);
     // La política de la versión mira la fila nueva, después de los triggers (como en la base).
     this.checkWriteVersion();
     checkPageLengths({ ...page, ...patch });
@@ -2914,6 +3052,296 @@ export class FakeRemote
       }
     }
     return rows;
+  }
+
+  // --- Share scenes: las reglas de 20261118120000_compartir_escenas.sql, con sus mutantes (`SCENE_SHARE_MUTANTS`) ---
+
+  private get sceneMutants(): Set<SceneShareMutant> {
+    return this.server.sceneShareMutants;
+  }
+
+  /** `project_page_shares` y `set_page_shares`: dueño o admin activo que puede compartir el proyecto. */
+  private sceneSharesAllowed(projectId: string): void {
+    const m = this.sceneMutants;
+    const role = this.server.role(this.userId);
+    const admin = role === 'owner' || role === 'admin';
+    if (!role || (!admin && !m.has('role')) || (!m.has('canShare') && !this.canShare({ projectId }))) throw this.denied('not_allowed');
+  }
+
+  /** `private.live_invitations`: sin usar, sin revocar, sin vencer y de un dueño o admin activo. */
+  private liveInvitations(email?: string): FakeServer['invitations'] {
+    const now = this.server.now();
+    return this.server.invitations.filter((i) => {
+      const by = this.server.role(i.invited_by ?? this.server.ownerId);
+      const alive = !i.expires_at || Date.parse(i.expires_at) > now;
+      return !i.used_at && !i.revoked_at && alive && (email === undefined || i.email === email) && (by === 'owner' || by === 'admin');
+    });
+  }
+
+  /** `private.page_outside_readers`: un permiso o una invitación de afuera puestos sobre esa misma página. */
+  private pageOutsideReaders(pageId: string): boolean {
+    for (const g of this.server.grants) {
+      if (g.page_id !== pageId) continue;
+      const role = this.server.role(g.user_id);
+      if (!role) continue;
+      const level = this.server.pageLevel(g.user_id, pageId);
+      if (role === 'guest' || (level >= 1 && level <= 2)) return true;
+    }
+    return this.liveInvitations().some(
+      (inv) => inv.grants.some((el) => 'page_id' in el && el.page_id === pageId && (inv.role === 'guest' || el.level === 'view' || el.level === 'comment')),
+    );
+  }
+
+  /** `private.chain_outside_readers`: la página o una de arriba (`onlyScenes`: solo las marcadas como escena). */
+  private chainOutsideReaders(pageId: string, onlyScenes: boolean): boolean {
+    const seen = new Set<string>();
+    for (let cur: string | null = pageId; cur && !seen.has(cur); cur = this.server.pages.get(cur)?.parent_id ?? null) {
+      seen.add(cur);
+      const page = this.server.pages.get(cur);
+      if (!page) return false;
+      if ((!onlyScenes || isSceneRow(page)) && this.pageOutsideReaders(cur)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * `private.branch_has_entities`: algo adentro (sin contarla a ella, también en la papelera) marcado, o cualquier cosa
+   * adentro si ella es una carpeta de entidades.
+   */
+  private branchHasEntities(pageId: string): boolean {
+    const folder = isFolderMarked(this.server.pages.get(pageId)?.settings);
+    const seen = new Set<string>([pageId]);
+    const stack = [pageId];
+    while (stack.length > 0) {
+      const parent = stack.pop()!;
+      for (const p of this.server.pages.values()) {
+        if (p.parent_id !== parent || seen.has(p.id)) continue;
+        if (folder || isEntityMarked(p.settings)) return true;
+        seen.add(p.id);
+        stack.push(p.id);
+      }
+    }
+    return false;
+  }
+
+  /** `private.nearest_shared_scene`: la escena compartida más cercana hacia arriba (ella incluida), o null. */
+  private nearestSharedScene(pageId: string | null): string | null {
+    const seen = new Set<string>();
+    for (let cur = pageId; cur && !seen.has(cur); cur = this.server.pages.get(cur)?.parent_id ?? null) {
+      seen.add(cur);
+      const page = this.server.pages.get(cur);
+      if (!page) return null;
+      if (isSceneRow(page) && this.pageOutsideReaders(cur)) return cur;
+    }
+    return null;
+  }
+
+  /** El trigger `pages_scene_share_guard`, al cambiar el padre o los ajustes de una página. */
+  private sceneShareGuard(page: PageRow, patch: PagePatch): void {
+    const m = this.sceneMutants;
+    if (m.has('guard')) return;
+    const parentId = patch.parent_id !== undefined ? patch.parent_id : page.parent_id;
+    const settings = patch.settings !== undefined ? patch.settings : page.settings;
+    const blocked = () => new RemoteError('entity_in_shared_scene', true, 'P0001');
+    // Moverla a una escena compartida: solo desde adentro de esa misma escena (la regla de los movimientos, D843).
+    if (parentId !== page.parent_id && parentId && !m.has('guardMove')) {
+      const dest = this.nearestSharedScene(parentId);
+      if (dest && dest !== this.nearestSharedScene(page.parent_id)) throw new RemoteError('moved_into_shared_scene', true, 'P0001');
+    }
+    if (patch.settings === undefined || JSON.stringify(patch.settings) === JSON.stringify(page.settings)) return;
+    const oldScene = isSceneSettings(page.settings);
+    const newScene = isSceneSettings(settings);
+    if (!m.has('guardUnmark')) {
+      if (oldScene && !newScene && this.pageOutsideReaders(page.id)) throw blocked();
+      if (newScene && !oldScene && this.pageOutsideReaders(page.id) && this.branchHasEntities(page.id)) throw blocked();
+    }
+    if (isFolderMarked(settings) && !isFolderMarked(page.settings) && this.chainOutsideReaders(page.id, true)) throw blocked();
+    if (parentId && isEntityMarked(settings) && !isEntityMarked(page.settings) && this.chainOutsideReaders(parentId, true)) throw blocked();
+  }
+
+  async projectPageShares(projectId: string): Promise<PageShareRow[]> {
+    this.server.check();
+    this.sceneSharesAllowed(projectId);
+    const m = this.sceneMutants;
+    const inProject = (pageId: string) =>
+      this.server.pages.has(pageId) && (m.has('listProject') || this.server.pages.get(pageId)!.workspace_id === projectId);
+    const rows: PageShareRow[] = [];
+    for (const g of this.server.grants) {
+      const member = this.server.members.get(g.user_id);
+      if (!member || member.removed_at) continue;
+      if (g.project_id !== projectId && !(g.page_id && inProject(g.page_id))) continue;
+      const trash = !!g.page_id && !m.has('listTrash') && !this.pageAlive(g.page_id);
+      rows.push({ row_key: `g:${g.id}`, email: member.email, user_id: g.user_id, role: member.role, page_id: g.page_id, level: g.level, grant_id: g.id, invitation_id: null, in_trash: trash });
+    }
+    for (const inv of this.liveInvitations()) {
+      for (const el of inv.grants) {
+        const pageId = 'page_id' in el ? el.page_id : null;
+        if (pageId === null ? !('project_id' in el && el.project_id === projectId) : !(inProject(pageId) && (m.has('listAlive') || this.pageAlive(pageId)))) continue;
+        rows.push({
+          row_key: `i:${inv.id}:${pageId ?? 'project'}`,
+          email: inv.email,
+          user_id: null,
+          role: inv.role,
+          page_id: pageId,
+          level: el.level,
+          grant_id: null,
+          invitation_id: inv.id,
+          in_trash: false,
+        });
+      }
+    }
+    return rows;
+  }
+
+  async setPageShares(projectId: string, email: string, add: string[], remove: string[], level: 'view' | 'comment'): Promise<PageSharesResult> {
+    this.server.check();
+    const m = this.sceneMutants;
+    const fail = (message: string, code = '22023') => new RemoteError(message, true, code);
+    this.sceneSharesAllowed(projectId);
+    if (!m.has('clean') && !this.server.cleanOn()) throw fail('clean_off', 'P0001');
+    if (!m.has('level') && level !== 'view' && level !== 'comment') throw fail('level_invalid');
+    const em = email.trim().toLowerCase();
+    if (!m.has('email') && (!/^[^@\s]+@[^@\s]+$/.test(em) || em.length > 320)) throw fail('email_invalid');
+    const all = [...add, ...remove];
+    if (!m.has('cap') && all.length > 200) throw fail('too_many_pages');
+    if (!m.has('pagesList') && (all.length === 0 || new Set(all).size !== all.length)) throw fail('pages_invalid');
+    // Sacar no pide que esté viva: así se saca un permiso que quedó en la papelera.
+    const valid = (pageId: string, adding: boolean): boolean => {
+      const page = this.server.pages.get(pageId);
+      if (!page) return false;
+      if (!m.has('project') && page.workspace_id !== projectId) return false;
+      if (!m.has('sharePage') && !this.server.userCanSharePage(this.userId, pageId)) return false;
+      if (!adding) return true;
+      if (!m.has('alive') && !this.pageAlive(pageId)) return false;
+      return m.has('mark') || isSceneRow(page);
+    };
+    // Todo o nada: cada página se valida antes de escribir. La mutante valida a medida que escribe (lo de antes queda).
+    const late = m.has('allOrNothing');
+    if (!late) {
+      for (const p of all) if (!valid(p, add.includes(p))) throw fail('page_invalid');
+      if (!m.has('entities') && add.some((p) => this.branchHasEntities(p))) throw fail('scene_contains_entities', 'P0001');
+      if (!m.has('entitiesSelf') && add.some((p) => isFolderMarked(this.server.pages.get(p)?.settings))) {
+        throw fail('scene_contains_entities', 'P0001');
+      }
+    }
+    const lateCheck = (p: string, adding: boolean) => {
+      if (late && !valid(p, adding)) throw fail('page_invalid');
+    };
+
+    const target = [...this.server.members].find(([, x]) => !x.removed_at && x.email.toLowerCase() === em)?.[0];
+    if (target) {
+      if (!m.has('memberInvitation') && this.liveInvitations(em).length > 0) throw fail('invitation_exists', 'P0001');
+      for (const p of add) {
+        lateCheck(p, true);
+        if (!m.has('lowers') && this.server.pageLevel(target, p) >= levelValue(level)) continue;
+        this.checkTeamWriteVersion();
+        // El upsert propio: una fila revocada vuelve (con el mismo id); una viva solo sube.
+        const live = this.server.grants.find((g) => g.user_id === target && g.page_id === p);
+        if (live) {
+          if (m.has('upsert') || levelValue(level) > levelValue(live.level)) Object.assign(live, { level, granted_by: this.userId });
+        } else {
+          const at = this.server.revokedGrants.findIndex((g) => g.user_id === target && g.page_id === p);
+          const id = at >= 0 ? this.server.revokedGrants.splice(at, 1)[0].id : crypto.randomUUID();
+          this.server.grants.push({ id, user_id: target, project_id: null, page_id: p, level, granted_by: this.userId });
+        }
+        this.server.cleanReset({ pageId: p });
+      }
+      for (const p of remove) {
+        lateCheck(p, false);
+        const projectOf = this.server.pages.get(p)?.workspace_id;
+        const grants = this.server.grants;
+        for (let i = grants.length - 1; i >= 0; i--) {
+          const g = grants[i];
+          if (g.user_id !== target) continue;
+          const here = g.page_id === p || (m.has('removesProject') && g.project_id === projectOf);
+          if (!here || (!m.has('removesHigher') && g.level !== 'view' && g.level !== 'comment')) continue;
+          this.checkTeamWriteVersion();
+          // Como `unshare`: la fila queda con `revoked_at`.
+          const [gone] = grants.splice(i, 1);
+          this.server.revokedGrants.push({ ...gone, revoked_at: new Date(this.server.now()).toISOString(), revoked_by: this.userId });
+        }
+      }
+      const pages = new Set(
+        this.server.grants
+          .filter((g) => g.user_id === target && g.page_id && this.server.pages.get(g.page_id)?.workspace_id === projectId && this.pageAlive(g.page_id))
+          .map((g) => g.page_id),
+      );
+      return { result: 'member', pages: pages.size };
+    }
+
+    // Alguien nuevo: una invitación de invitado, solo para agregar.
+    if (!m.has('inviteRemove') && remove.length > 0) throw fail('invitation_remove', 'P0001');
+    const live = this.liveInvitations(em)[0];
+    if (live) {
+      if (!m.has('inviteOwner') && (live.invited_by ?? this.server.ownerId) !== this.userId) throw fail('invitation_exists', 'P0001');
+      if (!m.has('inviteRole') && live.role !== 'guest') throw fail('invitation_role', 'P0001');
+    }
+    // Uno por página, el nivel más alto (`merge_invitation_grants`).
+    const merged = new Map<string, InvitationGrant>();
+    for (const g of [...(live?.grants ?? []), ...add.map((p) => ({ page_id: p, level }) as InvitationGrant)]) {
+      const key = 'page_id' in g ? `page:${g.page_id}` : `project:${g.project_id}`;
+      const had = merged.get(key);
+      if (!had || levelValue(g.level) > levelValue(had.level)) merged.set(key, g);
+    }
+    for (const p of remove) merged.delete(`page:${p}`);
+    if (!m.has('inviteCap') && merged.size > 200) throw fail('too_many_pages');
+    // Lo que vuelve a pedir `create_invitation`: 4 sobre cada página.
+    for (const p of add) {
+      lateCheck(p, true);
+      if (this.server.pageLevel(this.userId, p) < 4) throw this.denied('grant_not_allowed');
+    }
+    this.checkTeamWriteVersion();
+    for (const p of add) this.server.cleanReset({ pageId: p });
+    let inv = live;
+    if (inv) inv.grants = [...merged.values()];
+    else {
+      inv = {
+        id: crypto.randomUUID(),
+        email: em,
+        role: 'guest',
+        grants: [...merged.values()],
+        used_at: null,
+        invited_by: this.userId,
+        expires_at: new Date(this.server.now() + 30 * 86_400_000).toISOString(),
+      };
+      this.server.invitations.push(inv);
+    }
+    const pages = inv.grants.filter((g) => 'page_id' in g && this.server.pages.get(g.page_id)?.workspace_id === projectId && this.pageAlive(g.page_id));
+    return { result: 'invited', pages: pages.length };
+  }
+
+  async pagesWithOutsideReaders(projectId: string): Promise<Map<string, number>> {
+    this.server.check();
+    const m = this.sceneMutants;
+    const role = this.server.role(this.userId);
+    if (!role || (!m.has('readersGuest') && role === 'guest') || (!m.has('readersCanShare') && !this.canShare({ projectId }))) {
+      throw this.denied('not_allowed');
+    }
+    const inProject = (pageId: string) => m.has('readersProject') || this.server.pages.get(pageId)?.workspace_id === projectId;
+    const who = new Map<string, Set<string>>();
+    const note = (pageId: string, id: string) => who.set(pageId, (who.get(pageId) ?? new Set()).add(id));
+    for (const g of this.server.grants) {
+      if (!g.page_id || !this.server.pages.has(g.page_id) || !inProject(g.page_id)) continue;
+      const role = this.server.role(g.user_id);
+      if (!role) continue;
+      const level = this.server.pageLevel(g.user_id, g.page_id);
+      if (role === 'guest' || (level >= 1 && level <= 2)) note(g.page_id, `u:${g.user_id}`);
+    }
+    for (const inv of this.liveInvitations()) {
+      for (const el of inv.grants) {
+        if (!('page_id' in el) || !this.server.pages.has(el.page_id) || !inProject(el.page_id)) continue;
+        if (inv.role === 'guest' || el.level === 'view' || el.level === 'comment') note(el.page_id, `i:${inv.id}`);
+      }
+    }
+    return new Map([...who].filter(([pageId]) => this.pageAlive(pageId)).map(([pageId, ids]) => [pageId, ids.size]));
+  }
+
+  async pageHasOutsideReaders(pageId: string): Promise<boolean> {
+    this.server.check();
+    const role = this.server.role(this.userId);
+    if (!this.server.pages.has(pageId) || !role) return false;
+    if (!this.sceneMutants.has('hasEdit') && (role === 'guest' || this.server.pageLevel(this.userId, pageId) < 3)) return false;
+    return this.chainOutsideReaders(pageId, false);
   }
 
   /** `private.can_share`. */

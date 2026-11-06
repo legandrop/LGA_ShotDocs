@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useT } from '../i18n';
-import { usePermissions, useTree } from '../services';
+import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
+import { confirmOutsideMove, useOutsideReaders } from './outsideReaders';
 
 export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () => void }) {
   const tree = useTree();
   const perms = usePermissions();
+  const services = useServices();
   const [filter, setFilter] = useState('');
   const page = tree.get(pageId);
   const tr = useT();
+  // Lo que ven personas de afuera (Doc_Compartir_Escenas.md, condición 8): se pide al abrir, para la pregunta de abajo.
+  useOutsideReaders(page?.workspace_id);
 
   const options = useMemo(() => {
     const out: { page: PageRow; depth: number }[] = [];
@@ -36,6 +40,8 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
   const visible = needle ? allowed.filter((o) => o.page.title.toLowerCase().includes(needle)) : allowed;
 
   const moveTo = async (parentId: string | null) => {
+    // Adentro de lo que ven personas de afuera: pregunta antes (lo que entra, lo ven ellos).
+    if (!(await confirmOutsideMove(services, pageId, parentId))) return;
     await tree.move(pageId, parentId);
     onClose();
   };

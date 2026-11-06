@@ -234,6 +234,52 @@ describe('pantallas del equipo', () => {
     expect(server.meta(page).reset).toBe(server.pages.get(page)!.update_seq);
   });
 
+  it('Share: Retry y Share anyway mandan lo que muestra la ventana, y cambiar a quién o el nivel borra el aviso', async () => {
+    const { server, device, page, userId } = await teamDevice();
+    server.addMember('bea', 'member', 'bea@test');
+    server.addMember('ceci', 'member', 'ceci@test');
+    server.enableClean(0.001);
+    await device.engine.syncNow();
+    const upload = vi.spyOn(device.engine, 'uploadPagesFirst').mockResolvedValue(false);
+    const host = await mount(services(device, userId), <ShareDialog target={{ pageId: page }} onClose={() => undefined} />);
+    const pick = (level: string) => {
+      const select = host.querySelector('select[aria-label="Access"]') as HTMLSelectElement;
+      act(() => {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, level);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    };
+    const submit = async () =>
+      act(async () => {
+        (host.querySelector('form') as HTMLFormElement).requestSubmit();
+        await settled(50);
+      });
+    const warned = () => host.textContent!.includes('There are unsynced changes on these pages');
+    type(host.querySelector('input[type="email"]') as HTMLInputElement, 'bea@test');
+    pick('view');
+    await submit();
+    expect(warned()).toBe(true);
+    // Otra persona: el aviso (y su Share anyway, que compartiría con Bea) se va.
+    type(host.querySelector('input[type="email"]') as HTMLInputElement, 'ceci@test');
+    await act(async () => settled(20));
+    expect(warned()).toBe(false);
+    await submit();
+    expect(warned()).toBe(true);
+    pick('comment');
+    await act(async () => settled(20));
+    expect(warned()).toBe(false);
+    // Con el aviso de Ceci con Comentar a la vista, Retry manda eso.
+    await submit();
+    expect(warned()).toBe(true);
+    upload.mockResolvedValue(true);
+    await act(async () => {
+      [...host.querySelectorAll('button')].find((b) => b.textContent === 'Retry')!.click();
+      await settled(50);
+    });
+    expect(server.grants.find((g) => g.user_id === 'ceci')).toMatchObject({ page_id: page, level: 'comment' });
+    expect(server.grants.find((g) => g.user_id === 'bea')).toBeUndefined();
+  });
+
   it('la pantalla de sacado ofrece bajar lo pendiente y no borra nada hasta que se elige', async () => {
     const { server, device, page } = await teamDevice('ana');
     await device.docs.open(page).then((doc) => doc.getText('t').insert(0, 'x'));

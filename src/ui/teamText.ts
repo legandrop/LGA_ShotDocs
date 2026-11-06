@@ -29,6 +29,15 @@ const MESSAGES: Record<string, Key> = {
   request_not_found: 'teamError.requestNotFound',
   page_invalid: 'teamError.pageInvalid',
   decision_invalid: 'teamError.decisionInvalid',
+  // *Share scenes* (20261118120000_compartir_escenas.sql).
+  clean_off: 'teamError.cleanOff',
+  pages_invalid: 'teamError.pagesInvalid',
+  too_many_pages: 'teamError.tooManyPages',
+  invitation_remove: 'teamError.invitationRemove',
+  invitation_role: 'teamError.invitationRole',
+  scene_contains_entities: 'teamError.sceneContainsEntities',
+  entity_in_shared_scene: 'teamError.entityInSharedScene',
+  moved_into_shared_scene: 'teamError.movedIntoSharedScene',
   // La base frena compartir e invitar a una versión más vieja que la mínima del workspace.
   app_outdated: 'common.appOutdated',
 };

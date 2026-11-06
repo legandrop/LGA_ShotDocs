@@ -5363,6 +5363,58 @@ svg.sd-markup text {
   gap: 8px;
 }
 
+/* *Share scenes* (Doc_Compartir_Escenas.md): la lista de escenas con buscador, todas/ninguna y lo tocado resaltado. */
+.share-scenes-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.share-scenes-tools input {
+  flex: 1;
+  min-width: 0;
+}
+.share-scenes-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.share-scenes-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 5px 8px;
+}
+.share-scenes-list li.changed {
+  background: var(--hover);
+}
+.share-scenes-list label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.share-scenes-code {
+  flex: none;
+  min-width: 4.5em;
+}
+.share-scenes-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-scenes-note {
+  flex-basis: 100%;
+  padding-left: 26px;
+}
+
 .team-invite-row input {
   flex: 1;
   min-width: 0;
@@ -9042,6 +9094,18 @@ button.folder-row-main:hover {
 }
 .tree-row .tree-link.off {
   color: var(--warn);
+}
+/* Lo que ven personas de afuera (Doc_Compartir_Escenas.md): la página compartida en el color de aviso; lo de adentro,
+   más tenue. */
+.tree-row .tree-outside {
+  display: inline-flex;
+  align-self: center;
+  flex: none;
+  margin: 0 2px;
+  color: var(--warn);
+}
+.tree-row .tree-outside.inside {
+  color: var(--muted-2);
 }
 .link-aside-list {
   margin-top: 4px;

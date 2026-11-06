@@ -2792,3 +2792,46 @@ fotos no se tocan y salen los colores de los títulos (el texto ya dice «Sin VF
 plano de planta a la mitad, un storyboard o una foto histórica a un tercio; los colores adentro de las tablas y los
 links de Drive no se tocan; una plantilla de modelo y una tabla de Coda aplanada en títulos («Previs Ambulancia») quedan
 como están. Detalle en `Doc_Importar_Coda.md`, «Las demás páginas».
+
+### D843 · *Share scenes*: compartir escenas de un proyecto con un vendor, entrega B-1 (2026-11-06)
+**Pedido de Lega (2026-11-05):** *Share scenes of “<proyecto>”…*: elegir a una persona de un vendor y las escenas en las
+que trabaja; al entrar, que vea solo lo de esas escenas, con seguridad máxima (material con NDA). La propuesta pasó por
+una auditoría que la dividió en B-1 (esta, v0.323), B-2 (pedir una escena desde un link) y B-3 (prender D14).
+**Decidido sin Lega (lo puede cambiar):** (1) una escena compartida es **un permiso de Ver o Comentar sobre su página**,
+el de siempre: la RLS de lectura no cambia y lo de arriba y los costados no le llegan. (2) Nivel de fábrica Ver, se
+ofrece Comentar, nunca Editar. (3) **Solo el dueño y los admins** que pueden compartir el proyecto, aunque quien creó un
+proyecto lo comparta con *Share*. (4) **Una persona por guardado**, con *Same scenes for another email…*. (5) Alguien
+nuevo entra como **invitado**, con el link copiado; a su invitación pendiente solo se le suma (para sacar, se revoca y se
+vuelve a invitar). (6) **La base exige la marca de escena** en cada página que se agrega, y la app la escribe sola antes
+de compartir y espera a que suba (el vendor no ve la carpeta: sin la marca no tendría Panorama). (7) Agregar **nunca
+baja un nivel**; sacar revoca solo un Ver o Comentar sobre esa misma página. (8) **Frenado hasta prender D14**: la base
+rechaza con `clean_off` y la ventana lo dice. `share` y `create_invitation` no se tocaron: hoy *Share* de una página a
+un invitado tiene la misma fuga de lo borrado (para decidir con B-3). (9) La compuerta antes de compartir va **sin *Share
+anyway***. (10) **El ojo del árbol** en lo que ven personas de afuera (invitados, o Ver o Comentar) y en lo de adentro,
+solo para quien puede compartir el proyecto, con una pregunta al mover una página adentro y un aviso al crear. (11) Si
+una escena ya la ve otra persona de afuera, la ventana lo avisa y deja seguir (se ven comentarios y correos entre
+ellos): **lo decide Lega**. (12) Sin paso en los recorridos: es de dueño y admins y necesita la base y otra persona; va
+en la ayuda. (13) El vendor **no ve la locación ni los días** de sus escenas: es el límite dicho en la ayuda. **Después
+de las auditorías de la entrega (2026-11-06), también sin Lega:** (14) la base garantiza «solo esa escena»: no comparte
+una escena con otra entidad adentro (`scene_contains_entities`) y un trigger no deja crear, mover ni marcar adentro de
+una escena compartida una escena, locación, día, decorado o carpeta que los guarda; **solo frenan las escenas
+compartidas** (frenar en cualquier rama que ven de afuera rompería *Share* de una carpeta de locaciones con un cliente) y
+lo que ya estaba adentro se puede seguir cambiando. (15) La ventana es más estricta que la base: apaga también las
+escenas con algo que el registro reconoce como entidad o con título de escena (un episodio tomado por escena), sin
+opción para seguir. (16) Un miembro con una invitación pendiente para su mismo correo no recibe escenas hasta revocarla.
+(17) Lo compartido en la papelera se muestra aparte para poder sacarlo. (18) *Retry* manda siempre lo que muestra la
+ventana, y cambiar a quién, las escenas o el nivel borra el aviso, también en *Share*, *Members*, los pedidos de acceso
+y el link público. (19) Quien edita sin poder compartir el proyecto sabe solo sí o no (la página abierta y el destino al
+crear o mover), nunca quién ni cuántos. (20) Unir dos fichas pregunta como mover. (21) **Después de la
+re-verificación de la base:** la escena compartida no deja de ser escena (desmarcar, meter una locación y volver a
+marcar), y cuenta como entidad también lo que la app deduce sin marca: la carpeta de reportes del día y lo que sale de
+una carpeta de entidades (el padre o el abuelo), de forma más conservadora que la app (ante la duda, frena). *Share* e
+invitar desde *Members* sobre una escena siguen sin pasar por ese chequeo: para decidir con B-3. (22) **La regla de los
+movimientos (decisión del coordinador, después de la segunda re-verificación):** nada entra moviéndolo a una escena
+compartida desde afuera de ella, sea lo que sea, con marca o sin ella (`moved_into_shared_scene`: la escena compartida
+más cercana del destino tiene que ser la del origen); mover adentro de la misma o sacar algo, sí. Reemplaza a adivinar
+entidades por su carpeta al mover (que se esquivaba en dos pasos y frenaba fichas de más). Para meter algo: dejar de
+compartir, mover y volver a compartir, y ahí `scene_contains_entities` y la ventana lo vuelven a mirar; ese chequeo
+rechaza también una escena que es ella misma carpeta de entidades. La app dice «The scene … is shared with people outside
+the team. To move a page into it, stop sharing it first.» sin opción de seguir, también al unir fichas. Detalle,
+condiciones de las auditorías y lo pendiente: `Doc_Compartir_Escenas.md`.

@@ -1043,6 +1043,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Compartir ---
   { id: 'share', section: 'sharing', title: 'help.share.title', text: 'help.share.text', showMe: 'page-menu', since: BEFORE_HELP },
   { id: 'members', section: 'sharing', title: 'help.members.title', text: 'help.members.text', when: 'admin', since: BEFORE_HELP },
+  // *Share scenes* y la marca del árbol de lo que ven personas de afuera (Doc_Compartir_Escenas.md, B-1, D843).
+  {
+    id: 'shareScenes',
+    section: 'sharing',
+    title: 'help.shareScenes.title',
+    text: 'help.shareScenes.text',
+    words: ['vendor', 'escenas', 'scenes', 'share scenes', 'compartir escenas', 'guest', 'invitado', 'ojo', 'eye', 'afuera', 'outside', 'nda'],
+    // Sin `when`: el ojo y los avisos les llegan también a quienes solo editan.
+    since: '0.323',
+  },
   {
     id: 'publicLink',
     section: 'sharing',

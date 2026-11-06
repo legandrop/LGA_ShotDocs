@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.323 :
+
+Lega pidió compartir con un vendor solo las escenas en las que trabaja. Ahora el dueño y los admins tienen *Share
+scenes of “<proyecto>”…* (selector de proyectos y *Overview › Scenes*): una persona por vez, Ver o Comentar, y *Same
+scenes for another email…*. Cada escena es un permiso sobre su página: el vendor ve esa escena y sus fichas, nunca la
+locación, los días ni las carpetas de arriba. La base valida todo o nada, no comparte una escena con otra entidad adentro
+y un trigger no deja meterle una después (migración `20261118120000_compartir_escenas.sql`, base 28, prueba SQL; frenado
+hasta prender D14). Un ojo en el árbol marca lo que ven personas de afuera, también para quien solo edita, con aviso al
+mover, unir o crear adentro. *Retry* de compartir ya no repite el pedido anterior con otra persona (también en *Share*,
+*Members*, pedidos de acceso y link público). 30 mutantes, todos detectados. D843; `Doc_Compartir_Escenas.md`.
+[ Share scenes: compartir escenas de un proyecto con un vendor y el ojo del árbol en lo que ven personas de afuera ]
+
 v0.322 :
 
 Lega pidió que en una fila de fotos manden las alturas y no los anchos: con la limpieza de los reportes, cada foto quedó

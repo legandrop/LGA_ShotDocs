@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/teamDialogs';
 import { usePermissions, useServices, useTree } from '../services';
@@ -129,12 +129,20 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
     await submit(false);
   }
 
+  // *Retry* y *Share anyway* mandan el formulario de ese momento, y cambiar a quién, el rol o el nivel borra el aviso: era
+  // del pedido de antes (compartir con la persona equivocada; auditoría de Doc_Compartir_Escenas.md).
+  const latestSubmit = useRef(submit);
+  latestSubmit.current = submit;
+  useEffect(() => {
+    gate.clearBlocked();
+  }, [address, level, role]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** Comparte o invita; `anyway`: sin esperar a que suba lo pendiente (el aviso de shareGate.tsx). */
   async function submit(anyway: boolean) {
     if (!address) return;
     const reader = formReader;
-    const retry = () => void submit(false);
-    const skip = () => void submit(true);
+    const retry = () => void latestSubmit.current(false);
+    const skip = () => void latestSubmit.current(true);
     if (anyway) gate.clearBlocked();
     if (knownUser) {
       await run('add', async () => {

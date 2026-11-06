@@ -32,6 +32,10 @@ import { sceneStageRows, stagePageIds } from './sceneStageRows';
 import { SceneStages } from './SceneStages';
 import type { SceneMentionList } from './sceneMentions';
 import { kindReader } from './kind';
+import { SCENE_SHARES_SCHEMA_VERSION } from '../sync/remote';
+import { ShareIcon } from '../ui/icons';
+import { ShareScenesDialog } from '../ui/lazyDialogs';
+import { Part } from '../ui/lazyPart';
 import { LiveFixed, LiveHeader } from './LiveHeader';
 import './liveHeader.css';
 import './map.css';
@@ -181,6 +185,10 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   const snap = session.relations.snapshot(projectId);
   const [filter, setFilter] = useState('');
   useEffect(() => setFilter(''), [tab]);
+  // *Share scenes…* en la lista de escenas (Doc_Compartir_Escenas.md): dueño y admins que comparten el proyecto, base 28.
+  const [sharingScenes, setSharingScenes] = useState(false);
+  const syncStatus = useSyncStatus();
+  const canShareScenes = (syncStatus.schemaVersion ?? 0) >= SCENE_SHARES_SCHEMA_VERSION && perms.canInvite && perms.canShareProject(projectId);
   // Una escena abierta en *Scenes* (`/map/scenes?scene=105_027`, desde la sección *Scenes* de la barra lateral): la lista
   // de las páginas que hablan de ella (Docs/Doc_Relaciones.md, sección 21).
   const sceneQuery = useSearchParam('scene');
@@ -301,6 +309,12 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
                 <Ic name="code" small />
                 {tr('map.copyJson')}
               </button>
+              {tab === 'scenes' && !sceneCode && canShareScenes && (
+                <button className="mp-btn mp-share-scenes" onClick={() => setSharingScenes(true)}>
+                  <ShareIcon size={14} />
+                  {tr('map.shareScenes')}
+                </button>
+              )}
             </span>
             {tab !== 'pending' && !sceneCode && !entityId && (
               <label className="mp-filter">
@@ -331,6 +345,11 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
             <Pending data={data} complete={complete} partial={partial} session={session} snap={snap} projectId={projectId} onPlace={(p) => goToPlace(services, p)} />
           )}
         </>
+      )}
+      {sharingScenes && (
+        <Part onClose={() => setSharingScenes(false)}>
+          <ShareScenesDialog projectId={projectId} onClose={() => setSharingScenes(false)} />
+        </Part>
       )}
     </div>
   );

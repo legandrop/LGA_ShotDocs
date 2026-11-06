@@ -38,6 +38,99 @@ export const teamDialogs = {
     en: "Revoke the invitation for {email}? They can no longer join with it; nothing else changes.",
     es: "¿Revocar la invitación de {email}? Ya no va a poder entrar con ella; nada más cambia.",
   },
+  // *Share scenes* (Docs/Doc_Compartir_Escenas.md, B-1).
+  'scenes.share.label': { en: "Share scenes", es: "Compartir escenas" },
+  'scenes.share.title': { en: "Share scenes of “{name}”", es: "Compartir escenas de “{name}”" },
+  'scenes.share.lead': {
+    en: "Pick one person and the scenes they work on. They see those scenes and the pages inside them, in the sidebar and in the Overview: never the locations, the shoot days or the other scenes.",
+    es: "Elegí una persona y las escenas en las que trabaja. Ve esas escenas y las páginas de adentro, en la barra lateral y en el Panorama: nunca las locaciones, los días de rodaje ni las otras escenas.",
+  },
+  'scenes.share.limits': {
+    en: "What is written in a shared scene is seen too: the text of a link to another page, and the emails of whoever commented. If you take a scene away, what they already downloaded can stay on their device.",
+    es: "Lo que está escrito en una escena compartida también se ve: el texto de un link a otra página y los correos de quienes comentaron. Si le sacás una escena, lo que ya bajó puede quedar en su dispositivo.",
+  },
+  'scenes.share.cleanOff': {
+    en: "Sharing scenes needs the workspace setting that keeps deleted text out of shared pages, and it isn't on yet. Until then, nothing can be saved here.",
+    es: "Compartir escenas pide el ajuste del workspace que deja afuera de lo compartido lo que se borró, y todavía no está prendido. Hasta entonces, acá no se puede guardar nada.",
+  },
+  'scenes.share.emailPlaceholder': { en: "name@vendor.com or pick someone", es: "nombre@vendor.com o elegí a alguien" },
+  'scenes.share.suggestPages': {
+    en: { one: "{count} page in this project", other: "{count} pages in this project" },
+    es: { one: "{count} página en este proyecto", other: "{count} páginas en este proyecto" },
+  },
+  'scenes.share.suggestInvited': { en: "Invited, not joined yet", es: "Invitado, todavía no entró" },
+  'scenes.share.member': { en: "In the workspace · {role}", es: "En el workspace · {role}" },
+  'scenes.share.newPerson': {
+    en: "New to the workspace: invited as a guest with these scenes. The app copies the invitation link for you to send.",
+    es: "Es nuevo en el workspace: se lo invita como invitado con estas escenas. La app copia el link de la invitación para que lo mandes.",
+  },
+  'scenes.share.pending': {
+    en: "Has a pending invitation: you can add scenes. To take one away, revoke the invitation in Members and invite again.",
+    es: "Tiene una invitación pendiente: podés sumar escenas. Para sacarle una, revocá la invitación en Miembros y volvé a invitar.",
+  },
+  'scenes.share.wholeProject': {
+    en: "Already sees the whole project ({level}): sharing scenes doesn't change that. Change it in Share “{name}”.",
+    es: "Ya ve todo el proyecto ({level}): compartir escenas no lo cambia. Se cambia en Compartir “{name}”.",
+  },
+  'scenes.share.alsoHas': { en: "Also shared with them here: {list}", es: "Además tiene acá: {list}" },
+  'scenes.share.filter': { en: "Filter scenes", es: "Filtrar escenas" },
+  'scenes.share.all': { en: "All", es: "Todas" },
+  'scenes.share.none': { en: "None", es: "Ninguna" },
+  'scenes.share.list': { en: "Scenes", es: "Escenas" },
+  'scenes.share.noScenes': {
+    en: "This project has no scenes yet: pages in a scenes folder, or marked as a scene with Type.",
+    es: "Este proyecto todavía no tiene escenas: páginas en una carpeta de escenas, o marcadas como escena con Tipo.",
+  },
+  'scenes.share.noMatch': { en: "No scene matches.", es: "Ninguna escena coincide." },
+  'scenes.share.inside': {
+    en: { one: "{count} page inside", other: "{count} pages inside" },
+    es: { one: "{count} página adentro", other: "{count} páginas adentro" },
+  },
+  'scenes.share.blocked': {
+    en: "Can't be shared: it has another scene, a location, a day or a set inside (or a page named like a scene). Move that page out first.",
+    es: "No se puede compartir: tiene adentro otra escena, una locación, un día o un decorado (o una página con nombre de escena). Primero sacá esa página de ahí.",
+  },
+  'scenes.share.containsEntities': {
+    en: "One of the scenes has another scene, a location, a day or a set inside, so it can't be shared. Nothing was saved.",
+    es: "Una de las escenas tiene adentro otra escena, una locación, un día o un decorado, así que no se puede compartir. No se guardó nada.",
+  },
+  'scenes.share.trashLead': {
+    en: "Also shared, in the trash: untick to take it away.",
+    es: "También compartidas, en la papelera: desmarcalas para sacarlas.",
+  },
+  'scenes.share.memberInvitation': {
+    en: "This person is in the workspace but their email also has a pending invitation: accepting it would give back what you take away here. Revoke it in Members first.",
+    es: "Esta persona está en el workspace pero su correo tiene además una invitación pendiente: al aceptarla le volvería lo que le sacás acá. Revocala primero en Miembros.",
+  },
+  'scenes.share.trashList': { en: "Shared pages in the trash", es: "Páginas compartidas en la papelera" },
+  'scenes.share.inTrash': { en: "In trash · {level}", es: "En la papelera · {level}" },
+  'scenes.share.others': {
+    en: "Also seen from outside the team by {list}: they see each other's comments and emails",
+    es: "También la ven de afuera del equipo {list}: se ven los comentarios y los correos",
+  },
+  'scenes.share.higher': { en: "{level}: change it in Share", es: "{level}: se cambia en Compartir" },
+  'scenes.share.count': { en: "{checked} of {total} scenes", es: "{checked} de {total} escenas" },
+  'scenes.share.changes': { en: "+{add} −{remove}", es: "+{add} −{remove}" },
+  'scenes.share.tooMany': { en: "Up to 200 scenes at a time.", es: "Hasta 200 escenas por vez." },
+  'scenes.share.save': { en: "Save", es: "Guardar" },
+  'scenes.share.saving': { en: "Saving…", es: "Guardando…" },
+  'scenes.share.marksPending': {
+    en: "The scene marks couldn't be uploaded yet. Check the connection and try again.",
+    es: "Las marcas de escena todavía no se pudieron subir. Revisá la conexión y probá de nuevo.",
+  },
+  'scenes.share.pageInvalid': {
+    en: "One of the scenes can't be shared anymore (it moved, went to the trash, or isn't a scene). Close this and try again.",
+    es: "Una de las escenas ya no se puede compartir (se movió, fue a la papelera o ya no es una escena). Cerrá esto y probá de nuevo.",
+  },
+  'scenes.share.doneMember': {
+    en: { one: "Saved: {email} has {count} page of this project shared.", other: "Saved: {email} has {count} pages of this project shared." },
+    es: { one: "Guardado: {email} tiene {count} página de este proyecto compartida.", other: "Guardado: {email} tiene {count} páginas de este proyecto compartidas." },
+  },
+  'scenes.share.doneInvited': {
+    en: { one: "Invited {email} with {count} page of this project. Send them the link.", other: "Invited {email} with {count} pages of this project. Send them the link." },
+    es: { one: "Invitaste a {email} con {count} página de este proyecto. Mandale el link.", other: "Invitaste a {email} con {count} páginas de este proyecto. Mandale el link." },
+  },
+  'scenes.share.another': { en: "Same scenes for another email…", es: "Las mismas escenas para otro correo…" },
   'share.label': { en: "Share", es: "Compartir" },
   'share.deletedNow': {
     en: "Text and photos deleted from these pages can still reach the people you share them with.",

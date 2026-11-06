@@ -163,6 +163,56 @@ export interface InvitationRow {
 export type InvitationGrant = { project_id: string; level: GrantLevel } | { page_id: string; level: GrantLevel };
 
 /**
+ * Una fila de `project_page_shares` (*Share scenes*, 20261118120000_compartir_escenas.sql): un permiso vivo de un miembro
+ * activo (`grant_id`, `user_id`) o una página o el proyecto de una invitación viva (`invitation_id`). `page_id` nulo: el
+ * proyecto entero.
+ */
+export interface PageShareRow {
+  row_key: string;
+  email: string;
+  user_id: string | null;
+  role: Role;
+  page_id: string | null;
+  level: GrantLevel;
+  grant_id: string | null;
+  invitation_id: string | null;
+  /** Un permiso sobre una página en la papelera (ella o una de arriba): se muestra para poder sacarlo. */
+  in_trash: boolean;
+}
+
+/** Lo que devuelve `set_page_shares`: si era miembro o quedó invitado, y cuántas páginas del proyecto tiene compartidas. */
+export interface PageSharesResult {
+  result: 'member' | 'invited';
+  pages: number;
+}
+
+/** La versión de la base con *Share scenes* y la marca del árbol de lo que ven personas de afuera. */
+export const SCENE_SHARES_SCHEMA_VERSION = 28;
+
+/** Las funciones de *Share scenes* (Docs/Doc_Compartir_Escenas.md). Solo con red, como las demás del equipo. */
+export interface SceneSharesRemote {
+  /** Quién tiene qué en el proyecto (dueño o admin que puede compartirlo). */
+  projectPageShares(projectId: string): Promise<PageShareRow[]>;
+  /** Agrega y saca páginas de escena a una persona, todo o nada (ver la migración). */
+  setPageShares(projectId: string, email: string, add: string[], remove: string[], level: 'view' | 'comment'): Promise<PageSharesResult>;
+  /** Las páginas del proyecto que ven personas de afuera, con cuántas (quien puede compartir el proyecto). */
+  pagesWithOutsideReaders(projectId: string): Promise<Map<string, number>>;
+  /** Si a la página (o a una de arriba) la ven personas de afuera: solo sí o no, para quien la edita. */
+  pageHasOutsideReaders(pageId: string): Promise<boolean>;
+}
+
+/** La respuesta de `set_page_shares`, comprobada. */
+export function parsePageSharesResult(data: unknown): PageSharesResult {
+  const row = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+  const result = row?.result;
+  const pages = Number(row?.pages);
+  if ((result !== 'member' && result !== 'invited') || !Number.isInteger(pages) || pages < 0) {
+    throw new RemoteError(`set_page_shares: unexpected answer ${JSON.stringify(data)}`, true);
+  }
+  return { result, pages };
+}
+
+/**
  * Las funciones del equipo (supabase/migrations/20260930160000_equipo.sql). Solo con red: son la pantalla
  * de miembros y el diálogo de compartir, que muestran el error si no hay conexión.
  */
@@ -917,7 +967,7 @@ export function parseProjectSize(row: Record<string, unknown>): ProjectSizeRow {
 }
 
 export class SupabaseRemote
-  implements Remote, MediaRemote, TeamRemote, SizesRemote, TrashAllRemote, FilesBySizeRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote, SnapshotsRemote
+  implements Remote, MediaRemote, TeamRemote, SceneSharesRemote, SizesRemote, TrashAllRemote, FilesBySizeRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote, SnapshotsRemote
 {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
@@ -1889,6 +1939,36 @@ export class SupabaseRemote
     }, COUNTED));
     if (error) throw toRemoteError(error, status);
     return wholeList<AccessRow>(data, count);
+  }
+
+  // --- Share scenes (20261118120000_compartir_escenas.sql) ---
+
+  async projectPageShares(projectId: string): Promise<PageShareRow[]> {
+    // Enteras, por su clave única: un proyecto con muchos vendors puede pasar el tope de filas de la API.
+    return rpcByKey<PageShareRow>(this.client, 'project_page_shares', { p_project: projectId }, 'row_key');
+  }
+
+  async setPageShares(projectId: string, email: string, add: string[], remove: string[], level: 'view' | 'comment'): Promise<PageSharesResult> {
+    const { data, error, status } = await timed(this.client.rpc('set_page_shares', {
+      p_project: projectId,
+      p_email: email,
+      p_add: add,
+      p_remove: remove,
+      p_level: level,
+    }));
+    if (error) throw toRemoteError(error, status);
+    return parsePageSharesResult(data);
+  }
+
+  async pagesWithOutsideReaders(projectId: string): Promise<Map<string, number>> {
+    const rows = await rpcByKey<{ page_id: string; readers: number }>(this.client, 'pages_with_outside_readers', { p_project: projectId }, 'page_id');
+    return new Map(rows.filter((r) => typeof r.page_id === 'string').map((r) => [r.page_id, Number(r.readers) || 0]));
+  }
+
+  async pageHasOutsideReaders(pageId: string): Promise<boolean> {
+    const { data, error, status } = await timed(this.client.rpc('page_has_outside_readers', { p_page: pageId }));
+    if (error) throw toRemoteError(error, status);
+    return data === true;
   }
 
   /**

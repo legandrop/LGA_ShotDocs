@@ -75,6 +75,7 @@ import { disposeUndoTimeline } from './undoTimeline';
 import { useUndoTimelineKeys } from './undoTimelineUi';
 import { appLinkSource, setMediaLinkSource } from './mediaLinks';
 import { isAccessRoute, NoProjectsAccess, useNoProjectsAccess, type AccessRoute } from './NoProjectsRoute';
+import { noticeOutsideCreate } from './outsideReaders';
 
 // La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
 const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) => m.PracticeView));
@@ -597,7 +598,11 @@ export function Shell() {
           position={pageMenu.position}
           anchor={pageMenu.anchor}
           onClose={() => setPageMenu(null)}
-          onNewChild={async () => navigate(pagePath(await tree.create(pageId)))}
+          onNewChild={async () => {
+            navigate(pagePath(await tree.create(pageId)));
+            // Adentro de lo que ven personas de afuera, lo avisa (Doc_Compartir_Escenas.md, condición 8).
+            noticeOutsideCreate(services, pageId);
+          }}
           onRename={focusTitle}
           onMove={() => setMoving(pageId)}
           onFormat={() => setFormatting(pageId)}

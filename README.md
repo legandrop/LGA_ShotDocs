@@ -103,6 +103,9 @@ In development. What works today:
 - The team: the owner and admins manage people from the account menu (*Members*: invite with a link to
   send, change roles, remove), and projects and pages are shared from their menu (*Share…*) with view,
   comment, edit, or edit and create pages. What you cannot change shows read-only, also offline.
+  The owner and admins can also *Share scenes* of a project with a vendor: one person at a time, with view or
+  comment, they see only the scenes picked and the pages inside them (never the locations, shoot days, other
+  scenes or the folders above); an eye in the page tree marks what people outside the team can see.
 - Comments and questions: comment on any block (or the whole page) from a side panel, or a bottom sheet
   on the phone, with replies, resolve and edit, also offline; a *Question* paragraph is answered in its
   comment thread, so a guest with *Comment* can answer without editing the page. If you edit the same

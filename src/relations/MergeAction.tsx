@@ -15,6 +15,7 @@ import type { MergeDeps, MergeFailure, MergeJob, MergeOutcome } from './mergeJob
 import type { CopyPlan } from './mergeWrite';
 import { sceneLabel } from './reader';
 import { roleNames, twinLabels } from './twinNames';
+import { confirmOutsideMove } from '../ui/outsideReaders';
 import './merge.css';
 
 // *Merge…* (E16, alcance reducido; Docs/Doc_Relaciones.md, sección 20): el botón en *Map › Pending* y en la cabecera viva
@@ -227,6 +228,9 @@ export function MergeDialog({ pair, onClose }: { pair: MergePair; onClose: () =>
   })();
 
   const run = async () => {
+    // Lo que pasa a la que queda (texto y subpáginas) lo ven quienes la ven de afuera: pregunta antes, como al mover
+    // (Doc_Compartir_Escenas.md, condición 8).
+    if (!(await confirmOutsideMove(services, gone, kept, true))) return;
     setBusy(true);
     setWhy(null);
     try {

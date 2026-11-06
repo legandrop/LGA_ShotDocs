@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { locale, t, useT } from '../i18n';
 import '../i18n/lazy/teamDialogs';
 import { copyWhenReady, inviteLink } from '../invite';
@@ -113,6 +113,14 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
     await send(false);
   }
 
+  // *Retry* y *Share anyway* mandan el formulario de ese momento, y cambiar a quién, el rol o el nivel borra el aviso: era
+  // del pedido de antes (compartir con la persona equivocada; auditoría de Doc_Compartir_Escenas.md).
+  const latestSend = useRef(send);
+  latestSend.current = send;
+  useEffect(() => {
+    gate.clearBlocked();
+  }, [email, role, withProject, level]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** Invita; `anyway`: sin esperar a que suba lo pendiente (el aviso de shareGate.tsx). */
   async function send(anyway: boolean) {
     const address = email.trim().toLowerCase();
@@ -123,7 +131,7 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
     if (anyway) gate.clearBlocked();
     // Sin nada que espere antes del pedido del portapapeles: se pide en el mismo gesto (el link llega después).
     const copying = inviteAndCopy(
-      (anyway ? Promise.resolve(true) : gate.ready(scope, reader, () => void send(false), () => void send(true)))
+      (anyway ? Promise.resolve(true) : gate.ready(scope, reader, () => void latestSend.current(false), () => void latestSend.current(true)))
         .then((ok) => {
           if (!ok) throw UNSYNCED_BEFORE_SHARE;
           return remote.createInvitation(address, role, grants);
