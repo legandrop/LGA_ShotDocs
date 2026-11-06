@@ -192,6 +192,29 @@ describe('lector de escenas en una serie (S4, sección 6)', () => {
     ]);
   });
 
+  it('un rango con la forma de la post (v0.321): «Escena 5070-72» como «105_70-72»; una toma o una fecha no', () => {
+    const R = buildRegistry({
+      scenes: [...SERIES, '102_026', '103_047', '103_048', '103_049', '105_052'].map((code) => ({ code })),
+      locations: [],
+    });
+    expect(both(R, 'Escena 5070-72')).toEqual(['105_070 105_071 105_072', '105_070 105_071 105_072']);
+    expect(read(R, 'Escena 5070-72 plano 1', { heading: true })).toBe('105_070 105_071 105_072');
+    expect(read(R, '5070-72 plano 1', { heading: true })).toBe('105_070 105_071 105_072');
+    expect(both(R, 'Escena 3047-49 plano 4')).toEqual(['103_047 103_048 103_049', '103_047 103_048 103_049']);
+    // La de siempre, igual.
+    expect(both(R, 'Escena 105_70-72')).toEqual(['105_070 105_071 105_072', '105_070 105_071 105_072']);
+    // Una toma (escena, plano y toma) con la forma compacta o una fecha: nada.
+    for (const t of ['5052-01-03', 'Escena 5052-01-03', '2026-11-05', 'Escena 2026-11-05']) expect([t, both(R, t)]).toEqual([t, ['—', '—']]);
+    // La toma con la forma canónica se lee como su escena, como antes de v0.321; nunca como un rango.
+    expect(both(R, '105_52-01-03_A')).toEqual(['105_052', '105_052']);
+    // El rango marca las del medio como ocultas, igual que con la forma vieja.
+    expect(scan(R, 'Escena 5070-72').map((h) => [h.ref, !!h.hidden])).toEqual([
+      ['105_070', false],
+      ['105_071', true],
+      ['105_072', false],
+    ]);
+  });
+
   it('da las posiciones en el texto original', () => {
     const text = 'Ayer Escena 1074C y H1067.';
     for (const h of scan(series, text)) expect(text.slice(h.s, h.e)).toMatch(/^(1074C|H1067)$/);

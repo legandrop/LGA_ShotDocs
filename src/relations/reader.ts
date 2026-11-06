@@ -328,7 +328,10 @@ const RE_SHOT = /\b[A-Z]{2,6}_(\d{3})_(\d{1,3})([A-Za-z]?)(?=_|\b)(?:_\d{2,3})?/
 const CAMERA = 'IMG|DSC|DSCF|DSCN|DJI|MVI|GOPR|GP|PXL|VID|MOV|CIMG|SAM';
 const RE_POST_SHOT = new RegExp(`\\b(?!(?:${CAMERA})_)[A-Z]{2,6}_[hH]?([1-9])(\\d{3})(?!_\\d{2}_\\d{2}(?!\\d))([A-Za-z]?)(?:-[A-Za-z]+)?_\\d{2,4}(?=_|\\b)`, 'g');
 const RE_CAN = new RegExp(`(?<![\\w/=.:])(\\d{3})\\s?[-_]\\s?(\\d{1,3})${SUF}(?=_|\\b)`, 'g');
-const RE_CMP = new RegExp(`(?<![\\w./:=#-])[hH]?([1-9])(\\d{3})${SUF}(?=_|\\b)(?![.,]\\d|-\\d)`, 'g');
+// Un rango (`5070-72`, como `105_70-72`) sí; una toma (`5052-01-03`) o una fecha (`2026-11-05`) no: después del `-` y
+// sus cifras viene otro `-` (o `/`, `.`) con una cifra. Antes de v0.321 se descartaba todo `-` con cifra y un rango no
+// nombraba ninguna escena.
+const RE_CMP = new RegExp(`(?<![\\w./:=#-])[hH]?([1-9])(\\d{3})${SUF}(?=_|\\b)(?![.,]\\d|-\\d+[-/.]\\d|-\\d{4})`, 'g');
 const RE_ZERO = new RegExp(`(?<![\\w./:=#-])0([1-9])(\\d{2})${SUF}(?=_|\\b)`, 'g');
 const RE_SHORT = /(?<![\w/.:=-])[hH]?([1-9])-(\d{1,3})([A-Za-z]?)\b(?![-/.]\d)/g;
 const RE_EP = new RegExp(`${SCENE_WORD}(\\d{1,3})${SUF}(?=_|\\b)`, 'giu');

@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.321 :
+
+Con el renombre de ERSO a la forma de la post (D840), los títulos con un rango dejaron de nombrar escenas: «Escena
+5070-72», «Escena 5070-72 plano 1» y «Escena 3047-49 plano 4» (antes «105_70-72», que se leía como 070, 071 y 072), y
+11 fotos del Día 71 salieron de sus escenas. Causa: la forma compacta (`RE_CMP` en `reader.ts`) descartaba el número
+si le seguía `-` y una cifra, para no leer tomas ni fechas. Ahora acepta el rango y lo resuelve como la forma vieja;
+solo descarta si después viene otro `-`, `/` o `.` con cifra, o un número de 4 cifras (la toma `5052-01-03`, la fecha
+`2026-11-05`). La lupa, el `/`, el filtro del Panorama y `scene=` ganan el rango
+(«5070-72» da las tres escenas). Pruebas nuevas del lector. La ayuda y los recorridos no cambian.
+[ v0.321: Relaciones - los rangos con la forma de la post («Escena 5070-72») vuelven a nombrar sus escenas ]
+
 v0.320 :
 
 Lega pidió poder cambiar el color de los proyectos: todos tenían el mismo recuadro amarillo con dos letras. Ahora cada
