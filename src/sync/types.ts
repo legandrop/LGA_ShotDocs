@@ -144,6 +144,11 @@ export interface ProjectRow {
    * elegir (la app usa uno de su paleta según el id, `projectColor` de ui/projectColor.ts).
    */
   color?: string | null;
+  /**
+   * Si es favorito de la persona (la estrella del selector, `project_favorites`, versión 30 de la base): los favoritos
+   * se listan primero. Ausente: no (o una base anterior).
+   */
+  favorite?: boolean;
 }
 
 /** Una fila de `trashed_projects` (P.14): un proyecto en la papelera de proyectos que la sesión veía. */

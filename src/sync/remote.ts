@@ -56,6 +56,8 @@ export interface Remote {
   renameProject(id: string, name: string): Promise<void>;
   /** El color del proyecto (`workspaces.color`, versión 27). Idempotente. */
   colorProject(id: string, color: string | null): Promise<void>;
+  /** Marca o desmarca un proyecto como favorito de la sesión (`project_favorites`, versión 30). Idempotente. */
+  favoriteProject(id: string, favorite: boolean): Promise<void>;
   /** Idempotente: si la página ya existe no hace nada. */
   createPage(page: NewPage): Promise<void>;
   /**
@@ -360,6 +362,8 @@ export const SNAPSHOT_SCHEMA_VERSION = 17;
 export const CHANGED_AT_SCHEMA_VERSION = 26;
 /** La versión con el color de los proyectos (20261117120000_proyecto_color.sql): `workspaces.color`. */
 export const PROJECT_COLOR_SCHEMA_VERSION = 27;
+/** Los proyectos favoritos de cada persona (`project_favorites`, Docs/Doc_Navegacion.md, «Proyectos favoritos»). */
+export const PROJECT_FAVORITES_SCHEMA_VERSION = 30;
 /** Cada cuánto se baja igual la lista entera del árbol, aunque no haya ninguna señal de que haga falta. */
 export const TREE_WHOLE_EVERY_MS = 30 * 60_000;
 /** Cada cuánto se compara el total de páginas que la sesión ve con la copia (lo que entra o sale de lo compartido). */
@@ -680,6 +684,8 @@ const UNDEFINED_COLUMN = '42703';
 // La tabla o la función todavía no existen en la base (falta aplicar una migración).
 const MISSING_TABLE = new Set(['42P01', 'PGRST205']);
 const MISSING_FUNCTION = 'PGRST202';
+// PostgREST no encuentra la relación de un embebido (la tabla no existe todavía).
+const MISSING_RELATIONSHIP = 'PGRST200';
 
 /** De a cuántas filas se pide `trashed_files_all` a una base sin `trashed_files_page` (la API puede entregar menos). */
 export const TRASH_ALL_PAGE = 1000;
@@ -982,6 +988,7 @@ export class SupabaseRemote
   private driveColumnsMissingAt = 0;
   /** Lo mismo con `workspaces.color` (versión 27). */
   private colorMissingAt = 0;
+  private favoritesMissingAt = 0;
 
   /** Desde cuándo la base no tiene `workspace_settings` (o la subida con versión); se reintenta cada tanto. */
   private settingsTableMissingAt = 0;
@@ -1260,11 +1267,15 @@ export class SupabaseRemote
     // Y el color (versión 27): si falta, se deja primero él.
     const color =
       (schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION && Date.now() - this.colorMissingAt >= 10 * 60_000;
+    // Los favoritos de la sesión (versión 30), embebidos: la RLS de `project_favorites` deja ver solo los propios.
+    const favorites =
+      (schemaVersion ?? 0) >= PROJECT_FAVORITES_SCHEMA_VERSION && Date.now() - this.favoritesMissingAt >= 10 * 60_000;
     const columns = [
       'id, name, created_at, owner_id',
       ...(archived ? ['archived_at'] : []),
       ...(drive ? ['drive_trash_requested_at, drive_missing_at'] : []),
       ...(color ? ['color'] : []),
+      ...(favorites ? ['favorites:project_favorites(project_id)'] : []),
     ];
     // Por fecha de creación (el orden de la lista) y, a igual fecha, por id: cada pedido sigue al último proyecto
     // recibido, hasta el total que dice la API. Una lista de proyectos cortada dejaría sin bajar las páginas de los
@@ -1274,6 +1285,11 @@ export class SupabaseRemote
       let query = this.client.from('workspaces').select(columns.join(', '), COUNTED);
       if (list.last) query = query.or(afterPair('created_at', list.last.created_at, 'id', list.last.id));
       const { data, error, status, count } = await timed(query.order('created_at').order('id').limit(MAX_ROWS_PER_REQUEST));
+      // Sin la tabla (la versión dice 30 pero la migración no está): PostgREST no encuentra la relación.
+      if (favorites && (error?.code === MISSING_RELATIONSHIP || MISSING_TABLE.has(String(error?.code)))) {
+        this.favoritesMissingAt = Date.now();
+        return this.fetchProjects(schemaVersion);
+      }
       if (color && error?.code === UNDEFINED_COLUMN) {
         this.colorMissingAt = Date.now();
         return this.fetchProjects(schemaVersion);
@@ -1287,7 +1303,10 @@ export class SupabaseRemote
         return this.fetchProjects(schemaVersion);
       }
       if (error) throw toRemoteError(error, status);
-      if (list.add((data ?? []) as unknown as ProjectRow[], count)) return list.rows;
+      const rows = ((data ?? []) as unknown as (ProjectRow & { favorites?: unknown })[]).map(({ favorites: marks, ...p }) =>
+        favorites ? { ...p, favorite: Array.isArray(marks) && marks.length > 0 } : p,
+      );
+      if (list.add(rows, count)) return list.rows;
     }
   }
 
@@ -1350,6 +1369,16 @@ export class SupabaseRemote
     );
     if (error) throw toRemoteError(error, status);
     if (data.length === 0) throw new RemoteError('project_not_found', true, 'P0002');
+  }
+
+  async favoriteProject(id: string, favorite: boolean): Promise<void> {
+    // `user_id` lo pone la base (`auth.uid()`); la RLS solo deja tocar las filas propias.
+    const { error, status } = await timed(
+      favorite
+        ? this.client.from('project_favorites').upsert({ project_id: id }, { onConflict: 'user_id,project_id', ignoreDuplicates: true })
+        : this.client.from('project_favorites').delete().eq('project_id', id),
+    );
+    if (error) throw toRemoteError(error, status);
   }
 
   async createPage(page: NewPage): Promise<void> {

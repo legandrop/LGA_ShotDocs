@@ -16,6 +16,8 @@ export function compareSiblings(a: PageRow, b: PageRow): number {
 const PROJECTS_KEY = 'projects';
 /** Los colores de proyecto elegidos en el dispositivo que todavía no subieron (`{ id: color }`). */
 const PROJECT_COLORS_KEY = 'projectColorsPending';
+/** Los favoritos marcados o desmarcados en el dispositivo que todavía no subieron (`{ id: favorito }`). */
+const PROJECT_FAVORITES_KEY = 'projectFavoritesPending';
 /** El primer proyecto del dispositivo (`services.ts`): se reemplaza si el servidor deja de mandarlo (P.14). */
 const PRIMARY_KEY = 'workspaceId';
 /**
@@ -238,6 +240,7 @@ export class PageTree {
   private projectSnapshot = new Map<string, ProjectRow>();
   private projectView = new Map<string, ProjectRow>();
   private pendingColors = new Map<string, string | null>();
+  private pendingFavorites = new Map<string, boolean>();
   private writing = 0;
   private statsCache: Map<string, { pages: number; updatedAt: string | null }> | null = null;
   private ops: QueuedOp[] = [];
@@ -296,7 +299,7 @@ export class PageTree {
   }
 
   async load(): Promise<void> {
-    const [rows, ops, failed, projects, fresh, rests, colors] = await Promise.all([
+    const [rows, ops, failed, projects, fresh, rests, colors, favorites] = await Promise.all([
       this.db.getAll('pages'),
       this.db.getAll('ops'),
       this.db.getAll('failedOps'),
@@ -304,7 +307,13 @@ export class PageTree {
       this.db.get('meta', FRESH_KEY).catch(() => undefined),
       this.db.get('meta', TITLE_REST_KEY) as Promise<TitleRest[] | undefined>,
       this.db.get('meta', PROJECT_COLORS_KEY).catch(() => undefined),
+      this.db.get('meta', PROJECT_FAVORITES_KEY).catch(() => undefined),
     ]);
+    this.pendingFavorites = new Map(
+      favorites && typeof favorites === 'object' && !Array.isArray(favorites)
+        ? Object.entries(favorites as Record<string, unknown>).flatMap(([id, f]): [string, boolean][] => (typeof f === 'boolean' ? [[id, f]] : []))
+        : [],
+    );
     this.pendingColors = new Map(
       colors && typeof colors === 'object' && !Array.isArray(colors)
         ? Object.entries(colors as Record<string, unknown>).flatMap(([id, c]): [string, string | null][] =>
@@ -652,6 +661,44 @@ export class PageTree {
     const current = this.projectSnapshot.get(id);
     if (ok && current) {
       this.projectSnapshot.set(id, { ...current, color });
+      await tx.objectStore('meta').put([...this.projectSnapshot.values()], PROJECTS_KEY);
+    }
+    await tx.done;
+    this.recompute();
+  }
+
+  /**
+   * Marca o desmarca un proyecto como favorito de la persona (la estrella del selector; Docs/Doc_Navegacion.md,
+   * «Proyectos favoritos»). Como el color: anda sin red, queda pendiente en una clave aparte de `meta` (no en la cola
+   * del árbol) y sube en la próxima vuelta (`SyncEngine.pushProjectFavorites`).
+   */
+  async favoriteProject(id: string, favorite: boolean): Promise<void> {
+    if (!!this.projectView.get(id)?.favorite === favorite && !this.pendingFavorites.has(id)) return;
+    // Siempre queda pendiente, aunque vuelva a lo que dice el servidor: puede haber otro valor viajando (marcar y
+    // desmarcar rápido), y solo `settleProjectFavorite` lo saca. Mandar lo que ya está en la base no hace nada.
+    this.pendingFavorites.set(id, favorite);
+    await this.db.put('meta', Object.fromEntries(this.pendingFavorites), PROJECT_FAVORITES_KEY);
+    this.recompute();
+    this.onQueued?.();
+  }
+
+  /** Los favoritos que esperan subir, en el orden en que se marcaron. */
+  pendingProjectFavorites(): { id: string; favorite: boolean }[] {
+    return [...this.pendingFavorites].map(([id, favorite]) => ({ id, favorite }));
+  }
+
+  /**
+   * El servidor confirmó el favorito (`ok`) o lo rechazó para siempre (`ok` falso: se descarta, es una preferencia, no
+   * contenido). Si mientras subía se cambió de nuevo, el cambio nuevo sigue pendiente.
+   */
+  async settleProjectFavorite(id: string, favorite: boolean, ok: boolean): Promise<void> {
+    if (this.pendingFavorites.get(id) !== favorite) return;
+    this.pendingFavorites.delete(id);
+    const tx = this.db.transaction(['meta'], 'readwrite');
+    await tx.objectStore('meta').put(Object.fromEntries(this.pendingFavorites), PROJECT_FAVORITES_KEY);
+    const current = this.projectSnapshot.get(id);
+    if (ok && current) {
+      this.projectSnapshot.set(id, { ...current, favorite });
       await tx.objectStore('meta').put([...this.projectSnapshot.values()], PROJECTS_KEY);
     }
     await tx.done;
@@ -1271,6 +1318,11 @@ export class PageTree {
     for (const [id, color] of this.pendingColors) {
       const current = projects.get(id);
       if (current) projects.set(id, { ...current, color });
+    }
+    // Lo mismo con los favoritos que esperan subir (`favoriteProject`).
+    for (const [id, favorite] of this.pendingFavorites) {
+      const current = projects.get(id);
+      if (current) projects.set(id, { ...current, favorite });
     }
     // El primer proyecto está aunque el dispositivo todavía no haya bajado nunca la lista (la primera vez sin
     // red). Con la lista conocida, no: si el servidor no lo trae (lo borraron, P.14), se reemplaza.

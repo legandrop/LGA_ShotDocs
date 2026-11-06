@@ -96,7 +96,7 @@ del navegador y la página no los recibe; ahí se usan sus pestañas (sección s
   ventana; si ninguno la tiene (se llegó con un link), va uno nuevo al principio.
 - Un link a otro workspace o con la autoridad de un link público no se abre en un tab (`appPath`): se abre como siempre.
 
-## Proyectos favoritos (v0.327)
+## Proyectos favoritos (v0.327; sincronizados desde la v0.328)
 
 Pedido de Lega (2026-11-06): una estrella en cada renglón del selector de proyectos para marcarlo como favorito; los
 favoritos se listan antes que los demás.
@@ -106,9 +106,20 @@ favoritos se listan antes que los demás.
   íconos (mouse, foco o renglón de las flechas). En el teléfono, siempre (fuera del ⋯: es un toque).
 - **El orden:** `favoritesFirst` pone los favoritos primero y deja el orden de siempre dentro de cada grupo. Vale también
   con una búsqueda escrita y en la lista de archivados. Las flechas y Enter siguen el orden que se ve.
-- **Dónde se guarda:** en este dispositivo (`localStorage`, clave `<proyecto elegido del workspace>-favorites`, por
-  usuario; `src/ui/projectFavorites.ts`), como lo colapsado «solo para vos». No se sincroniza entre dispositivos: si
-  hiciera falta, iría a una tabla por persona en la base. Quitar el workspace del dispositivo lo olvida.
+- **Dónde se guarda (v0.328, pedido de Lega del mismo día):** en la base, `project_favorites` (una fila por persona y
+  proyecto; migración `20261120120000_proyectos_favoritos.sql`, versión 30 de la base). Cada persona ve, marca y
+  desmarca solo las suyas, y solo marca un proyecto que ve; una sesión con contraseña y un anónimo no tocan nada. Si se
+  borra la fila del proyecto o del usuario, se borran sus filas; *Delete forever* no la borra (pone `purged_at`) y las
+  filas quedan sin efecto, como las de un proyecto que la persona dejó de ver. Prueba: `supabase/tests/proyectos_favoritos_permisos.sql`.
+- **Cómo viaja:** llega con la lista de proyectos (`fetchProjects` pide `favorites:project_favorites(project_id)`
+  embebido; la RLS deja solo las propias) como `ProjectRow.favorite`. Marcar anda sin red: `PageTree.favoriteProject`
+  lo deja pendiente en una clave aparte de `meta` (`projectFavoritesPending`, no en la cola del árbol, como el color;
+  siempre queda pendiente hasta que el servidor confirma, aunque vuelva al valor de antes, por si otro viaja) y
+  `SyncEngine.pushProjectFavorites` lo sube después de los colores. Cuenta en los cambios sin subir. Con una base
+  anterior a la 30 (o sin la tabla) espera; un rechazo para siempre (el proyecto ya no está o no se ve) lo descarta.
+- **Lo de la v0.327:** esa versión los guardaba solo en el dispositivo (`localStorage`, clave
+  `<proyecto elegido del workspace>-favorites`). Al abrir el selector, `adoptDeviceFavorites` los pasa a la base y borra
+  la clave; quitar el workspace del dispositivo también la borra.
 
 ## Color del proyecto (v0.320, D841)
 

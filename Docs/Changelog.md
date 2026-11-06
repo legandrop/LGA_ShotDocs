@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.328 :
+
+Lega pidió que los proyectos favoritos de la v0.327 se sincronicen entre sus dispositivos: la v0.327 los guardaba solo
+en el dispositivo. Ahora van a la base, en `project_favorites` (migración `20261120120000_proyectos_favoritos.sql`,
+versión 30): una fila por persona y proyecto, cada uno ve y toca solo las suyas y solo marca un proyecto que ve. Llegan
+con la lista de proyectos (embebidos en el pedido de cada minuto, sin pedidos nuevos) y se marcan sin red: quedan
+pendientes aparte de la cola del árbol, como el color, y suben en la vuelta siguiente. Lo que la v0.327 guardó en el
+dispositivo se pasa a la base al abrir el selector. Una app anterior no pide la tabla y sigue igual. Pruebas:
+`src/sync/projectFavorites.test.ts`, la del selector y `supabase/tests/proyectos_favoritos_permisos.sql` (pasó contra
+la base real en rollback antes de aplicarla). [ v0.328: Proyectos favoritos sincronizados - la estrella se guarda en la base y sigue a la persona en todos sus dispositivos ]
+
 v0.327 :
 
 Lega pidió poder marcar proyectos como favoritos y que se listen primero. Cada renglón del selector de proyectos tiene

@@ -212,8 +212,8 @@ export const help = {
   },
   'help.projectsFavorites.title': { en: "Favorite projects", es: "Proyectos favoritos" },
   'help.projectsFavorites.text': {
-    en: "In the project list, hover a project and click its star (on a phone the star is always there) to make it a favorite: favorites are listed before the other projects, and their star stays on. Click it again to remove it. Favorites are yours and are kept on this device.",
-    es: "En la lista de proyectos, pasá por un proyecto y tocá su estrella (en el teléfono, la estrella está siempre) para marcarlo como favorito: los favoritos se listan antes que los demás proyectos y su estrella queda a la vista. Tocala de nuevo para quitarlo. Los favoritos son tuyos y se guardan en este dispositivo.",
+    en: "In the project list, hover a project and click its star (on a phone the star is always there) to make it a favorite: favorites are listed before the other projects, and their star stays on. Click it again to remove it. Favorites are yours: nobody else sees them, and they follow you to your other devices.",
+    es: "En la lista de proyectos, pasá por un proyecto y tocá su estrella (en el teléfono, la estrella está siempre) para marcarlo como favorito: los favoritos se listan antes que los demás proyectos y su estrella queda a la vista. Tocala de nuevo para quitarlo. Los favoritos son tuyos: nadie más los ve, y te siguen a tus otros dispositivos.",
   },
   'help.projectsColor.title': { en: "Project colors", es: "El color de cada proyecto" },
   'help.projectsColor.text': {

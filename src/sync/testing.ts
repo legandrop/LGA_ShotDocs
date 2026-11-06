@@ -15,6 +15,7 @@ import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
 import {
   PROJECT_COLOR_SCHEMA_VERSION,
+  PROJECT_FAVORITES_SCHEMA_VERSION,
   PROJECT_DRIVE_SCHEMA_VERSION,
   PROJECT_PURGE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
@@ -1158,6 +1159,15 @@ export class FakeServer {
     this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_PURGE_SCHEMA_VERSION) };
   }
 
+  /** Los favoritos de cada usuario (`project_favorites`): `usuario|proyecto`. */
+  readonly favorites = new Set<string>();
+
+  /** Prende los favoritos: la base en la versión 30 (`project_favorites`). */
+  enableProjectFavorites(): void {
+    this.enableProjectColor();
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_FAVORITES_SCHEMA_VERSION) };
+  }
+
   /** Prende el color de los proyectos: la base en la versión 27 (`workspaces.color`). */
   enableProjectColor(): void {
     this.enableProjectPurge();
@@ -2111,6 +2121,10 @@ export class FakeRemote
     // El color, con la 27.
     const withColor =
       (schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION;
+    // Los favoritos de la sesión, con la 30.
+    const withFavorites =
+      (schemaVersion ?? 0) >= PROJECT_FAVORITES_SCHEMA_VERSION &&
+      (this.server.settings?.schemaVersion ?? 0) >= PROJECT_FAVORITES_SCHEMA_VERSION;
     return [...this.server.projects.values()]
       .filter((p) => !this.server.projectDeleted(p.id))
       .filter((p) => !this.team || this.server.canViewProject(this.userId, p.id))
@@ -2119,6 +2133,7 @@ export class FakeRemote
         return {
           ...p,
           ...(withColor ? { color: color ?? null } : {}),
+          ...(withFavorites ? { favorite: this.server.favorites.has(`${this.userId}|${p.id}`) } : {}),
           ...(withArchived ? { archived_at: archived_at ?? null } : {}),
           ...(withDrive ? { drive_trash_requested_at: d?.requested_at ?? null, drive_missing_at: d?.missing_at ?? null } : {}),
         };
@@ -2309,6 +2324,20 @@ export class FakeRemote
       throw new RemoteError('new row for relation "workspaces" violates check constraint "workspaces_color_hex"', true, '23514');
     }
     this.server.projects.set(id, { ...project, color });
+  }
+
+  async favoriteProject(id: string, favorite: boolean): Promise<void> {
+    this.server.check();
+    const key = `${this.userId}|${id}`;
+    if (!favorite) {
+      this.server.favorites.delete(key);
+      return;
+    }
+    // Como la política de la base: solo un proyecto que la sesión ve (y que existe).
+    if (!this.server.projects.has(id) || this.server.projectDeleted(id) || (this.team && !this.server.canViewProject(this.userId, id))) {
+      throw new RemoteError('new row violates row-level security policy for table "project_favorites"', true, '42501');
+    }
+    this.server.favorites.add(key);
   }
 
   async createPage(page: NewPage): Promise<void> {

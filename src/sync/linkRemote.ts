@@ -551,6 +551,10 @@ export class LinkRemote extends SupabaseRemote {
     return readOnly();
   }
 
+  override async favoriteProject(): Promise<void> {
+    return readOnly();
+  }
+
   /** Ni archivar, borrar, restaurar o borrar para siempre un proyecto: el pedido no sale. */
   override async setProjectArchived(): Promise<never> {
     return readOnly();

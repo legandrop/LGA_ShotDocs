@@ -11,10 +11,10 @@ import { epochBehind, type PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { canAdmit, LINK_EDIT_SCHEMA_VERSION, LinkAdmission } from './linkAdmit';
 import { hasUnsyncedContent, type DocState } from './localDb';
-import { APP_OUTDATED, PROJECT_COLOR_SCHEMA_VERSION, SNAPSHOT_SCHEMA_VERSION, type Remote } from './remote';
+import { APP_OUTDATED, PROJECT_COLOR_SCHEMA_VERSION, PROJECT_FAVORITES_SCHEMA_VERSION, SNAPSHOT_SCHEMA_VERSION, type Remote } from './remote';
 import { AUTHOR_MISSING } from './types';
 import type { PageTree } from './tree';
-import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type ProjectRow, type QueuedOp, type WorkspaceSettings } from './types';
+import { errorMessage, isNetworkError, isPermanent, isTimeout, RemoteError, REQUEST_TIMEOUT, type ProjectRow, type QueuedOp, type WorkspaceSettings } from './types';
 
 export interface SyncStatus {
   /** El último intento de hablar con el servidor tuvo respuesta (aunque fuera un error). */
@@ -754,6 +754,8 @@ export class SyncEngine {
       halt();
       if (!outdated && (await this.pushProjectColors()) > 0) lists = true;
       halt();
+      if (!outdated && (await this.pushProjectFavorites()) > 0) lists = true;
+      halt();
       // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
       // `listsForced` también puede prenderse en `checkWorkspace` (cambió la versión de la base: otras columnas).
       lists ||= this.listsForced || this.projectsCache === null;
@@ -1266,6 +1268,36 @@ export class SyncEngine {
     return sent;
   }
 
+  /**
+   * Los favoritos marcados en el dispositivo (`PageTree.favoriteProject`), como los colores: con una base anterior a la
+   * 30 esperan, un proyecto creado acá espera a existir en el servidor, y un rechazo para siempre lo descarta.
+   */
+  private async pushProjectFavorites(): Promise<number> {
+    if ((this.status.schemaVersion ?? 0) < PROJECT_FAVORITES_SCHEMA_VERSION) return 0;
+    let sent = 0;
+    for (const { id, favorite } of this.tree.pendingProjectFavorites()) {
+      if (this.stopped) return sent;
+      if (this.tree.isLocalProject(id)) continue;
+      sent++;
+      try {
+        await this.remote.favoriteProject(id, favorite);
+        await this.tree.settleProjectFavorite(id, favorite, true);
+      } catch (err) {
+        if (errorMessage(err) === APP_OUTDATED) {
+          this.patch({ outdated: true });
+          this.options.media?.setOutdated(true);
+          return sent;
+        }
+        if (!isPermanent(err)) throw err;
+        // La base dice 30 pero la tabla no está (una migración a medias): espera, no se descarta.
+        if (err instanceof RemoteError && (err.code === '42P01' || err.code === 'PGRST205')) return sent;
+        console.warn('[sync] favorito rechazado', id, errorMessage(err));
+        await this.tree.settleProjectFavorite(id, favorite, false);
+      }
+    }
+    return sent;
+  }
+
   /** Sube los cambios del árbol en orden. Devuelve cuántos intentó (los proyectos se vuelven a pedir si hubo alguno). */
   private async pushOps(): Promise<number> {
     let sent = 0;
@@ -1562,7 +1594,7 @@ export class SyncEngine {
     for (const s of states.values()) if (s.rejected && unsyncedSet.has(s.pageId)) rejectedPages++;
     this.patch({
       // Los colores de proyecto sin subir cuentan como cambios del árbol pendientes.
-      pendingOps: this.tree.pendingOps().length + this.tree.pendingProjectColors().length,
+      pendingOps: this.tree.pendingOps().length + this.tree.pendingProjectColors().length + this.tree.pendingProjectFavorites().length,
       failedOps: this.tree.failedOps().length,
       pendingPages: unsynced.length,
       rejectedPages,

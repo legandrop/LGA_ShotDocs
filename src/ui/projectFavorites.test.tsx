@@ -9,11 +9,10 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { ProjectSwitcher } from './ProjectSwitcher';
-import { favoritesFirst, favoritesOf, setFavorite } from './projectFavorites';
 
 // Los proyectos favoritos en el selector (Docs/Doc_Navegacion.md, «Proyectos favoritos»): la estrella marca y
-// desmarca, los favoritos van primero (también con una búsqueda), lo marcado queda en el dispositivo por usuario, y
-// las entradas de abajo del selector ya no terminan en «…».
+// desmarca, los favoritos van primero (también con una búsqueda) y suben a la base, lo que la v0.327 guardó en el
+// dispositivo pasa a la base, y las entradas de abajo del selector ya no terminan en «…».
 
 const newTab = vi.fn(async (_path?: string, _options?: { background?: boolean; project?: string }) => undefined);
 vi.mock('./tabs', async (importOriginal) => ({
@@ -87,7 +86,8 @@ async function openSwitcher(d: Device, userId: string): Promise<HTMLElement> {
 async function workspace(schema: number): Promise<{ server: FakeServer; owner: Device; o: string; z: string }> {
   const server = new FakeServer();
   server.enableTeam();
-  if (schema >= 27) server.enableProjectColor();
+  if (schema >= 30) server.enableProjectFavorites();
+  else if (schema >= 27) server.enableProjectColor();
   else server.enableProjectPurge();
   const owner = await makeDevice(server);
   devices.push(owner);
@@ -100,40 +100,34 @@ async function workspace(schema: number): Promise<{ server: FakeServer; owner: D
 
 const label = (name: string) => document.querySelector<HTMLElement>(`[aria-label="${name}"]`);
 const order = () => [...document.querySelectorAll<HTMLElement>('.project-row .project-label strong')].map((s) => s.textContent);
-const keys = legacyStorageNames(WANKA_LOCAL_KEY);
 
-describe('favoritos: lo guardado', () => {
-  it('favoritesFirst pone los favoritos primero y respeta el orden de cada grupo', () => {
-    const list = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
-    expect(favoritesFirst(list, ['d', 'b']).map((p) => p.id)).toEqual(['b', 'd', 'a', 'c']);
-    expect(favoritesFirst(list, []).map((p) => p.id)).toEqual(['a', 'b', 'c', 'd']);
-  });
-
-  it('se guarda por usuario y sobrevive a algo dañado', () => {
-    setFavorite(keys, 'u1', 'p1', true);
-    setFavorite(keys, 'u2', 'p2', true);
-    expect(favoritesOf(keys, 'u1')).toEqual(['p1']);
-    expect(favoritesOf(keys, 'u2')).toEqual(['p2']);
-    setFavorite(keys, 'u1', 'p1', false);
-    expect(favoritesOf(keys, 'u1')).toEqual([]);
-    localStorage.setItem('shotdocs-project-favorites', '{roto');
-    expect(favoritesOf(keys, 'u1')).toEqual([]);
-    setFavorite(keys, 'u1', 'p3', true);
-    expect(favoritesOf(keys, 'u1')).toEqual(['p3']);
+describe('favoritos: lo que la v0.327 guardó en el dispositivo', () => {
+  it('pasa una vez a la base y se borra de ahí (lo de otro usuario queda)', async () => {
+    const { server, owner, z } = await workspace(30);
+    localStorage.setItem('shotdocs-project-favorites', JSON.stringify({ [server.ownerId]: [z, 'no-existe'], otro: [z] }));
+    await openSwitcher(owner, server.ownerId);
+    expect(order()[0]).toBe('Zeta');
+    expect(owner.tree.project(z)?.favorite).toBe(true);
+    expect(JSON.parse(localStorage.getItem('shotdocs-project-favorites')!)).toEqual({ otro: [z] });
+    await act(async () => owner.engine.syncNow());
+    expect(server.favorites.has(`${server.ownerId}|${z}`)).toBe(true);
   });
 });
 
 describe('selector: la estrella de favorito', () => {
   it('marcar un proyecto lo sube al principio; desmarcarlo lo devuelve a su lugar', async () => {
-    const { server, owner, z } = await workspace(27);
+    const { server, owner, z } = await workspace(30);
     await openSwitcher(owner, server.ownerId);
     const before = order();
     expect(before.indexOf('Zeta')).toBeGreaterThan(0);
     await act(async () => label('Add “Zeta” to favorites')!.click());
+    await settle();
     expect(order()[0]).toBe('Zeta');
     // El resaltado sigue al renglón que se movió.
     expect(document.querySelector('.project-row.active .project-label strong')!.textContent).toBe('Zeta');
-    expect(favoritesOf(keys, server.ownerId)).toEqual([z]);
+    expect(owner.tree.project(z)?.favorite).toBe(true);
+    await act(async () => owner.engine.syncNow());
+    expect(server.favorites.has(`${server.ownerId}|${z}`)).toBe(true);
     const star = label('Remove “Zeta” from favorites')!;
     expect(star.getAttribute('aria-pressed')).toBe('true');
     expect(star.closest('.project-row')!.classList.contains('favorite')).toBe(true);
@@ -146,7 +140,8 @@ describe('selector: la estrella de favorito', () => {
     });
     expect(order()[0]).toBe('Zeta');
     await act(async () => label('Remove “Zeta” from favorites')!.click());
-    expect(favoritesOf(keys, server.ownerId)).toEqual([]);
+    await settle();
+    expect(owner.tree.project(z)?.favorite).toBe(false);
   });
 
   it('las entradas de abajo no terminan en «…»', async () => {

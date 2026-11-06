@@ -79,6 +79,7 @@ export const sidebar = {
   'project.color': { en: "Color", es: "Color" },
   'project.favoriteNamed': { en: "Add “{name}” to favorites", es: "Marcar “{name}” como favorito" },
   'project.unfavoriteNamed': { en: "Remove “{name}” from favorites", es: "Quitar “{name}” de favoritos" },
+  'project.favoriteFailed': { en: "Couldn't save the favorite on this device", es: "No se pudo guardar el favorito en este dispositivo" },
   'project.favoriteTip': { en: "Favorite: listed before the other projects", es: "Favorito: se lista antes que los demás proyectos" },
   'project.colorNamed': { en: "Color of “{name}”", es: "Color de “{name}”" },
   'project.colorTip': { en: "Project color: it marks the project in the list and in the tabs", es: "Color del proyecto: lo marca en la lista y en los tabs" },

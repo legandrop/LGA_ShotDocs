@@ -36,7 +36,7 @@ import { editedLabel, lastPageOf, projectStateError, useCurrentProject, useSwitc
 import { defaultProjectColor, loadRecentColors, previewColor, PROJECT_PRESETS, projectColor, rememberRecentColor, useProjectColor } from './projectColor';
 import { ColorPicker } from './ColorPicker';
 import { useSearchSession } from './projectSearchUi';
-import { favoritesFirst, useProjectFavorites } from './projectFavorites';
+import { adoptDeviceFavorites, favoritesFirst } from './projectFavorites';
 import { tipRows } from './tipRows';
 import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, ShareScenesDialog, TrashPanel } from './lazyDialogs';
 import { Part } from './lazyPart';
@@ -343,8 +343,11 @@ function ProjectMenu(props: {
   const scenesReady = (status.schemaVersion ?? 0) >= SCENE_SHARES_SCHEMA_VERSION && perms.canInvite;
   const { workspace, user } = useServices();
   const keys = workspace.config.storage;
-  // La estrella de cada renglón: los favoritos de la persona van primero (en este dispositivo, projectFavorites.ts).
-  const { favorites, toggle: toggleFavorite } = useProjectFavorites(keys, user.id);
+  // La estrella de cada renglón: los favoritos de la persona van primero (`ProjectRow.favorite`, se sincronizan). Lo que la
+  // v0.327 guardó solo en este dispositivo pasa una vez a la base.
+  useEffect(() => void adoptDeviceFavorites(keys, user.id, tree).catch(() => undefined), [keys, user.id, tree]);
+  const toggleFavorite = (id: string, favorite: boolean) =>
+    void tree.favoriteProject(id, favorite).catch(() => notify(t('project.favoriteFailed')));
   const offline = !status.online;
   const needle = query.trim().toLowerCase();
   const archivedMode = mode.name === 'archived';
@@ -355,10 +358,7 @@ function ProjectMenu(props: {
     archivedMode || known.some((p) => p.id === props.current)
       ? known
       : [{ id: props.current, name: tr('project.defaultName'), created_at: '' }, ...known];
-  const projects = favoritesFirst(
-    all.filter((p) => !needle || p.name.toLowerCase().includes(needle)),
-    favorites,
-  );
+  const projects = favoritesFirst(all.filter((p) => !needle || p.name.toLowerCase().includes(needle)));
   const archivedCount = tree.archivedProjects().filter((p) => p.id !== props.current).length;
   const currentName = tree.project(props.current)?.name ?? tr('project.thisProject');
   // El peso que se muestra de un proyecto: solo a quien ve su papelera de archivos (también en el dispositivo: un
@@ -709,7 +709,7 @@ function ProjectMenu(props: {
               </div>
             );
           }
-          const favorite = favorites.includes(p.id);
+          const favorite = !!p.favorite;
           return (
             <div
               key={p.id}
@@ -765,9 +765,9 @@ function ProjectMenu(props: {
                 data-tip={touch || favorite ? undefined : tr('project.favoriteTip')}
                 onClick={() => {
                   // El renglón cambia de lugar: el resaltado (y Enter) lo sigue, no se queda en el que ocupó su lugar.
-                  const nextFavorites = favorite ? favorites.filter((id) => id !== p.id) : [...favorites, p.id];
-                  setActive(Math.max(0, favoritesFirst(projects, nextFavorites).findIndex((q) => q.id === p.id)));
-                  toggleFavorite(p.id);
+                  const next = favoritesFirst(projects.map((q) => (q.id === p.id ? { ...q, favorite: !favorite } : q)));
+                  setActive(Math.max(0, next.findIndex((q) => q.id === p.id)));
+                  toggleFavorite(p.id, !favorite);
                 }}
               >
                 {favorite ? <StarFilledIcon size={16} /> : <StarIcon size={16} />}
