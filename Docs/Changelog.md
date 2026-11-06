@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.325 :
+
+Lega pidió bajar el tráfico de Supabase (plan gratis, 5 GB de salida por mes) después de prender la privacidad de lo
+borrado. Medido en los registros de la API: con la app a la vista, cada ciclo de 10 s hacía unos 5 pedidos aunque no
+cambiara nada, y dos pestañas olvidadas hicieron 4.500 pedidos por hora toda la noche. Ahora el reloj de fondo se
+espacia sin uso (30 s tras 2 minutos sin tocar la app ni subir o bajar contenido, un minuto tras 15) y vuelve a 10 s
+al usarla; tocar la app después de un rato sincroniza enseguida. Los proyectos y los permisos propios se piden cada
+minuto, al pedirlo quien sabe que algo cambió (`syncNow`) y en el ciclo que sube cambios del árbol; lo que cada uno
+puede ver lo sigue decidiendo la base. Las bases limpias quedan como estaban: los deltas se midieron y no compensan
+(D848). Prueba `idleCycle.test.ts`. [Tráfico: el ciclo de fondo se espacia sin uso y proyectos y permisos se piden cada minuto]
+
 v0.324 :
 
 Lega pidió que quien toque el link de una escena desde PipeSync sin acceso pueda pedirla, con NDA: sin saber nada del

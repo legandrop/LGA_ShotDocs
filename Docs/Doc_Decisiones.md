@@ -2868,3 +2868,16 @@ aparece, se elige de la lista. (6) Un rechazo deja en silencio el mismo pedido p
 (7) Quien pidió no recibe aviso: la escena le aparece con la próxima sincronización. (8) El link del correo de login
 vuelve al link entero. (9) Sin paso en los recorridos (como D843 (12)): necesita un link ajeno, la base y otra persona;
 va en la ayuda. Detalle: `Doc_Compartir_Escenas.md`, sección 10.
+
+### D848 · Menos pedidos de fondo y sin deltas entre bases limpias, por ahora (2026-11-06)
+**Pedido de Lega:** que la privacidad de lo borrado (D14) no le complique el plan gratis de Supabase y que se optimice
+todo el tráfico que se pueda, con la seguridad primero. **Decidido sin Lega (lo puede cambiar):** (1) **El ciclo de
+fondo se espacia sin uso:** 10 s con la app en uso, 30 s tras 2 minutos quieta, un minuto tras 15; volver a la app la
+pone al día enseguida. Lo que escribe otro le llega a una pestaña quieta en hasta un minuto. (2) **Proyectos y permisos
+propios, cada minuto** (y cuando algo los pudo cambiar): un permiso nuevo o un proyecto compartido desde otro
+dispositivo aparece en hasta un minuto; la base sigue decidiendo cada pedido. (3) **Sin deltas entre bases limpias:**
+medido con filas reales, ahorran 64 % solo a un lector con la app abierta mientras se edita y 22 % a uno que entra de
+vez en cuando; no compensa tocar lo que recibe quien no ve lo borrado. (4) **La copia de seguridad diaria ya no lleva
+las bases limpias** (la restauración las tiraba igual). (5) Sin paso en los recorridos ni en la ayuda: no cambia nada que
+se vea. Detalle: `Doc_Sincronizacion.md`, «El ciclo en reposo y las listas cada minuto», y `Doc_Privacidad_Borrado.md`,
+«Entrega 2».

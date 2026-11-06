@@ -14,7 +14,7 @@ import { hasUnsyncedContent, type DocState } from './localDb';
 import { APP_OUTDATED, PROJECT_COLOR_SCHEMA_VERSION, SNAPSHOT_SCHEMA_VERSION, type Remote } from './remote';
 import { AUTHOR_MISSING } from './types';
 import type { PageTree } from './tree';
-import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type QueuedOp, type WorkspaceSettings } from './types';
+import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type ProjectRow, type QueuedOp, type WorkspaceSettings } from './types';
 
 export interface SyncStatus {
   /** El último intento de hablar con el servidor tuvo respuesta (aunque fuera un error). */
@@ -91,6 +91,23 @@ export interface SyncStatus {
 }
 
 const INTERVAL_MS = 10_000;
+/**
+ * El ciclo en reposo (Docs/Doc_Sincronizacion.md): sin uso (tocar la app, contenido que sube o baja) en `IDLE_AFTER_MS`,
+ * el reloj de fondo pregunta cada `IDLE_INTERVAL_MS`, y pasado `IDLE_SLOW_MS`, cada `IDLE_SLOW_INTERVAL_MS`. Cada ciclo
+ * son unos 5 pedidos aunque no cambie nada: una pestaña olvidada a la vista hacía 2.200 por hora. Volver a la app
+ * (foco, pestaña a la vista, tocarla) sincroniza enseguida.
+ */
+const IDLE_AFTER_MS = 2 * 60_000;
+const IDLE_SLOW_MS = 15 * 60_000;
+const IDLE_INTERVAL_MS = 30_000;
+const IDLE_SLOW_INTERVAL_MS = 60_000;
+/**
+ * Los proyectos y los permisos propios (`workspaces`, `members`, `grants`) cambian poco: se piden cada `LISTS_EVERY_MS`,
+ * y además en el primer ciclo, cuando lo pide quien sabe que algo cambió (`syncNow`: compartir, reintentar, volver a la
+ * app) y después de subir cambios del árbol o colores. Lo que deja ver o editar lo decide siempre la base (RLS): una
+ * lista vieja de un minuto solo atrasa lo que se muestra.
+ */
+const LISTS_EVERY_MS = 60_000;
 /** Sin actividad (subir o bajar contenido) en este rato, `clean_work` se pregunta cada `CLEAN_IDLE_MS`, no en cada ciclo. */
 const CLEAN_ACTIVE_MS = 5 * 60_000;
 const CLEAN_IDLE_MS = 2 * 60_000;
@@ -177,6 +194,14 @@ export class SyncEngine {
   private lastCleanAt = 0;
   /** La app pasó a segundo plano: el próximo ciclo arma las bases sin esperar la cadencia. */
   private urgentClean = false;
+  /** El ciclo en reposo: cuándo arrancó la sincronización, la última vez que alguien tocó la app y el último ciclo. */
+  private startedAt = 0;
+  private lastInputAt = 0;
+  private lastCycleAt = 0;
+  /** Las listas de proyectos y permisos propios (ver `LISTS_EVERY_MS`): pedirlas en el próximo ciclo, cuándo se pidieron, la última. */
+  private listsForced = true;
+  private listsAt = 0;
+  private projectsCache: ProjectRow[] | null = null;
   /**
    * La versión desde la que se arman snapshots de compactar (`snapshot_min_version`, versión 17 de la base), o `null`:
    * apagados (Docs/Doc_Compactar.md, sección 4.1).
@@ -218,7 +243,7 @@ export class SyncEngine {
       media?: MediaQueue;
       /** Las carpetas que suben (P.9): como la cola de archivos, dejan de esperar cuando vuelve la red. */
       folders?: { networkBack(): void };
-      /** Los permisos de la persona: se actualizan en cada sincronización (ver `checkAccess`). */
+      /** Los permisos de la persona: se actualizan cada minuto y cuando algo los pudo cambiar (ver `checkAccess`, `LISTS_EVERY_MS`). */
       access?: AccessStore;
       /** La cola de comentarios (paso 10): sube y baja al final de cada ciclo. */
       comments?: CommentQueue;
@@ -361,6 +386,15 @@ export class SyncEngine {
       this.files.networkBack();
       onWake();
     };
+    // Alguien usa la app (Doc_Sincronizacion.md, «El ciclo en reposo»): se anota la hora y, si el ciclo de fondo estaba
+    // espaciado y ya pasó el intervalo normal, se sincroniza enseguida (vuelve a la compu sin cambiar de ventana).
+    const onInput = () => {
+      const now = Date.now();
+      const wasIdle = now - this.lastSeenActive() >= IDLE_AFTER_MS;
+      this.lastInputAt = now;
+      if (wasIdle && now - this.lastCycleAt >= this.baseInterval()) void this.syncQuiet();
+    };
+    const inputEvents = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const;
     if (typeof window !== 'undefined') {
       window.addEventListener('offline', onOffline);
       window.addEventListener('online', onOnline);
@@ -368,6 +402,7 @@ export class SyncEngine {
       document.addEventListener('visibilitychange', onWake);
       document.addEventListener('visibilitychange', onHide);
       window.addEventListener('pagehide', onHide);
+      for (const name of inputEvents) window.addEventListener(name, onInput, { capture: true, passive: true });
       this.cleanups.push(() => {
         window.removeEventListener('offline', onOffline);
         window.removeEventListener('online', onOnline);
@@ -375,9 +410,16 @@ export class SyncEngine {
         document.removeEventListener('visibilitychange', onWake);
         document.removeEventListener('visibilitychange', onHide);
         window.removeEventListener('pagehide', onHide);
+        for (const name of inputEvents) window.removeEventListener(name, onInput, { capture: true });
       });
     }
-    this.interval = setInterval(onWake, this.options.intervalMs ?? INTERVAL_MS);
+    this.startedAt = Date.now();
+    // El reloj de fondo late con el intervalo normal; en reposo saltea latidos (`tickDue`).
+    const onTick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (this.tickDue(Date.now())) void this.syncQuiet();
+    };
+    this.interval = setInterval(onTick, this.baseInterval());
     // Lo que el servidor rechazó se vuelve a intentar una vez por apertura: puede que ya se haya arreglado.
     // Un error de la base de archivos nunca saltea la sincronización del texto. Del árbol, solo lo rechazado por la
     // versión mínima (lo dejó una versión anterior de la app, que lo tomaba como un rechazo): lo demás sigue a la vista
@@ -422,7 +464,7 @@ export class SyncEngine {
    * Lo rechazado porque la base dijo "no existe" vuelve a intentarse solo cuando la página vuelve. Ese "no existe"
    * (`page_not_found`, `comment_not_found`…) es también lo que la base contesta cuando la sesión dejó de ver o de poder
    * editar la página, y eso se revierte: le devuelven el permiso, la página sale de la papelera, restauran el
-   * proyecto. El dato llega con el árbol y los permisos que se bajan en cada ciclo.
+   * proyecto. El dato llega con el árbol (cada ciclo) y los permisos (cada minuto, `LISTS_EVERY_MS`).
    *
    * Una página se reintenta cuando el árbol pasa de "no" a "sí": con algo suyo rechazado, una bajada del árbol tiene
    * que haberla mostrado como no editable (o no visible, para los comentarios) y una posterior, como editable. Ahí se
@@ -537,7 +579,8 @@ export class SyncEngine {
   appHidden(): Promise<void> {
     if (!this.status.cleanOn || this.stopped) return Promise.resolve();
     this.urgentClean = true;
-    return this.syncNow();
+    // Sin forzar las listas: pasar a segundo plano no cambia proyectos ni permisos.
+    return this.syncQuiet();
   }
 
   /**
@@ -619,11 +662,42 @@ export class SyncEngine {
     // control), queda como estaba, sin un rechazo suelto (O9 de la auditoría de la 2b).
     void this.refreshCounts().catch(() => undefined);
     if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.syncNow(), DEBOUNCE_MS);
+    this.timer = setTimeout(() => void this.syncQuiet(), DEBOUNCE_MS);
   }
 
-  /** Corre un ciclo ya. Si hay uno en curso, corre otro apenas termine. */
+  /** El intervalo normal del ciclo de fondo (10 s; el modo link, 30 s). */
+  private baseInterval(): number {
+    return this.options.intervalMs ?? INTERVAL_MS;
+  }
+
+  /** La última señal de uso: tocar la app, contenido que subió o bajó, o el arranque. */
+  private lastSeenActive(): number {
+    return Math.max(this.lastInputAt, this.lastActivityAt, this.startedAt);
+  }
+
+  /**
+   * ¿Le toca un ciclo al reloj de fondo? Con uso en los últimos `IDLE_AFTER_MS`, cada latido (el intervalo normal);
+   * si no, cada `IDLE_INTERVAL_MS`, y pasado `IDLE_SLOW_MS`, cada `IDLE_SLOW_INTERVAL_MS`. La mitad de un latido de
+   * margen, para que un reloj que se atrasa un poco no saltee uno de más.
+   */
+  private tickDue(now: number): boolean {
+    const base = this.baseInterval();
+    const quiet = now - this.lastSeenActive();
+    const every = quiet < IDLE_AFTER_MS ? base : Math.max(base, quiet < IDLE_SLOW_MS ? IDLE_INTERVAL_MS : IDLE_SLOW_INTERVAL_MS);
+    return now - this.lastCycleAt >= every - base / 2;
+  }
+
+  /**
+   * Corre un ciclo ya, con los proyectos y los permisos propios recién pedidos (los pide quien sabe que algo cambió:
+   * compartir, reintentar, volver a la app). Si hay uno en curso, corre otro apenas termine.
+   */
   syncNow(): Promise<void> {
+    this.listsForced = true;
+    return this.syncQuiet();
+  }
+
+  /** Corre un ciclo ya, sin forzar las listas (el reloj de fondo y los cambios locales). */
+  private syncQuiet(): Promise<void> {
     if (this.stopped) return Promise.resolve();
     if (this.running) {
       this.again = true;
@@ -647,8 +721,16 @@ export class SyncEngine {
     const halt = () => {
       if (this.stopped) throw new Error('stopped');
     };
+    this.lastCycleAt = Date.now();
+    // Los permisos propios y los proyectos, solo si toca (ver `LISTS_EVERY_MS`); si no, los últimos que se bajaron.
+    let lists = this.listsForced || this.projectsCache === null || this.lastCycleAt - this.listsAt >= LISTS_EVERY_MS;
+    const listsAtStart = lists;
+    // La marca se apaga al empezar: un `syncNow` que llega en el medio (con datos que estos pedidos ya no ven) la vuelve
+    // a prender y el ciclo siguiente pide las listas. Si este ciclo no llega a pedirlas, se vuelve a prender abajo.
+    if (listsAtStart) this.listsForced = false;
+    let listsDone = false;
     try {
-      const { outdated, removed } = await this.checkWorkspace();
+      const { outdated, removed } = await this.checkWorkspace(lists);
       halt();
       // La base contestó después de un ciclo sin conexión: la cola de archivos y la de las carpetas dejan de esperar (si estaba
       // esperando porque el portero o Storage no contestaban, puede que fuera la red) y prueba enseguida.
@@ -667,12 +749,22 @@ export class SyncEngine {
       // Con la app vieja para este workspace (`min_app_version`) no sale nada del dispositivo: ni el árbol, ni el
       // contenido, ni las imágenes, ni los comentarios. Todo queda en la cola y sale al actualizar, en el orden de
       // siempre (Docs/Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red").
-      if (!outdated) await this.pushOps();
+      // Un cambio del árbol o un color que subió puede cambiar la lista de proyectos: se pide en este mismo ciclo.
+      if (!outdated && (await this.pushOps()) > 0) lists = true;
       halt();
-      if (!outdated) await this.pushProjectColors();
+      if (!outdated && (await this.pushProjectColors()) > 0) lists = true;
       halt();
       // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
-      const projects = await this.remote.fetchProjects(this.status.schemaVersion);
+      // `listsForced` también puede prenderse en `checkWorkspace` (cambió la versión de la base: otras columnas).
+      lists ||= this.listsForced || this.projectsCache === null;
+      const projects = lists ? await this.remote.fetchProjects(this.status.schemaVersion) : (this.projectsCache ?? []);
+      if (lists) this.projectsCache = projects;
+      // Recién con los permisos y los proyectos pedidos en este ciclo se cuenta el minuto (si los permisos no se
+      // pidieron arriba, el próximo ciclo pide los dos).
+      if (listsAtStart && lists) {
+        this.listsAt = this.lastCycleAt;
+        listsDone = true;
+      }
       halt();
       const rows = await this.remote.fetchTree(projects.map((p) => p.id), this.status.schemaVersion, this.tree.serverPages);
       halt();
@@ -806,6 +898,7 @@ export class SyncEngine {
       void this.syncMedia();
       this.startAutoPurge();
     } catch (err) {
+      if (listsAtStart && !listsDone) this.listsForced = true;
       if (this.stopped) return;
       this.patch({ online: !isNetworkError(err), lastError: errorMessage(err) });
     } finally {
@@ -823,13 +916,17 @@ export class SyncEngine {
    * generación), pone en la cola todo lo que el servidor ya no tiene antes de seguir. Devuelve si esta
    * versión de la app es más vieja que la mínima del workspace.
    */
-  private async checkWorkspace(): Promise<{ outdated: boolean; removed: boolean }> {
+  private async checkWorkspace(lists = true): Promise<{ outdated: boolean; removed: boolean }> {
     const settings = await this.remote.fetchWorkspaceSettings();
     this.options.comments?.configure(settings?.schemaVersion ?? null, settings?.generation ?? null);
     // Sin ajustes, la base es anterior a todo esto: 0.
     this.options.sizes?.configure(settings?.schemaVersion ?? 0);
     // La usan `fetchProjects` (las columnas que pide) y la interfaz (archivar y borrar, P.14).
-    if ((settings?.schemaVersion ?? 0) !== this.status.schemaVersion) this.patch({ schemaVersion: settings?.schemaVersion ?? 0 });
+    if ((settings?.schemaVersion ?? 0) !== this.status.schemaVersion) {
+      // Otra versión de la base: los proyectos se piden otra vez (las columnas dependen de ella).
+      if (this.status.schemaVersion !== null) this.listsForced = true;
+      this.patch({ schemaVersion: settings?.schemaVersion ?? 0 });
+    }
     // El interruptor de la privacidad de lo borrado: solo con la base en la versión 12 o más.
     this.cleanMin = settings && settings.schemaVersion >= CLEAN_SCHEMA_VERSION ? (settings.cleanMinVersion ?? null) : null;
     // El de los snapshots de compactar: solo con la base en la versión 17 o más.
@@ -864,7 +961,9 @@ export class SyncEngine {
     // Un error de la base de archivos del dispositivo no corta la subida del texto.
     await this.options.media?.configure(settings.mediaUrl, settings.schemaVersion).catch(() => undefined);
     // Antes de recuperar nada tras una restauración: a alguien que sacaron no se le arma ninguna cola.
-    if (await this.checkAccess(settings)) return { outdated, removed: true };
+    // Con otra generación (se restauró una copia) los permisos se piden siempre: deciden qué vuelve a la cola.
+    const generationChanged = ((await this.tree.knownGeneration()) ?? 1) !== settings.generation;
+    if (await this.checkAccess(settings, lists || generationChanged)) return { outdated, removed: true };
     // La cola de fotos y videos lleva su propia generación (en su base): si falla, lo hace en la próxima
     // sincronización, sin frenar el texto.
     const mediaRecovered = (await this.options.media?.syncGeneration(settings.generation).catch(() => 0)) ?? 0;
@@ -925,13 +1024,15 @@ export class SyncEngine {
    * (y no cambia nada de lo guardado); una base sin la versión del equipo deja los permisos sin datos, y
    * sin datos no se bloquea nada.
    */
-  private async checkAccess(settings: WorkspaceSettings | null): Promise<boolean> {
+  private async checkAccess(settings: WorkspaceSettings | null, fetch = true): Promise<boolean> {
     const access = this.options.access;
     if (!access) return false;
     if (!settings || !(settings.schemaVersion >= TEAM_SCHEMA_VERSION)) {
       await access.set(null);
       return false;
     }
+    // Entre una lectura y otra (`LISTS_EVERY_MS`), los guardados: la base sigue decidiendo cada pedido.
+    if (!fetch && access.get()) return access.removed;
     const snapshot = await this.remote.fetchMyAccess(access.userId);
     if (this.stopped) return false;
     await access.set(snapshot);
@@ -1139,13 +1240,15 @@ export class SyncEngine {
    * proyecto creado sin red ya subió). Con una base anterior a la 27 esperan. Un rechazo para siempre (sin permiso, el
    * proyecto no está) lo descarta: es un dato de la vista, no contenido.
    */
-  private async pushProjectColors(): Promise<void> {
-    if ((this.status.schemaVersion ?? 0) < PROJECT_COLOR_SCHEMA_VERSION) return;
+  private async pushProjectColors(): Promise<number> {
+    if ((this.status.schemaVersion ?? 0) < PROJECT_COLOR_SCHEMA_VERSION) return 0;
+    let sent = 0;
     for (const { id, color } of this.tree.pendingProjectColors()) {
-      if (this.stopped) return;
+      if (this.stopped) return sent;
       // Un proyecto creado acá que todavía no subió (en la cola o rechazado): el color espera a que exista en el
       // servidor; subirlo antes daría «no está» y se perdería.
       if (this.tree.isLocalProject(id)) continue;
+      sent++;
       try {
         await this.remote.colorProject(id, color);
         await this.tree.settleProjectColor(id, color, true);
@@ -1153,18 +1256,22 @@ export class SyncEngine {
         if (errorMessage(err) === APP_OUTDATED) {
           this.patch({ outdated: true });
           this.options.media?.setOutdated(true);
-          return;
+          return sent;
         }
         if (!isPermanent(err)) throw err;
         console.warn('[sync] color de proyecto rechazado', id, errorMessage(err));
         await this.tree.settleProjectColor(id, color, false);
       }
     }
+    return sent;
   }
 
-  private async pushOps(): Promise<void> {
+  /** Sube los cambios del árbol en orden. Devuelve cuántos intentó (los proyectos se vuelven a pedir si hubo alguno). */
+  private async pushOps(): Promise<number> {
+    let sent = 0;
     for (const op of this.tree.pendingOps()) {
-      if (this.stopped) return;
+      if (this.stopped) return sent;
+      sent++;
       try {
         // Mover una página puede dejarla adentro de una rama con lectores (la base la reinicia en ese momento): antes,
         // lo pendiente de la página y de su rama tiene que estar en el servidor (Docs/Doc_Privacidad_Borrado.md, 4.2).
@@ -1180,12 +1287,13 @@ export class SyncEngine {
           // queda en la cola (no pasa a rechazados) y sale al actualizar, con los que vienen después, en orden.
           this.patch({ outdated: true });
           this.options.media?.setOutdated(true);
-          return;
+          return sent;
         }
         if (!isPermanent(err)) throw err;
         await this.tree.failOp(op, errorMessage(err));
       }
     }
+    return sent;
   }
 
   /** La página y todas las de adentro (en el árbol que ve el dispositivo). */

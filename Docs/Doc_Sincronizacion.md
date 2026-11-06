@@ -1360,8 +1360,45 @@ contenido nuevo, qué fotos y videos usa cada página que cambió (ver "Papelera
 pendientes y comentarios (subir la cola y bajar los de las páginas abiertas).
 Las imágenes y los comentarios van al final y sus errores no cortan el ciclo: una foto grande en una red
 mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, cada 10
-segundos con la app a la vista, al volver la red y al volver a la ventana. Al final de cada ciclo arranca,
-sin esperarla, la cola de fotos y videos, que tiene su propio ciclo (ver "Archivos grandes").
+segundos con la app a la vista (más espaciado en reposo: ver abajo), al volver la red y al volver a la ventana. Al
+final de cada ciclo arranca, sin esperarla, la cola de fotos y videos, que tiene su propio ciclo (ver "Archivos
+grandes").
+
+### El ciclo en reposo y las listas cada minuto (2026-11-06)
+
+**Por qué.** Cada ciclo hace unos 5 pedidos aunque no cambie nada (ajustes, proyectos, la fila propia de `members`,
+los `grants` propios y el árbol por cambios), y con la app a la vista corría cada 10 s aunque nadie la usara. Medido en
+los registros de la API (`edge_logs`) la noche del 5 al 6 de noviembre: dos pestañas olvidadas a la vista hacían
+**unos 4.500 pedidos por hora** sin bajar contenido (de 4 a 7 de la mañana, ninguna bajada). Cada pedido son cabeceras
+y un cuerpo chico, pero se repiten todo el día y entran en el tráfico de salida del plan gratis (5 GB por mes).
+
+**Qué cambió** (`engine.ts`):
+
+- **El reloj de fondo se espacia sin uso.** Late con el intervalo de siempre (10 s; el modo link, 30 s), pero si en
+  los últimos 2 minutos (`IDLE_AFTER_MS`) nadie tocó la app (puntero, teclado, rueda, toque) ni subió o bajó contenido,
+  corre un ciclo cada 30 s (`IDLE_INTERVAL_MS`), y pasados 15 minutos (`IDLE_SLOW_MS`), cada minuto
+  (`IDLE_SLOW_INTERVAL_MS`). Lo demás no cambia: un cambio local sincroniza a los 1,2 s, volver a la ventana o a la
+  pestaña sincroniza enseguida, y tocar la app después de un rato quieto también (si pasó más del intervalo normal
+  desde el último ciclo). Lo que escribe otro llega a una pestaña quieta en hasta un minuto; desde ahí, como hubo
+  contenido que bajó, vuelve a cada 10 s.
+- **Proyectos y permisos propios, cada minuto** (`LISTS_EVERY_MS`). `workspaces`, `members` y `grants` se piden en el
+  primer ciclo, cada minuto, cuando lo pide quien sabe que algo cambió (`syncNow`: compartir, invitar, reintentar,
+  volver a la app) y en el ciclo que sube cambios del árbol o colores de proyecto. Entre medio se usan los últimos
+  que se bajaron. **La seguridad no cambia:** lo que cada sesión puede ver, editar o bajar lo decide siempre la base
+  (RLS y las funciones); una lista de hace un minuto solo atrasa lo que se muestra (un permiso nuevo de otro
+  dispositivo, un proyecto compartido, que sacaron a alguien) hasta un minuto. Los ajustes del workspace se siguen
+  pidiendo en cada ciclo: traen la versión mínima y la generación (una restauración).
+- **Lo que se ahorra:** a 10 s son 6 ciclos y unos 30 pedidos por minuto por pestaña. En reposo, unos 8 pedidos por
+  minuto a los 2 minutos (unas 4 veces menos) y unos 5 a los 15 minutos (unas 6 veces menos); con la app en uso, unos
+  2 pedidos menos de cada 5 por ciclo.
+- **Detalles:** la marca de «pedir las listas» se apaga al empezar el ciclo, así un `syncNow` que llega en el medio
+  (una invitación aceptada mientras sincroniza) deja pedido el ciclo siguiente; con otra generación de la base (se
+  restauró una copia) los permisos se piden siempre, porque deciden qué vuelve a la cola; pasar a segundo plano
+  (`appHidden`) no fuerza las listas.
+
+Pruebas: `src/sync/idleCycle.test.ts` (las listas guardadas entre ciclos de fondo, `syncNow` que las pide, un proyecto
+nuevo que las pide en el ciclo que lo sube, un permiso nuevo de otro dispositivo que llega al minuto, y las esperas del
+reloj de fondo).
 
 **Qué es un rechazo y qué una falla pasajera** (`toRemoteError` en `remote.ts`; lo usan todos los pedidos a la base).
 Sin red, una sesión que se está renovando (401) y los estados 408, 425, 429 y 500 o más son pasajeros: el pedido se
@@ -1785,7 +1822,7 @@ Desde la versión 4 de la base (`20260930160000_equipo.sql`) las páginas, el co
 ven y se cambian según `members` y `grants` (escala 0 nada, 1 ver, 2 comentar, 3 editar, 4 editar y crear
 páginas). La base decide; la app hace la misma cuenta para no ofrecer lo que el servidor va a rechazar:
 
-- **Qué lee:** en cada ciclo, su fila de `members` (rol y `removed_at`) y sus propias filas de `grants`
+- **Qué lee:** en el primer ciclo, cada minuto y cuando algo los pudo cambiar (ver «El ciclo en reposo y las listas cada minuto»), su fila de `members` (rol y `removed_at`) y sus propias filas de `grants`
   (los admins ven las de todos: se piden solo las propias; las que tienen `revoked_at` no cuentan), más `workspaces.owner_id` de cada proyecto (va
   con `fetchProjects`). Se guarda en la base local (`meta.access`), así anda sin red. Una respuesta con
   otra forma tira error y no cambia lo guardado.

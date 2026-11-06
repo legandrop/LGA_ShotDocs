@@ -827,3 +827,30 @@ antes); correr la prueba 7; y recién ahí `update public.workspace_settings set
 **Queda para después:** la entrega 2 (medir), la 3 (rearmar lo guardado al dejar de ver lo borrado), la 4 (deltas);
 `pull_page_content` y `pull_page_snapshot` de `Doc_Compactar.md` tienen que pedir `sees_deleted` cuando se implementen;
 las imágenes viejas `sdfile://`; medir en el iPhone (prueba 6).
+
+## Entrega 2: lo medido con el interruptor prendido (2026-11-06)
+
+Medido el mismo día en que se prendió, con las bases de ERSO y VLLF armándose (460 de 1128 a las 10:20 UTC), los
+registros de la API (`edge_logs`) de las 24 horas anteriores y las filas reales de 25 páginas editadas en la semana.
+
+- **Lo que pesa una base en la red.** La API de Supabase comprime las respuestas (gzip: `content-encoding: gzip` con
+  `Accept-Encoding`, que el navegador manda siempre). Una base en base64 comprimida viaja al **36 %** de sus bytes:
+  la de 22 KB promedio, unos 8 KB; las 1128 de ERSO y VLLF (unos 24 MB), unos 9 MB para cada dispositivo de un lector
+  la primera vez. El tercio de más del base64 de la sección 4.5 no se paga.
+- **Cada cuánto pregunta un editor.** `clean_work` salió 21 veces en 3 horas (cada 2 minutos con la app quieta, en
+  cada ciclo con actividad) y contesta poco; `push_clean_base` sube la base (subida: no cuenta en el tráfico de
+  salida). Lo que cuesta salida es lo que baja cada lector y la fila del árbol que cambia con cada base (`clean_seq`
+  mueve `changed_at`).
+- **Los deltas (F2) no se implementan por ahora.** Con las filas reales, el delta desde la base anterior (`Y.diffUpdate`
+  de la base nueva contra el vector de la anterior: no lleva nada que la base nueva no tenga) pesa en la red un 36 %
+  de la base entera (ahorra 64 %), pero solo le sirve a un lector que tenía justo la anterior, o sea, con la app
+  abierta mientras se edita. Contra una base de 5 vueltas atrás (un lector que entra de vez en cuando) ahorra solo
+  22 %: las ediciones de estas semanas (limpiezas y repasos) reescriben la página casi entera, y cada delta lleva
+  además todos los borrados. Hoy los lectores son dos invitados y entran de vez en cuando. No compensa el riesgo de
+  tocar lo que recibe quien no ve lo borrado; si un día hay lectores mirando en vivo páginas que se editan mucho, el
+  diseño que cierra es el de arriba (delta = `diffUpdate` de la base ya comprobada, servido solo si `p_after_seq` es
+  el `to_seq` de la base de origen, y si al aplicarlo queda algo pendiente, la base entera).
+- **Lo que sí se cambió:** la copia de seguridad diaria ya no lleva los datos de `page_clean_bases`
+  (`z_shotdocs_backup`, `backup.sh`): restaurar los tiraba igual, y eran unos 25 MB por copia (el doble en la red,
+  porque el volcado escribe los bytes en hexadecimal). Y el ciclo en reposo de `Doc_Sincronizacion.md` baja los
+  pedidos de fondo de todos los dispositivos, también los de los lectores.
