@@ -850,6 +850,41 @@ marcas ya no se corren y una corrección desde el editor sí llega; la comparaci
 por las dudas. Un diagrama sobre fondo blanco puede pasar por captura del guion: se mira en la página y, si es foto, va
 a un tercio.
 
+### Las demás páginas: escenas, lugares, scoutings y el resto (D846, 2026-11-05)
+
+Lo que no es reporte ni plan del día también cumple las reglas de títulos, imágenes y colores. Por tipo de página:
+
+- **Escenas** (la página de cada escena: «Planos» en 1, cada plano en 2, lo de adentro en 3, D785): las fotos de cada
+  plano a un tercio en filas de a tres (las capturas del guion y las tiras, a la mitad); una foto pegada al texto de una
+  viñeta va a su renglón; dos renglones vacíos antes de cada título. Los niveles ya vienen bien.
+- **Lugares** (locaciones y decorados): las fotos, que venían a tamaño natural, a un tercio en filas.
+- **Subpáginas de escenas, fichas sueltas, referencia, archivo y guías**: el primer título de la página va en 1 y ninguno
+  salta un nivel (una ficha que empezaba en título 3 «Descripción» pasa a 1; una guía toda en 2, a 1), sin cambiar la
+  relación entre títulos: cada uno queda un nivel debajo de su padre, y dos hermanos siguen siendo hermanos (corregir
+  solo el título que salta dejaba al hermano de abajo como su hijo; lo encontró la auditoría en dos scoutings de ERSO).
+  Si la estructura de Coda no tenía sentido (secciones de lugares distintos colgando de otra, en La Candelaria), se
+  mira la página. Fotos, colores y aire como en cualquier página.
+- **Scoutings de VLLF**: las fotos **no se tocan** (las acomodó Lega, D795). Se sacan los colores de Coda de los títulos
+  («Sin VFX», «Cleanups»: el texto ya lo dice), las secciones del día vacías como en los planes de VLLF (D838, misma
+  plantilla) y los saltos de nivel. Una página con esa plantilla que no acomodó Lega («Puestas de cámara | 13 Mar») va
+  con las reglas de los planes de VLLF y las fotos como en cualquier página.
+- **Scoutings de ERSO** (otra plantilla): niveles sin saltos, fotos, colores y aire.
+- **Una plantilla** («Modelo | Plantilla de reporte de Coda») no se toca: vacía es lo que tiene que estar. Tampoco una
+  tabla de Coda que quedó aplanada en títulos («Previs Ambulancia»: «Thumb», «Shot #», «Indicaciones»): pasarlos a 1 la
+  empeora; queda para rearmarla si Lega lo pide.
+
+Imágenes que el clasificador no separa bien y se miran una por una: un diagrama, un storyboard o una foto histórica en
+blanco y negro sobre blanco pasan por captura del guion y son fotos (a un tercio); una captura de una planilla o de
+instrucciones, o un plano de planta con medidas, a la mitad para que se lea; una panorámica (4:1 o más), a la mitad como
+las tiras. No se tocan: los colores de Coda **adentro de las tablas** (la regla es para títulos; en las fichas el fondo
+azul de «Shot Name» o «Descripción» marcaba lo cambiado en Coda), los links de Drive (D796/D797, solo si Lega lo pide),
+un renglón con color que no es título («Duplicado» en rojo), y los títulos que Coda dejó adentro de una tabla. Los mismos
+controles que los reportes: mismo texto y mismas fotos en el mismo orden, el formato de cada bloque igual, ningún título
+con color ni salto de nivel, aire, y en los scoutings de VLLF cada foto con el ancho y la fila de antes.
+
+Hecho el 2026-11-05: VLLF, 234 páginas con contenido; ERSO (después del renombre de códigos, D840), 333. Todas
+verificadas y auditadas.
+
 ### Varios docs en un proyecto (2026-10-17)
 
 Un proyecto puede venir repartido en varios docs de Coda (preproducción, scoutings, reportes de rodaje). Se exporta

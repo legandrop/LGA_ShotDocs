@@ -2783,3 +2783,12 @@ iguales a mano. (3) La fila ocupa lo mismo que antes y corta en el mismo lugar. 
 (tirador o tamaño rápido) las demás guardan el ancho con que se veían, así cambia solo la tocada; un arrastre de menos de
 unos 15 px no cambia nada. (5) «1/4» sobre la vertical sola de una fila llena la agranda (se veía a 0,18) y, como ya no
 entra, baja a la fila de abajo, igual que el tirador. Detalle: `Doc_Fotos_En_Linea.md`, «Filas con la misma altura».
+
+### D846 · Las demás páginas, con las mismas reglas de títulos, imágenes y colores (2026-11-05)
+**Pedido de Lega:** que en VLLF y ERSO todo lo que no es reporte ni plan quede prolijo con las reglas de títulos,
+imágenes y colores. **Decidido** (Lega dormía; anotado para que lo vea): escenas y lugares con las fotos a un tercio y
+aire; toda página empieza en título 1 sin saltar niveles; en los scoutings de VLLF, acomodados a mano por Lega, las
+fotos no se tocan y salen los colores de los títulos (el texto ya dice «Sin VFX»); una captura con texto chico o un
+plano de planta a la mitad, un storyboard o una foto histórica a un tercio; los colores adentro de las tablas y los
+links de Drive no se tocan; una plantilla de modelo y una tabla de Coda aplanada en títulos («Previs Ambulancia») quedan
+como están. Detalle en `Doc_Importar_Coda.md`, «Las demás páginas».
