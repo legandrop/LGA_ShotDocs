@@ -803,6 +803,17 @@ Acá **no** se pasan párrafos a título: «Cámara testigo» en «Necesidades r
 controles de los reportes, con las reglas de los planes, y además: cada decorado es un renglón todo en negrita, sin
 color y con sus links, y toda foto está a un tercio. Hecho en los 35 planes de ERSO (2026-11-05), todos verificados.
 
+**Planos y decorados repetidos (D839).** Después de la limpieza conviene buscar en los planes los decorados que se
+repiten entre días y los códigos de plano que aparecen dos veces en una página, y cruzarlos con lo que se filmó cada
+día (DIT, planilla de script, plan de rodaje). Un plan muestra lo que se planeó: el plano que se filmó otro día lleva
+debajo de su título «**Rodaje:** se filmó el [Día N] (fecha).», con link al día; el decorado mal copiado se corrige.
+Dos filas de Coda con el mismo código (dos acciones de una escena) van en una ficha: «Descripción» con «Acción 1» y
+«Acción 2» (sin la fila «Descripción» en la tabla, para no repetirla; «Acción 2» enlaza a esa acción en su escena),
+y lo demás de la segunda como «Acción 2: …»; un duplicado exacto se borra. Al reescribir un renglón con formato
+mezclado, como «Cantidad de shots:» en azul y el número en negrita, se respeta cada tramo. Una ficha que falta se copia de la página de su escena, con las filas de los planes (afuera
+EP, SCN, SHT, Plate, Grupo, Complejidad y Duracion) y con el título **sin link**: un título que enlaza entero a la
+escena la app lo muestra como tarjeta de escena.
+
 ### Varios docs en un proyecto (2026-10-17)
 
 Un proyecto puede venir repartido en varios docs de Coda (preproducción, scoutings, reportes de rodaje). Se exporta

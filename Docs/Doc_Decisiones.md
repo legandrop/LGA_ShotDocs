@@ -2719,3 +2719,18 @@ porque PipeSync solo sabe el código, y solo se elige si hay uno (no se adivina;
 cuenta sobre los proyectos que ve la persona: quien ve «ERSO prueba» y no «ERSO | Serie» cae en el primero; por eso el
 aviso de una escena que no está nombra el proyecto. La resolución vive en Shot Docs: PipeSync
 no guarda ids de Shot Docs. Primera parte hecha en v0.317 (`Doc_Link_Escena.md`); el resto, en `Doc_Roadmap.md`.
+
+### D839 · Un plan del día muestra lo que se planeó; los planos y decorados repetidos se corrigen así (2026-11-05)
+**Pregunta:** los planes de ERSO tenían decorados repetidos entre días y planos repetidos dentro de una misma página.
+Se cruzaron con los DIT de cada día, las planillas de script, los planes de rodaje y los mails. La causa casi siempre:
+en Coda el renglón del decorado era texto copiado de la plantilla y nadie lo actualizaba al mover un día, y la tabla de
+planos tiene una fila por acción con el mismo código. **Decidido por Lega:** (1) **un plan del día muestra lo que se
+planeó**; el plano que se filmó otro día lleva debajo de su título «Rodaje: se filmó el Día N (fecha)» con link a ese
+día (lo filmado ya está en el reporte). Un decorado mal copiado, que nunca fue el plan de ese día, sí se corrige. (2)
+**Dos acciones con el mismo código van en una sola ficha:** las fotos de las dos en una fila, las filas de la tabla
+que faltaban, «Descripción» con «Acción 1» y «Acción 2» (la fila «Descripción» de la tabla sale, y «Acción 2» enlaza a
+esa acción en su escena), y lo demás de la segunda como «Acción 2: …»; un duplicado exacto se borra. Si las dos filas son escenas distintas (2-17A y 2-17B), la segunda toma su código. (3) **La ficha que
+falta en un plan se suma** desde la página de su escena, con las filas de los planes. Aplicado en ERSO: decorados de
+los días 33, 35 y 52; fichas nuevas en los días 33 y 35; fichas unidas en los días 17 y 36; duplicado fuera en el 37;
+notas en los días 18, 20, 21 y 31; el Día 46 era el 47 (30/01); el plan «COFA (2)» era del Día 43; el plan vacío «sin
+lugar (2)» del Día 37 a la papelera.
