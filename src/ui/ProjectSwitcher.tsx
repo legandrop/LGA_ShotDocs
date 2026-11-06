@@ -4,7 +4,10 @@ import { locale, t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
 import { usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
 import { isOnlyActiveProject, nextProjectAfter } from '../sync/projectStates';
-import { PROJECT_STATES_SCHEMA_VERSION } from '../sync/remote';
+import { PROJECT_COLOR_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION } from '../sync/remote';
+import { pagePath } from '../router';
+import { modPressed } from './findUi';
+import { newTab, openInNewTab, tabsOn } from './tabs';
 import { displayName } from '../workspaces';
 import { useCodaOwner } from '../import/codaOwner';
 import { importJobFor } from '../import/importJob';
@@ -16,6 +19,7 @@ import {
   ImportIcon,
   MoreIcon,
   OfflineMarkIcon,
+  PaletteIcon,
   PlusIcon,
   RenameIcon,
   SearchIcon,
@@ -26,7 +30,9 @@ import {
 } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
-import { editedLabel, monogram, projectStateError, useCurrentProject, useSwitchProject } from './project';
+import { editedLabel, lastPageOf, projectStateError, useCurrentProject, useSwitchProject } from './project';
+import { defaultProjectColor, loadRecentColors, previewColor, PROJECT_PRESETS, projectColor, rememberRecentColor, useProjectColor } from './projectColor';
+import { ColorPicker } from './ColorPicker';
 import { useSearchSession } from './projectSearchUi';
 import { tipRows } from './tipRows';
 import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, TrashPanel } from './lazyDialogs';
@@ -44,14 +50,71 @@ import {
   WorkspaceSection,
 } from './WorkspaceMenu';
 
-export function Monogram({ name, size = 26 }: { name: string; size?: number }) {
-  return (
-    <span className="monogram" style={{ width: size, height: size, fontSize: size >= 30 ? 12 : 10 }} aria-hidden="true">
-      {monogram(name)}
-    </span>
-  );
+/**
+ * El punto de color de un proyecto (reemplazó al recuadro con dos letras): su color elegido o el de fábrica, y el que se
+ * está probando mientras el picker está abierto.
+ */
+export function ProjectDot({ id, size = 14 }: { id: string; size?: number }) {
+  const tree = useTree();
+  return <ProjectDotOf project={tree.project(id) ?? { id, color: null }} size={size} />;
 }
 
+/** El punto de un proyecto que no está en el árbol (uno borrado; la pantalla «sin proyectos», sin servicios). */
+export function ProjectDotOf({ project, size = 14 }: { project: { id: string; color?: string | null }; size?: number }) {
+  const color = useProjectColor(project);
+  return <span className="project-dot" style={{ width: size, height: size, background: color ?? undefined }} aria-hidden="true" />;
+}
+
+
+/**
+ * Elegir el color de un proyecto, dentro del selector: el picker con la vista previa en vivo en todos los puntos del
+ * proyecto (la barra, la lista, los tabs). *OK* lo guarda (anda sin red: `PageTree.colorProject`); *Cancel*, Escape o
+ * cerrar el selector lo descartan. Elegir el color de fábrica lo deja sin elegir.
+ */
+function ProjectColorPanel(props: { id: string; name: string; touch: boolean; onDone: () => void }) {
+  const tree = useTree();
+  const tr = useT();
+  const { id } = props;
+  const [initial] = useState(() => projectColor(tree.project(id) ?? { id, color: null }));
+  const [recents] = useState(loadRecentColors);
+  // Aceptado: la vista previa queda hasta que el color nuevo está en la vista (si no, el punto parpadea con el viejo).
+  const accepted = useRef(false);
+  // Cerrar el selector a mitad de camino (un clic afuera) también descarta la vista previa.
+  useEffect(
+    () => () => {
+      if (!accepted.current) previewColor(id, null);
+    },
+    [id],
+  );
+  return (
+    <>
+      <button className="project-back" autoFocus={!props.touch} onClick={props.onDone}>
+        <ChevronLeftIcon size={16} />
+        {tr('project.colorNamed', { name: props.name })}
+      </button>
+      <ColorPicker
+        initial={initial}
+        defaultColor={defaultProjectColor(id)}
+        presets={PROJECT_PRESETS}
+        recents={recents}
+        onChange={(color) => previewColor(id, color)}
+        onCancel={() => {
+          previewColor(id, null);
+          props.onDone();
+        }}
+        onAccept={(color) => {
+          accepted.current = true;
+          rememberRecentColor(color);
+          void tree
+            .colorProject(id, color === defaultProjectColor(id) ? null : color)
+            .catch(() => notify(t('project.colorFailed')))
+            .finally(() => previewColor(id, null));
+          props.onDone();
+        }}
+      />
+    </>
+  );
+}
 
 // En pantallas táctiles no se enfoca el buscador al abrir: el teclado taparía la lista.
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -129,7 +192,7 @@ export function ProjectSwitcher() {
         data-tip={tipRows([{ shortcut: 'search', action: tr('project.switchTip') }])}
         onClick={toggle}
       >
-        <Monogram name={name} />
+        <ProjectDot id={current} />
         <span className="project-label">
           <strong>{name}</strong>
           <span>
@@ -210,6 +273,8 @@ type Mode =
   | { name: 'list' }
   | { name: 'new' }
   | { name: 'rename'; id: string }
+  // El color del proyecto (Docs/Doc_Navegacion.md, «Color del proyecto»).
+  | { name: 'color'; id: string }
   | { name: 'archived' }
   // La papelera única: proyectos, páginas y archivos borrados (TrashView.tsx).
   | { name: 'trash' }
@@ -256,6 +321,10 @@ function ProjectMenu(props: {
 
   // Archivar y borrar (P.14) solo con la base en la versión 9: con una más vieja, el selector es el de siempre.
   const statesReady = (status.schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION;
+  // El color, con la base en la versión 27 (una más vieja no tiene dónde guardarlo).
+  const colorReady = (status.schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION;
+  const { workspace } = useServices();
+  const keys = workspace.config.storage;
   const offline = !status.online;
   const needle = query.trim().toLowerCase();
   const archivedMode = mode.name === 'archived';
@@ -279,6 +348,21 @@ function ProjectMenu(props: {
     .filter((id) => weightOf(id) > 0)
     .sort((a, b) => weightOf(b) - weightOf(a));
   const nameOf = (id: string) => tree.project(id)?.name ?? tr('project.thisProject');
+
+  /**
+   * Abre el proyecto en un tab nuevo de fondo (Ctrl/⌘+clic o la rueda): en su última página, si la hay; si no, en su
+   * inicio. Sin tabs (el navegador), solo una página se puede abrir aparte; `false` si no se abrió.
+   */
+  const openProjectInNewTab = (id: string): boolean => {
+    const last = lastPageOf(keys, id);
+    const page = last ? tree.get(last) : undefined;
+    const path = page && page.workspace_id === id && !tree.isTrashed(page.id) ? pagePath(page.id) : '/';
+    if (tabsOn()) {
+      void newTab(path, { background: true, project: id });
+      return true;
+    }
+    return path !== '/' && openInNewTab(path);
+  };
 
   const pick = (id: string) => {
     props.onClose();
@@ -377,6 +461,27 @@ function ProjectMenu(props: {
     );
   }
 
+  if (mode.name === 'color') {
+    return (
+      <div
+        ref={ref}
+        className="menu project-menu color-menu"
+        role="dialog"
+        aria-label={tr('project.colorNamed', { name: nameOf(mode.id) })}
+        style={props.position}
+        onKeyDown={(e) => {
+          // Escape vuelve a la lista de proyectos (sin cerrar el selector), como en la papelera.
+          if (e.key !== 'Escape' || e.defaultPrevented) return;
+          e.preventDefault();
+          e.stopPropagation();
+          backToList();
+        }}
+      >
+        <ProjectColorPanel id={mode.id} name={nameOf(mode.id)} touch={touch} onDone={backToList} />
+      </div>
+    );
+  }
+
   if (mode.name === 'trash') {
     return (
       <div
@@ -439,6 +544,7 @@ function ProjectMenu(props: {
     const canOffline = !!mediaDb && offlineSupported();
     // "Export project…" (P.22): quien ve el proyecto entero (un invitado con páginas sueltas exporta cada rama).
     const canExport = perms.projectLevel(id) >= LEVEL_VIEW;
+    const canColor = canRename && colorReady;
     if (!canRename && !canManage && !canOffline && !canExport) return null;
     const reason = blockedReason(id, archived);
     const deleteReason = offline ? tr('fileTrash.needsInternet') : archived ? null : reason;
@@ -468,6 +574,16 @@ function ProjectMenu(props: {
             }}
           >
             <ExportIcon size={16} />
+          </button>
+        )}
+        {canColor && (
+          <button
+            className="icon-button"
+            aria-label={tr('project.colorNamed', { name })}
+            data-tip={tr('project.colorTip')}
+            onClick={() => setMode({ name: 'color', id })}
+          >
+            <PaletteIcon size={16} />
           </button>
         )}
         {canRename && (
@@ -559,7 +675,7 @@ function ProjectMenu(props: {
                   search.current?.focus();
                 }}
               >
-                <Monogram name={p.name} />
+                <ProjectDot id={p.id} />
                 <span className="project-confirm-text">{tr('project.archiveConfirm', { name: p.name })}</span>
                 <button className="primary small" disabled={busy !== null} autoFocus onClick={() => void setArchived(p.id, true)}>
                   {tr('project.archive')}
@@ -584,9 +700,20 @@ function ProjectMenu(props: {
                 aria-current={p.id === props.current ? 'true' : undefined}
                 className="project-open"
                 tabIndex={-1}
-                onClick={() => pick(p.id)}
+                onClick={(e) => {
+                  // Ctrl/⌘+clic: en un tab nuevo de fondo, como una página; el selector queda abierto para abrir otros.
+                  if (modPressed(e) && !e.altKey && !e.shiftKey && openProjectInNewTab(p.id)) return;
+                  pick(p.id);
+                }}
+                // La rueda: sin el desplazamiento automático del navegador (Windows), como en el árbol.
+                onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+                onAuxClick={(e) => {
+                  if (e.button !== 1) return;
+                  e.preventDefault();
+                  openProjectInNewTab(p.id);
+                }}
               >
-                <Monogram name={p.name} />
+                <ProjectDot id={p.id} />
                 <span className="project-label">
                   <strong>
                     {p.name}
@@ -635,6 +762,11 @@ function ProjectMenu(props: {
                       }}
                     >
                       <ExportIcon size={16} /> {tr('project.export')}
+                    </button>
+                  )}
+                  {perms.canRenameProject(p.id) && !archived && colorReady && (
+                    <button onClick={() => setMode({ name: 'color', id: p.id })}>
+                      <PaletteIcon size={16} /> {tr('project.color')}
                     </button>
                   )}
                   {perms.canRenameProject(p.id) && !archived && (

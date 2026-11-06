@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.320 :
+
+Lega pidió poder cambiar el color de los proyectos: todos tenían el mismo recuadro amarillo con dos letras. Ahora cada
+proyecto tiene un punto de color, en la lista, arriba de la barra lateral, en la búsqueda y en cada tab, que se elige
+con un picker hecho como el de las apps de escritorio de LGA (ocho de fábrica, ocho recientes, *Custom* con el cuadrado
+de saturación y brillo, las barras y el hex), con vista previa en vivo y *Cancel* que lo deja como estaba. Se guarda en
+`workspaces.color` (migración `20261117120000_proyecto_color.sql`, base 27); anda sin red y queda pendiente aparte de la cola del árbol, que una versión vieja no entendería;
+sin elegir, uno de fábrica según el proyecto. Además: el hover de un tab ya no lo parte en dos (el nombre sumaba su
+propio gris) y Ctrl/⌘+clic sobre un proyecto de la lista lo abre en un tab de fondo. D841; doc
+`Doc_Navegacion.md`, «Color del proyecto».
+[ Proyectos - color con picker, punto de color en los tabs, hover entero del tab y Ctrl/⌘+clic para abrir un proyecto en un tab ]
+
 v0.319 :
 
 ERSO pasa a numerar como la post (D840): escena `1013` y plano `ERSO_1066_010`, y la app solo entendía `101_013`. La

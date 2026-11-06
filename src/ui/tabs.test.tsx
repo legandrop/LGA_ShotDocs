@@ -179,6 +179,21 @@ describe('abrir, cambiar y cerrar tabs', () => {
     expect(tabsState().tabs).toHaveLength(1);
   });
 
+  it('el de otro proyecto (Ctrl/⌘+clic en la lista de proyectos) se abre de fondo en su inicio, con ese proyecto', async () => {
+    bind();
+    navigate(A);
+    const first = tabsState().active;
+    await newTab('/', { background: true, project: 'p9' });
+    expect(here()).toBe(A);
+    expect(tabsState().active).toBe(first);
+    const opened = tabsState().tabs[1];
+    expect(opened.history.stack).toEqual(['/']);
+    expect(opened.project).toBe('p9');
+    await switchTab(opened.id);
+    expect(chosen).toContain('p9');
+    expect(here()).toBe('/');
+  });
+
   it('un tab que no estaba en una página vuelve con su proyecto elegido', async () => {
     bind();
     rawReplace.call(history, history.state, '', '/map');

@@ -44,6 +44,7 @@ export async function unsyncedInProject(queues: LocalQueues, projectId: string):
   };
   let count = 0;
   for (const o of tree.pendingOps()) if (opProject(o.op) === projectId) count++;
+  for (const c of tree.pendingProjectColors()) if (c.id === projectId) count++;
   for (const f of tree.failedOps()) if (opProject(f.op) === projectId) count++;
   const [pages, files, media] = await Promise.all([
     queues.docs.unsyncedPages(),

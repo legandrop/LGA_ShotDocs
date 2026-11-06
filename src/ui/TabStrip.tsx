@@ -5,6 +5,7 @@ import { useServices, useTree } from '../services';
 import type { PageTree } from '../sync/tree';
 import { isLetter, modPressed } from './findUi';
 import { CloseIcon, PlusIcon } from './icons';
+import { ProjectDot } from './ProjectSwitcher';
 import { storeProject, useCurrentProject } from './project';
 import { IS_MAC } from './shortcuts';
 import {
@@ -67,6 +68,13 @@ export function tabTitle(tab: Pick<AppTab, 'project'> & { path: string }, tree: 
   if (route.name === 'trash') return tr('trash.title');
   const project = tab.project ? tree.project(tab.project) : undefined;
   return project?.name || tr('tabs.home');
+}
+
+/** El proyecto de un tab: el de su página o, en el inicio, el mapa y la papelera, el que se veía. */
+export function tabProject(tab: Pick<AppTab, 'project'> & { path: string }, tree: PageTree): string | null {
+  const route = parseRoute(new URL(tab.path, 'http://x').pathname);
+  if (route.name === 'page') return tree.get(route.id)?.workspace_id ?? tab.project;
+  return tab.project;
 }
 
 /** Prende los tabs mientras la ventana los tiene (la app instalada, fuera del teléfono) y escucha sus teclas. */
@@ -184,13 +192,17 @@ export function TabStrip() {
     <div className="tab-strip" role="tablist" aria-label={tr('tabs.label')}>
       {tabs.map((tab) => {
         const on = tab.id === active;
-        const title = on
-          ? tabTitle({ path: route.name === 'page' ? pagePath(route.id) : route.name === 'map' ? '/map' : route.name === 'trash' ? '/trash' : '/', project }, tree, tr)
-          : tabTitle({ path: tab.history.stack[tab.history.at] ?? '/', project: tab.project }, tree, tr);
+        const where = on
+          ? { path: route.name === 'page' ? pagePath(route.id) : route.name === 'map' ? '/map' : route.name === 'trash' ? '/trash' : '/', project }
+          : { path: tab.history.stack[tab.history.at] ?? '/', project: tab.project };
+        const title = tabTitle(where, tree, tr);
+        // El punto con el color del proyecto del tab (Docs/Doc_Navegacion.md, «Color del proyecto»).
+        const owner = tabProject(where, tree);
         return (
           <div key={tab.id} className={`app-tab${on ? ' active' : ''}`} onAuxClick={(e) => middleClose(e, tab.id)} onMouseDown={(e) => e.button === 1 && e.preventDefault()}>
             <button className="app-tab-label" role="tab" aria-selected={on} onClick={() => void switchTab(tab.id)}>
-              {title}
+              {owner && <ProjectDot id={owner} size={8} />}
+              <span className="app-tab-title">{title}</span>
             </button>
             <button
               className="app-tab-close"

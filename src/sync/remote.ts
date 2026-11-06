@@ -54,6 +54,8 @@ export interface Remote {
   /** Idempotente: si el proyecto ya existe no hace nada. */
   createProject(project: NewProject): Promise<void>;
   renameProject(id: string, name: string): Promise<void>;
+  /** El color del proyecto (`workspaces.color`, versión 27). Idempotente. */
+  colorProject(id: string, color: string | null): Promise<void>;
   /** Idempotente: si la página ya existe no hace nada. */
   createPage(page: NewPage): Promise<void>;
   /**
@@ -306,6 +308,8 @@ export const SNAPSHOT_SCHEMA_VERSION = 17;
  * bajando la lista entera, sin aviso.
  */
 export const CHANGED_AT_SCHEMA_VERSION = 26;
+/** La versión con el color de los proyectos (20261117120000_proyecto_color.sql): `workspaces.color`. */
+export const PROJECT_COLOR_SCHEMA_VERSION = 27;
 /** Cada cuánto se baja igual la lista entera del árbol, aunque no haya ninguna señal de que haga falta. */
 export const TREE_WHOLE_EVERY_MS = 30 * 60_000;
 /** Cada cuánto se compara el total de páginas que la sesión ve con la copia (lo que entra o sale de lo compartido). */
@@ -926,6 +930,8 @@ export class SupabaseRemote
   private archivedMissingAt = 0;
   /** Lo mismo con las columnas de la carpeta en la papelera de Drive (versión 10). */
   private driveColumnsMissingAt = 0;
+  /** Lo mismo con `workspaces.color` (versión 27). */
+  private colorMissingAt = 0;
 
   /** Desde cuándo la base no tiene `workspace_settings` (o la subida con versión); se reintenta cada tanto. */
   private settingsTableMissingAt = 0;
@@ -1201,7 +1207,15 @@ export class SupabaseRemote
       archived &&
       (schemaVersion ?? 0) >= PROJECT_DRIVE_SCHEMA_VERSION &&
       Date.now() - this.driveColumnsMissingAt >= 10 * 60_000;
-    const columns = ['id, name, created_at, owner_id', ...(archived ? ['archived_at'] : []), ...(drive ? ['drive_trash_requested_at, drive_missing_at'] : [])];
+    // Y el color (versión 27): si falta, se deja primero él.
+    const color =
+      (schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION && Date.now() - this.colorMissingAt >= 10 * 60_000;
+    const columns = [
+      'id, name, created_at, owner_id',
+      ...(archived ? ['archived_at'] : []),
+      ...(drive ? ['drive_trash_requested_at, drive_missing_at'] : []),
+      ...(color ? ['color'] : []),
+    ];
     // Por fecha de creación (el orden de la lista) y, a igual fecha, por id: cada pedido sigue al último proyecto
     // recibido, hasta el total que dice la API. Una lista de proyectos cortada dejaría sin bajar las páginas de los
     // que faltan, y el dispositivo los daría por borrados. En el caso de siempre es un pedido, como antes.
@@ -1210,6 +1224,10 @@ export class SupabaseRemote
       let query = this.client.from('workspaces').select(columns.join(', '), COUNTED);
       if (list.last) query = query.or(afterPair('created_at', list.last.created_at, 'id', list.last.id));
       const { data, error, status, count } = await timed(query.order('created_at').order('id').limit(MAX_ROWS_PER_REQUEST));
+      if (color && error?.code === UNDEFINED_COLUMN) {
+        this.colorMissingAt = Date.now();
+        return this.fetchProjects(schemaVersion);
+      }
       if (drive && error?.code === UNDEFINED_COLUMN) {
         this.driveColumnsMissingAt = Date.now();
         return this.fetchProjects(schemaVersion);
@@ -1271,6 +1289,14 @@ export class SupabaseRemote
   async renameProject(id: string, name: string): Promise<void> {
     const { data, error, status } = await timed(
       this.client.from('workspaces').update({ name }).eq('id', id).select('id'),
+    );
+    if (error) throw toRemoteError(error, status);
+    if (data.length === 0) throw new RemoteError('project_not_found', true, 'P0002');
+  }
+
+  async colorProject(id: string, color: string | null): Promise<void> {
+    const { data, error, status } = await timed(
+      this.client.from('workspaces').update({ color }).eq('id', id).select('id'),
     );
     if (error) throw toRemoteError(error, status);
     if (data.length === 0) throw new RemoteError('project_not_found', true, 'P0002');

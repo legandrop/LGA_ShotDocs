@@ -12,7 +12,7 @@ import type { ProjectRow } from '../sync/types';
 import { CloseIcon, ExpandIcon, PageIcon, PlusIcon, SearchIcon } from './icons';
 import { notify } from './notice';
 import { useCurrentProject, useSwitchProject } from './project';
-import { Monogram } from './ProjectSwitcher';
+import { ProjectDot } from './ProjectSwitcher';
 import { ReplaceResults } from './ProjectReplace';
 import { searchSession, type ResultRequest } from './projectSearchUi';
 import { existingRelationsSession } from './relationsUi';
@@ -448,7 +448,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
                     itemOf((i) => i.kind === 'project' && i.project.id === p.id),
                     'search-project',
                     <>
-                      <Monogram name={p.name} size={22} />
+                      <ProjectDot id={p.id} size={12} />
                       <span className="search-project-name">
                         <Highlight text={p.name} ranges={typed ? rangesIn(p.name, words) : []} />
                       </span>

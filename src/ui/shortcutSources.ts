@@ -75,6 +75,8 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   // Renombrar en el árbol.
   treeRename: ['Sidebar.tsx'],
   sidebarResize: ['SidebarResizer.tsx'],
+  colorAdjust: ['ColorPicker.tsx'],
+  colorAccept: ['ColorPicker.tsx'],
   menusMove: ['menus.tsx'],
   menusClose: [
     // Esc deja sin crear el nombre de *New location* (FolderIndex.tsx) y de *New set* (LiveHeader.tsx).

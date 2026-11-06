@@ -114,6 +114,8 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   'menusClose': 'shortcut.menusClose',
   'listPick': 'shortcut.listPick',
   'listClose': 'shortcut.listClose',
+  'colorAdjust': 'shortcut.colorAdjust',
+  'colorAccept': 'shortcut.colorAccept',
   versionName: 'shortcut.versionName',
   assistantApply: 'shortcut.assistantApply',
   dictationPlace: 'shortcut.dictationPlace',

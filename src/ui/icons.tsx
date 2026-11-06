@@ -35,6 +35,10 @@ export const DayReportIcon = icon(
 export const TypeIcon = icon('M3.75 4.75v4.4a1 1 0 0 0 .3.7l6.3 6.3a1 1 0 0 0 1.4 0l4.2-4.2a1 1 0 0 0 0-1.4l-6.3-6.3a1 1 0 0 0-.7-.3h-4.2a1 1 0 0 0-1 1zM7.25 7.25h.01', { strokeWidth: 1.5 });
 export const CheckIcon = icon('M5 10.5l3.25 3.25L15 7', { strokeWidth: 1.8 });
 export const RenameIcon = icon('M12.5 4.5l3 3L8 15H5v-3z');
+// El color de un proyecto: una paleta con tres pinturas.
+export const PaletteIcon = icon(
+  'M10 3.25a6.75 6.75 0 1 0 0 13.5c.9 0 1.35-.55 1.35-1.2 0-.4-.2-.7-.4-1-.2-.3-.4-.6-.4-1 0-.7.55-1.25 1.25-1.25h1.6a3.35 3.35 0 0 0 3.35-3.35c0-3.15-3-5.7-6.75-5.7zM6.75 9.75h.01M8.25 6.75h.01M11.75 6.75h.01',
+);
 export const MoveIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM8.5 12h5M11.5 10l2 2-2 2');
 // Importar: una carpeta con una flecha que entra.
 export const ImportIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM10 9.5v4.5M8 12l2 2 2-2');

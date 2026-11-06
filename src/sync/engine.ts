@@ -11,7 +11,7 @@ import { epochBehind, type PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { canAdmit, LINK_EDIT_SCHEMA_VERSION, LinkAdmission } from './linkAdmit';
 import { hasUnsyncedContent, type DocState } from './localDb';
-import { APP_OUTDATED, SNAPSHOT_SCHEMA_VERSION, type Remote } from './remote';
+import { APP_OUTDATED, PROJECT_COLOR_SCHEMA_VERSION, SNAPSHOT_SCHEMA_VERSION, type Remote } from './remote';
 import { AUTHOR_MISSING } from './types';
 import type { PageTree } from './tree';
 import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type QueuedOp, type WorkspaceSettings } from './types';
@@ -669,6 +669,8 @@ export class SyncEngine {
       // siempre (Docs/Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red").
       if (!outdated) await this.pushOps();
       halt();
+      if (!outdated) await this.pushProjectColors();
+      halt();
       // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
       const projects = await this.remote.fetchProjects(this.status.schemaVersion);
       halt();
@@ -1132,6 +1134,34 @@ export class SyncEngine {
       .catch(() => undefined);
   }
 
+  /**
+   * Los colores de proyecto elegidos en el dispositivo (`PageTree.colorProject`), después de los cambios del árbol (un
+   * proyecto creado sin red ya subió). Con una base anterior a la 27 esperan. Un rechazo para siempre (sin permiso, el
+   * proyecto no está) lo descarta: es un dato de la vista, no contenido.
+   */
+  private async pushProjectColors(): Promise<void> {
+    if ((this.status.schemaVersion ?? 0) < PROJECT_COLOR_SCHEMA_VERSION) return;
+    for (const { id, color } of this.tree.pendingProjectColors()) {
+      if (this.stopped) return;
+      // Un proyecto creado acá que todavía no subió (en la cola o rechazado): el color espera a que exista en el
+      // servidor; subirlo antes daría «no está» y se perdería.
+      if (this.tree.isLocalProject(id)) continue;
+      try {
+        await this.remote.colorProject(id, color);
+        await this.tree.settleProjectColor(id, color, true);
+      } catch (err) {
+        if (errorMessage(err) === APP_OUTDATED) {
+          this.patch({ outdated: true });
+          this.options.media?.setOutdated(true);
+          return;
+        }
+        if (!isPermanent(err)) throw err;
+        console.warn('[sync] color de proyecto rechazado', id, errorMessage(err));
+        await this.tree.settleProjectColor(id, color, false);
+      }
+    }
+  }
+
   private async pushOps(): Promise<void> {
     for (const op of this.tree.pendingOps()) {
       if (this.stopped) return;
@@ -1423,7 +1453,8 @@ export class SyncEngine {
     const unsyncedSet = new Set(unsynced);
     for (const s of states.values()) if (s.rejected && unsyncedSet.has(s.pageId)) rejectedPages++;
     this.patch({
-      pendingOps: this.tree.pendingOps().length,
+      // Los colores de proyecto sin subir cuentan como cambios del árbol pendientes.
+      pendingOps: this.tree.pendingOps().length + this.tree.pendingProjectColors().length,
       failedOps: this.tree.failedOps().length,
       pendingPages: unsynced.length,
       rejectedPages,

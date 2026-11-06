@@ -11,7 +11,7 @@ import { errorMessage, type ProjectDeleteInfo, type TrashedProjectRow } from '..
 import { RestoreIcon } from './icons';
 import { notify } from './notice';
 import { projectStateError, useProjectDrive } from './project';
-import { Monogram } from './ProjectSwitcher';
+import { ProjectDot, ProjectDotOf } from './ProjectSwitcher';
 import { downloadUnsynced } from './unsyncedDownload';
 
 // Borrar un proyecto y la papelera de proyectos (P.14, Docs/Doc_Proyectos_Borrar.md, secciones 3, 6.1, 7.2 y 7.4).
@@ -166,7 +166,7 @@ export function DeleteProjectDialog(props: {
         <h2>{tr('deleteProject.title', { name: props.name })}</h2>
         {info && (
           <div className="delete-project-stats">
-            <Monogram name={props.name} size={30} />
+            <ProjectDot id={props.projectId} size={22} />
             <span>
               {tr('deleteProject.stats', {
                 pages: tr('project.pages', { count: info.pages }),
@@ -535,7 +535,7 @@ export function DeletedProjectItem(props: { row: TrashedProjectRow; list: Delete
   return (
     <div className="deleted-project-item" data-kind="project">
       <div className="deleted-project-row">
-        <Monogram name={r.name} />
+        <ProjectDotOf project={r} />
         <span className="project-label">
           {props.kind && <span className="trash-kind">{props.kind}</span>}
           <strong>{r.name}</strong>

@@ -138,8 +138,8 @@ export const help = {
   },
   'help.tabs.title': { en: "Tabs", es: "Tabs" },
   'help.tabs.text': {
-    en: "In the installed app, {new} opens a new tab with the page you're on, and Ctrl/⌘+click or the mouse wheel on a page opens it in a tab behind. Each tab keeps its own back and forward. {close} closes it, {next} and {prev} switch tabs. The tabs come back when you open the app again. In a browser, use its own tabs: open as many as you want, and the one you're using takes over (the others wait, and continue when you go back to them).",
-    es: "En la app instalada, {new} abre un tab nuevo con la página en la que estás, y Ctrl/⌘+clic o la rueda del mouse sobre una página la abre en un tab de fondo. Cada tab tiene su atrás y adelante. {close} lo cierra, {next} y {prev} pasan de un tab a otro. Los tabs vuelven al abrir la app otra vez. En un navegador, usá sus propias pestañas: abrí las que quieras y la que estás usando toma el control (las otras esperan y siguen cuando volvés a ellas).",
+    en: "In the installed app, {new} opens a new tab with the page you're on, and Ctrl/⌘+click or the mouse wheel on a page opens it in a tab behind; on a project in the project list, it opens that project. Each tab shows the color dot of its project and keeps its own back and forward. {close} closes it, {next} and {prev} switch tabs. The tabs come back when you open the app again. In a browser, use its own tabs: open as many as you want, and the one you're using takes over (the others wait, and continue when you go back to them).",
+    es: "En la app instalada, {new} abre un tab nuevo con la página en la que estás, y Ctrl/⌘+clic o la rueda del mouse sobre una página la abre en un tab de fondo; sobre un proyecto de la lista de proyectos, abre ese proyecto. Cada tab muestra el punto de color de su proyecto y tiene su atrás y adelante. {close} lo cierra, {next} y {prev} pasan de un tab a otro. Los tabs vuelven al abrir la app otra vez. En un navegador, usá sus propias pestañas: abrí las que quieras y la que estás usando toma el control (las otras esperan y siguen cuando volvés a ellas).",
   },
   'help.pagesExpand.title': { en: "Expand subpages when selecting a page", es: "Expandir subpáginas al elegir una página" },
   'help.pagesExpand.text': {
@@ -209,6 +209,11 @@ export const help = {
   'help.projects.text': {
     en: "Each show or job is a project with its own page tree. Switch projects or create one from the top of the sidebar; {search} lists them too.",
     es: "Cada serie o trabajo es un proyecto con su propio árbol de páginas. Cambiá de proyecto o creá uno desde arriba de la barra lateral; {search} también los muestra.",
+  },
+  'help.projectsColor.title': { en: "Project colors", es: "El color de cada proyecto" },
+  'help.projectsColor.text': {
+    en: "Each project has a color dot, in the project list, at the top of the sidebar and on its tabs. To change it, hover the project in the list and click the palette (on a phone, tap its ⋯ and Color): pick one of the presets or a recent color, or open Custom to choose any color or type its hex. You see it change as you choose; OK saves it for everyone in the project and Cancel leaves it as it was. Whoever can rename the project can change its color; a project that never got one has a default color.",
+    es: "Cada proyecto tiene un punto de color, en la lista de proyectos, arriba de la barra lateral y en sus tabs. Para cambiarlo, pasá por el proyecto en la lista y tocá la paleta (en el teléfono, su ⋯ y Color): uno de PRESETS o de RECIENTES, o abrí PERSONALIZADO para elegir cualquier color o escribir su hex. Lo ves cambiar mientras elegís; OK lo guarda para todos los del proyecto y Cancelar lo deja como estaba. Lo cambia quien puede renombrar el proyecto; uno que nunca tuvo color tiene uno de fábrica.",
   },
   'help.projectsArchive.title': { en: "Archive and delete projects", es: "Archivar y borrar proyectos" },
   'help.projectsArchive.text': {
@@ -962,6 +967,11 @@ export const help = {
   },
   'shortcut.menusMove': { en: "Go through the items of a menu", es: "Recorrer los ítems de un menú" },
   'shortcut.menusClose': { en: "Close a menu or a dialog", es: "Cerrar un menú o un diálogo" },
+  'shortcut.colorAdjust': {
+    en: "In the color picker, on the square or a bar: move it (with Shift, in bigger steps)",
+    es: "En el picker de color, sobre el cuadrado o una barra: moverlo (con Shift, de a pasos más grandes)",
+  },
+  'shortcut.colorAccept': { en: "In the color picker: OK / Cancel", es: "En el picker de color: OK / Cancelar" },
   'shortcut.listPick': {
     en: "In the project list, the search panel and the Drive paste menu: move and choose",
     es: "En la lista de proyectos, el panel de buscar y el menú de pegar Drive: moverse y elegir",

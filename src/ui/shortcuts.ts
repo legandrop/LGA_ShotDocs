@@ -224,6 +224,10 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'menusClose', keys: ['Escape'], place: 'menus', owner: 'app', source: 'dom' },
   { id: 'listPick', keys: ['ArrowUp', 'ArrowDown', 'Enter'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
   { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
+  // El picker de color (ColorPicker.tsx; el color de un proyecto): las flechas mueven el cuadrado y las barras (con Shift,
+  // de a 10 %); Enter acepta y Escape cancela.
+  { id: 'colorAdjust', keys: ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'], place: 'menus', context: 'color', owner: 'app', source: 'dom' },
+  { id: 'colorAccept', keys: ['Enter', 'Escape'], place: 'menus', context: 'color', owner: 'app', source: 'dom' },
   // El nombre de una versión del historial (Docs/Doc_Historial.md, entrega 3): guardar o dejar como estaba.
   { id: 'versionName', keys: ['Enter', 'Escape'], place: 'menus', context: 'versionName', owner: 'app', source: 'dom' },
   // Aplicar la sugerencia del asistente, con el foco en su panel (Esc la descarta: `menusClose`).

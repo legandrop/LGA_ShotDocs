@@ -14,6 +14,7 @@ import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
 import {
+  PROJECT_COLOR_SCHEMA_VERSION,
   PROJECT_DRIVE_SCHEMA_VERSION,
   PROJECT_PURGE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
@@ -960,6 +961,12 @@ export class FakeServer {
     this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_PURGE_SCHEMA_VERSION) };
   }
 
+  /** Prende el color de los proyectos: la base en la versión 27 (`workspaces.color`). */
+  enableProjectColor(): void {
+    this.enableProjectPurge();
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_COLOR_SCHEMA_VERSION) };
+  }
+
   /** Prende archivar y borrar proyectos: la base en la versión 9. */
   enableProjectStates(): void {
     this.settings = {
@@ -1873,13 +1880,17 @@ export class FakeRemote
     const withArchived = (schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION;
     const withDrive =
       (schemaVersion ?? 0) >= PROJECT_DRIVE_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= PROJECT_DRIVE_SCHEMA_VERSION;
+    // El color, con la 27.
+    const withColor =
+      (schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION;
     return [...this.server.projects.values()]
       .filter((p) => !this.server.projectDeleted(p.id))
       .filter((p) => !this.team || this.server.canViewProject(this.userId, p.id))
-      .map(({ archived_at, drive_trash_requested_at: _r, drive_missing_at: _m, ...p }) => {
+      .map(({ archived_at, drive_trash_requested_at: _r, drive_missing_at: _m, color, ...p }) => {
         const d = this.server.projectDrive.get(p.id);
         return {
           ...p,
+          ...(withColor ? { color: color ?? null } : {}),
           ...(withArchived ? { archived_at: archived_at ?? null } : {}),
           ...(withDrive ? { drive_trash_requested_at: d?.requested_at ?? null, drive_missing_at: d?.missing_at ?? null } : {}),
         };
@@ -2057,6 +2068,19 @@ export class FakeRemote
     this.checkWriteVersion();
     checkProjectName(name);
     this.server.projects.set(id, { ...project, name });
+  }
+
+  async colorProject(id: string, color: string | null): Promise<void> {
+    this.server.check();
+    const project = this.server.projects.get(id);
+    if (!project || (this.team && this.server.projectLevel(this.userId, id) < 4)) {
+      throw new RemoteError('project_not_found', true, 'P0002');
+    }
+    this.checkWriteVersion();
+    if (color !== null && !/^#[0-9a-f]{6}$/.test(color)) {
+      throw new RemoteError('new row for relation "workspaces" violates check constraint "workspaces_color_hex"', true, '23514');
+    }
+    this.server.projects.set(id, { ...project, color });
   }
 
   async createPage(page: NewPage): Promise<void> {

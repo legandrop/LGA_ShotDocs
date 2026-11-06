@@ -139,6 +139,11 @@ export interface ProjectRow {
    */
   drive_trash_requested_at?: string | null;
   drive_missing_at?: string | null;
+  /**
+   * El color elegido para el proyecto (`workspaces.color`, versión 27 de la base): `#rrggbb`. `null` o ausente: sin
+   * elegir (la app usa uno de su paleta según el id, `projectColor` de ui/projectColor.ts).
+   */
+  color?: string | null;
 }
 
 /** Una fila de `trashed_projects` (P.14): un proyecto en la papelera de proyectos que la sesión veía. */

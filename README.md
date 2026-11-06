@@ -15,7 +15,8 @@ its own project: a tree of pages you own.
 - On editable workspace pages, an annotated Drive photo’s existing Download button also offers annotated Download and Copy, including photos in rows, inline and in table cells. Original stays available.
 
 - **Projects.** Each show or job is a project with its own tree of pages. Switch between them from the
-  top of the sidebar without leaving the page you are on.
+  top of the sidebar without leaving the page you are on. Each project has a color dot (chosen with a color picker
+  by whoever can rename it) that also marks its tabs; Ctrl/⌘+click on a project in the list opens it in a new tab.
 - **Search.** Ctrl/⌘+F finds and replaces in the open page. Ctrl/⌘+K (or the magnifying glass next to
   "+" in the sidebar) searches the titles and text of every page in the project, on your device and
   offline, including the complete text of valid photo annotations. Selecting an **Annotation** result opens that same photo in the viewer, including inline photos and table cells. Text results take you to the exact spot (collapsed sections that hide a match open while you search and fold back when

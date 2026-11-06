@@ -279,14 +279,15 @@ export function stepTab(delta: 1 | -1): Promise<void> {
  * Un tab nuevo con `path` (de fábrica, lo que se ve ahora), al lado del de ahora. `background`: se abre sin dejar el de
  * ahora (Ctrl/⌘+clic o la rueda en un link, como en un navegador).
  */
-export function newTab(path: string = here(), options: { background?: boolean } = {}): Promise<void> {
+export function newTab(path: string = here(), options: { background?: boolean; project?: string } = {}): Promise<void> {
   return queue(async () => {
     if (!binding || state.tabs.length >= MAX_TABS) return;
     const captured = captureActive();
     const tab: AppTab = {
       id: newId(),
       history: { stack: [path], at: 0 },
-      project: path === here() ? (binding.project() ?? null) : null,
+      // `project`: el de otro proyecto (Ctrl/⌘+clic en la lista de proyectos), que abre en su inicio o en su página.
+      project: options.project ?? (path === here() ? (binding.project() ?? null) : null),
       scroll: path === here() ? (scrollRoot()?.scrollTop ?? 0) : 0,
     };
     const i = captured.tabs.findIndex((t) => t.id === captured.active);

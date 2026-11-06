@@ -283,8 +283,9 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.tabs.title',
     text: 'help.tabs.text',
     keys: { new: 'newTab', close: 'closeTab', next: 'nextTab', prev: 'prevTab' },
-    words: ['tab', 'tabs', 'pestaña', 'pestañas', 'new tab', 'tab nuevo', 'ventana', 'window', 'browser', 'navegador', 'Ctrl+T', 'abrir aparte'],
-    since: '0.300',
+    words: ['tab', 'tabs', 'pestaña', 'pestañas', 'new tab', 'tab nuevo', 'ventana', 'window', 'browser', 'navegador', 'Ctrl+T', 'abrir aparte', 'color', 'proyecto', 'project'],
+    // Subió con el punto de color de cada tab y Ctrl/⌘+clic en la lista de proyectos (v0.320).
+    since: '0.320',
   },
   {
     id: 'pagesTree',
@@ -336,6 +337,17 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { search: 'search' },
     showMe: 'project-switcher',
     since: BEFORE_HELP,
+  },
+  {
+    // El color de cada proyecto (Docs/Doc_Navegacion.md, «Color del proyecto»).
+    id: 'projectsColor',
+    section: 'pages',
+    title: 'help.projectsColor.title',
+    text: 'help.projectsColor.text',
+    showMe: 'project-switcher',
+    words: ['color', 'colour', 'picker', 'paleta', 'palette', 'punto', 'dot', 'hex', 'proyecto', 'project', 'tab'],
+    more: ['colorAdjust', 'colorAccept'],
+    since: '0.320',
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
   { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },

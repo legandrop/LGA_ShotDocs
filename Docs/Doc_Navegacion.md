@@ -96,6 +96,49 @@ del navegador y la página no los recibe; ahí se usan sus pestañas (sección s
   ventana; si ninguno la tiene (se llegó con un link), va uno nuevo al principio.
 - Un link a otro workspace o con la autoridad de un link público no se abre en un tab (`appPath`): se abre como siempre.
 
+## Color del proyecto (v0.320, D841)
+
+Cada proyecto tiene un punto de color (`ProjectDot`, `src/ui/ProjectSwitcher.tsx`), que reemplazó al recuadro amarillo con
+dos letras: en el selector de proyectos, arriba de la barra lateral, en la búsqueda (⌘K), en la papelera de proyectos y
+en cada tab. Los workspaces siguen con sus dos letras (son otra cosa).
+
+- **Dónde se guarda:** `workspaces.color` (`#rrggbb` en minúsculas o `null`; migración
+  `20261117120000_proyecto_color.sql`, versión 27 de la base). Lo cambia quien puede renombrar el proyecto (nivel 4, la
+  política `workspaces_update` de siempre) y lo leen todos los que ven el proyecto. Con una base anterior a la 27 la app
+  no pide la columna y no ofrece la paleta.
+- **Sin elegir** (`null`): uno de los ocho colores de fábrica según el id (`defaultProjectColor`,
+  `src/ui/projectColor.ts`), el mismo en todos los dispositivos. Elegir justo ese color lo deja sin elegir.
+- **Cómo se cambia:** en la lista de proyectos, el ícono de la paleta del renglón (en el teléfono, en su ⋯) abre el
+  picker dentro del selector (`ProjectColorPanel`). `PageTree.colorProject` lo deja pendiente en el dispositivo (anda sin
+  red) y `SyncEngine.pushProjectColors` lo sube después de los cambios del árbol; llega a los otros dispositivos con la
+  lista de proyectos. **No va en la cola del árbol** (`ops`): una versión anterior de la app que encuentra en su cola un
+  cambio que no conoce no arranca (`repairQueued` → `fitOp`); va en una clave aparte de `meta`
+  (`projectColorsPending`), que una versión vieja ignora (el color sube cuando vuelve una nueva). Cuenta en los cambios
+  sin subir. Con una base anterior a la 27 espera; un rechazo para siempre (sin permiso, el proyecto no está) lo descarta.
+- **En la papelera de proyectos** el punto sale con el color de fábrica: `trashed_projects()` no trae el color.
+- **El picker** (`src/ui/ColorPicker.tsx`) es el de las apps de escritorio de LGA (`LgaColorPickerDialog` de
+  `LGA_Base_QT_C_Py`, `docs/Doc_ColorPicker.md`): *Presets* (los ocho de fábrica), *Recent* (los últimos ocho elegidos en
+  este dispositivo, `shotdocs.colorRecents`), y *Custom* plegable con el cuadrado de saturación y brillo de 240 × 140,
+  las barras de tono, saturación y brillo, el hex que se escribe (se confirma con Enter o al salir; uno roto vuelve al de
+  antes) y el reset al color de fábrica. Sin transparencia. Las flechas mueven el cuadrado y las barras (con Shift, de a
+  10 %). **Vista previa en vivo:** cada cambio se ve en todos los puntos de ese proyecto (`previewColor`); *OK* lo guarda,
+  *Cancel*, Escape o cerrar el selector lo descartan.
+- **Tabs:** cada tab lleva el punto de su proyecto (`tabProject`: el de su página o, en el inicio, el mapa y la papelera,
+  el que se veía).
+
+## El hover de un tab (v0.320)
+
+El tab es uno solo hasta la cruz: al pasar por encima se pinta entero. Antes el nombre (un `<button>`) sumaba su propio
+gris de hover (`button:hover`) al del tab y lo partía en dos; `.app-tab-label:hover` ya no se pinta. La cruz sí se marca
+sola (un gris más) cuando el puntero está sobre ella.
+
+## Abrir un proyecto en un tab (v0.320)
+
+En la lista de proyectos, **Ctrl/⌘+clic** (o la rueda) sobre un proyecto lo abre en un tab nuevo de fondo, como una
+página, y el selector queda abierto para abrir otros. El tab va a la última página que se vio de ese proyecto en el
+dispositivo o, si no hay, a su inicio, con ese proyecto elegido (`newTab(path, { background, project })`). En un
+navegador (sin tabs) se abre en otra pestaña solo si hay una página a la que ir; si no, el clic abre el proyecto acá.
+
 ## Varias pestañas del navegador (v0.300, D812)
 
 Escribe una sola pestaña por base local (el lock `lock:<base>` de `services.ts`, de siempre). Lo nuevo es que la que se

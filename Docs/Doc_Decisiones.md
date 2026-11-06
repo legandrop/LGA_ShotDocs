@@ -2754,3 +2754,19 @@ plano `ERSO_1066_010` en vez de `ERSO_101_066_010`, igual que en la post y en Pi
 `101_013` (la marca de la página, el registro y el orden), y la app entiende y muestra la forma de la post. El link de
 escena abre con las dos formas. Un inserto es parte de su escena (`1033A-INS` → `101_033A`). VLLF (un largo) no cambia.
 Implementado en v0.319 (`Doc_Relaciones.md`, sección 2).
+
+### D841 · El color de cada proyecto, el punto en los tabs y Ctrl/⌘+clic en la lista de proyectos (2026-11-05)
+**Pedido de Lega:** que se pueda cambiar el color de los proyectos: el recuadro amarillo con dos letras se reemplaza por
+un punto de color que se elige con un buen picker, como el de sus apps de escritorio; cada tab lleva el punto del
+proyecto al que pertenece; el hover de un tab lo pinta entero hasta la cruz (la cruz se marca sola solo con el puntero
+encima); y Ctrl/⌘+clic sobre otro proyecto en la lista lo abre en un tab nuevo, como con las páginas. **Decidido sin
+Lega (lo puede cambiar):** (1) **un círculo**, no un cuadrado (es el punto de los tabs de sus apps de escritorio). (2)
+**Sin elegir, un color de fábrica según el proyecto** (uno de los ocho del picker, siempre el mismo), para que los
+proyectos se distingan desde el primer día; elegir justo ese color lo deja sin elegir. (3) **Lo cambia quien puede
+renombrar el proyecto** y vale para todos los que lo ven (está en la base, no en el dispositivo). (4) El picker es el
+de `LgaColorPickerDialog`: ocho de fábrica, ocho recientes (por dispositivo), *Custom* plegable y abierto de entrada, con
+vista previa en vivo en todos los puntos del proyecto; *Cancel* lo deja como estaba. (5) Los workspaces conservan sus
+dos letras. (6) Ctrl/⌘+clic abre el proyecto **de fondo** (como las páginas) y deja la lista abierta para abrir varios;
+el tab va a la última página vista de ese proyecto o a su inicio. (7) El color elegido sin red queda pendiente **aparte de
+la cola del árbol**, para que una versión anterior de la app abierta en otra pestaña siga arrancando. Detalle:
+`Doc_Navegacion.md`, «Color del proyecto».

@@ -2,6 +2,7 @@ import { ImportPending, validUuid, matchesProjectIdentity, projectReceiptKey, pr
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { t } from '../i18n';
 import { cutText } from '../lib/graphemes';
+import { normalizeHex } from '../lib/hexColor';
 import { DB_LIMITS, splitTitle } from '../lib/dbLimits';
 import { contentGap, serverSeqFor } from './clean';
 import { GENERATION_KEY, type LocalDb } from './localDb';
@@ -13,6 +14,8 @@ export function compareSiblings(a: PageRow, b: PageRow): number {
 }
 
 const PROJECTS_KEY = 'projects';
+/** Los colores de proyecto elegidos en el dispositivo que todavía no subieron (`{ id: color }`). */
+const PROJECT_COLORS_KEY = 'projectColorsPending';
 /** El primer proyecto del dispositivo (`services.ts`): se reemplaza si el servidor deja de mandarlo (P.14). */
 const PRIMARY_KEY = 'workspaceId';
 /**
@@ -234,6 +237,7 @@ export class PageTree {
   private snapshot = new Map<string, PageRow>();
   private projectSnapshot = new Map<string, ProjectRow>();
   private projectView = new Map<string, ProjectRow>();
+  private pendingColors = new Map<string, string | null>();
   private writing = 0;
   private statsCache: Map<string, { pages: number; updatedAt: string | null }> | null = null;
   private ops: QueuedOp[] = [];
@@ -292,14 +296,22 @@ export class PageTree {
   }
 
   async load(): Promise<void> {
-    const [rows, ops, failed, projects, fresh, rests] = await Promise.all([
+    const [rows, ops, failed, projects, fresh, rests, colors] = await Promise.all([
       this.db.getAll('pages'),
       this.db.getAll('ops'),
       this.db.getAll('failedOps'),
       this.db.get('meta', PROJECTS_KEY) as Promise<ProjectRow[] | undefined>,
       this.db.get('meta', FRESH_KEY).catch(() => undefined),
       this.db.get('meta', TITLE_REST_KEY) as Promise<TitleRest[] | undefined>,
+      this.db.get('meta', PROJECT_COLORS_KEY).catch(() => undefined),
     ]);
+    this.pendingColors = new Map(
+      colors && typeof colors === 'object' && !Array.isArray(colors)
+        ? Object.entries(colors as Record<string, unknown>).flatMap(([id, c]): [string, string | null][] =>
+            c === null ? [[id, null]] : typeof c === 'string' && normalizeHex(c) ? [[id, normalizeHex(c)]] : [],
+          )
+        : [],
+    );
     this.fresh = Array.isArray(fresh) ? fresh.filter((id): id is string => typeof id === 'string') : [];
     this.snapshot = new Map(rows.map((r) => [r.id, r]));
     this.projectSnapshot = new Map((projects ?? []).map((p) => [p.id, p]));
@@ -605,6 +617,45 @@ export class PageTree {
     const next = cutText(name.trim(), DB_LIMITS.projectName);
     if (!next || this.projectView.get(id)?.name === next) return;
     await this.enqueue({ kind: 'renameProject', id, name: next });
+  }
+
+  /**
+   * El color del proyecto: `#rrggbb` (se guarda en minúsculas) o `null` para volver al de fábrica. Anda sin red: queda
+   * pendiente y sube en la próxima vuelta (`SyncEngine.pushProjectColors`). **No va en la cola del árbol** (`ops`): una
+   * versión anterior de la app que encuentra en su cola un cambio que no conoce no arranca; esta clave aparte de `meta`
+   * la ignora, y el color sube cuando vuelve una versión que la conoce (Docs/Doc_Navegacion.md, «Color del proyecto»).
+   */
+  async colorProject(id: string, color: string | null): Promise<void> {
+    const next = color === null ? null : normalizeHex(color);
+    if (color !== null && !next) return;
+    if ((this.projectView.get(id)?.color ?? null) === next && !this.pendingColors.has(id)) return;
+    this.pendingColors.set(id, next);
+    await this.db.put('meta', Object.fromEntries(this.pendingColors), PROJECT_COLORS_KEY);
+    this.recompute();
+    this.onQueued?.();
+  }
+
+  /** Los colores de proyecto que esperan subir, en el orden en que se eligieron. */
+  pendingProjectColors(): { id: string; color: string | null }[] {
+    return [...this.pendingColors].map(([id, color]) => ({ id, color }));
+  }
+
+  /**
+   * El servidor confirmó el color (`ok`) o lo rechazó para siempre (`ok` falso: se descarta, como un cambio que no
+   * vale). Si mientras subía se eligió otro, ese sigue pendiente.
+   */
+  async settleProjectColor(id: string, color: string | null, ok: boolean): Promise<void> {
+    if (!this.pendingColors.has(id) || this.pendingColors.get(id) !== color) return;
+    this.pendingColors.delete(id);
+    const tx = this.db.transaction(['meta'], 'readwrite');
+    await tx.objectStore('meta').put(Object.fromEntries(this.pendingColors), PROJECT_COLORS_KEY);
+    const current = this.projectSnapshot.get(id);
+    if (ok && current) {
+      this.projectSnapshot.set(id, { ...current, color });
+      await tx.objectStore('meta').put([...this.projectSnapshot.values()], PROJECTS_KEY);
+    }
+    await tx.done;
+    this.recompute();
   }
 
   /**
@@ -1216,6 +1267,11 @@ export class PageTree {
       ...this.failed.filter(visible).map((f) => ({ seq: f.opSeq ?? 0, op: f.op })),
     ].sort((a, b) => a.seq - b.seq);
     for (const change of changes) applyOp(view, projects, change.op, now);
+    // Los colores que esperan subir (`colorProject`), sobre los proyectos que están a la vista.
+    for (const [id, color] of this.pendingColors) {
+      const current = projects.get(id);
+      if (current) projects.set(id, { ...current, color });
+    }
     // El primer proyecto está aunque el dispositivo todavía no haya bajado nunca la lista (la primera vez sin
     // red). Con la lista conocida, no: si el servidor no lo trae (lo borraron, P.14), se reemplaza.
     if (!this.projectsKnown && !projects.has(this.workspaceId)) {
