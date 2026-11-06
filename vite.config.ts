@@ -96,6 +96,11 @@ function assertYProsemirrorPatched(): void {
     "const STABLE_GAPS_MARKER = 'lgaStableGaps'",
     'if (isStableGapsMarker(type)) return',
     'if (!hasMarker) yel.insert(0,',
+    // Una marca que el texto no tiene en el editor no vale lo mismo que una sin atributos (negrita): sin esto, un
+    // renglón al que se le cambian las marcas puede quedar distinto en Yjs (stableGapsMarks.test.ts).
+    'return mark !== undefined && equalAttrs(attr, mark.attrs)',
+    'equalYAttrPMark(attr, yattrname, ptexts[i].marks)',
+    'equalYAttrPMark(attr, yattrname, marks)',
   ];
   const libMarks = ["if (t.nodeName !== 'lgaStableGaps')", "if (contentType.nodeName !== 'lgaStableGaps')"];
   // Deshacer nunca borra la marca del renglón (si no, deshacer la primera foto la sacaba).

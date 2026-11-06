@@ -192,6 +192,9 @@ Están en `patches/y-prosemirror+1.3.7.patch` y los aplica `patch-package` al in
   tuvo). `createTypeFromElementNode` y `updateStableGapsChildren` lo ponen, nadie lo borra, `createNodeFromYElement`
   no lo dibuja y `relativePositionToAbsolutePosition` (`src/lib.js`, la única parte del parche en ese archivo) no le
   cuenta tamaño. Ver "Versiones viejas y `min_app_version`".
+- **Las marcas de un texto (v0.318)**: `equalYTextPText` (de la librería) y `equalDeltaAttrsMarks` (de los huecos
+  estables) comparan cada marca guardada en Yjs con la del editor por `equalYAttrPMark`, que exige que el editor la
+  tenga. Ver "Marcas que no se escribían".
 
 **Si los parches faltan, la app no se construye ni corren las pruebas**: `vite.config.ts`
 (`assertYProsemirrorPatched`) revisa las marcas en los dos archivos (si falta un archivo, también corta) y corta con un mensaje (pasa si se instaló con
@@ -200,6 +203,47 @@ fijo en `1.3.7` en `package.json` para que una actualización sea a propósito. 
 parte de los huecos y la de los huecos estables, y una prueba (`inlinePhoto.test.ts`) compara el nombre de la
 marca del nodo, y el del atributo de los textos, con los que lee el parche. Otra (`stableGaps.test.ts`) le da
 a los dos archivos la misma secuencia de documentos y exige los mismos cambios de Yjs, byte a byte.
+
+### Marcas que no se escribían (v0.318)
+
+**Qué pasaba.** Al limpiar los planes de VLLF (2026-11-05), editar otros bloques de la página dejó una tarjeta de Drive
+(un párrafo que es un link entero) con la marca del renglón (`lgaStableGaps`) y sus últimas letras fuera del link y en
+negrita, sin cambiar el texto; otros dos renglones quedaron parecido. El editor que hizo el cambio lo seguía mostrando
+bien mientras estaba abierto, pero el documento quedó mal (al volver a abrir la página, cualquier editor la dibuja desde
+Yjs y la muestra corrida), y corregirlo desde el editor no llegaba a Yjs (se arregló con `Y.XmlText.format` directo).
+
+**La causa** es de la librería, no de la marca del renglón. Para saber si un texto cambió, y-prosemirror busca cada
+marca guardada en Yjs por su nombre entre las del editor; si el editor no la tiene, la comparaba con «nada», y
+`equalAttrs({}, undefined)` da igual. Así una marca sin atributos (negrita, cursiva, subrayado) valía lo mismo que
+cualquier otra marca del mismo tramo (un link, un color): un tramo en negrita «era igual» a uno con link y no se
+escribía. Pasaba de dos formas:
+
+- **Al editar otro bloque.** Borrar o insertar bloques hace que y-prosemirror reescriba los de después por posición
+  (el elemento de Yjs de un bloque recibe el contenido del de abajo). Si ese elemento era un renglón con fotos (o que
+  las tuvo), lo escribe el código de los huecos estables: cada `Y.XmlText` se queda con su parte del texto nuevo (las
+  letras que coinciden se conservan) y sus marcas se corrigen **solo si la comparación dice que cambiaron**. La parte
+  del link que caía en un texto que antes estaba en negrita quedaba en negrita. Por eso la tarjeta quedó con la marca
+  del renglón: su elemento de Yjs era el de la fila de fotos de arriba, y la marca nunca se saca (así quedan también
+  los renglones de texto con varios `Y.XmlText` seguidos, que se leen como uno y no pierden nada).
+- **Al corregir desde el editor.** Con el texto partido en dos `Y.XmlText`, el editor tiene un solo tramo con link y
+  Yjs uno con link y otro en negrita: la comparación de los huecos estables los daba iguales y no escribía nada. En un
+  renglón común pasa lo mismo si en un solo paso se cambia una marca sin atributos por otra (negrita por cursiva en
+  todo un tramo).
+
+**El arreglo** (`equalYAttrPMark`, en las dos copias de la librería): una marca que el editor no tiene nunca es igual.
+No cambia cómo se guarda nada ni lo que escriben los párrafos que ya estaban bien (los números de las tablas de este
+documento son los mismos), así que una versión vieja abre y edita igual que antes; solo deja de saltarse escrituras
+que hacían falta. Un documento que ya quedó con las marcas corridas no se corrige solo: se corrige al tocar esas
+marcas en el editor (ahora sí llega) o, como en VLLF, con `Y.XmlText.format`.
+
+**Las pruebas** (`stableGapsMarks.test.ts`; sin el arreglo fallan 16 de 40): la tarjeta con y sin `driveCard`,
+guardada como la escribe el editor, con la marca del renglón y con el texto en varios `Y.XmlText` (uno vacío), en una
+página como el plan del Día 09 (arriba, una fila de fotos y un renglón con una foto y texto en negrita), mientras se
+borra la fila de fotos, el texto con link, un renglón vacío, se cambia el nivel de un título o se suman renglones vacíos
+antes de él (y todo junto): ningún otro bloque cambia sus marcas (sin el arreglo, borrar la fila y el vacío deja la
+tarjeta corrida en las seis formas). Además: un renglón con fotos reescrito con un texto en negrita y un link, la
+corrección desde el editor en la tarjeta partida, negrita por cursiva en un renglón común, y 60 páginas al azar con 6
+ediciones de bloques cada una (antes fallaba la 23).
 
 ### El texto de los huecos (v0.074)
 
@@ -345,6 +389,7 @@ borrar uno perdía lo que se escribía en él.
 | `src/ui/stableGaps.test.ts` | Los huecos estables con un solo editor: borrar una foto deja los textos (los mismos objetos de Yjs) y se leen como uno; ida y vuelta Yjs → editor → Yjs sin cambios; la regla del borde; una foto en el medio de un texto; formatos que cruzan el borde; la marca; la reparación que copia; la versión anterior abriendo un renglón al que le borraron las fotos; 400 pasos al azar (con fotos: ningún texto se borra y abrir no escribe; sin fotos: sin marca); y las dos copias de la librería (`src` y `dist/*.cjs`) escribiendo los mismos cambios de Yjs, byte a byte. |
 | `src/ui/collabPhotosVersions.test.ts` | Saltos de línea con el esquema anterior y este: las mismas agendas dan lo mismo con cualquier combinación de los dos. Ojo: usa la librería de HOY con el esquema anterior (la librería publicada la prueba el archivo de abajo). |
 | `src/ui/collabPhotosVersions.published.test.ts` | Versiones mezcladas con la librería **publicada** de verdad (v0.052 a v0.075: la arma `src/test/publishedYProsemirror.ts` sin red ni git, desde `node_modules` y `src/test/fixtures/y-prosemirror-v0.052.patch`, y la pone el alias del proyecto `published` de `vite.config.ts`, también adentro de BlockNote): el renglón al que le borraron las fotos antes y después de la marca, uno con fotos, la cola de un viejo sin red, y sin fotos las dos librerías escribiendo lo mismo byte a byte (con un control que sí difiere). |
+| `src/ui/stableGapsMarks.test.ts` | Las marcas de un renglón no cambian al editar otros bloques (la tarjeta de Drive de VLLF: con y sin `driveCard`, con y sin la marca del renglón, con el texto en varios `Y.XmlText`), y una corrección de marcas en el editor llega a Yjs (también negrita por cursiva en un renglón común); 60 páginas al azar. Ver "Marcas que no se escribían". |
 | `src/ui/stableGapsMarker.test.ts` | La marca del renglón: cuándo se pone, que no se dibuja ni se va, que abrir no escribe, deshacer la primera foto, y un renglón sin la marca que la recibe al editarlo. |
 | `src/ui/inlinePhoto.test.ts` | El nodo, cómo queda guardado cada caso (con y sin saltos de línea), que abrir una página no escribe nada, la versión anterior (no la abre; si la abriera, borraría las fotos) y deshacer. |
 | `src/ui/photoHarness.ts` | Las ayudas de las pruebas de fotos (no es una prueba): las agendas (con `trace` para mirar una paso a paso), los casos con sus números, la forma de los huecos (`brokenGaps`), las marcas que perdieron letras (`lettersGone`), el esquema de la versión anterior y el de la foto sin la marca de los huecos. |

@@ -1,5 +1,5 @@
 diff --git a/node_modules/y-prosemirror/dist/y-prosemirror.cjs b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
-index de4d1e6..05d80ef 100644
+index de4d1e6..2232135 100644
 --- a/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 +++ b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 @@ -322,37 +322,104 @@ const ySyncPlugin = (yXmlFragment, {
@@ -235,7 +235,41 @@ index de4d1e6..05d80ef 100644
    return res
  };
  
-@@ -1052,6 +1158,10 @@ const equalYTypePNode = (ytype, pnode) => {
+@@ -1035,14 +1141,28 @@ const equalYTextPText = (ytext, ptexts) => {
+     delta.every(/** @type {(d:any,i:number) => boolean} */ (d, i) =>
+       d.insert === /** @type {any} */ (ptexts[i]).text &&
+       object__namespace.keys(d.attributes || {}).length === ptexts[i].marks.length &&
+-      object__namespace.every(d.attributes, (attr, yattrname) => {
+-        const markname = yattr2markname(yattrname);
+-        const pmarks = ptexts[i].marks;
+-        return equalAttrs(attr, pmarks.find(/** @param {any} mark */ mark => mark.type.name === markname)?.attrs)
+-      })
++      object__namespace.every(d.attributes, (attr, yattrname) => equalYAttrPMark(attr, yattrname, ptexts[i].marks))
+     )
+ };
+ 
++/**
++ * LGA-SHOTDOCS-PATCH (marks): whether a format attribute of a Y.Text equals the prosemirror mark of that name.
++ * The original compared the attribute with `undefined` when the text has no mark of that name, and
++ * equalAttrs({}, undefined) is true: a mark without attributes (bold, italic) equalled any other mark (a
++ * link), so a text whose marks changed that way was never written (the editor showed one thing and Yjs kept
++ * another). It happened above all in blocks with stable gaps, whose texts get their marks only when this says
++ * they changed.
++ *
++ * @param {any} attr
++ * @param {string} yattrname
++ * @param {Array<any>} pmarks
++ */
++const equalYAttrPMark = (attr, yattrname, pmarks) => {
++  const markname = yattr2markname(yattrname);
++  const mark = pmarks.find(/** @param {any} mark */ (mark) => mark.type.name === markname);
++  return mark !== undefined && equalAttrs(attr, mark.attrs)
++};
++
+ /**
+  * @param {Y.XmlElement|Y.XmlText|Y.XmlHook} ytype
+  * @param {any|Array<any>} pnode
+@@ -1052,6 +1172,10 @@ const equalYTypePNode = (ytype, pnode) => {
      ytype instanceof Y__namespace.XmlElement && !(pnode instanceof Array) &&
      matchNodeName(ytype, pnode)
    ) {
@@ -246,7 +280,7 @@ index de4d1e6..05d80ef 100644
      const normalizedContent = normalizePNodeContent(pnode);
      return ytype._length === normalizedContent.length &&
        equalAttrs(ytype.getAttributes(), pnode.attrs) &&
-@@ -1203,6 +1313,638 @@ const marksToAttributes = (marks, meta) => {
+@@ -1203,6 +1327,635 @@ const marksToAttributes = (marks, meta) => {
    return pattrs
  };
  
@@ -341,10 +375,7 @@ index de4d1e6..05d80ef 100644
 + */
 +const equalDeltaAttrsMarks = (attrs, marks) =>
 +  object__namespace.keys(attrs || {}).length === marks.length &&
-+  object__namespace.every(attrs, (attr, yattrname) => {
-+    const markname = yattr2markname(yattrname)
-+    return equalAttrs(attr, marks.find(/** @param {any} mark */ (mark) => mark.type.name === markname)?.attrs)
-+  })
++  object__namespace.every(attrs, (attr, yattrname) => equalYAttrPMark(attr, yattrname, marks))
 +
 +/**
 + * Whether a run of consecutive Y__namespace.XmlText holds exactly these prosemirror text nodes (text and marks).
@@ -885,7 +916,7 @@ index de4d1e6..05d80ef 100644
  /**
   * Update a yDom node by syncing the current content of the prosemirror node.
   *
-@@ -1244,6 +1986,12 @@ const updateYFragment = (y, yDomFragment, pNode, meta) => {
+@@ -1244,6 +1997,12 @@ const updateYFragment = (y, yDomFragment, pNode, meta) => {
        }
      }
    }
@@ -898,7 +929,7 @@ index de4d1e6..05d80ef 100644
    // update children
    const pChildren = normalizePNodeContent(pNode);
    const pChildCnt = pChildren.length;
-@@ -1528,7 +2276,8 @@ const relativePositionToAbsolutePosition = (y, documentType, relPos, mapping) =>
+@@ -1528,7 +2287,8 @@ const relativePositionToAbsolutePosition = (y, documentType, relPos, mapping) =>
          i++;
          if (t instanceof Y__namespace.XmlText) {
            pos += t._length;
@@ -908,7 +939,7 @@ index de4d1e6..05d80ef 100644
            pos += /** @type {any} */ (mapping.get(t)).nodeSize;
          }
        }
-@@ -1552,7 +2301,8 @@ const relativePositionToAbsolutePosition = (y, documentType, relPos, mapping) =>
+@@ -1552,7 +2312,8 @@ const relativePositionToAbsolutePosition = (y, documentType, relPos, mapping) =>
          if (!n.deleted) {
            if (contentType instanceof Y__namespace.XmlText) {
              pos += contentType._length;
@@ -918,7 +949,7 @@ index de4d1e6..05d80ef 100644
              pos += /** @type {any} */ (mapping.get(contentType)).nodeSize;
            }
          }
-@@ -2109,7 +2859,13 @@ const defaultProtectedNodes = new Set(['paragraph']);
+@@ -2109,7 +2870,13 @@ const defaultProtectedNodes = new Set(['paragraph']);
   * @param {Set<string>} protectedNodes
   * @returns {boolean}
   */
@@ -958,7 +989,7 @@ index 3f48497..285a6f9 100644
            }
          }
 diff --git a/node_modules/y-prosemirror/src/plugins/sync-plugin.js b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
-index dccfb76..4d58750 100644
+index dccfb76..4ec2943 100644
 --- a/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 +++ b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 @@ -248,37 +248,104 @@ export const ySyncPlugin = (yXmlFragment, {
@@ -1193,7 +1224,41 @@ index dccfb76..4d58750 100644
    return res
  }
  
-@@ -978,6 +1084,10 @@ const equalYTypePNode = (ytype, pnode) => {
+@@ -961,14 +1067,28 @@ const equalYTextPText = (ytext, ptexts) => {
+     delta.every(/** @type {(d:any,i:number) => boolean} */ (d, i) =>
+       d.insert === /** @type {any} */ (ptexts[i]).text &&
+       object.keys(d.attributes || {}).length === ptexts[i].marks.length &&
+-      object.every(d.attributes, (attr, yattrname) => {
+-        const markname = yattr2markname(yattrname)
+-        const pmarks = ptexts[i].marks
+-        return equalAttrs(attr, pmarks.find(/** @param {any} mark */ mark => mark.type.name === markname)?.attrs)
+-      })
++      object.every(d.attributes, (attr, yattrname) => equalYAttrPMark(attr, yattrname, ptexts[i].marks))
+     )
+ }
+ 
++/**
++ * LGA-SHOTDOCS-PATCH (marks): whether a format attribute of a Y.Text equals the prosemirror mark of that name.
++ * The original compared the attribute with `undefined` when the text has no mark of that name, and
++ * equalAttrs({}, undefined) is true: a mark without attributes (bold, italic) equalled any other mark (a
++ * link), so a text whose marks changed that way was never written (the editor showed one thing and Yjs kept
++ * another). It happened above all in blocks with stable gaps, whose texts get their marks only when this says
++ * they changed.
++ *
++ * @param {any} attr
++ * @param {string} yattrname
++ * @param {Array<any>} pmarks
++ */
++const equalYAttrPMark = (attr, yattrname, pmarks) => {
++  const markname = yattr2markname(yattrname)
++  const mark = pmarks.find(/** @param {any} mark */ (mark) => mark.type.name === markname)
++  return mark !== undefined && equalAttrs(attr, mark.attrs)
++}
++
+ /**
+  * @param {Y.XmlElement|Y.XmlText|Y.XmlHook} ytype
+  * @param {any|Array<any>} pnode
+@@ -978,6 +1098,10 @@ const equalYTypePNode = (ytype, pnode) => {
      ytype instanceof Y.XmlElement && !(pnode instanceof Array) &&
      matchNodeName(ytype, pnode)
    ) {
@@ -1204,7 +1269,7 @@ index dccfb76..4d58750 100644
      const normalizedContent = normalizePNodeContent(pnode)
      return ytype._length === normalizedContent.length &&
        equalAttrs(ytype.getAttributes(), pnode.attrs) &&
-@@ -1129,6 +1239,638 @@ const marksToAttributes = (marks, meta) => {
+@@ -1129,6 +1253,635 @@ const marksToAttributes = (marks, meta) => {
    return pattrs
  }
  
@@ -1299,10 +1364,7 @@ index dccfb76..4d58750 100644
 + */
 +const equalDeltaAttrsMarks = (attrs, marks) =>
 +  object.keys(attrs || {}).length === marks.length &&
-+  object.every(attrs, (attr, yattrname) => {
-+    const markname = yattr2markname(yattrname)
-+    return equalAttrs(attr, marks.find(/** @param {any} mark */ (mark) => mark.type.name === markname)?.attrs)
-+  })
++  object.every(attrs, (attr, yattrname) => equalYAttrPMark(attr, yattrname, marks))
 +
 +/**
 + * Whether a run of consecutive Y.XmlText holds exactly these prosemirror text nodes (text and marks).
@@ -1843,7 +1905,7 @@ index dccfb76..4d58750 100644
  /**
   * Update a yDom node by syncing the current content of the prosemirror node.
   *
-@@ -1170,6 +1912,12 @@ export const updateYFragment = (y, yDomFragment, pNode, meta) => {
+@@ -1170,6 +1923,12 @@ export const updateYFragment = (y, yDomFragment, pNode, meta) => {
        }
      }
    }

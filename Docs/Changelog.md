@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.318 :
+
+Editar un bloque podía cambiar las marcas de otro renglón sin tocar su texto: en la limpieza de VLLF, una tarjeta de
+Drive quedó con sus últimas letras fuera del link y en negrita, y corregirla desde el editor no llegaba al documento. La
+causa es de y-prosemirror: para saber si un texto cambió compara cada marca de Yjs con la del editor del mismo nombre, y
+si el editor no la tiene la comparaba con «nada», que da igual a una marca sin atributos; un tramo en negrita valía lo
+mismo que uno con link y no se escribía. Pegaba sobre todo en los renglones con huecos estables que y-prosemirror
+reescribe por posición al borrar o insertar bloques. El parche suma `equalYAttrPMark` (una marca que el editor no tiene
+nunca es igual) en las dos copias de la librería, y `vite.config.ts` lo exige. Nada cambia en lo guardado. Prueba:
+`stableGapsMarks.test.ts` (sin el arreglo fallan 16 de 40); doc: `Doc_Colaboracion.md`, «Marcas que no se escribían».
+[ Editor - las marcas de un renglón ya no se corren al editar otro bloque ]
+
 v0.317 :
 
 No había forma de mandar a alguien a una escena: la dirección del Panorama (`/map/scenes?scene=…`) abría la escena del

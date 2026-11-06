@@ -844,9 +844,11 @@ trae su propia «Locación Guion» hace de escena). Todos verificados con los co
 renglón vecino: el texto queda igual pero un tramo pierde el link, el color o gana una cursiva (en VLLF, 3 bloques en
 139 páginas: una tarjeta de Drive con las últimas letras fuera del link y dos renglones con colores corridos). La
 verificación final lo detecta comparando el formato de cada bloque con la copia de antes. Corregirlo desde el editor
-no alcanza (el editor lo ve bien y el documento sigue mal): se devuelve el formato de la copia de antes directo en el
-documento. Un diagrama sobre fondo blanco puede pasar por captura del guion: se mira en la página y, si es foto, va a
-un tercio.
+no alcanzaba (el editor que escribió lo ve bien y el documento sigue mal; al reabrir la página se ve corrido): se devuelve el formato de la copia de antes directo en el
+documento. Desde v0.318 eso está arreglado en el editor (`Doc_Colaboracion.md`, «Marcas que no se escribían»): las
+marcas ya no se corren y una corrección desde el editor sí llega; la comparación de la verificación final queda igual,
+por las dudas. Un diagrama sobre fondo blanco puede pasar por captura del guion: se mira en la página y, si es foto, va
+a un tercio.
 
 ### Varios docs en un proyecto (2026-10-17)
 
