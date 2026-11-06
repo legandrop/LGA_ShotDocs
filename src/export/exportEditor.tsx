@@ -9,6 +9,7 @@ import type { Language } from '../prefs';
 import { markAttachments } from '../ui/attachments';
 import { attachMarkupOverlay } from '../ui/markupOverlay';
 import { pageEditorExtensions } from '../ui/editorExtensions';
+import { flushPhotoRows } from '../ui/photoAspects';
 import { editorDictionary } from '../ui/editorLocale';
 import { editorSchemaOptions } from '../ui/editorSchema';
 import type { PageFormat } from '../ui/pageFormat';
@@ -246,6 +247,8 @@ export class ExportEditor {
     overlay?.flush();
     overlay?.stop();
     const mediaHref = this.options.mediaHref;
+    // Las filas de fotos con la misma altura que todavía no se dibujaron (la pestaña puede estar oculta), ya.
+    flushPhotoRows(this.article);
     const view = buildPrintView(this.article, page.format, 'output', {
       pageId: page.id,
       mediaHref: mediaHref ? (id) => mediaHref(id, page.id) : undefined,

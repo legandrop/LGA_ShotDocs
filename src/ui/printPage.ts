@@ -4,6 +4,7 @@ import { MEDIA_SCHEME, mediaIdOf, type MediaQueue } from '../media/queue';
 import { navigate, pagePath } from '../router';
 import { IS_MAC, isLetter, modPressed } from './findUi';
 import { notify } from './notice';
+import { flushPhotoRows } from './photoAspects';
 import type { PageFormat } from './pageFormat';
 import { applyBreaks, buildPrintView, findPageArticle, paginateView, type Paginated, type PrintView } from './printView';
 
@@ -67,6 +68,8 @@ function prepare(article: HTMLElement, format: Format): Job {
   finishPrint();
   // Como se ve solo si hay algo colapsado: si no, es lo mismo.
   const asSeen = printAsSeen() && !!article.querySelector('.sd-collapsed');
+  // Las filas de fotos con la misma altura que todavía no se dibujaron, ya (si no, la copia sale con lo guardado).
+  flushPhotoRows(article);
   const view = buildPrintView(article, format, 'output', { asSeen });
   try {
     const result = paginateView(view);

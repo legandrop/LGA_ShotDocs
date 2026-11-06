@@ -3,7 +3,9 @@ import { mergeAttributes, Node } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { t } from '../i18n';
 import '../i18n/lazy/editor';
-import { pxToRowWidth, snapRowWidth } from './imageRows';
+import { evenRowWidths, groupRows, pxToRowWidth, snapRowWidth } from './imageRows';
+import { notePhotoAspect, photoAspect } from './photoAspects';
+import { thumbSize } from './sharpMarks';
 import { tipRows } from './tipRows';
 import { isAppMediaUrl, setQuietSrc } from './quietImage';
 
@@ -156,6 +158,11 @@ export const PhotoNode = Node.create({
         shown = props;
       };
       paint(node);
+      // La proporción de lo que se ve, para las filas con la misma altura (photoAspects.ts).
+      const onLoad = () => {
+        if (shown) noteImageAspect(shown.url, img, true);
+      };
+      img.addEventListener('load', onLoad);
       // Los tiradores, como los de la foto-bloque (D-24): arrastrar cambia `w`, imantado a 1, 1/2, 1/3 y 1/4.
       const stopHandles = addResizeHandles(dom, img, () => {
         const pos = typeof getPos === 'function' ? getPos() : undefined;
@@ -164,7 +171,10 @@ export const PhotoNode = Node.create({
 
       return {
         dom,
-        destroy: stopHandles,
+        destroy: () => {
+          img.removeEventListener('load', onLoad);
+          stopHandles();
+        },
         // Un cambio de propiedades reusa esta vista y su `<img>` (sin `update`, el editor la tira y arma otra).
         update(n: PMNode) {
           if (n.type.name !== PHOTO) return false;
@@ -177,6 +187,16 @@ export const PhotoNode = Node.create({
     };
   },
 });
+
+/**
+ * Anota la proporción de la imagen de la foto con esa dirección, si ya cargó (photoAspects.ts): la de la miniatura, aunque
+ * ya esté la nítida. El marcador (sin red, de otro proyecto, subiendo: un SVG) no es la foto: no cuenta.
+ */
+export function noteImageAspect(url: string, img: HTMLImageElement, loaded = img.complete): void {
+  if (!url || !loaded || !img.getAttribute('src') || img.src.startsWith('data:image/svg')) return;
+  const { width, height } = thumbSize(img);
+  if (width > 0 && height > 0) notePhotoAspect(url, width / height);
+}
 
 type Resolver = (url: string) => Promise<string>;
 
@@ -238,6 +258,68 @@ export const photoSpec = createInlineContentSpecFromTipTapNode(
   },
 );
 
+// --- Filas ----------------------------------------------------------------------------------------------------
+//
+// Las filas lógicas de un renglón (las dibuja la decoración de inlinePhotoEditor.ts; acá porque también las usan los
+// tiradores): `groupRows` sobre cada tanda de fotos SEGUIDAS del texto de un bloque. Cualquier texto en el medio
+// (también un espacio), una foto con `w = 0` o una que empieza fila (`rowStart`) cortan la tanda.
+
+/** La parte del ancho de una foto en línea (0: sin ancho propio, o no es una foto). */
+export function fractionOf(node: PMNode): number {
+  return node.type.name === PHOTO ? photoWidth(node.attrs.w) : 0;
+}
+
+export interface PhotoRow {
+  /** La posición de cada foto de la fila en el documento. */
+  positions: number[];
+  fracs: number[];
+}
+
+/** Las filas lógicas del texto de un bloque (`pos`: dónde empieza ese nodo de texto en el documento). */
+export function rowsOfTextblock(block: PMNode, pos: number): PhotoRow[] {
+  const out: PhotoRow[] = [];
+  let run: { pos: number; f: number }[] = [];
+  const flush = () => {
+    if (run.length) {
+      const fracs = run.map((r) => r.f);
+      for (const row of groupRows(fracs)) out.push({ positions: row.map((i) => run[i].pos), fracs: row.map((i) => fracs[i]) });
+    }
+    run = [];
+  };
+  block.forEach((child, offset) => {
+    if (child.type.name === PHOTO) {
+      // Una foto que empieza fila (`rowStart`, "Arrange in rows" de las elegidas) corta la tanda.
+      if (child.attrs.rowStart === true) flush();
+      run.push({ pos: pos + 1 + offset, f: fractionOf(child) });
+    } else flush();
+  });
+  flush();
+  return out;
+}
+
+/** La fila de la foto en `pos`, o `null` (no es una foto, o no tiene ancho propio). */
+export function photoRowAt(doc: PMNode, pos: number): PhotoRow | null {
+  if (doc.nodeAt(pos)?.type.name !== PHOTO) return null;
+  const $pos = doc.resolve(pos);
+  return rowsOfTextblock($pos.parent, $pos.before($pos.depth)).find((r) => r.positions.includes(pos)) ?? null;
+}
+
+/**
+ * El ancho que se MUESTRA de cada foto de la fila (Docs/Doc_Fotos_En_Linea.md, "Filas con la misma altura"): si
+ * tienen todas el mismo ancho guardado, repartido según su proporción para que queden a la misma altura
+ * (`evenRowWidths`); `null`: se muestra el guardado. `aspectOf`: la proporción de la foto con esa dirección.
+ */
+export function shownRowWidths(
+  doc: PMNode,
+  row: PhotoRow,
+  aspectOf: (url: string) => number | undefined = photoAspect,
+): number[] | null {
+  return evenRowWidths(
+    row.fracs,
+    row.positions.map((p) => aspectOf(String(doc.nodeAt(p)?.attrs.url ?? ''))),
+  );
+}
+
 // --- Tiradores (D-24, paridad con la foto-bloque) ----------------------------------------------------------
 //
 // Dos tiradores, a los costados de la foto (los de BlockNote: una barrita negra con borde blanco), que se ven con la
@@ -275,6 +357,58 @@ export function lineMetrics(dom: HTMLElement): { W: number; g: number; n: number
 /** El `w` que corresponde a un ancho en px (imantado). */
 export function widthFromPx(px: number, m: { W: number; g: number; n: number }): number {
   return snapRowWidth(pxToRowWidth(px, m.W, m.g, m.n));
+}
+
+/**
+ * Los cambios de ancho `changes` (posición → `w` nuevo) más, en cada fila con la misma altura ("Filas con la misma
+ * altura") que tocan solo en parte, las otras fotos de esa fila con el ancho con que se veían. Así cambia solo lo que se
+ * pidió: sin esto, la fila dejaba de tener anchos iguales y las demás saltaban a lo guardado (una vertical a 1/3 volvía
+ * a quedar el doble de alta). Lo usan los tiradores y los tamaños rápidos.
+ */
+export function keepShownWidths(
+  doc: PMNode,
+  changes: ReadonlyMap<number, number>,
+  aspectOf: (url: string) => number | undefined = photoAspect,
+): Map<number, number> {
+  const out = new Map(changes);
+  const seen = new Set<number>();
+  for (const pos of changes.keys()) {
+    const row = photoRowAt(doc, pos);
+    if (!row || seen.has(row.positions[0])) continue;
+    seen.add(row.positions[0]);
+    if (row.positions.every((p) => changes.has(p))) continue;
+    const shown = shownRowWidths(doc, row, aspectOf);
+    if (shown) row.positions.forEach((p, k) => !changes.has(p) && out.set(p, shown[k]));
+  }
+  return out;
+}
+
+/**
+ * En una fila con la misma altura, el ancho con que se ve una foto es un imán más de los tiradores (como 1/2, 1/3 y
+ * 1/4): soltarla a menos de esto de ese ancho no cambia nada.
+ */
+const SHOWN_MAGNET = 0.02;
+
+/**
+ * Lo que cambia soltar el tirador de la foto en `pos` con el ancho `w` (posición → `w` nuevo; vacío si nada). En una
+ * fila con la misma altura, se compara con lo que se veía (arrastrarla a 1/3 cambia algo aunque guarde 1/3; a menos de
+ * `SHOWN_MAGNET` de lo que se veía, nada) y las otras fotos de la fila guardan el ancho con que se veían
+ * (`keepShownWidths`): cambia solo la que se arrastró.
+ */
+export function resizedWidths(
+  doc: PMNode,
+  pos: number,
+  w: number,
+  aspectOf: (url: string) => number | undefined = photoAspect,
+): Map<number, number> {
+  const node = doc.nodeAt(pos);
+  if (node?.type.name !== PHOTO) return new Map();
+  const row = photoRowAt(doc, pos);
+  const shown = row ? shownRowWidths(doc, row, aspectOf) : null;
+  if (shown && row) {
+    if (Math.abs(shown[row.positions.indexOf(pos)] - w) < SHOWN_MAGNET) return new Map();
+  } else if (Math.abs(photoWidth(node.attrs.w) - w) <= 1e-6) return new Map();
+  return keepShownWidths(doc, new Map([[pos, w]]), aspectOf);
 }
 
 function addResizeHandles(dom: HTMLElement, img: HTMLImageElement, target: () => Target | null): () => void {
@@ -318,10 +452,11 @@ function addResizeHandles(dom: HTMLElement, img: HTMLImageElement, target: () =>
       dom.classList.remove('sd-photo-resizing');
       const at = target();
       if (!done.moved || !at || !(m.W > 0)) return;
-      const node = at.view.state.doc.nodeAt(at.pos);
-      if (node?.type.name !== PHOTO) return;
-      const w = widthFromPx(done.px, m);
-      if (Math.abs(photoWidth(node.attrs.w) - w) > 1e-6) at.view.dispatch(at.view.state.tr.setNodeAttribute(at.pos, 'w', w));
+      const changes = resizedWidths(at.view.state.doc, at.pos, widthFromPx(done.px, m));
+      if (changes.size === 0) return;
+      const tr = at.view.state.tr;
+      for (const [pos, w] of changes) tr.setNodeAttribute(pos, 'w', w);
+      at.view.dispatch(tr);
     };
     handle.addEventListener('pointerdown', down);
     handle.addEventListener('mousedown', swallow);

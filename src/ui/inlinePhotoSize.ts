@@ -2,7 +2,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { NodeSelection, TextSelection, type EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { arrangeRows } from './imageRows';
-import { PHOTO, photoLine } from './inlinePhoto';
+import { keepShownWidths, PHOTO, photoLine } from './inlinePhoto';
 import { thumbSize } from './sharpMarks';
 import { asOneUndoStep } from './undoGuard';
 
@@ -126,12 +126,17 @@ export function arrangeTarget(state: EditorState): { positions: number[]; adjace
   return { positions: chosen, adjacent: join, join };
 }
 
-/** Pone el mismo ancho a todas esas fotos, en un solo cambio. */
+/**
+ * Pone el mismo ancho a todas esas fotos, en un solo cambio. Si son parte de una fila con la misma altura, las demás
+ * fotos de la fila guardan el ancho con que se veían (`keepShownWidths`): "1/4" a la vertical sola no le cambia el
+ * reparto a las otras.
+ */
 export function setPhotoWidths(view: EditorView, positions: readonly number[], w: number): void {
+  const doc = view.state.doc;
+  const changes = new Map<number, number>();
+  for (const pos of positions) if (doc.nodeAt(pos)?.type.name === PHOTO) changes.set(pos, w);
   const tr = view.state.tr;
-  for (const pos of positions) {
-    if (tr.doc.nodeAt(pos)?.type.name === PHOTO) tr.setNodeAttribute(pos, 'w', w);
-  }
+  for (const [pos, f] of keepShownWidths(doc, changes)) tr.setNodeAttribute(pos, 'w', f);
   if (tr.docChanged) view.dispatch(tr);
 }
 

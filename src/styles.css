@@ -4513,8 +4513,11 @@ svg.sd-markup text {
   max-width: min(100%, var(--sd-thumb-w, 100%));
 }
 
+/* `--ph-v`: en una fila de fotos con el mismo ancho guardado, el ancho que se muestra, repartido según la proporción
+   de cada una para que queden a la misma altura (la decoración de las filas; Docs/Doc_Fotos_En_Linea.md, "Filas con la
+   misma altura"). Sin él, el guardado. */
 .sd-photo.sd-photo-sized {
-  width: calc(var(--ph-w) * (100% - (var(--row-n) - 1) * var(--img-gap, 8px) - 1px));
+  width: calc(var(--ph-v, var(--ph-w)) * (100% - (var(--row-n) - 1) * var(--img-gap, 8px) - 1px));
 }
 
 .sd-photo.sd-photo-sized:not(.sd-photo-row-first) {

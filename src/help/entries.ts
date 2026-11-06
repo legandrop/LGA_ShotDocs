@@ -749,8 +749,10 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.photosRows.text',
     keys: { next: 'photoRowNext', prev: 'photoRowPrev', leave: 'photoRowLeave', enter: 'photoRowEnter' },
     more: ['photoInlineSelect', 'photoInlineType'],
+    words: ['same height', 'misma altura', 'vertical', 'alto', 'height'],
     showMe: 'practice-photos',
-    since: BEFORE_HELP,
+    // Subió con las filas con la misma altura (Doc_Fotos_En_Linea.md, D842).
+    since: '0.322',
   },
   {
     id: 'photosCells',

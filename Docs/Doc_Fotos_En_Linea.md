@@ -1036,6 +1036,69 @@ fixture y se vacía).
 **Límites:** en el teléfono una apaisada en *Large* puede quedar más baja que las demás (tope en el ancho de la celda,
 como ya pasaba con 96 en una celda angosta). Sin probar en Safari ni en el iPhone de verdad.
 
+## Filas con la misma altura
+
+**Qué pasaba.** Pedido de Lega (2026-11-05), con una página de reporte de rodaje: en una fila de tres fotos a 1/3 (dos
+apaisadas y una vertical), las tres tenían el mismo ancho, así que la vertical quedaba más del doble de alta y dejaba un
+hueco grande arriba de las otras dos. Lo prefiere al revés: anchos desparejos y alturas iguales. Pasaba en todas las
+páginas importadas de Coda que se limpiaron con «fotos a un tercio en filas de a tres» (D795, D798, D800), y con cualquier
+fila hecha con los tamaños rápidos.
+
+**Qué cambió: cómo se muestra, no lo guardado.** Nada del documento cambia, así que se arregla solo en todas las páginas
+(también las ya limpiadas) y una versión vieja las sigue viendo como antes, sin perder nada.
+
+- **Qué es una fila pareja.** Una fila como las arma `groupRows` (fotos seguidas en el mismo renglón, todas con ancho
+  propio; un texto, aunque sea un espacio, una foto con `w = 0` o una con `rowStart` cortan la tanda), de **dos o más
+  fotos con el mismo `w`** (con una milésima de tolerancia), con la proporción de todas conocida y no todas iguales.
+- **Cómo se reparte.** La fila ocupa lo mismo que lo guardado, `T = Σ w` (hasta 1), y cada foto se muestra con
+  `T · a_k / Σa` (`a`: ancho / alto de lo que se ve), con 4 decimales y el redondeo en la más ancha (`evenRowWidths`,
+  `imageRows.ts`). Con el CSS de siempre (`v · (100% − (n − 1) · g − 1px)`), todas quedan a la misma altura en cualquier
+  ancho, y esa altura queda entre la más baja y la más alta de antes. La fila corta donde cortaba (`--row-n`, el margen de
+  una fila que no llena y la marca de una fila llena después de un texto salen de lo guardado, que no cambió).
+- **Por qué solo con el mismo ancho.** Anchos distintos los eligió alguien: con los tiradores (una foto más grande a
+  propósito) o con *Arrange in rows*, que ya los deja proporcionales. Esas filas se ven como siempre. El mismo ancho en
+  todas es lo que dejan los tamaños rápidos y la limpieza de Coda: ahí «1/3» pasa a querer decir «tres por fila, a la
+  misma altura».
+- **Cómo llega a la pantalla.** La decoración de las filas (`inlinePhotoEditor.ts`) le pone a cada foto `--ph-v`, el
+  ancho que se muestra, y el CSS lo usa en lugar de `--ph-w`. La proporción sale de la imagen al cargar (`naturalWidth`
+  / `naturalHeight`, o las medidas de la miniatura si ya está la nítida, `thumbSize`), y se guarda **en memoria** por
+  dirección (`photoAspects.ts`): una foto que se vuelve a dibujar (otra página, un cambio de otro dispositivo, deshacer)
+  ya la tiene. Cada proporción nueva vuelve a armar las filas de los editores cuya página tiene esa foto, en el cuadro
+  siguiente (una transacción sin cambios en el documento, una sola aunque carguen muchas juntas); con la pestaña oculta,
+  donde los cuadros se frenan, en la vuelta siguiente (`setTimeout(0)`). El marcador (sin red, de otro proyecto,
+  subiendo: un SVG) no cuenta.
+- **Mientras falta alguna proporción**, la fila se ve con lo guardado (sin la foto que no cargó, que no tiene alto
+  todavía). Al cargar la última se acomoda una vez; las siguientes veces en la misma pestaña, ya sale pareja.
+- **Los tiradores** en una fila pareja: al soltar, las otras fotos de la fila pasan a guardar el ancho con que se veían
+  (`resizedWidths` y `keepShownWidths`, `inlinePhoto.ts`), así cambia solo la que se arrastró. Se compara con lo que se
+  veía, y ese ancho es un imán más, como 1/2, 1/3 y 1/4: soltarla a menos de 0,02 de él no cambia nada (un temblor de
+  unos px mandaba la vertical sola a la fila de abajo); soltarla en 1/3 cambia algo aunque guardara 1/3. Si se agranda
+  hasta no entrar, baja de fila, como siempre. Un solo deshacer.
+- **Los tamaños rápidos** sobre parte de una fila pareja (`setPhotoWidths`, `inlinePhotoSize.ts`): con la misma regla,
+  las demás fotos de la fila guardan el ancho con que se veían. «1/4» a la vertical sola la deja en 1/4 sin desarmar a
+  las otras (sin esto, volvían a 1/3 y la fila quedaba otra vez despareja); si no entra al lado, baja de fila. A toda
+  la fila, solo cambian las elegidas.
+- **Teléfono:** «apiladas» no cambia (cada foto, el renglón entero); «en fila», como en la computadora.
+- **Celdas de tabla:** las miniaturas (`w = 0`) no son filas: no cambian. Las agrandadas con el mismo ancho en una celda
+  siguen la misma regla que en un renglón.
+- **Impresión, PDF y hojas:** la vista de impresión copia el DOM con `--ph-v` (y la proporción de cada imagen), así que
+  sale igual que en pantalla; las marcas de hoja se vuelven a medir con el cambio de alto del editor. Imprimir
+  (`printPage.ts`, `prepare`) y exportar a PDF (`exportEditor.tsx`, `render`) llaman a `flushPhotoRows` antes de copiar
+  la página: arma ya las filas que esperaban el cuadro siguiente y anota las imágenes ya cargadas cuyo aviso no llegó
+  (la espera de imágenes mira `complete`, que se pone antes del `load`). Vive en `photoAspects.ts`, que no depende del
+  editor, para que imprimir no lo cargue entero.
+- **Las fotos-bloque viejas en fila** (`imageRowsEditor.ts`) no cambian: siguen con lo guardado.
+
+**Límites.** Si se imprime o se exporta sin que haya cargado alguna foto de una fila (pasó el tope de espera), esa
+fila sale con lo guardado. La primera vez que se abre una página en la pestaña, una fila puede acomodarse cuando carga
+su última foto. Sin probar en Safari ni en el iPhone, ni en una página real con fotos de un proyecto.
+
+**Lo medido** (Chromium, el documento de práctica de `tour.html` en un servidor propio, fotos de 3:2, 2:3, 16:9, 3:4 y
+1:1 a 1/3): fila de dos apaisadas y una vertical, las tres de **166,6 px** de alto (antes, 136 y 306); la última fila
+(dos a 1/3), 190,5 y 190,4 px, ocupando lo mismo que antes; tres distintas (16:9, 3:4, 1:1), 173,2 px las tres. La vista
+de impresión (A4) copia los anchos: 170,6 / 195 / 177,3 px por fila, iguales dentro de cada fila. Pruebas en el repo:
+`imageRows.test.ts` («filas con la misma altura») e `inlinePhotoEvenRows.test.ts`.
+
 ## Cámara: sacar una foto o filmar desde la página (P.25, v0.110)
 
 Pedido de Lega (2026-10-01): sacar una foto o filmar desde la app, que entre en el renglón y suba al Drive como

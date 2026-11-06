@@ -2770,3 +2770,16 @@ dos letras. (6) Ctrl/⌘+clic abre el proyecto **de fondo** (como las páginas) 
 el tab va a la última página vista de ese proyecto o a su inicio. (7) El color elegido sin red queda pendiente **aparte de
 la cola del árbol**, para que una versión anterior de la app abierta en otra pestaña siga arrancando. Detalle:
 `Doc_Navegacion.md`, «Color del proyecto».
+
+### D842 · En una fila de fotos mandan las alturas, no los anchos (2026-11-05)
+**Pedido de Lega:** en una fila de fotos con el mismo ancho guardado (las de «un tercio» que dejó la limpieza de los
+reportes), una vertical entre dos apaisadas salía el doble de alta; las fotos de una fila tienen que verse a la misma
+altura, con el ancho repartido según la forma de cada una. **Decidido sin Lega (lo puede cambiar):** (1) **Se arregla al
+dibujar, no en lo guardado:** abrir una página no escribe nada, se corrige solo en todas las páginas donde pasó y una
+versión anterior de la app sigue viendo lo de siempre. (2) **Solo las filas con el mismo ancho guardado** se emparejan; las
+de anchos distintos (elegidos con los tiradores o con *Arrange in rows*, que ya salen parejas) quedan como estaban. Por
+eso ya no se pueden tener columnas del mismo ancho a propósito con fotos de distinta forma, salvo con anchos casi
+iguales a mano. (3) La fila ocupa lo mismo que antes y corta en el mismo lugar. (4) Al tocar una foto de una fila pareja
+(tirador o tamaño rápido) las demás guardan el ancho con que se veían, así cambia solo la tocada; un arrastre de menos de
+unos 15 px no cambia nada. (5) «1/4» sobre la vertical sola de una fila llena la agranda (se veía a 0,18) y, como ya no
+entra, baja a la fila de abajo, igual que el tirador. Detalle: `Doc_Fotos_En_Linea.md`, «Filas con la misma altura».

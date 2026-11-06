@@ -99,7 +99,8 @@ async function workspace(schema: number): Promise<{ server: FakeServer; owner: D
 }
 
 const label = (name: string) => document.querySelector<HTMLElement>(`[aria-label="${name}"]`);
-const byText = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text);
+// Solo los botones del picker: un aviso de novedades de la versión puede tener su propio «OK».
+const byText = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('.color-picker button')].find((b) => b.textContent?.trim() === text);
 const rowDot = (id: string) => document.querySelector<HTMLElement>(`#project-option-${id} .project-dot`)!;
 /** El color de un punto, como lo da el navegador (`rgb(…)`) pasado a hex. */
 const dotHex = (el: HTMLElement) => {

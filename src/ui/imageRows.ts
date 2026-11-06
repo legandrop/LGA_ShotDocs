@@ -72,6 +72,32 @@ export function rowHeights(fracs: readonly number[], aspects: readonly number[],
 }
 
 /**
+ * Las filas con la misma altura (Docs/Doc_Fotos_En_Linea.md, "Filas con la misma altura"): el ancho que se MUESTRA
+ * de cada foto de una fila cuyas fotos tienen todas el mismo ancho guardado (tres a 1/3, dos a 1/2…), repartido según
+ * su proporción para que queden todas a la misma altura: `T · a_k / Σa`, con `T` lo que ocupa la fila (la suma de lo
+ * guardado). La fila ocupa lo mismo y corta donde cortaba; solo cambia cómo se reparte. `null` si se muestra lo
+ * guardado: una sola foto, anchos distintos (los eligió alguien, con los tiradores o "Arrange in rows", que ya los
+ * deja proporcionales), alguna proporción sin conocer o todas iguales (ya quedan parejas).
+ */
+export function evenRowWidths(fracs: readonly number[], aspects: readonly (number | undefined)[]): number[] | null {
+  const n = fracs.length;
+  if (n < 2 || aspects.length !== n) return null;
+  if (fracs.some((f) => !(f > 0) || Math.abs(f - fracs[0]) > 1e-3)) return null;
+  if (aspects.some((a) => a === undefined || !Number.isFinite(a) || !(a > 0))) return null;
+  const a = aspects as number[];
+  if (a.every((x) => Math.abs(x - a[0]) <= 1e-3 * a[0])) return null;
+  const total = Math.min(1, fracs.reduce((s, f) => s + f, 0));
+  const sum = a.reduce((s, x) => s + x, 0);
+  const out = a.map((x) => Math.max(MIN_ROW_WIDTH, round4((total * x) / sum)));
+  // La que más ocupa se queda con lo que falta o sobra del redondeo: la fila suma lo mismo que la guardada.
+  let widest = 0;
+  for (let k = 1; k < n; k++) if (out[k] > out[widest]) widest = k;
+  const rest = out.reduce((s, f, k) => (k === widest ? s : s + f), 0);
+  out[widest] = Math.max(MIN_ROW_WIDTH, round4(total - rest));
+  return out;
+}
+
+/**
  * La inversa del CSS, para los tiradores: el ancho en px que dejó el arrastre, en una fila de `n` fotos,
  * pasado a `rowWidth`. Queda entre lo más chico que se guarda y 1.
  */

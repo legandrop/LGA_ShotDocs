@@ -4,8 +4,8 @@ import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState } fro
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { TableMap } from '@tiptap/pm/tables';
 import { photoKey } from './carreteModel';
-import { groupRows } from './imageRows';
-import { PHOTO, photoWidth } from './inlinePhoto';
+import { fractionOf, noteImageAspect, PHOTO, rowsOfTextblock, shownRowWidths } from './inlinePhoto';
+import { onPhotoAspects, photoAspect, registerPhotoRows } from './photoAspects';
 import { cellTextEnd } from './inlinePhotoCreate';
 import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
 
@@ -30,39 +30,12 @@ import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
 //     en un renglón nuevo (una marca que no es parte del documento). Sin ella, las primeras fotos de la fila
 //     quedaban al lado del texto y la última bajaba sola (medido en Chromium al pegar tres al final de un texto, y
 //     al acomodar fotos que siguen a un texto). Una fila que no llena sigue fluyendo al lado del texto.
+//   - `--ph-v` (filas con la misma altura, `shownRowWidths`): en una fila de fotos con el mismo ancho guardado, el
+//     ancho que se muestra de cada una, repartido según su proporción. El CSS lo usa en lugar de `--ph-w`. Se arma
+//     cuando se conocen las proporciones de toda la fila (photoAspects.ts): cada proporción nueva vuelve a armar las
+//     decoraciones (una transacción sin cambios en el documento).
 
-/** La parte del ancho de una foto en línea (0: sin ancho propio, o no es una foto). */
-function fractionOf(node: PMNode): number {
-  return node.type.name === PHOTO ? photoWidth(node.attrs.w) : 0;
-}
-
-export interface PhotoRow {
-  /** La posición de cada foto de la fila en el documento. */
-  positions: number[];
-  fracs: number[];
-}
-
-/** Las filas lógicas del texto de un bloque (`pos`: dónde empieza ese nodo de texto en el documento). */
-export function rowsOfTextblock(block: PMNode, pos: number): PhotoRow[] {
-  const out: PhotoRow[] = [];
-  let run: { pos: number; f: number }[] = [];
-  const flush = () => {
-    if (run.length) {
-      const fracs = run.map((r) => r.f);
-      for (const row of groupRows(fracs)) out.push({ positions: row.map((i) => run[i].pos), fracs: row.map((i) => fracs[i]) });
-    }
-    run = [];
-  };
-  block.forEach((child, offset) => {
-    if (child.type.name === PHOTO) {
-      // Una foto que empieza fila (`rowStart`, "Arrange in rows" de las elegidas) corta la tanda.
-      if (child.attrs.rowStart === true) flush();
-      run.push({ pos: pos + 1 + offset, f: fractionOf(child) });
-    } else flush();
-  });
-  flush();
-  return out;
-}
+export { rowsOfTextblock, type PhotoRow } from './inlinePhoto';
 
 const round4 = (x: number) => Math.round(x * 1e4) / 1e4;
 
@@ -79,8 +52,11 @@ function rowStart(): HTMLElement {
   return el;
 }
 
-/** Las decoraciones de las filas de todo el documento. */
-export function decorateRows(doc: PMNode): DecorationSet {
+/**
+ * Las decoraciones de las filas de todo el documento. `aspectOf`: la proporción de la foto con esa dirección (la de
+ * photoAspects.ts; las pruebas pasan otra).
+ */
+export function decorateRows(doc: PMNode, aspectOf: (url: string) => number | undefined = photoAspect): DecorationSet {
   const decorations: Decoration[] = [];
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
@@ -88,6 +64,7 @@ export function decorateRows(doc: PMNode): DecorationSet {
       const n = row.positions.length;
       const sum = row.fracs.reduce((s, f) => s + f, 0);
       const full = sum > 1 - 1e-3;
+      const shown = shownRowWidths(doc, row, aspectOf);
       // Después del cursor (`side: 1`): con el cursor al final del texto, lo que se escribe va al texto (antes de la
       // marca, el navegador lo ponía después de la primera foto: medido en Chromium).
       if (full && afterText(doc, row.positions[0])) {
@@ -96,6 +73,7 @@ export function decorateRows(doc: PMNode): DecorationSet {
       row.positions.forEach((at, k) => {
         const classes = ['sd-photo-sized'];
         let style = `--row-n: ${n}`;
+        if (shown) style += `; --ph-v: ${shown[k]}`;
         if (k === 0) classes.push('sd-photo-row-first');
         if (k === n - 1 && !full) {
           const next = doc.nodeAt(at + 1);
@@ -118,10 +96,64 @@ const rowsPlugin = new Plugin<DecorationSet>({
   key: rowsKey,
   state: {
     init: (_, state) => decorateRows(state.doc),
-    apply: (tr, old) => (tr.docChanged ? decorateRows(tr.doc) : old),
+    apply: (tr, old) => (tr.docChanged || tr.getMeta(rowsKey) ? decorateRows(tr.doc) : old),
   },
   props: { decorations: (state) => rowsKey.getState(state) },
+  // Cuando carga una foto de esta página con una proporción nueva, las filas se vuelven a armar, una vez por cuadro
+  // aunque carguen muchas juntas (al abrir la página). Con la pestaña oculta los cuadros se frenan: ahí, en la vuelta
+  // siguiente (un PDF que se arma de fondo no espera a que se vea). Imprimir y exportar no esperan ni eso:
+  // `flushPhotoRows`.
+  view(view) {
+    let cancel: (() => void) | null = null;
+    const now = () => {
+      cancel?.();
+      cancel = null;
+      if (!view.isDestroyed) view.dispatch(view.state.tr.setMeta(rowsKey, true));
+    };
+    const schedule = (url: string) => {
+      if (cancel || !hasPhotoUrl(view.state.doc, url)) return;
+      if (typeof document !== 'undefined' && document.hidden) {
+        const id = setTimeout(now, 0);
+        cancel = () => clearTimeout(id);
+      } else if (typeof requestAnimationFrame === 'function') {
+        const id = requestAnimationFrame(now);
+        cancel = () => cancelAnimationFrame(id);
+      } else {
+        const id = setTimeout(now, 16);
+        cancel = () => clearTimeout(id);
+      }
+    };
+    const stop = onPhotoAspects(schedule);
+    const unregister = registerPhotoRows(view.dom, () => {
+      // Las imágenes ya cargadas cuyo `load` todavía no llegó (imprimir mira `complete`, que se pone antes).
+      for (const img of view.dom.querySelectorAll<HTMLImageElement>('.sd-photo[data-url] > img.bn-visual-media')) {
+        noteImageAspect(img.parentElement!.getAttribute('data-url') ?? '', img);
+      }
+      if (cancel) now();
+    });
+    return {
+      destroy() {
+        stop();
+        cancel?.();
+        cancel = null;
+        unregister();
+      },
+    };
+  },
 });
+
+/** El documento tiene alguna foto en línea con esa dirección. */
+function hasPhotoUrl(doc: PMNode, url: string): boolean {
+  let found = false;
+  doc.descendants((node) => {
+    if (found) return false;
+    if (node.type.name === PHOTO && node.attrs.url === url) found = true;
+    return !found;
+  });
+  return found;
+}
+
+export { flushPhotoRows } from './photoAspects';
 
 // --- Las fotos que abarca una selección de texto -----------------------------------------------------------
 //

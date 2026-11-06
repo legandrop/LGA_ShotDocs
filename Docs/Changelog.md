@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.322 :
+
+Lega pidió que en una fila de fotos manden las alturas y no los anchos: con la limpieza de los reportes, cada foto quedó
+en un tercio y una vertical entre dos apaisadas salía el doble de alta. Ahora una fila con el mismo ancho guardado se
+dibuja con todas sus fotos a la misma altura, repartiendo el ancho de la fila según la forma de cada una (D842); lo
+guardado no cambia, así que se arregla solo en todas las páginas y una versión anterior ve lo de siempre. La fila ocupa
+lo mismo y corta en el mismo lugar; las filas con anchos distintos (*Arrange in rows*, los tiradores) quedan igual. Al
+tocar una foto de una fila pareja (tirador o tamaño rápido) las demás guardan el ancho con que se veían, y un arrastre
+chico no cambia nada. Imprimir y el PDF rearman las filas antes de copiar la página. La ayuda de «Fotos en fila» suma el
+renglón; el recorrido no cambia (su documento de práctica usa anchos de *Arrange in rows*, que no son iguales).
+`Doc_Fotos_En_Linea.md`, «Filas con la misma altura». Pruebas nuevas de las filas, la impresión, el imán y los tamaños.
+[ v0.322: Fotos en línea - en una fila de fotos con el mismo ancho, todas se ven a la misma altura ]
+
 v0.321 :
 
 Con el renombre de ERSO a la forma de la post (D840), los títulos con un rango dejaron de nombrar escenas: «Escena

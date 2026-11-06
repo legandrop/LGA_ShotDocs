@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arrangeRows, groupRows, pxToRowWidth, ROW_PRESETS, rowHeights, snapRowWidth } from './imageRows';
+import { arrangeRows, evenRowWidths, groupRows, pxToRowWidth, ROW_PRESETS, rowHeights, snapRowWidth } from './imageRows';
 
 // Fotos en fila (Docs/Doc_Imagenes.md): las filas del plugin, "Arrange in rows" y los tiradores, con números.
 // Las alturas se miden con el mismo modelo que el CSS: `flex-basis = f · (W − (n − 1) · g)`.
@@ -320,5 +320,73 @@ describe('seis por fila (D800)', () => {
       [1.02, 1.42],
     ];
     for (const a of tandas) expect(arrangeRows(a)).toEqual(arrangeRows(a, { maxPerRow: 4 }));
+  });
+});
+
+// Filas con la misma altura (Docs/Doc_Fotos_En_Linea.md): el ancho que se muestra de una fila de fotos en línea con el
+// mismo ancho guardado. El alto de cada foto con el modelo del CSS: `v · (W − (n − 1) · g) / a`.
+describe('filas con la misma altura', () => {
+  const heightsOf = (v: readonly number[], a: readonly number[], W = 720) => v.map((f, k) => (f * (W - (v.length - 1) * GAP)) / a[k]);
+  const spread = (xs: readonly number[]) => Math.max(...xs) - Math.min(...xs);
+
+  it('la captura de Lega: dos apaisadas y una vertical a 1/3 quedan a la misma altura, y la fila sigue llena', () => {
+    const a = [1.5, 1.5, V];
+    const before = heightsOf([1 / 3, 1 / 3, 1 / 3], a);
+    // Antes: la vertical, más del doble de alta que las otras.
+    expect(Math.max(...before) / Math.min(...before)).toBeGreaterThan(2.2);
+    const v = evenRowWidths([1 / 3, 1 / 3, 1 / 3], a)!;
+    expect(sum(v)).toBeCloseTo(1, 4);
+    expect(v[2]).toBeLessThan(v[0]);
+    for (const W of WIDTHS) expect(spread(heightsOf(v, a, W))).toBeLessThan(0.15);
+    // El alto queda entre el de las bajas y el de la alta de antes.
+    const h = heightsOf(v, a)[0];
+    expect(h).toBeGreaterThan(Math.min(...before));
+    expect(h).toBeLessThan(Math.max(...before));
+  });
+
+  it('una fila que no llena ocupa lo mismo que antes (la última, dos a 1/3), con la misma altura', () => {
+    const a = [1.5, V];
+    const v = evenRowWidths([1 / 3, 1 / 3], a)!;
+    expect(sum(v)).toBeCloseTo(2 / 3, 4);
+    expect(spread(heightsOf(v, a))).toBeLessThan(0.15);
+  });
+
+  it('dos a 1/2, cuatro a 1/4: lo mismo', () => {
+    const cases: [number, number[]][] = [
+      [1 / 2, [1.5, V]],
+      [1 / 4, [1.78, V, 1, 1.5]],
+    ];
+    for (const [f, a] of cases) {
+      const v = evenRowWidths(
+        a.map(() => f),
+        a,
+      )!;
+      expect(sum(v)).toBeCloseTo(Math.min(1, f * a.length), 4);
+      expect(spread(heightsOf(v, a))).toBeLessThan(0.15);
+    }
+  });
+
+  it('se muestra lo guardado: una sola, anchos distintos, alguna sin proporción, o todas iguales', () => {
+    expect(evenRowWidths([1 / 3], [V])).toBeNull();
+    expect(evenRowWidths([0.5, 0.25, 0.25], [1.5, V, 1.5])).toBeNull();
+    expect(evenRowWidths([1 / 3, 1 / 3, 1 / 3], [1.5, undefined, V])).toBeNull();
+    expect(evenRowWidths([1 / 3, 1 / 3, 1 / 3], [1.5, 0, V])).toBeNull();
+    expect(evenRowWidths([1 / 3, 1 / 3, 1 / 3], [1.5, 1.5, 1.5])).toBeNull();
+  });
+
+  it('una fila de "Arrange in rows" (ya proporcional) no cambia', () => {
+    const a = [1.5, V, 1.5, 1.78, 1, V];
+    const fracs = arrangeRows(a);
+    for (const row of groupRows(fracs)) expect(evenRowWidths(pick(fracs, row), pick(a, row))).toBeNull();
+  });
+
+  it('proporciones extremas: la angostísima queda en lo más chico que se guarda y la más ancha absorbe el resto', () => {
+    // Sin tope, la del medio daría 0,00001 (0 con 4 decimales: "sin ancho propio").
+    const v = evenRowWidths([1 / 3, 1 / 3, 1 / 3], [1000, 0.01, 1])!;
+    expect(v[1]).toBe(1e-4);
+    expect(v[2]).toBe(0.001);
+    // La más ancha se queda con lo que falta para que la fila sume lo guardado.
+    expect(v[0]).toBe(Math.round((1 - 1e-4 - 0.001) * 1e4) / 1e4);
+    expect(sum(v)).toBeCloseTo(1, 9);
   });
 });
