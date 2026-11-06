@@ -2720,6 +2720,18 @@ cuenta sobre los proyectos que ve la persona: quien ve «ERSO prueba» y no «ER
 aviso de una escena que no está nombra el proyecto. La resolución vive en Shot Docs: PipeSync
 no guarda ids de Shot Docs. Primera parte hecha en v0.317 (`Doc_Link_Escena.md`); el resto, en `Doc_Roadmap.md`.
 
+### D838 · Los reportes y los planes del día de VLLF, con el mismo criterio que ERSO (2026-11-05)
+**Pedido de Lega:** dejar prolijos los reportes de rodaje y los planes del día de VLLF, igual que los de ERSO. Los
+reportes tienen la misma plantilla que los de ERSO y llevan la limpieza de D832 a D834 (más dos títulos que Coda dejaba
+en otro nivel). Los planes no: tienen la plantilla de los scoutings de VLLF, y las reglas de D836 los arruinaban (todos
+sus títulos salían como decorados). **Decidido por Lega, con capturas de los planes de los días 09 y 02 y de los
+reportes de los días 09 y 54 U2:** en los planes de VLLF, nivel 1 para las secciones del día y cada escena, adentro los
+niveles comprimidos a 2 y 3 sin cambiar su orden, afuera las secciones del día vacías (salvo que su título diga algo
+que no está en otro lado de la página: escenas sin sección propia, «Estudio») y el «Indicaciones:» + «-» sin
+llenar, y las fotos como en los reportes: la tira del desglose y la captura del guion de cada escena a la mitad (en
+ERSO todo iba a un tercio). Anotado en `Doc_Importar_Coda.md` («Planes del día de VLLF»); aplicado y verificado en los
+68 reportes y los 71 planes de VLLF.
+
 ### D839 · Un plan del día muestra lo que se planeó; los planos y decorados repetidos se corrigen así (2026-11-05)
 **Pregunta:** los planes de ERSO tenían decorados repetidos entre días y planos repetidos dentro de una misma página.
 Se cruzaron con los DIT de cada día, las planillas de script, los planes de rodaje y los mails. La causa casi siempre:

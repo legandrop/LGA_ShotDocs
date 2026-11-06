@@ -814,6 +814,40 @@ mezclado, como «Cantidad de shots:» en azul y el número en negrita, se respet
 EP, SCN, SHT, Plate, Grupo, Complejidad y Duracion) y con el título **sin link**: un título que enlaza entero a la
 escena la app lo muestra como tarjeta de escena.
 
+### Planes del día de VLLF (D838, 2026-11-05)
+
+Los planes de VLLF («… | Plan» y los de «Planes por locación (varios días)») no tienen la plantilla de los de ERSO sino
+la de los scoutings de VLLF: la ficha del día en renglones, secciones del día («Generales», «Necesidades VFX | …», «Se
+filma ESC …»), una sección por escena («Escena 042 | EXT Día | 03 planos», «ESCENA 174A – EXT …») con la tira del
+desglose y la captura del guion, y adentro los planos («Plano 01:») y otros subtítulos («Videostory:», «Info general:»,
+«Parte 1 - …», «Opción 1»). Se dejan así:
+
+1. **Niveles:** 1 para las secciones del día y para cada escena (y para un título que está al nivel de las escenas, como
+   «Plaza de Mayo evolución»); adentro de cada una, los niveles que había se comprimen a 2 y 3 sin cambiar el orden
+   entre ellos: los planos solos quedan en 2; una «Parte N» queda en 2 con sus planos en 3. «Indicaciones:» como
+   título va un nivel debajo de su plano.
+2. **Se borran** las secciones del día vacías (sin nada, o solo viñetas vacías o «-») **cuyo título no dice nada más**
+   que la sección, una fecha y escenas que tienen su propia sección en la página; las viñetas vacías; y el par de la
+   plantilla «Indicaciones:» + «-» cuando no tiene nada más. Un título como «Necesidades VFX | Esc 152, 154:» sin las
+   escenas 152 y 154 en la página, o «… | Mié 17 de Junio | Estudio | Esc 120A, 120B:», queda aunque esté vacío: es el
+   único lugar donde dice eso (lo encontró la auditoría; 10 secciones volvieron a su lugar). Un plano sin texto queda:
+   el plan enumera los planos de la escena. No se pasan párrafos a título.
+3. **Fotos como en los reportes, no como en los planes de ERSO:** la tira del desglose y la captura del guion de cada
+   escena van a la mitad; las fotos de los planos, a un tercio en filas de a tres.
+4. Lo demás, como en los reportes: ningún título con color de Coda y dos renglones vacíos antes de cada título.
+
+Hecho en los 71 planes de VLLF (2026-11-05), con los 68 reportes (que tienen la plantilla de ERSO; se sumaron dos casos
+de nivel que Coda dejaba mal: un plano en nivel 1 debajo de su escena pasa a 2, y un «Escena N plano M» de nivel 2 que
+trae su propia «Locación Guion» hace de escena). Todos verificados con los controles de los reportes.
+
+**Lo que hay que mirar después de escribir con el editor.** Al guardar, el editor a veces corre las marcas de un
+renglón vecino: el texto queda igual pero un tramo pierde el link, el color o gana una cursiva (en VLLF, 3 bloques en
+139 páginas: una tarjeta de Drive con las últimas letras fuera del link y dos renglones con colores corridos). La
+verificación final lo detecta comparando el formato de cada bloque con la copia de antes. Corregirlo desde el editor
+no alcanza (el editor lo ve bien y el documento sigue mal): se devuelve el formato de la copia de antes directo en el
+documento. Un diagrama sobre fondo blanco puede pasar por captura del guion: se mira en la página y, si es foto, va a
+un tercio.
+
 ### Varios docs en un proyecto (2026-10-17)
 
 Un proyecto puede venir repartido en varios docs de Coda (preproducción, scoutings, reportes de rodaje). Se exporta
