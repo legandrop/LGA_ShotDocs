@@ -2881,3 +2881,17 @@ vez en cuando; no compensa tocar lo que recibe quien no ve lo borrado. (4) **La 
 las bases limpias** (la restauración las tiraba igual). (5) Sin paso en los recorridos ni en la ayuda: no cambia nada que
 se vea. Detalle: `Doc_Sincronizacion.md`, «El ciclo en reposo y las listas cada minuto», y `Doc_Privacidad_Borrado.md`,
 «Entrega 2».
+
+### D849 · El nombre de una escena dice dónde pasa; ERSO, con los reportes (2026-11-08)
+**Pedido de Lega:** que las escenas de ERSO queden nombradas como las de VLLF (D830): hasta acá eran el comienzo de la
+descripción del desglose («1034 | Un taxi viaja por París. El Ruso y el…»). **Qué pasaba:** ERSO no tiene nombres en
+los planes de rodaje; lo más parecido es la «Descripción de la escena» corta de cada sección de los reportes, en 117
+escenas. **Decidido:** (1) El nombre sale de esa descripción corta (acortada) y, donde no hay, de un borrador en el
+mismo estilo a partir de la descripción; tres escenas sin descripción en ningún lado quedan con su decorado. (2) Al ver
+la primera vuelta, Lega agregó una regla para todos los proyectos: **el nombre dice dónde pasa la escena cuando la acción
+no lo deja claro**, porque el lugar define el efecto (en un auto hay croma; el frente del Arrabal no es su salón): «En el
+auto, Otto le da el salvoconducto», «Bar: Ruso nervioso oye a Hitler en la radio». Si la acción ya lo dice («sale de la
+farmacia», «duerme como un tronco»), no se agrega. Cortos: unos 40 caracteres, 45 como máximo. (3) Aplicado en ERSO:
+229 renombres, solo el título, con el código adelante como antes y ningún « | » dentro del nombre (la barra lateral parte
+el título por ahí); el contenido, el código interno y los links no se
+tocan.
