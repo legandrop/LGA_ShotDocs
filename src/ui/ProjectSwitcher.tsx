@@ -33,7 +33,7 @@ import {
 } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
-import { editedLabel, lastPageOf, projectStateError, shortDateLabel, useCurrentProject, useSwitchProject } from './project';
+import { editedLabel, lastPageOf, projectStateError, useCurrentProject, useSwitchProject } from './project';
 import { defaultProjectColor, loadRecentColors, previewColor, PROJECT_PRESETS, projectColor, rememberRecentColor, useProjectColor } from './projectColor';
 import { ColorPicker } from './ColorPicker';
 import { useSearchSession } from './projectSearchUi';
@@ -120,8 +120,9 @@ function ProjectColorPanel(props: { id: string; name: string; touch: boolean; on
   );
 }
 
-/** El ancho del selector en el escritorio (`.project-menu` en styles.css): la tabla de proyectos y la papelera. */
-const PROJECT_MENU_WIDTH = 560;
+/** El ancho del selector en el escritorio (styles.css): la lista de proyectos (`.project-list-menu`) y la papelera (`.project-menu`). */
+const PROJECT_LIST_WIDTH = 400;
+const PROJECT_MENU_WIDTH = 520;
 
 // En pantallas táctiles no se enfoca el buscador al abrir: el teclado taparía la lista.
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -169,7 +170,7 @@ export function ProjectSwitcher() {
 
   const toggle = () => {
     setStartIn('list');
-    setPosition((open) => (open || !button.current ? null : menuBelow(button.current, PROJECT_MENU_WIDTH)));
+    setPosition((open) => (open || !button.current ? null : menuBelow(button.current, PROJECT_LIST_WIDTH)));
   };
 
   useEffect(() => {
@@ -286,7 +287,7 @@ export function ProjectSwitcher() {
   );
 }
 
-/** Un renglón de un menú flotante del selector (⋯ de un proyecto, *New*, *Share*). */
+/** Un renglón de un menú flotante del selector (⋯ de un proyecto, *New*). */
 interface PopEntry {
   key: string;
   label: string;
@@ -298,18 +299,20 @@ interface PopEntry {
   danger?: boolean;
   /** Algo a la derecha del texto (la muestra del color). */
   right?: ReactNode;
+  /** El ícono, solo en la lista del teléfono (en el menú flotante, solo texto). */
+  icon?: ReactNode;
   run: () => void;
 }
 
 /** Cuál menú flotante está abierto y desde qué botón. */
-type PopKind = { kind: 'row'; id: string } | { kind: 'new' } | { kind: 'share' };
+type PopKind = { kind: 'row'; id: string } | { kind: 'new' };
 type Pop = { anchor: HTMLElement } & PopKind;
 
 /** Los renglones de un menú flotante que se pueden elegir. Las flechas recorren todos, también los apagados (su motivo se lee con el foco). */
 const ENABLED = 'button:not([aria-disabled="true"])';
 
 /**
- * Un menú chico que sale de un botón del selector (el ⋯ de un renglón, *New*, *Share*): con texto y en grupos. Va
+ * Un menú chico que sale de un botón del selector (el ⋯ de un renglón, *New*): con texto y en grupos. Va
  * adentro del selector (fijo a la ventana) para que tocarlo no cuente como tocar afuera. Escape lo cierra sin cerrar el
  * selector; tocar afuera o desplazar la lista, también. Las flechas recorren los renglones.
  */
@@ -318,8 +321,6 @@ function PopMenu(props: {
   label: string;
   groups: PopEntry[][];
   align: 'left' | 'right';
-  /** Sale hacia arriba del botón (el pie del selector). */
-  up?: boolean;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -335,7 +336,7 @@ function PopMenu(props: {
     const below = a.bottom + 4;
     const above = a.top - 4 - height;
     const fitsBelow = below + height <= window.innerHeight - 8;
-    const top = props.up ? (above >= 8 ? above : below) : fitsBelow || above < 8 ? below : above;
+    const top = fitsBelow || above < 8 ? below : above;
     el.style.top = `${Math.max(8, Math.min(top, window.innerHeight - 8 - height))}px`;
     el.querySelector<HTMLElement>(ENABLED)?.focus({ preventScroll: true });
     return () => {
@@ -343,7 +344,7 @@ function PopMenu(props: {
       const active = document.activeElement;
       if (props.anchor.isConnected && (!active || active === document.body || el.contains(active))) props.anchor.focus({ preventScroll: true });
     };
-  }, [props.anchor, props.align, props.up]);
+  }, [props.anchor, props.align]);
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
       const target = e.target as Node;
@@ -499,7 +500,6 @@ function ProjectMenu(props: {
     document.getElementById(`project-option-${activeId}`)?.scrollIntoView?.({ block: 'nearest' });
   }, [active, activeId]);
   const archivedCount = tree.archivedProjects().filter((p) => p.id !== props.current).length;
-  const currentName = tree.project(props.current)?.name ?? tr('project.thisProject');
   // El peso que se muestra de un proyecto: solo a quien ve su papelera de archivos (también en el dispositivo: un
   // valor guardado no se muestra si se perdió el permiso); 0 si no hay o no lo ve.
   const weightOf = (id: string) => (perms.canSeeFileTrash(id) ? (sizes.rows?.find((r) => r.project_id === id)?.drive_bytes ?? 0) : 0);
@@ -700,8 +700,9 @@ function ProjectMenu(props: {
   }
 
   /**
-   * Las acciones de un renglón, en su menú ⋯ (v0.329): sin conexión y exportar; color y renombrar; archivar y borrar.
-   * Archivar y borrar son solo para quien maneja el proyecto; renombrar, con 4 sobre él. Los grupos van separados.
+   * Las acciones de un renglón, en su menú ⋯ (v0.333, pedido de Lega): sin conexión, color y renombrar; compartir, compartir
+   * escenas y exportar; archivar y borrar. Archivar y borrar son solo para quien maneja el proyecto; renombrar, con 4 sobre
+   * él; compartir, como en *Share*. Los grupos van separados. En el teléfono, la misma lista se despliega abajo del renglón.
    */
   const rowGroups = (id: string, name: string, archived: boolean): PopEntry[][] => {
     const canRename = !archived && perms.canRenameProject(id);
@@ -711,6 +712,9 @@ function ProjectMenu(props: {
     // "Export project…" (P.22): quien ve el proyecto entero (un invitado con páginas sueltas exporta cada rama).
     const canExport = perms.projectLevel(id) >= LEVEL_VIEW;
     const canColor = canRename && colorReady;
+    // Compartir, como antes en el pie y en la hoja del teléfono: también un archivado (se sigue abriendo y editando).
+    const canShareIt = perms.canShareProject(id);
+    const canScenesOf = scenesReady && perms.canShareScenes(id);
     const reason = blockedReason(id, archived);
     const deleteReason = offline ? tr('fileTrash.needsInternet') : archived ? null : reason;
     const groups: (PopEntry | false)[][] = [
@@ -718,25 +722,17 @@ function ProjectMenu(props: {
         canOffline && {
           key: 'offline',
           label: tr('project.offline'),
+          icon: <OfflineMarkIcon size={16} />,
           run: () => {
             props.onClose();
             openOffline('project', id);
           },
         },
-        canExport && {
-          key: 'export',
-          label: tr('project.export'),
-          run: () => {
-            props.onClose();
-            openExport('project', id);
-          },
-        },
-      ],
-      [
         canColor && {
           key: 'color',
           label: tr('project.color'),
           aria: tr('project.colorNamed', { name }),
+          icon: <PaletteIcon size={16} />,
           right: <ProjectDot id={id} size={12} />,
           run: () => setMode({ name: 'color', id }),
         },
@@ -744,7 +740,39 @@ function ProjectMenu(props: {
           key: 'rename',
           label: tr('project.renameMenu'),
           aria: tr('project.renameNamed', { name }),
+          icon: <RenameIcon size={16} />,
           run: () => setMode({ name: 'rename', id }),
+        },
+      ],
+      [
+        canShareIt && {
+          key: 'share',
+          label: tr('project.shareItem'),
+          aria: tr('project.share', { name }),
+          icon: <ShareIcon size={16} />,
+          run: () => {
+            props.onClose();
+            props.onShare(id);
+          },
+        },
+        canScenesOf && {
+          key: 'shareScenes',
+          label: tr('project.shareScenesItem'),
+          aria: tr('project.shareScenes', { name }),
+          icon: <ShareIcon size={16} />,
+          run: () => {
+            props.onClose();
+            props.onShareScenes(id);
+          },
+        },
+        canExport && {
+          key: 'export',
+          label: tr('project.export'),
+          icon: <ExportIcon size={16} />,
+          run: () => {
+            props.onClose();
+            openExport('project', id);
+          },
         },
       ],
       [
@@ -752,6 +780,7 @@ function ProjectMenu(props: {
           key: 'archive',
           label: tr(archived ? 'project.unarchive' : 'project.archive'),
           aria: tr(archived ? 'project.unarchiveNamed' : 'project.archiveNamed', { name }),
+          icon: archived ? <UnarchiveIcon size={16} /> : <ArchiveIcon size={16} />,
           tip: (archived ? (offline ? tr('fileTrash.needsInternet') : null) : reason) ?? undefined,
           disabled: busy !== null || (archived ? offline : reason !== null),
           run: () => (archived ? void setArchived(id, false) : setConfirming(id)),
@@ -760,6 +789,7 @@ function ProjectMenu(props: {
           key: 'delete',
           label: tr('project.delete'),
           aria: tr('project.deleteNamed', { name }),
+          icon: <TrashIcon size={16} />,
           tip: deleteReason ?? undefined,
           danger: true,
           disabled: busy !== null || deleteReason !== null,
@@ -808,48 +838,16 @@ function ProjectMenu(props: {
 
   const newCount = newGroups.flat().length;
 
-  // Lo del proyecto abierto, en el pie: compartirlo y, con las escenas disponibles, compartir solo sus escenas.
-  const canShare = !archivedMode && perms.canShareProject(props.current);
-  const canScenes = !archivedMode && scenesReady && perms.canShareScenes(props.current);
-  const shareGroups: PopEntry[][] = canScenes
-    ? [
-        [
-          ...(canShare
-            ? [
-                {
-                  key: 'share',
-                  label: tr('project.share', { name: currentName }),
-                  run: () => {
-                    props.onClose();
-                    props.onShare(props.current);
-                  },
-                },
-              ]
-            : []),
-          {
-            key: 'shareScenes',
-            label: tr('project.shareScenes', { name: currentName }),
-            run: () => {
-              props.onClose();
-              props.onShareScenes(props.current);
-            },
-          },
-        ],
-      ]
-    : [];
-
   /** Abre (o cierra, si ya estaba abierto desde ese botón) un menú flotante. */
   const togglePop = (next: PopKind, anchor: HTMLElement) =>
     setPop((open) => (open && open.anchor === anchor ? null : ({ ...next, anchor } as Pop)));
 
-  const popGroups = !pop ? [] : pop.kind === 'new' ? newGroups : pop.kind === 'share' ? shareGroups : rowGroups(pop.id, nameOf(pop.id), !!tree.project(pop.id)?.archived_at);
-  // El tamaño de la tabla: el peso solo se muestra si algún proyecto lo tiene (si no, una columna de rayas).
-  const showSize = all.some((p) => weightOf(p.id) > 0);
+  const popGroups = !pop ? [] : pop.kind === 'new' ? newGroups : rowGroups(pop.id, nameOf(pop.id), !!tree.project(pop.id)?.archived_at);
 
   return (
     <div
       ref={ref}
-      className={`menu project-menu project-list-menu${showSize ? '' : ' no-size'}`}
+      className="menu project-menu project-list-menu"
       role="dialog"
       aria-label={tr(archivedMode ? 'project.archivedTitle' : 'project.projects')}
       style={props.position}
@@ -896,16 +894,6 @@ function ProjectMenu(props: {
         )}
       </div>
       <div className="project-scroll" onScroll={() => setPop(null)}>
-        {projects.length > 0 && (
-          // Los títulos de las columnas (no son parte de la lista: cada renglón se lee entero, con su nombre y sus datos).
-          <div className="project-head" aria-hidden="true">
-            <span />
-            <span>{tr('project.colProject')}</span>
-            <span>{tr('project.colPages')}</span>
-            {showSize && <span>{tr('project.colSize')}</span>}
-            <span>{tr(archivedMode ? 'project.colArchived' : 'project.colEdited')}</span>
-          </div>
-        )}
         <div className="project-list" id="project-listbox" role="listbox" aria-label={tr(archivedMode ? 'project.archivedTitle' : 'project.yours')}>
           {projects.map((p, i) => {
             const stats = tree.projectStats(p.id);
@@ -914,8 +902,7 @@ function ProjectMenu(props: {
             const bytes = weightOf(p.id);
             const groups = rowGroups(p.id, p.name, archived);
             const hasActions = groups.length > 0;
-            const dateIso = archived && archivedMode && p.archived_at ? p.archived_at : stats.updatedAt;
-            // La línea de datos de siempre: en la tabla va en columnas; en el teléfono, abajo del nombre.
+            // La línea de datos, chica y abajo del nombre (v0.333): páginas, peso y cuándo se editó (o archivó).
             const summary = [
               tr('project.pages', { count: stats.pages }),
               bytes > 0 ? formatSize(bytes, tr.lang) : null,
@@ -992,9 +979,6 @@ function ProjectMenu(props: {
                     </span>
                     <small className="project-meta">{summary}</small>
                   </span>
-                  <span className="project-num">{stats.pages}</span>
-                  {showSize && <span className={`project-num${bytes > 0 ? '' : ' dim'}`}>{bytes > 0 ? formatSize(bytes, tr.lang) : '—'}</span>}
-                  <span className="project-num dim">{shortDateLabel(dateIso, tr)}</span>
                 </button>
                 <span className="project-acts">
                   {/* La estrella: llena y siempre a la vista en un favorito; en los demás, al pasar el mouse (en el
@@ -1032,69 +1016,24 @@ function ProjectMenu(props: {
                   )}
                 </span>
                 {hasActions && touch && opened === p.id && (
+                  // En el teléfono, las mismas acciones del ⋯, con íconos y el motivo de lo apagado a la vista.
                   <span className="project-sheet">
-                    {mediaDb && offlineSupported() && (
-                      <button
-                        onClick={() => {
-                          props.onClose();
-                          openOffline('project', p.id);
-                        }}
-                      >
-                        <OfflineMarkIcon size={16} /> {tr('project.offline')}
-                      </button>
-                    )}
-                    {perms.projectLevel(p.id) >= LEVEL_VIEW && (
-                      <button
-                        onClick={() => {
-                          props.onClose();
-                          openExport('project', p.id);
-                        }}
-                      >
-                        <ExportIcon size={16} /> {tr('project.export')}
-                      </button>
-                    )}
-                    {perms.canRenameProject(p.id) && !archived && colorReady && (
-                      <button onClick={() => setMode({ name: 'color', id: p.id })}>
-                        <PaletteIcon size={16} /> {tr('project.color')}
-                      </button>
-                    )}
-                    {perms.canRenameProject(p.id) && !archived && (
-                      <button onClick={() => setMode({ name: 'rename', id: p.id })}>
-                        <RenameIcon size={16} /> {tr('project.renameMenu')}
-                      </button>
-                    )}
-                    {perms.canShareProject(p.id) && (
-                      <button
-                        onClick={() => {
-                          props.onClose();
-                          props.onShare(p.id);
-                        }}
-                      >
-                        <ShareIcon size={16} /> {tr('project.share', { name: p.name })}
-                      </button>
-                    )}
-                    {statesReady && perms.canManageProject(p.id) && (
-                      <>
-                        <button
-                          disabled={busy !== null || (archived ? offline : blockedReason(p.id, false) !== null)}
-                          onClick={() => (archived ? void setArchived(p.id, false) : setConfirming(p.id))}
-                        >
-                          {archived ? <UnarchiveIcon size={16} /> : <ArchiveIcon size={16} />}
-                          {tr(archived ? 'project.unarchive' : 'project.archive')}
-                        </button>
-                        <button
-                          className="danger"
-                          disabled={busy !== null || offline || (!archived && blockedReason(p.id, false) !== null)}
-                          onClick={() => {
-                            props.onClose();
-                            props.onDelete(p.id, p.name);
-                          }}
-                        >
-                          <TrashIcon size={16} /> {tr('project.delete')}
-                        </button>
-                        {!archived && blockedReason(p.id, false) && <span className="muted small">{blockedReason(p.id, false)}</span>}
-                      </>
-                    )}
+                    {groups.map((group, gi) => (
+                      <span key={gi} className="project-sheet-group">
+                        {group.map((entry, ei) => (
+                          <span key={entry.key} className="project-sheet-entry">
+                            <button className={entry.danger ? 'danger' : undefined} aria-label={entry.aria} disabled={entry.disabled} onClick={entry.run}>
+                              {entry.icon} {entry.label}
+                              {entry.right && <span className="project-pop-right">{entry.right}</span>}
+                            </button>
+                            {/* El motivo, una sola vez: archivar y borrar suelen estar apagados por lo mismo. */}
+                            {entry.disabled && entry.tip && !group.slice(ei + 1).some((next) => next.disabled && next.tip === entry.tip) && (
+                              <span className="muted small">{entry.tip}</span>
+                            )}
+                          </span>
+                        ))}
+                      </span>
+                    ))}
                   </span>
                 )}
               </div>
@@ -1140,30 +1079,8 @@ function ProjectMenu(props: {
         )}
       </div>
       {!archivedMode && (
-        // El pie: lo del proyecto abierto a la izquierda; las vistas (archivos por peso y la papelera), a la derecha.
+        // El pie: las vistas (archivos por peso y la papelera), a la derecha. Compartir está en el ⋯ de cada proyecto.
         <div className="project-foot">
-          {(canShare || canScenes) &&
-            (shareGroups.length > 0 ? (
-              <button
-                className="project-share"
-                aria-haspopup="menu"
-                aria-expanded={pop?.kind === 'share'}
-                onClick={(e) => togglePop({ kind: 'share' }, e.currentTarget)}
-              >
-                {tr('project.shareMenu')}
-                <ChevronDownIcon size={14} />
-              </button>
-            ) : (
-              <button
-                className="project-share"
-                onClick={() => {
-                  props.onClose();
-                  props.onShare(props.current);
-                }}
-              >
-                <span>{tr('project.share', { name: currentName })}</span>
-              </button>
-            ))}
           <span className="project-foot-space" />
           {heaviest.length > 0 && (
             <button className="project-ghost" onClick={() => setMode({ name: 'files', id: heaviest.includes(props.current) ? props.current : heaviest[0] })}>
@@ -1181,10 +1098,9 @@ function ProjectMenu(props: {
       {pop && popGroups.length > 0 && (
         <PopMenu
           anchor={pop.anchor}
-          label={pop.kind === 'row' ? tr('project.moreNamed', { name: nameOf(pop.id) }) : tr(pop.kind === 'new' ? 'project.newMenu' : 'project.shareMenu')}
+          label={pop.kind === 'row' ? tr('project.moreNamed', { name: nameOf(pop.id) }) : tr('project.newMenu')}
           groups={popGroups}
-          align={pop.kind === 'share' ? 'left' : 'right'}
-          up={pop.kind === 'share'}
+          align="right"
           onClose={() => setPop(null)}
         />
       )}

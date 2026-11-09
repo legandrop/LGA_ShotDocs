@@ -2903,7 +2903,7 @@ bordes izquierdos y un pie de siete renglones iguales que mezclaba tres trabajos
 silenciosa, B con el proyecto abierto arriba, C tabla), **la C**: columnas de páginas, peso y fecha; estrella y ⋯ en un
 lugar fijo; las acciones del renglón en un menú ⋯ con texto; *New* junto al buscador (crear e importar); y una barra de
 abajo con *Share*, *Files by size* y *Trash*. Íconos que quedan: buscar, estrella, ⋯, +, flechas, *Files by size* y
-*Trash*. Detalle: `Doc_Navegacion.md`, «El selector de proyectos como tabla».
+*Trash*. Detalle: `Doc_Navegacion.md`, «El selector de proyectos».
 
 ### D851 · *Share scenes* como tabla (2026-11-08)
 **Pedido de Lega:** rediseñar la ventana de compartir escenas («tiene poco cariño»): espacios, íconos, qué es ícono y qué
@@ -2936,3 +2936,11 @@ aceptarla se dan las que el vendor tiene en ese momento; la casilla se apaga si 
 una escena asignada que deja de poder compartirse no se le da a nadie y se ve bloqueada; el vendor no se toma un permiso
 propio de la persona; con la casilla, uno no se carga a sí mismo en un vendor. Detalle: `Doc_Compartir_Escenas.md`,
 sección 11.
+
+### D853 · Selector de proyectos en dos líneas y compartir en el ⋯ (2026-11-09)
+**Pedido de Lega:** que las páginas, el peso y la fecha de edición no ocupen columnas: una segunda línea chica dentro del
+renglón de cada proyecto, como en el teléfono, y el selector mucho más angosto. *Share* deja el pie y pasa al ⋯ de cada
+proyecto, en este orden: *Available offline…*, *Color…* y *Rename…*; *Share…*, *Share scenes…* y *Export project…*;
+*Archive* y *Delete…*. **Decidido:** la lista mide 400 px (la papelera y *Files by size* siguen en 520 por su contenido);
+el pie queda con *Files by size* y *Trash*; en el teléfono, el ⋯ despliega la misma lista con el mismo orden. Un
+archivado se sigue compartiendo, como antes. Detalle: `Doc_Navegacion.md`, «El selector de proyectos».

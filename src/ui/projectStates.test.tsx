@@ -291,10 +291,11 @@ describe('selector en el teléfono', () => {
     await act(async () => more.click());
     const sheet = document.querySelector('.project-row.opened .project-sheet')!;
     expect([...sheet.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
-      // "Available offline" (P.10) no aparece: jsdom no tiene Web Locks (sin ellos, la opción no se ofrece).
-      'Export project…',
+      // "Available offline" (P.10) no aparece: jsdom no tiene Web Locks (sin ellos, la opción no se ofrece). Las mismas
+      // acciones y el mismo orden que el ⋯ del escritorio (v0.333).
       'Rename…',
-      'Share “Bosque Negro”',
+      'Share…',
+      'Export project…',
       'Archive',
       'Delete…',
     ]);

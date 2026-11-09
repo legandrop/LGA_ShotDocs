@@ -8,10 +8,9 @@ import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { shortDateLabel } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
 
-// El selector de proyectos como tabla (v0.329): columnas, el ⋯ de cada renglón (menú flotante con texto), el botón *New*
+// El selector de proyectos (v0.329, sin columnas desde la v0.333): la línea de datos abajo del nombre, el ⋯ de cada renglón (menú flotante con texto), el botón *New*
 // de arriba, el pie, los archivados y la estrella en su lugar fijo. Contra el servidor en memoria.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -98,38 +97,27 @@ const popItems = () => [...document.querySelectorAll<HTMLButtonElement>('.projec
 const byText = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text);
 
 describe('selector: la tabla', () => {
-  it('encabezados, una fila por proyecto con sus columnas, y «Open» solo en el abierto', async () => {
+  it('una fila por proyecto, con la línea de datos abajo del nombre, y «Open» solo en el abierto', async () => {
     const { server, owner, p } = await workspace();
     await openFor(owner, server.ownerId);
-    expect([...document.querySelectorAll('.project-head span')].map((s) => s.textContent)).toEqual(['', 'Project', 'Pages', 'Edited']);
+    // Sin columnas ni títulos de columnas (v0.333): páginas, peso y fecha van chicos abajo del nombre.
+    expect(document.querySelector('.project-head, .project-num')).toBeNull();
     expect(rows()).toHaveLength(3);
-    // Sin peso que mostrar no hay columna (el menú lleva `no-size`).
-    expect(document.querySelector('.project-menu')!.classList.contains('no-size')).toBe(true);
     const current = rowOf(p);
     expect(current.classList.contains('current')).toBe(true);
     expect(current.querySelector('.project-badge')?.textContent).toBe('Open');
     expect(rows().filter((r) => r.querySelector('.project-badge'))).toHaveLength(1);
     // Cada renglón se lee entero (nombre, datos y si es el abierto), no celda por celda.
     expect(document.getElementById(`project-option-${p}`)!.getAttribute('aria-label')).toMatch(/^My project, 0 pages · .*, Open$/);
-    // Las columnas de números van en celdas propias.
-    expect([...current.querySelectorAll('.project-num')]).toHaveLength(2);
+    expect(current.querySelector('.project-meta')!.textContent).toMatch(/^0 pages · /);
   });
 
-  it('en castellano los títulos y la fecha corta salen en castellano', async () => {
-    const { server, owner } = await workspace();
+  it('en castellano la línea de datos sale en castellano', async () => {
+    const { server, owner, p } = await workspace();
     act(() => prefs.set({ language: 'es' }));
     await openFor(owner, server.ownerId);
-    expect([...document.querySelectorAll('.project-head span')].map((s) => s.textContent)).toEqual(['', 'Proyecto', 'Págs.', 'Editado']);
+    expect(rowOf(p).querySelector('.project-meta')!.textContent).toMatch(/^0 páginas · /);
     expect(byText('Nuevo')).toBeDefined();
-  });
-
-  it('la fecha corta: hoy, ayer, día y mes (con el año si no es este) y una raya sin fecha', async () => {
-    const day = 86_400_000;
-    expect(shortDateLabel(new Date().toISOString())).toBe('today');
-    expect(shortDateLabel(new Date(Date.now() - day).toISOString())).toBe('yesterday');
-    expect(shortDateLabel(null)).toBe('—');
-    expect(shortDateLabel(new Date(Date.now() - 400 * day).toISOString())).toMatch(/\d{4}/);
-    expect(shortDateLabel(new Date(Date.now() - 10 * day).toISOString())).not.toMatch(/\d{4}/);
   });
 
   it('la estrella y el ⋯ tienen su lugar fijo en todos los renglones, también sin nada para el ⋯', async () => {
@@ -151,14 +139,6 @@ describe('selector: la tabla', () => {
 });
 
 describe('selector: la lista y el teclado', () => {
-  it('los títulos de las columnas van adentro de la lista que se desplaza (así siguen alineados con una barra clásica)', async () => {
-    const { server, owner } = await workspace();
-    await openFor(owner, server.ownerId);
-    const head = document.querySelector('.project-head')!;
-    expect(head.closest('.project-scroll')).not.toBeNull();
-    expect(head.compareDocumentPosition(document.querySelector('.project-list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
   it('las flechas del buscador desplazan la lista hasta el renglón activo', async () => {
     const { server, owner } = await workspace();
     const scrollIntoView = vi.fn();
@@ -218,15 +198,17 @@ describe('selector: el menú ⋯ de un renglón', () => {
     // Sin íconos de acciones en el renglón: solo la estrella y el ⋯.
     expect(rowOf(o).querySelectorAll('button:not(.project-open)')).toHaveLength(2);
     await act(async () => moreOf('Bosque Negro')!.click());
-    // «Available offline…» no está: jsdom no tiene Web Locks. La base 9 no tiene color.
-    expect(popItems()).toEqual(['Export project…', 'Rename…', 'Archive', 'Delete…']);
+    // «Available offline…» no está: jsdom no tiene Web Locks. La base 9 no tiene color ni compartir escenas. El orden
+    // (v0.333): renombrar; compartir y exportar; archivar y borrar.
+    expect(popItems()).toEqual(['Rename…', 'Share…', 'Export project…', 'Archive', 'Delete…']);
+    expect(pop()!.querySelector('button[aria-label="Share “Bosque Negro”"]')).not.toBeNull();
     expect(pop()!.getAttribute('role')).toBe('menu');
     expect(pop()!.querySelectorAll('[role="group"]')).toHaveLength(3);
     expect(document.querySelector('.project-pop [title]')).toBeNull();
     expect(moreOf('Bosque Negro')!.getAttribute('aria-expanded')).toBe('true');
     expect(rowOf(o).classList.contains('more-open')).toBe(true);
     // El foco entra al primer renglón.
-    expect(document.activeElement?.textContent).toBe('Export project…');
+    expect(document.activeElement?.textContent).toBe('Rename…');
   });
 
   it('Escape lo cierra sin cerrar el selector y el foco vuelve al ⋯', async () => {
@@ -254,12 +236,12 @@ describe('selector: el menú ⋯ de un renglón', () => {
     await act(async () => {
       document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
-    expect(document.activeElement?.textContent).toBe('Rename…');
+    expect(document.activeElement?.textContent).toBe('Share…');
     await act(async () => {
       document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
       document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
     });
-    // Da la vuelta: de «Export project…» sube a «Delete…».
+    // Da la vuelta: de «Rename…» sube a «Delete…».
     expect(document.activeElement?.textContent).toBe('Delete…');
 
     // Tocar el buscador (afuera del menú flotante) lo cierra y deja abierto el selector.
@@ -275,6 +257,14 @@ describe('selector: el menú ⋯ de un renglón', () => {
       document.querySelector('.project-scroll')!.dispatchEvent(new Event('scroll'));
     });
     expect(pop()).toBeNull();
+  });
+
+  it('compartir un proyecto que no es el abierto abre su ventana Share (v0.333: compartir está en el ⋯ de cada uno)', async () => {
+    const { server, owner } = await workspace();
+    await openFor(owner, server.ownerId);
+    await act(async () => moreOf('Bosque Negro')!.click());
+    await act(async () => byText('Share…')!.click());
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"] h2')?.textContent).toContain('Bosque Negro'));
   });
 
   it('cada acción hace lo suyo: renombrar abre el formulario con el nombre, archivar pregunta en el renglón', async () => {
@@ -307,7 +297,8 @@ describe('selector: el menú ⋯ de un renglón', () => {
     expect(document.querySelector('.project-pop button[aria-label="Delete “My project”…"]')!.getAttribute('aria-disabled')).toBe('true');
     // Con el teclado se llega también a lo apagado (su motivo se lee con el foco), y Tab cierra el menú.
     const ariaLabels = () => document.activeElement?.getAttribute('aria-label');
-    for (let i = 0; i < 2; i++) {
+    // Rename… → Share… → Export project… → Archive.
+    for (let i = 0; i < 3; i++) {
       await act(async () => {
         document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
       });
@@ -358,7 +349,6 @@ describe('selector: el botón New, el pie y los archivados', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     expect(rows()).toHaveLength(0);
-    expect(document.querySelector('.project-head')).toBeNull();
     expect(document.querySelector('.project-empty')!.textContent).toContain('No project with that name.');
     const create = document.querySelector<HTMLButtonElement>('.project-create')!;
     expect(create.textContent).toBe('Create “Zzz”');
@@ -366,13 +356,12 @@ describe('selector: el botón New, el pie y los archivados', () => {
     expect(document.querySelector<HTMLInputElement>('.project-form input')!.value).toBe('Zzz');
   });
 
-  it('el pie: compartir el proyecto abierto a la izquierda; archivos por peso y papelera a la derecha', async () => {
+  it('el pie: archivos por peso y papelera (compartir está en el ⋯ de cada proyecto)', async () => {
     const { server, owner } = await workspace();
     await openFor(owner, server.ownerId);
     const foot = [...document.querySelectorAll<HTMLButtonElement>('.project-foot button')].map((b) => b.textContent);
-    // Sin escenas para compartir (base 9) no hay menú: el botón comparte el proyecto. Sin pesos, no hay *Files by size*.
-    expect(foot).toEqual(['Share “My project”', 'Trash']);
-    expect(document.querySelector('.project-foot .project-share')!.getAttribute('aria-haspopup')).toBeNull();
+    // Sin pesos, no hay *Files by size*.
+    expect(foot).toEqual(['Trash']);
     await act(async () => byText('Trash')!.click());
     expect(document.querySelector('.trash-menu')).not.toBeNull();
   });
@@ -385,12 +374,12 @@ describe('selector: el botón New, el pie y los archivados', () => {
     const link = byText('Archived projects (1)')!;
     expect(link.closest('.project-scroll')).not.toBeNull();
     await act(async () => link.click());
-    expect([...document.querySelectorAll('.project-head span')].map((s) => s.textContent)).toEqual(['', 'Project', 'Pages', 'Archived']);
+    expect(rows()[0].querySelector('.project-meta')!.textContent).toMatch(/ · archived /);
     expect(rows()).toHaveLength(1);
     expect(document.querySelector('.project-new')).toBeNull();
     expect(document.querySelector('.project-foot')).toBeNull();
-    // Dentro de los archivados las acciones siguen en el ⋯ (desarchivar y borrar).
+    // Dentro de los archivados las acciones siguen en el ⋯ (compartir, como antes; desarchivar y borrar).
     await act(async () => moreOf('Bosque Negro')!.click());
-    expect(popItems()).toEqual(['Export project…', 'Unarchive', 'Delete…']);
+    expect(popItems()).toEqual(['Share…', 'Export project…', 'Unarchive', 'Delete…']);
   });
 });

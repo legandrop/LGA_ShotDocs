@@ -149,7 +149,7 @@ describe('selector: la estrella de favorito', () => {
     await openSwitcher(owner, server.ownerId);
     // Lo de abajo de la lista (v0.329): el pie, los archivados y los workspaces.
     const texts = [...document.querySelectorAll<HTMLButtonElement>('.project-menu .project-foot button, .project-menu .project-scroll > button')].map((b) => b.textContent ?? '');
-    expect(texts.some((t) => t.startsWith('Share “'))).toBe(true);
+    expect(texts).toContain('Trash');
     expect(texts.filter((t) => t.endsWith('…'))).toEqual([]);
   });
 });

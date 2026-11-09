@@ -112,10 +112,8 @@ const openSwitcher = async (host: HTMLElement) => {
   await settle();
 };
 const rowText = (id: string) => document.getElementById(`project-option-${id}`)?.textContent ?? '';
-/** La línea de datos de un renglón (la del teléfono): «0 pages · 3.4 GB · edited today». */
+/** La línea de datos de un renglón, abajo del nombre: «0 pages · 3.4 GB · edited today». */
 const metaOf = (id: string) => document.getElementById(`project-option-${id}`)?.querySelector('.project-meta')?.textContent ?? '';
-/** Las celdas de la tabla de un renglón: páginas, peso (si hay columna) y fecha. */
-const cellsOf = (id: string) => [...(document.getElementById(`project-option-${id}`)?.querySelectorAll('.project-num') ?? [])].map((c) => c.textContent);
 
 describe('selector de proyectos', () => {
   it('muestra el peso entre las páginas y la fecha, sin peso en cero, y no vuelve a pedir antes de 5 minutos', async () => {
@@ -124,9 +122,7 @@ describe('selector de proyectos', () => {
     const host = await mount(services(owner, server.ownerId), <ProjectSwitcher />);
     await openSwitcher(host);
     await vi.waitFor(() => expect(metaOf(server.workspaceId)).toMatch(/^0 pages · 3\.4 GB · /));
-    // La tabla: páginas, peso y fecha en columnas; un proyecto sin peso lleva una raya (nunca «0 KB»).
-    expect(cellsOf(server.workspaceId)).toEqual(['0', '3.4 GB', '—']);
-    expect(cellsOf(second)).toEqual(['0', '—', '—']);
+    // Un proyecto sin peso no lo muestra (nunca «0 KB»).
     expect(metaOf(second)).not.toMatch(/KB|MB|GB/);
     expect(server.sizesCalls).toBe(1);
 
@@ -138,7 +134,6 @@ describe('selector de proyectos', () => {
 
     act(() => prefs.set({ language: 'es' }));
     expect(metaOf(server.workspaceId)).toMatch(/^0 páginas · 3,4 GB · /);
-    expect(cellsOf(server.workspaceId)).toEqual(['0', '3,4 GB', '—']);
   });
 
   it('quien no ve la papelera de archivos del proyecto no ve el peso, aunque haya uno guardado', async () => {

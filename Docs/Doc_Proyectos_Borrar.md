@@ -72,7 +72,7 @@ se desarchiva desde una lista de archivados.
    mandar archivos a la papelera de Drive), no cambios en la cola. No se borra desde un dispositivo que tiene
    cambios de ese proyecto sin subir.
 9. **Interfaz** (desde la v0.329 las acciones del renglón están en su menú ⋯ con texto, no en íconos: ver
-   `Doc_Navegacion.md`, «El selector de proyectos como tabla»): en el selector, al pasar el mouse (o con el foco) por un
+   `Doc_Navegacion.md`, «El selector de proyectos»): en el selector, al pasar el mouse (o con el foco) por un
    proyecto, tres íconos: renombrar,
    archivar y borrar; en el teléfono, un "⋯" por renglón. Al pie, *Archived projects (N)* y *Deleted
    projects*, que cambian el mismo selector a esas listas. La ventana de borrar muestra nombre, páginas,
@@ -3045,8 +3045,8 @@ sincronización: si pidiera `archived_at` a una base sin la migración 9, el `42
 ### 7.1 El selector de proyectos
 
 > **Desde la v0.329 (D850) el selector es una tabla** y las acciones del renglón están en su menú ⋯ con texto; el pie es una
-> barra con *Share*, *Files by size* y *Trash*, y crear e importar están en *New ▾*. El dibujo de abajo es el diseño
-> original de P.14 (histórico); lo vigente está en `Doc_Navegacion.md`, «El selector de proyectos como tabla».
+> barra con *Files by size* y *Trash* (*Share* pasó al ⋯ en la v0.333, D853), y crear e importar están en *New ▾*. El dibujo de abajo es el diseño
+> original de P.14 (histórico); lo vigente está en `Doc_Navegacion.md`, «El selector de proyectos».
 
 Hoy cada proyecto es un botón y abajo hay líneas: *Share “X”…*, *New project*, *Import from Coda…* y *Rename
 “X”* (estas dos del proyecto abierto). Propuesta: **las acciones de un proyecto van en su renglón**, como pidió

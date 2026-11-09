@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.333 :
+
+Lega pidió que el selector de proyectos ocupe menos (D853): las columnas de páginas, peso y fecha se llevaban la mitad
+del ancho. Ahora cada renglón tiene el nombre arriba y, abajo, en letra chica, «páginas · peso · editado …», como en el
+teléfono; la lista mide 400 px (la papelera y *Files by size* siguen en 520). *Share* deja el pie y pasa al ⋯ de cada
+proyecto, que queda en tres grupos: *Available offline…*, *Color…* y *Rename…*; *Share…*, *Share scenes…* y *Export
+project…*; *Archive* y *Delete…*. Así se comparte cualquier proyecto, no solo el abierto. El menú flotante es el mismo de
+antes; en el teléfono, el ⋯ despliega la misma lista. La auditoría encontró que se le había sacado compartir a un
+archivado (antes se podía): vuelve. Ayuda, recorrido y docs al día; pruebas del orden, de compartir otro proyecto y de la
+línea de datos. [ v0.333: Selector de proyectos en dos líneas y compartir en el menú de cada proyecto ]
+
 v0.332 :
 
 27 pruebas SQL de permisos fallaban contra la base real, sin que la app tuviera nada roto. 26 bajan

@@ -29,10 +29,3 @@ export function openNewMenu(): HTMLButtonElement | null {
   if (button && button.getAttribute('aria-haspopup') === 'menu' && button.getAttribute('aria-expanded') !== 'true') flushSync(() => button.click());
   return button;
 }
-
-/** Abre el menú del botón *Share* del pie del selector (compartir el proyecto o sus escenas); `null` si no hay menú. */
-export function openShareMenu(): HTMLButtonElement | null {
-  const button = document.querySelector<HTMLButtonElement>('.project-menu .project-foot .project-share');
-  if (button && button.getAttribute('aria-haspopup') === 'menu' && button.getAttribute('aria-expanded') !== 'true') flushSync(() => button.click());
-  return button;
-}

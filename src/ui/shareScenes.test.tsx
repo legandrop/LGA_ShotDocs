@@ -14,7 +14,7 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { confirmOutsideMove, noticeOutsideCreate, outsideReadersStore } from './outsideReaders';
 import { storeProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
-import { openShareMenu } from '../test/projectRows';
+import { rowLabel } from '../test/projectRows';
 import { ShareDialog } from './ShareDialog';
 import { ShareScenesDialog } from './ShareScenesDialog';
 import { Shell } from './Workspace';
@@ -785,9 +785,14 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(owner).workspace.config.storage, owner.remote.userId, built.projectId);
     mount(owner, <ProjectSwitcher />);
     await openSwitcher();
-    // *Share* (el pie del selector) abre un menú con compartir el proyecto y compartir sus escenas.
-    act(() => void openShareMenu());
-    click(byText('Share scenes of “Serie de prueba”'));
+    // El ⋯ del proyecto (v0.333) trae compartir el proyecto y compartir sus escenas.
+    let entry: HTMLButtonElement | null = null;
+    act(() => void (entry = rowLabel('Share scenes of “Serie de prueba”')));
+    expect(entry!.textContent).toBe('Share scenes…');
+    // El orden del ⋯ (v0.333, D853): compartir, compartir escenas y exportar juntos, en ese orden.
+    const items = [...document.querySelectorAll<HTMLButtonElement>('.project-pop button')].map((b) => b.textContent);
+    expect(items.slice(items.indexOf('Share…'), items.indexOf('Share…') + 3)).toEqual(['Share…', 'Share scenes…', 'Export project…']);
+    click(entry);
     await until(() => document.querySelector('.share-scenes'), 'la ventana');
     expect(document.querySelector('.share-scenes h2')!.textContent).toBe('Share scenes of “Serie de prueba”');
   });
@@ -797,8 +802,10 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(old.owner).workspace.config.storage, old.owner.remote.userId, old.built.projectId);
     mount(old.owner, <ProjectSwitcher />);
     await openSwitcher();
-    expect(byText('Share “Serie de prueba”')).toBeTruthy();
-    expect(byText('Share scenes of “Serie de prueba”')).toBeUndefined();
+    act(() => {
+      expect(rowLabel('Share “Serie de prueba”')).toBeTruthy();
+      expect(rowLabel('Share scenes of “Serie de prueba”')).toBeNull();
+    });
     for (const r of roots.splice(0)) act(() => r.unmount());
     document.body.innerHTML = '';
 
@@ -812,12 +819,11 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(beto).workspace.config.storage, 'beto', built.projectId);
     mount(beto, <ProjectSwitcher />);
     await openSwitcher();
-    act(() => void openShareMenu());
-    expect(byText('Share scenes of “Serie de prueba”')).toBeUndefined();
+    act(() => void expect(rowLabel('Share scenes of “Serie de prueba”')).toBeNull());
     for (const r of roots.splice(0)) act(() => r.unmount());
     document.body.innerHTML = '';
 
-    // Gina, invitada con Comentar y *Can share scenes*: el menú *Share* trae solo compartir escenas.
+    // Gina, invitada con Comentar y *Can share scenes*: el ⋯ trae solo compartir escenas.
     server.addMember('gina', 'guest', 'gina@prod.test');
     server.grant('gina', { projectId: built.projectId }, 'comment');
     server.grants.find((g) => g.user_id === 'gina' && g.project_id === built.projectId)!.share_scenes = true;
@@ -828,9 +834,12 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(gina).workspace.config.storage, 'gina', built.projectId);
     mount(gina, <ProjectSwitcher />);
     await openSwitcher();
-    act(() => void openShareMenu());
-    expect(byText('Share “Serie de prueba”', document)).toBeUndefined();
-    click(byText('Share scenes of “Serie de prueba”', document));
+    let scenes: HTMLButtonElement | null = null;
+    act(() => {
+      expect(rowLabel('Share “Serie de prueba”')).toBeNull();
+      scenes = rowLabel('Share scenes of “Serie de prueba”');
+    });
+    click(scenes);
     await until(() => document.querySelector('.share-scenes'), 'la ventana');
   });
 

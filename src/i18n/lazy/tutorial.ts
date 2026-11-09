@@ -70,12 +70,12 @@ export const tutorial = {
   },
   'tour.projects.title': { en: "Projects", es: "Proyectos" },
   'tour.projects.text': {
-    en: "A workspace has several projects. Switch or create one here; the Trash is here too. Each project has its color dot. {search} finds pages and projects.",
-    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera. Cada proyecto tiene su punto de color. {search} busca páginas y proyectos.",
+    en: "A workspace has several projects. Switch or create one here; the Trash is here too. Each project has its color dot, and its ⋯ shares, exports or renames it. {search} finds pages and projects.",
+    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera. Cada proyecto tiene su punto de color, y su ⋯ lo comparte, lo exporta o lo renombra. {search} busca páginas y proyectos.",
   },
   'tour.projects.textPhone': {
-    en: "A workspace has several projects. Switch or create one here; the Trash is here too.",
-    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera.",
+    en: "A workspace has several projects. Switch or create one here; the Trash is here too. Each project's ⋯ shares, exports or renames it.",
+    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera. El ⋯ de cada proyecto lo comparte, lo exporta o lo renombra.",
   },
   'tour.slash.title': { en: "The / menu", es: "El menú /" },
   'tour.slash.text': {

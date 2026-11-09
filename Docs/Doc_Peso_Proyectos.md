@@ -17,8 +17,8 @@ borra o la reemplaza." En el roadmap, P.7 y P.8.
 - **Quién lo ve:** quien ya ve la papelera de archivos del proyecto (`private.can_see_file_trash`): el dueño,
   los admins con algún permiso sobre el proyecto entero y quien tiene "Editar y crear páginas" sobre el
   proyecto entero. Ver, Comentar, Editar e invitados, no.
-- **Dónde:** en el renglón de cada proyecto del selector (desde la v0.329, la columna **Peso** de la tabla; en el teléfono,
-  la línea "12 páginas · 3,4 GB · editado hoy" de siempre); en el diálogo de
+- **Dónde:** en el renglón de cada proyecto del selector (desde la v0.333, en la línea chica abajo del nombre,
+  "12 páginas · 3,4 GB · editado hoy", también en el escritorio; en la v0.329 fue la columna **Peso** de una tabla); en el diálogo de
   Google Drive (solo el dueño), una sección *Espacio en Drive* con el total, el detalle por proyecto y el
   desglose; y arriba de la pestaña Archivos de la papelera (sumado en el cliente).
 - **Caché:** en la base local (`meta`, clave `projectSizes`), pedido como mucho cada 5 minutos; sin red, el

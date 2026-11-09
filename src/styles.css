@@ -2833,10 +2833,10 @@ code {
   white-space: nowrap;
 }
 
-/* 560 px (v0.329): la lista es una tabla (nombre, páginas, peso, fecha) y al nombre le quedan unos 220 px; lo que no entra
-   termina en «…». La papelera y los demás paneles del selector miden lo mismo, así el menú no cambia de ancho al navegar. */
+/* 520 px: la papelera y los archivos por peso (filtro, miniatura y *Restore*). La lista de proyectos es más angosta (abajo,
+   `.project-list-menu`): sus datos van en una segunda línea chica, no en columnas (v0.333, pedido de Lega). */
 .project-menu {
-  width: 560px;
+  width: 520px;
   max-width: calc(100vw - 16px);
   max-height: min(560px, calc(100vh - 80px));
   overflow-y: auto;
@@ -2891,20 +2891,15 @@ code {
   gap: 2px;
 }
 
-/* El selector de proyectos como tabla (v0.329). Tres bordes en uno: el ícono de buscar, el punto de cada proyecto y los
-   íconos de abajo comparten columna (16 px a 12 px del borde), y los textos arrancan a la misma altura (36 px del borde,
-   la columna más el hueco). Las columnas son las de `--cols`: punto, nombre, páginas, peso y fecha; sin ningún peso que
-   mostrar se saca la columna. A la derecha del renglón, un lugar fijo para la estrella y el ⋯ (28 px cada uno). */
+/* La lista de proyectos (v0.333): cada renglón con el nombre arriba y, abajo, chica, la línea de datos (páginas, peso y
+   cuándo se editó), como en el teléfono. El punto de cada proyecto y los íconos de abajo comparten columna (16 px a 12 px
+   del borde), igual que el ícono de buscar. A la derecha, un lugar fijo para la estrella y el ⋯ (28 px cada uno). */
 .menu.project-list-menu {
-  --cols: 16px minmax(0, 1fr) 44px 64px 92px;
+  width: 400px;
   display: flex;
   flex-direction: column;
   gap: 0;
   overflow: hidden;
-}
-
-.menu.project-list-menu.no-size {
-  --cols: 16px minmax(0, 1fr) 44px 92px;
 }
 
 .project-top {
@@ -2933,37 +2928,7 @@ code {
   color: inherit;
 }
 
-/* Los títulos de las columnas. */
-.project-head {
-  display: grid;
-  grid-template-columns: var(--cols);
-  column-gap: 8px;
-  align-items: center;
-  /* Pegado arriba al bajar por la lista, y adentro de ella: con una barra de desplazamiento clásica (Windows), los títulos
-     siguen alineados con sus columnas. */
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  height: 28px;
-  margin-top: 4px;
-  padding: 0 68px 0 12px;
-  background: var(--menu-bg);
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted-2);
-}
-
-.project-head span:nth-child(2) {
-  margin-left: 4px;
-}
-
-.project-head span:nth-child(n + 3) {
-  text-align: right;
-}
-
-/* La lista se recorre sola; el buscador, los títulos y el pie se quedan. Sus márgenes llevan la barra de desplazamiento
+/* La lista se recorre sola; el buscador y el pie se quedan. Sus márgenes llevan la barra de desplazamiento
    hasta el borde del menú. */
 .project-list-menu .project-scroll {
   flex: 1 1 auto;
@@ -2987,10 +2952,8 @@ code {
 
 .menu .project-line {
   gap: 0;
-  min-height: 44px;
+  min-height: 52px;
   padding: 0 8px 0 0;
-  /* Con las flechas, el renglón no queda tapado por los títulos pegados arriba. */
-  scroll-margin-top: 32px;
 }
 
 /* El proyecto abierto lleva su propio fondo, que el hover y las flechas no pisan: se ven las dos cosas a la vez. */
@@ -3005,10 +2968,10 @@ code {
 .menu .project-line .project-open {
   flex: 1;
   min-width: 0;
-  height: 44px;
+  height: 52px;
   padding: 0 0 0 12px;
   display: grid;
-  grid-template-columns: var(--cols);
+  grid-template-columns: 16px minmax(0, 1fr);
   column-gap: 8px;
   align-items: center;
   text-align: left;
@@ -3062,30 +3025,20 @@ code {
   color: var(--accent-text);
 }
 
-/* La línea de datos de siempre: solo en el teléfono, donde no hay columnas. */
+/* La línea de datos, abajo del nombre: páginas · peso · cuándo se editó. */
 .project-meta {
-  display: none;
+  display: block;
+  margin-top: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
   color: var(--muted-2);
-}
-
-.project-num {
-  text-align: right;
-  white-space: nowrap;
-  font-size: 13px;
-  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 
-.project-num.dim {
-  color: var(--muted-2);
-}
-
 /* Sobre el fondo del proyecto abierto el gris de siempre no llega a 4,5:1 en oscuro. */
-.menu .project-line.current .project-num.dim {
+.menu .project-line.current .project-meta {
   color: var(--muted);
 }
 
@@ -3142,7 +3095,7 @@ code {
   color: var(--danger);
 }
 
-/* Los menús chicos del selector (el ⋯ de un renglón, *New* y *Share*): fijos a la ventana, con texto y en grupos. */
+/* Los menús chicos del selector (el ⋯ de un renglón y *New*): fijos a la ventana, con texto y en grupos. */
 .menu .project-pop {
   position: fixed;
   z-index: 3;
@@ -3181,7 +3134,7 @@ code {
   align-items: center;
 }
 
-/* El pie: lo del proyecto abierto a la izquierda y las vistas a la derecha, en una barra hundida. */
+/* El pie: las vistas (archivos por peso y la papelera) a la derecha, en una barra hundida. */
 .project-foot {
   flex: none;
   display: flex;
@@ -3204,25 +3157,6 @@ code {
   gap: 8px;
   font-size: 13px;
   border-radius: 6px;
-}
-
-.menu .project-foot .project-share {
-  min-width: 0;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  font-weight: 500;
-  background: var(--menu-bg);
-}
-
-.menu .project-foot .project-share:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.menu .project-foot .project-share span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Lo que sigue a la lista (los archivados, los workspaces): sus íconos caen en la misma columna que los puntos. */
@@ -3262,6 +3196,19 @@ code {
   display: grid;
   gap: 2px;
   padding: 0 0 6px 48px;
+}
+
+/* Los mismos grupos del ⋯ (v0.333), separados por una línea. */
+.project-sheet-group,
+.project-sheet-entry {
+  display: grid;
+  gap: 2px;
+}
+
+.project-sheet-group + .project-sheet-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--menu-border);
 }
 
 .menu .project-row.confirming {
@@ -3368,7 +3315,7 @@ code {
   padding: 0 12px;
 }
 
-/* La papelera única, adentro del selector de proyectos, toma el ancho del selector (520 px): entran el filtro, la
+/* La papelera única, adentro del selector de proyectos, mide 520 px (más que la lista, de 400): entran el filtro, la
    miniatura y *Restore*. El color y el formulario de nombre, en cambio, más angostos: el picker tiene medidas fijas (el
    cuadro de 240 px) y el nombre es un solo campo. En el teléfono, la hoja de abajo de siempre (ancho entero). */
 @media (min-width: 761px) {
@@ -3718,21 +3665,6 @@ code {
     margin: 10px -12px calc(-16px - env(safe-area-inset-bottom));
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     border-radius: 0;
-  }
-
-  /* Sin columnas: nombre y, abajo, la línea de datos de siempre (páginas · peso · fecha). */
-  .menu.project-list-menu,
-  .menu.project-list-menu.no-size {
-    --cols: 16px minmax(0, 1fr);
-  }
-
-  .project-head,
-  .project-num {
-    display: none;
-  }
-
-  .project-meta {
-    display: block;
   }
 
   .menu .project-line {

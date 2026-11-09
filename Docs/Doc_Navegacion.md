@@ -96,47 +96,46 @@ del navegador y la página no los recibe; ahí se usan sus pestañas (sección s
   ventana; si ninguno la tiene (se llegó con un link), va uno nuevo al principio.
 - Un link a otro workspace o con la autoridad de un link público no se abre en un tab (`appPath`): se abre como siempre.
 
-## El selector de proyectos como tabla (v0.329, D850)
+## El selector de proyectos (tabla en la v0.329, D850; dos líneas en la v0.333, D853)
 
 Pedido de Lega (2026-11-08): el selector tenía «poco cariño». Auditado contra la captura (siete íconos casi iguales por
 renglón, la estrella que saltaba de lugar, el dato cortado en «editad…», tres bordes izquierdos, un pie de siete renglones
 iguales que mezclaba tres trabajos), se hicieron tres propuestas y Lega eligió la **C, la tabla**. Esto reemplaza lo que
 dicen más abajo y en `Doc_Proyectos_Borrar.md` sobre los íconos del renglón.
 
-- **Medidas:** 560 px de ancho en el escritorio (`PROJECT_MENU_WIDTH`; la papelera y los demás paneles miden igual, así el
-  menú no cambia de ancho al navegar), con el nombre unos 220 px. La lista se recorre sola (`.project-scroll`): el
-  buscador, los títulos de las columnas y el pie se quedan.
-- **Columnas:** punto de color, **Proyecto** (nombre, «Open» al lado del abierto, y la marca de sin conexión), **Págs.**,
-  **Peso** y **Editado**, con cifras tabulares alineadas a la derecha (`.project-num`). Peso solo si algún proyecto lo
-  muestra (`.no-size`; cuenta el permiso de `canSeeFileTrash`); un proyecto sin peso lleva «—», nunca «0 KB». La fecha es
-  corta (`shortDateLabel`: «hoy», «ayer», «4 nov», con el año si no es este, «—» sin fecha); en los archivados la columna
-  dice **Archivado** y trae la fecha en que se archivó. Cada renglón se lee entero para un lector de pantalla (`aria-label`
-  con nombre, datos y «Open»). En el teléfono (hasta 760 px) no hay columnas: el renglón vuelve a la línea de siempre
-  («páginas · peso · fecha») debajo del nombre.
+- **Dos líneas, sin columnas (v0.333, D853, pedido de Lega 2026-11-09):** la tabla ocupaba mucho ancho con tres columnas
+  de números. Ahora cada renglón lleva el nombre arriba (con «Open» y la marca de sin conexión) y, abajo, en letra chica,
+  la línea de datos de siempre: «páginas · peso · editado …» (`.project-meta`; en los archivados, «archivado …»), igual
+  que en el teléfono. Sin títulos de columnas. El peso sale solo si se ve (`canSeeFileTrash`) y nunca «0 KB». Cada renglón
+  se lee entero para un lector de pantalla (`aria-label` con nombre, datos y «Open»).
+- **Medidas:** la lista mide 400 px en el escritorio (`.project-list-menu`, `PROJECT_LIST_WIDTH`); la papelera y *Files by size* siguen en 520
+  (`PROJECT_MENU_WIDTH`, filtro, miniatura y *Restore*), y el color y el nombre en 340. La lista se recorre sola
+  (`.project-scroll`): el buscador y el pie se quedan.
 - **El renglón abierto** lleva su propio fondo (`--project-current`), que el hover y las flechas no pisan.
 - **Estrella y ⋯ en lugar fijo:** una columna de 28 + 28 px a la derecha de todos los renglones. La estrella de un favorito
   queda siempre a la vista y en la misma columna; los demás la muestran con el mouse encima, el foco o las flechas. El ⋯
   igual, y siempre en el teléfono. Si la persona no tiene nada para el ⋯, su lugar queda vacío (nada se corre).
 - **El ⋯ abre un menú flotante con texto** (`PopMenu`, dentro del selector y fijo a la ventana, así tocarlo no cuenta como
-  tocar afuera), en tres grupos: *Available offline…* y *Export project…*; *Color* (con la muestra a la derecha) y
-  *Rename*; *Archive* / *Unarchive* y *Delete…* (rojo, al final). Las mismas condiciones y permisos de siempre; lo apagado
-  trae su motivo en el tooltip (`data-tip`). Escape lo cierra sin cerrar el selector y el foco vuelve al ⋯; tocar afuera,
-  desplazar la lista, cambiar el ancho de la ventana o volver a tocar el ⋯ también; las flechas recorren los
-  renglones (dan la vuelta). Los nombres accesibles de cada entrada son los de siempre («Archive “X”», «Color of “X”»…). En una pantalla
-  táctil sigue la hoja de renglones debajo del proyecto, que ya traía además *Share*.
+  tocar afuera), en tres grupos (orden de Lega, v0.333): *Available offline…*, *Color…* (con la muestra a la derecha) y
+  *Rename…*; *Share…*, *Share scenes…* y *Export project…*; *Archive* / *Unarchive* y *Delete…* (rojo, al final). Las
+  mismas condiciones y permisos de siempre (compartir, como antes en el pie: `canShareProject`, y escenas con la base en la
+  31 y `canShareScenes`; también en un archivado, como antes); lo apagado trae su motivo en el tooltip (`data-tip`). Escape
+  lo cierra sin cerrar el selector y el foco vuelve al ⋯; tocar afuera, desplazar la lista, cambiar el ancho de la ventana
+  o volver a tocar el ⋯ también; las flechas recorren los renglones (dan la vuelta). Los nombres accesibles de cada entrada
+  llevan el proyecto («Share “X”», «Share scenes of “X”», «Archive “X”», «Color of “X”»…). En una pantalla táctil, la
+  misma lista (`rowGroups`) se despliega debajo del renglón, con íconos y el motivo de lo apagado a la vista.
 - **Arriba, *New*:** el botón de al lado del buscador reúne *New project*, *Import Shot Docs archive* y, para la cuenta de
   Lega, *Import from Coda* (menú flotante). Solo lo ve quien crea proyectos. Escribir un nombre que no existe ofrece
   *Create “nombre”* (o Enter), en el lugar de lo que decía el viejo renglón del pie.
-- **Abajo, una barra hundida:** a la izquierda lo del proyecto abierto, *Share* (con escenas disponibles, un menú con *Share
-  “X”* y *Share scenes of “X”*; sin ellas, un botón *Share “X”* directo); a la derecha, *Files by size* (si algún proyecto
-  muestra un peso) y *Trash*. *Archived projects (N)* y los workspaces (`WorkspaceSection`) siguen al final de la lista,
+- **Abajo, una barra hundida:** *Files by size* (si algún proyecto muestra un peso) y *Trash*, a la derecha. *Share* estuvo a
+  la izquierda hasta la v0.332; desde la v0.333 está en el ⋯ de cada proyecto. *Archived projects (N)* y los workspaces (`WorkspaceSection`) siguen al final de la lista,
   con sus íconos en la misma columna que los puntos de los proyectos.
 - **Un solo borde izquierdo:** el ícono de buscar, el punto de cada proyecto y los íconos de abajo comparten una columna
   de 16 px a 12 px del borde; los textos arrancan a 36 px.
 - **Íconos que quedan** (se entienden más rápido que su texto): buscar, estrella, ⋯, +, flechas de desplegar y, en el pie,
   *Files by size* y *Trash*. Lo demás pasó a texto.
 - **Pruebas:** `src/ui/projectTable.test.tsx` y los tests del selector ya existentes, que piden las acciones con
-  `src/test/projectRows.ts` (abre el ⋯, el *New* o el *Share* antes de buscar). Arnés visual: `src/dev/barra-lateral.html?proyectos`.
+  `src/test/projectRows.ts` (abre el ⋯ o el *New* antes de buscar). Arnés visual: `src/dev/barra-lateral.html?proyectos`.
 
 ## Proyectos favoritos (v0.327; sincronizados desde la v0.328)
 
