@@ -3,7 +3,7 @@
 // login ni red, con el proyecto sintético de las relaciones (escenas, locaciones y días): sirve para mirar los títulos
 // de la barra lateral (Overview, Pages), las partes de *Overview* y su selección contra la de una página. `?map` abre el mapa; `?muchas`
 // suma 120 escenas al episodio 5 y una rama *Preproducción › Decorados* con 80 páginas, para ver qué queda pegado arriba
-// al bajar (D771). `?compartir` abre encima *Share scenes* (v0.330), con dos personas de afuera.
+// al bajar (D771). `?compartir` abre encima *Share scenes* (v0.331), con dos vendors.
 import { createRoot } from 'react-dom/client';
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
@@ -38,12 +38,12 @@ const fakePhoto = async () => `0000${String(++n).padStart(4, '0')}-aaaa-4bbb-8cc
 async function main() {
   prefs.init();
   const server = new FakeServer();
-  // `?compartir`: abre *Share scenes* (v0.330) con la base 28, el interruptor de lo borrado y dos personas de afuera.
+  // `?compartir`: abre *Share scenes* (v0.331) con la base 31, el interruptor de lo borrado y dos vendors.
   const share = new URLSearchParams(location.search).has('compartir');
   if (share) {
     server.enableTeam();
     server.enableClean();
-    server.enableSceneShares();
+    server.enableVendors();
   }
   const A = await makeDevice(server);
   await A.engine.syncNow();
@@ -81,9 +81,12 @@ async function main() {
   }
   if (share) {
     server.addMember('vera', 'guest', 'vera@vendor.test');
-    server.addMember('juan', 'guest', 'juan@vendor.test');
-    for (const k of ['s027', 's029']) server.grant('vera', { pageId: built.ids[k] }, 'view');
-    server.grant('juan', { pageId: built.ids.s027 }, 'comment');
+    for (const k of ['s027', 's029']) await A.tree.setPatch(built.ids[k], { settings: { entity: { kind: 'scene', code: k } } });
+    await A.engine.syncNow();
+    await A.remote.saveSceneVendors(built.projectId, [
+      { op: 'create', key: 'dn', name: 'DNEG', code: 'DN', color: '#2e5a8e', level: 'comment', add_scenes: [built.ids.s027, built.ids.s029], add_emails: ['vera@vendor.test'] },
+      { op: 'create', key: 'fs', name: 'Framestore', code: 'FS', color: '#774dcb', level: 'view', add_scenes: [built.ids.s027], add_emails: [] },
+    ]);
   }
   await A.engine.syncNow();
   // El proyecto sintético como el elegido (en `/map` no hay página abierta que lo diga).

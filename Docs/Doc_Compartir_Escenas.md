@@ -7,7 +7,10 @@ Pasó por dos auditorías (la de la propuesta y la de la entrega, las dos «apro
 **B-2 hecha en la v0.324** (D847): pedir una escena desde su link (sección 10; migración
 `20261119120000_pedir_escena.sql`, base 29, **aplicada** con la v0.324, 2026-11-06). **B-3 hecha el 2026-11-06:**
 la privacidad de lo borrado (D14) está prendida, así que *Share scenes* y dar una escena pedida ya guardan. Falta
-probarlo con una persona real (sección 9).
+probarlo con una persona real (sección 9). **Desde la v0.331 (D852) se comparte con vendors** (sección 11): cada
+proyecto tiene sus vendors, con correos y escenas asignadas, y la casilla *Can share scenes* deja hacerlo a un productor.
+Lo que las secciones 2 a 9 dicen de «elegir una persona» es la ventana de la v0.323 a la v0.330; la base de entonces
+(`set_page_shares`, `project_page_shares`) sigue andando, pero la ventana ya no la usa.
 
 Pedido de Lega (2026-11-05): dentro de un proyecto, además de *Share “<proyecto>”*, **«Share scenes of “<proyecto>”»**.
 Un vendor tiene asignadas algunas escenas: se elige a quién, aparecen las escenas con las que ya tiene marcadas, se marcan
@@ -519,3 +522,118 @@ enteran y deciden si le dan acceso y a qué.** Hay NDA: nadie sin acceso puede s
   cierra la otra, que queda pendiente hasta decidirla (dar de nuevo no cambia nada) o que pasen 30 días. Bajo.
 - Una carrera de la inbox (pre-existente): una pregunta pedida justo cuando termina otra puede devolver la lista de antes;
   la próxima vuelta (60 s, o al abrir la campana) la corrige.
+
+## 11. Vendors por proyecto y *Can share scenes* (v0.331, D852)
+
+Pedido de Lega (2026-11-09): que un productor o coordinador de post con permiso de comentar pueda compartir escenas con
+los vendors, y vendors por proyecto armados en la misma ventana, con color, más de un correo y escenas asignadas antes de
+tener correo. Lega aprobó la maqueta (en `LGA_RepoTools`, `DISENO.md`) y las decisiones de D852.
+
+### 11.1 El modelo
+
+- **Un vendor** (`scene_vendors`): proyecto, nombre (1 a 80), código (0 a 4 letras o números; vacío: la app muestra las
+  primeras letras del nombre), color (`#rrggbb`, la paleta de los proyectos), nivel **Ver o Comentar**, quién lo creó y,
+  si se borró, cuándo y quién (borrar marca: la fila y lo asignado quedan).
+- **Sus correos** (`scene_vendor_emails`): cero o más. **Un correo, un solo vendor vivo por proyecto.**
+- **Sus escenas** (`scene_vendor_scenes`): páginas con la marca de escena del proyecto, vivas al asignarlas, sin otra
+  entidad adentro. Una escena puede estar en varios vendors. **Una escena asignada que deja de cumplirlo** (le sacan la
+  marca, la marcan como carpeta o le mueven una entidad adentro mientras el vendor no tiene correos, que es cuando nada
+  lo frena) **no se le da a nadie** (`private.vendor_scene_ok`): ni a un miembro, ni al aceptar una invitación, ni la
+  cuenta `project_page_shares`; la ventana la muestra bloqueada en el vendor (`ok` en la lista) y se puede sacar.
+- Las filas de `scene_vendor_scenes` y `scene_vendor_emails` se borran al sacar una escena o un correo (son una
+  asignación, no contenido de nadie); el vendor, en cambio, se marca como borrado.
+- **Sin correos es solo planificación**: no comparte nada. **Cada correo ve todas las escenas de su vendor** con su nivel,
+  y lo de adentro: es un permiso por página (sección 1), así que la lectura (RLS) no cambió.
+- Las tres tablas están cerradas: solo las tocan las funciones de abajo. **Un vendor nunca ve la lista de vendors.**
+
+### 11.2 Quién los maneja (`private.vendor_cap`)
+
+- El **dueño o un admin que puede compartir el proyecto**: hasta Comentar.
+- Quien tiene **Can share scenes** en un permiso vivo sobre el proyecto (también un invitado): hasta **su propio nivel**
+  sobre el proyecto (con Ver, solo Ver), y solo escenas que ve. Tiene control total sobre **todos** los vendors del
+  proyecto, también los que armó otro (D852 (2)). **No puede cargar su propio correo** (`own_email`): le quedarían
+  escenas por vendor el día que le sacaran el permiso del proyecto. Ve los correos de todos los vendors y si cada uno ya
+  entró (*in*): es lo que necesita para coordinar, y por eso puede saber si un correo es del equipo.
+- La casilla (`grants.share_scenes`, solo sobre un permiso de proyecto) la ponen y la sacan el dueño y los admins que
+  comparten el proyecto (`set_share_scenes`), en *Share “<proyecto>”*, en cada persona con permiso sobre el proyecto.
+  Sacarla no toca lo que compartió (D852 (3)). Revocar el permiso la apaga, y volver a compartir no la devuelve.
+- En la app: `Permissions.canShareScenes` y `vendorCap`; las entradas (el menú *Share* del selector y *Share scenes…* del
+  Panorama) piden además la base 31. A quien tiene la casilla sin poder compartir el proyecto, el menú *Share* le trae
+  solo *Share scenes*.
+
+### 11.3 La base (`20261121120000_vendors.sql`, versión 31)
+
+- `scene_vendors_list(p_project)`: para quien los maneja; `cap`, `admin`, los vendors vivos con sus correos (`joined`:
+  miembro activo; `invited`: con una invitación viva de ese vendor; `expired`) y sus escenas (`alive`), y `others`: las
+  páginas que ven personas de afuera **sin** vendor (permisos o invitaciones de antes, o *Share*).
+- `save_scene_vendors(p_project, p_ops)`: hasta 100 operaciones `create` / `update` / `delete`, **todo o nada**. Valida
+  quién guarda, el interruptor de lo borrado, la forma de la lista, cada vendor (del proyecto, vivo, una sola vez), los
+  campos, **el nivel** (crear o subir por encima del propio, o sumar escenas o correos a un vendor de más nivel:
+  `level_not_allowed`; bajar y sacar, siempre), cada escena que entra (del proyecto, viva, con la marca, que quien guarda
+  puede compartir o ve, sin entidades adentro), los correos, los topes (100 vendors, 30 correos por vendor, 1000 cambios
+  de escenas y 200 de correos por guardado) y **un correo en un solo vendor** (mirado al final: un correo pasa de un
+  vendor a otro en un guardado). Después sincroniza cada correo tocado y devuelve `keys` (los ids de los nuevos), `reset`
+  (lo que empieza a verse) y `pending` (correos de afuera con invitación viva).
+- `private.vendor_sync_email`: deja lo que un correo ve por vendors igual a lo que dicen los vendors. A un **miembro
+  activo**: permisos por página con `grants.vendor_id` (los saca, les cambia el nivel y suma los que faltan; no le da
+  nada si ya ve más). **Un permiso propio de la persona** (de *Share* o de un pedido, sin vendor) **no se lo toma el
+  vendor**: queda como estaba, aunque el vendor tenga más nivel, y sacarla del vendor no se lo lleva. A **alguien de afuera**: **una invitación de invitado por vendor** (`invitations.vendor_id`) sin
+  páginas; **al aceptarla se dan las escenas que el vendor tiene en ese momento** (`accept_invitations`). Así lo que el
+  vendor cambia vale también para quien todavía no entró, y no hay tope de 200 páginas por invitación.
+- Las invitaciones de vendors no las hace un dueño o admin: valen mientras el vendor, el correo y el proyecto sigan
+  (`private.invitation_live`). *Members* no las muestra (`list_invitations`); el registro las acepta (el hook); la marca
+  del árbol, el sí o no de quien edita, el freno de movimientos y `project_page_shares` las cuentan.
+- `grants_vendor_guard`: otro camino que revoca, revive o cambia el nivel de un permiso de vendor le saca el vendor (si
+  no, el vendor después lo sacaría o lo bajaría sin ser suyo); revocar o revivir apaga *Can share scenes*.
+- `list_access` suma `share_scenes`.
+- **Conversión:** lo compartido antes a **invitados** persona por persona (permisos vivos de Ver o Comentar sobre
+  escenas) pasa a un vendor por persona y proyecto, con su correo y el **nivel más bajo**: entran las escenas de ese
+  nivel; las de más nivel quedan como permisos sueltos (un correo va en un solo vendor), así nadie gana ni pierde nada.
+  Los miembros del equipo no se convierten (lo suyo vino de *Share*). En la base real no había nada para
+  convertir (2026-11-09).
+
+### 11.4 La ventana (`ShareScenesDialog.tsx`)
+
+- A la izquierda, **los vendors** (color, nombre, código, Ver o Comentar, cuántas escenas y correos, lo que cambia) y
+  **All vendors**, el reparto completo, sin casillas. *New vendor* abajo.
+- Arriba, **la ficha del vendor elegido**: color (el mismo selector que el color del proyecto), nombre, código, Ver o
+  Comentar (Comentar apagado si quien comparte solo ve; a un vendor con Comentar, quien solo ve no le suma escenas ni
+  correos, y lo dice antes de guardar), borrar (con confirmación), y los correos con su estado (*in*,
+  *invited*, *invitation expired* con *Invite again*, *invited on save*, *removed on save*). Un correo que ya está en
+  otro vendor no se suma: lo dice.
+- **La tabla de la v0.330** (sección 2) con la columna *Vendors*: un chip por vendor con su código (punteado: sin correo;
+  tachado: se saca), el triángulo cuando dos vendors con correo ven la escena, y las personas de afuera sin vendor. Vistas:
+  *All*, *Of <vendor>*, *No vendor*, *2+ vendors*, *Can't be shared*. El buscador también encuentra el código del vendor.
+  Una escena sin la marca la escribe al guardar quien edita; para quien no edita, la fila queda apagada con el motivo.
+- **Un solo *Save*** manda todo. Antes: la marca de escena (quien edita) y la compuerta de lo borrado, sin *Share anyway*,
+  para lo que empieza a verse. Después: las bases de lo reiniciado (quien edita), la marca del árbol y, si se sumaron
+  correos, el link de invitación copiado (uno sirve para todos).
+
+### 11.5 Pruebas
+
+- `supabase/tests/vendors_permisos.sql`: las puertas, quién maneja, crear y cambiar con los niveles, cada escena,
+  correos, planificación, miembro e invitación, aceptar trae las escenas de ese momento, sacar, bajar y borrar revocan,
+  el freno de movimientos, la casilla y `list_access`, el `vendor_id` que otro camino toca, y lo que encontró la
+  auditoría: una escena que dejó de poder compartirse no se da, un permiso propio no se lo toma el vendor, uno no se
+  carga a sí mismo con la casilla, y la invitación de un proyecto borrado no vale. Corrió contra la base real
+  en una transacción que se deshace, con la migración adelante: `ok`; cae sin la migración y con los mutantes del tope,
+  del nivel, del correo único, de la marca del árbol y del trigger (uno equivalente: el vendor vivo de la invitación, que
+  la sincronización ya cubre). La conversión se probó aparte con datos de prueba.
+- `src/sync/vendors.test.ts`: las mismas reglas en el servidor en memoria, con un mutante por chequeo
+  (`VENDOR_MUTANTS`), y los permisos del cliente.
+- `src/ui/shareScenes.test.tsx`: la ventana (crear, planificar, cargar un correo, invitar, dos vendors, un correo en otro
+  vendor, Shift+clic, vistas, borrar y sacar, errores, la compuerta, sin red, el orden, con la casilla y Ver), la casilla
+  en *Share* y las entradas.
+
+### 11.6 Lo que queda
+
+- **Sin paso en los recorridos**, por lo mismo que *Share scenes* (D843 (12)): necesita otra persona y la base 31. La
+  ayuda (*Share scenes with vendors*) lo explica.
+- El correo de entrada sigue saliendo por el SMTP con su tope de 30 por hora: si muchos vendors entran a la vez, alguno
+  espera.
+- El color del vendor se ve solo en esta ventana (no en la barra lateral ni en el Panorama).
+- Separar los comentarios por vendor (que dos vendors de una escena no se vean) queda para otra tanda.
+- Una pestaña con la v0.330 abierta todavía comparte persona por persona (`set_page_shares`), por fuera de los vendors:
+  por eso `min_app_version` sube a 0.331 apenas se publica.
+- Partir una escena por planos entre vendors, también.
+

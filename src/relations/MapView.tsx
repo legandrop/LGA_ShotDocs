@@ -33,7 +33,7 @@ import { sceneStageRows, stagePageIds } from './sceneStageRows';
 import { SceneStages } from './SceneStages';
 import type { SceneMentionList } from './sceneMentions';
 import { kindReader } from './kind';
-import { SCENE_SHARES_SCHEMA_VERSION } from '../sync/remote';
+import { VENDORS_SCHEMA_VERSION } from '../sync/remote';
 import { ShareIcon } from '../ui/icons';
 import { ShareScenesDialog } from '../ui/lazyDialogs';
 import { Part } from '../ui/lazyPart';
@@ -192,10 +192,11 @@ function MapBody({ tab, session }: { tab: MapTab; session: Session }) {
   const snap = session.relations.snapshot(projectId);
   const [filter, setFilter] = useState('');
   useEffect(() => setFilter(''), [tab]);
-  // *Share scenes…* en la lista de escenas (Doc_Compartir_Escenas.md): dueño y admins que comparten el proyecto, base 28.
+  // *Share scenes…* en la lista de escenas (Doc_Compartir_Escenas.md, sección 11): dueño o admin que comparte el proyecto, o
+  // quien tiene *Can share scenes*, base 31.
   const [sharingScenes, setSharingScenes] = useState(false);
   const syncStatus = useSyncStatus();
-  const canShareScenes = (syncStatus.schemaVersion ?? 0) >= SCENE_SHARES_SCHEMA_VERSION && perms.canInvite && perms.canShareProject(projectId);
+  const canShareScenes = (syncStatus.schemaVersion ?? 0) >= VENDORS_SCHEMA_VERSION && perms.canShareScenes(projectId);
   // Una escena abierta en *Scenes* (`/map/scenes?scene=105_027`, desde la sección *Scenes* de la barra lateral): la lista
   // de las páginas que hablan de ella (Docs/Doc_Relaciones.md, sección 21).
   const sceneQuery = useSearchParam('scene');

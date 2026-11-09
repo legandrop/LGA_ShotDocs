@@ -4,7 +4,7 @@ import { locale, t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
 import { useOffline, usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
 import { isOnlyActiveProject, nextProjectAfter } from '../sync/projectStates';
-import { PROJECT_COLOR_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION, SCENE_SHARES_SCHEMA_VERSION } from '../sync/remote';
+import { PROJECT_COLOR_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION, VENDORS_SCHEMA_VERSION } from '../sync/remote';
 import { pagePath } from '../router';
 import { modPressed } from './findUi';
 import { newTab, openInNewTab, tabsOn } from './tabs';
@@ -470,9 +470,9 @@ function ProjectMenu(props: {
   const statesReady = (status.schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION;
   // El color, con la base en la versión 27 (una más vieja no tiene dónde guardarlo).
   const colorReady = (status.schemaVersion ?? 0) >= PROJECT_COLOR_SCHEMA_VERSION;
-  // *Share scenes* (Doc_Compartir_Escenas.md, B-1): solo dueño y admins que pueden compartir el proyecto, con la base en la
-  // 28. La base vuelve a pedir todo (`set_page_shares`).
-  const scenesReady = (status.schemaVersion ?? 0) >= SCENE_SHARES_SCHEMA_VERSION && perms.canInvite;
+  // *Share scenes* con vendors (Doc_Compartir_Escenas.md, sección 11, D852): dueño o admin que comparte el proyecto, o quien
+  // tiene *Can share scenes*, con la base en la 31. La base vuelve a pedir todo (`save_scene_vendors`).
+  const scenesReady = (status.schemaVersion ?? 0) >= VENDORS_SCHEMA_VERSION;
   const { workspace, user } = useServices();
   const keys = workspace.config.storage;
   // La estrella de cada renglón: los favoritos de la persona van primero (`ProjectRow.favorite`, se sincronizan). Lo que la
@@ -810,17 +810,22 @@ function ProjectMenu(props: {
 
   // Lo del proyecto abierto, en el pie: compartirlo y, con las escenas disponibles, compartir solo sus escenas.
   const canShare = !archivedMode && perms.canShareProject(props.current);
-  const shareGroups: PopEntry[][] = canShare && scenesReady
+  const canScenes = !archivedMode && scenesReady && perms.canShareScenes(props.current);
+  const shareGroups: PopEntry[][] = canScenes
     ? [
         [
-          {
-            key: 'share',
-            label: tr('project.share', { name: currentName }),
-            run: () => {
-              props.onClose();
-              props.onShare(props.current);
-            },
-          },
+          ...(canShare
+            ? [
+                {
+                  key: 'share',
+                  label: tr('project.share', { name: currentName }),
+                  run: () => {
+                    props.onClose();
+                    props.onShare(props.current);
+                  },
+                },
+              ]
+            : []),
           {
             key: 'shareScenes',
             label: tr('project.shareScenes', { name: currentName }),
@@ -1137,7 +1142,7 @@ function ProjectMenu(props: {
       {!archivedMode && (
         // El pie: lo del proyecto abierto a la izquierda; las vistas (archivos por peso y la papelera), a la derecha.
         <div className="project-foot">
-          {canShare &&
+          {(canShare || canScenes) &&
             (shareGroups.length > 0 ? (
               <button
                 className="project-share"

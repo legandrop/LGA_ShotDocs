@@ -147,6 +147,8 @@ export interface AccessRow {
   grant_id: string | null;
   project_id: string | null;
   page_id: string | null;
+  /** *Can share scenes* sobre un permiso de proyecto (base 31). Sin el dato, falso. */
+  share_scenes?: boolean;
 }
 
 /** Una fila de `list_invitations`. */
@@ -201,6 +203,136 @@ export interface SceneSharesRemote {
   pagesWithOutsideReaders(projectId: string): Promise<Map<string, number>>;
   /** Si a la página (o a una de arriba) la ven personas de afuera: solo sí o no, para quien la edita. */
   pageHasOutsideReaders(pageId: string): Promise<boolean>;
+  /** Los vendors del proyecto (base 31): quien los maneja (`vendor_cap`). */
+  sceneVendorsList(projectId: string): Promise<SceneVendorsList>;
+  /** Guarda los cambios de los vendors, todo o nada (`save_scene_vendors`). */
+  saveSceneVendors(projectId: string, ops: VendorOp[]): Promise<SaveVendorsResult>;
+  /** Pone o saca *Can share scenes* a una persona con permiso sobre el proyecto (dueño o admin que lo comparte). */
+  setShareScenes(projectId: string, userId: string, on: boolean): Promise<void>;
+}
+
+/** La versión de la base con vendors y *Can share scenes* (20261121120000_vendors.sql, D852). */
+export const VENDORS_SCHEMA_VERSION = 31;
+
+/** El nivel de un vendor: siempre Ver o Comentar. */
+export type VendorLevel = 'view' | 'comment';
+
+/** Un correo de un vendor: adentro (`joined`), con una invitación viva (`invited`) o con la invitación vencida. */
+export interface SceneVendorEmail {
+  email: string;
+  state: 'joined' | 'invited' | 'expired';
+}
+
+/** Un vendor vivo de `scene_vendors_list`. */
+export interface SceneVendor {
+  id: string;
+  name: string;
+  code: string;
+  color: string;
+  level: VendorLevel;
+  created_at: string;
+  emails: SceneVendorEmail[];
+  /**
+   * Sus escenas; `alive` falso si ella o una de arriba está en la papelera; `ok` falso si hoy no se le puede dar (sin la
+   * marca de escena, marcada como carpeta o con otra entidad adentro): la base no se la da a ningún correo del vendor.
+   */
+  scenes: { page_id: string; alive: boolean; ok: boolean }[];
+}
+
+/** Lo que devuelve `scene_vendors_list`. */
+export interface SceneVendorsList {
+  /** Hasta qué nivel da quien pregunta: 1 Ver, 2 Comentar. */
+  cap: 1 | 2;
+  /** Dueño o admin que comparte el proyecto. */
+  admin: boolean;
+  vendors: SceneVendor[];
+  /** Las páginas que ven personas de afuera sin vendor, con cuántas. */
+  others: Map<string, number>;
+}
+
+/** Una operación de `save_scene_vendors`. */
+export type VendorOp =
+  | {
+      op: 'create';
+      key: string;
+      name: string;
+      code: string;
+      color: string;
+      level: VendorLevel;
+      add_scenes?: string[];
+      add_emails?: string[];
+    }
+  | {
+      op: 'update';
+      id: string;
+      name?: string;
+      code?: string;
+      color?: string;
+      level?: VendorLevel;
+      add_scenes?: string[];
+      remove_scenes?: string[];
+      add_emails?: string[];
+      remove_emails?: string[];
+      reinvite?: string[];
+    }
+  | { op: 'delete'; id: string };
+
+/** Lo que devuelve `save_scene_vendors`. */
+export interface SaveVendorsResult {
+  /** La clave de cada vendor nuevo → su id. */
+  keys: Record<string, string>;
+  /** Las páginas que empiezan a verse (reiniciadas). */
+  reset: string[];
+  /** Los correos de afuera con una invitación viva (hay que mandarles el link). */
+  pending: string[];
+}
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+
+/** La respuesta de `scene_vendors_list`, comprobada. */
+export function parseSceneVendorsList(data: unknown): SceneVendorsList {
+  const row = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+  const cap = Number(row?.cap);
+  if (!row || (cap !== 1 && cap !== 2) || !Array.isArray(row.vendors)) {
+    throw new RemoteError(`scene_vendors_list: unexpected answer ${JSON.stringify(data)?.slice(0, 200)}`, true);
+  }
+  const vendors: SceneVendor[] = [];
+  for (const raw of row.vendors as Record<string, unknown>[]) {
+    if (!raw || typeof raw.id !== 'string' || typeof raw.name !== 'string') continue;
+    vendors.push({
+      id: raw.id,
+      name: raw.name,
+      code: typeof raw.code === 'string' ? raw.code : '',
+      color: typeof raw.color === 'string' ? raw.color : '#2e5a8e',
+      level: raw.level === 'comment' ? 'comment' : 'view',
+      created_at: typeof raw.created_at === 'string' ? raw.created_at : '',
+      emails: (Array.isArray(raw.emails) ? (raw.emails as Record<string, unknown>[]) : [])
+        .filter((e) => e && typeof e.email === 'string')
+        .map((e) => ({
+          email: e.email as string,
+          state: e.state === 'joined' || e.state === 'invited' ? e.state : 'expired',
+        })),
+      scenes: (Array.isArray(raw.scenes) ? (raw.scenes as Record<string, unknown>[]) : [])
+        .filter((x) => x && typeof x.page_id === 'string')
+        .map((x) => ({ page_id: x.page_id as string, alive: x.alive !== false, ok: x.ok !== false })),
+    });
+  }
+  const others = new Map<string, number>();
+  for (const o of Array.isArray(row.others) ? (row.others as Record<string, unknown>[]) : []) {
+    if (o && typeof o.page_id === 'string') others.set(o.page_id, Number(o.readers) || 0);
+  }
+  return { cap, admin: row.admin === true, vendors, others };
+}
+
+/** La respuesta de `save_scene_vendors`, comprobada. */
+export function parseSaveVendorsResult(data: unknown): SaveVendorsResult {
+  const row = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+  if (!row || typeof row.keys !== 'object' || row.keys === null) {
+    throw new RemoteError(`save_scene_vendors: unexpected answer ${JSON.stringify(data)?.slice(0, 200)}`, true);
+  }
+  const keys: Record<string, string> = {};
+  for (const [k, v] of Object.entries(row.keys as Record<string, unknown>)) if (typeof v === 'string') keys[k] = v;
+  return { keys, reset: strings(row.reset), pending: strings(row.pending) };
 }
 
 /** La respuesta de `set_page_shares`, comprobada. */
@@ -1998,6 +2130,25 @@ export class SupabaseRemote
     const { data, error, status } = await timed(this.client.rpc('page_has_outside_readers', { p_page: pageId }));
     if (error) throw toRemoteError(error, status);
     return data === true;
+  }
+
+  // --- Vendors (20261121120000_vendors.sql) ---
+
+  async sceneVendorsList(projectId: string): Promise<SceneVendorsList> {
+    const { data, error, status } = await timed(this.client.rpc('scene_vendors_list', { p_project: projectId }));
+    if (error) throw toRemoteError(error, status);
+    return parseSceneVendorsList(data);
+  }
+
+  async saveSceneVendors(projectId: string, ops: VendorOp[]): Promise<SaveVendorsResult> {
+    const { data, error, status } = await timed(this.client.rpc('save_scene_vendors', { p_project: projectId, p_ops: ops }));
+    if (error) throw toRemoteError(error, status);
+    return parseSaveVendorsResult(data);
+  }
+
+  async setShareScenes(projectId: string, userId: string, on: boolean): Promise<void> {
+    const { error, status } = await timed(this.client.rpc('set_share_scenes', { p_project: projectId, p_user: userId, p_on: on }));
+    if (error) throw toRemoteError(error, status);
   }
 
   /**

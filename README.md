@@ -64,8 +64,10 @@ The app runs at **[shotdocs.lega.com.ar](https://shotdocs.lega.com.ar)**. Each t
 - The owner and admins invite people from *Members* with a link; one device can join several workspaces.
 - Roles (owner, admin, member, guest) and four permissions (view, comment, edit, edit and create pages) on a
   project or a page. A permission covers everything below and nothing above.
-- *Share scenes* with a vendor: they see only their scenes and the pages inside them, never the locations,
-  shoot days or other scenes. An eye in the page tree marks what people outside the team can see.
+- *Share scenes* with vendors: each project has its vendors (name, code, color, view or comment, one or more
+  emails), you assign them scenes before they have an email, and each email sees only its vendor's scenes and the
+  pages inside them, never the locations, shoot days or other scenes. *Can share scenes* lets a producer do it too.
+  An eye in the page tree marks what people outside the team can see.
 - *Anyone with the link* for a page and the pages inside: *Can view* (also comments, with a name) or *Can edit*
   once the workspace turns it on; no account needed.
 - Access requests from a file link, a page link or a scene link.

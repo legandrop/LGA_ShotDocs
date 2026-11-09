@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/teamDialogs';
-import { usePermissions, useServices, useTree } from '../services';
+import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, levelValue, type GrantLevel, type Role } from '../sync/access';
-import type { AccessRow, MemberRow } from '../sync/remote';
+import { VENDORS_SCHEMA_VERSION, type AccessRow, type MemberRow } from '../sync/remote';
 import { ShareRequests } from './AccessRequests';
 import { LinkShare } from './LinkShare';
 import { inviteAndCopy, useInviteLink } from './MembersDialog';
@@ -12,7 +12,9 @@ import { teamErrorText } from './teamText';
 
 // "Share…" en el menú de la página y en el del proyecto: quién tiene acceso y con qué nivel, cambiarlo,
 // quitarlo y sumar a alguien (un miembro, o un correo nuevo con una invitación y su link). Solo lo ve quien
-// puede compartir (`private.can_share`).
+// puede compartir (`private.can_share`). En un proyecto, con la base 31, el dueño y los admins ven en cada persona con
+// permiso sobre el proyecto la casilla *Can share scenes* (D852, `set_share_scenes`): maneja los vendors del proyecto
+// hasta su propio nivel. Sacarla no toca lo que ya compartió.
 
 export type ShareTarget = { projectId: string } | { pageId: string };
 
@@ -32,6 +34,7 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
   const { remote } = useServices();
   const tree = useTree();
   const perms = usePermissions();
+  const status = useSyncStatus();
   const makeLink = useInviteLink();
   const isProject = 'projectId' in target;
   const targetId = isProject ? target.projectId : target.pageId;
@@ -193,6 +196,9 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
     });
   }
 
+  // *Can share scenes*: solo sobre un proyecto, con la base 31, y la pone o la saca el dueño o un admin.
+  const flagReady = isProject && (status.schemaVersion ?? 0) >= VENDORS_SCHEMA_VERSION && (perms.role === 'owner' || perms.role === 'admin');
+
   const suggestions = members.filter((m) => !people.some((p) => p.userId === m.user_id && p.direct));
 
   return (
@@ -273,7 +279,22 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
                 <span className="mono-label">
                   {ROLE_LABELS[p.role] ? tr(ROLE_LABELS[p.role]) : p.role}
                   {p.via ? ` · ${tr(LEVEL_LABELS[p.level])} ${p.via}` : ''}
+                  {isProject && p.direct?.share_scenes && !flagReady ? ` · ${tr('share.scenesBadge')}` : ''}
                 </span>
+                {flagReady && p.direct?.grant_id && (
+                  <label className="team-share-scenes" data-tip={tr('share.scenesFlagTip')}>
+                    <input
+                      type="checkbox"
+                      checked={!!p.direct.share_scenes}
+                      disabled={busy !== null}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        void run(`flag:${p.userId}`, () => remote.setShareScenes(targetId, p.userId, on));
+                      }}
+                    />
+                    {tr('share.scenesFlag')}
+                  </label>
+                )}
               </span>
               {p.direct ? (
                 <select

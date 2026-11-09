@@ -60,6 +60,11 @@ export interface MyGrant {
   project_id: string | null;
   page_id: string | null;
   level: GrantLevel;
+  /**
+   * *Can share scenes* (D852, 20261121120000_vendors.sql): sobre un permiso de proyecto, maneja los vendors del proyecto
+   * hasta su propio nivel. Sin el dato (una base vieja), falso.
+   */
+  share_scenes?: boolean;
 }
 
 /** La fila propia de `members`. */
@@ -110,7 +115,7 @@ export function parseAccess(memberRow: unknown, grantRows: unknown, now = Date.n
   }
   if (!Array.isArray(grantRows)) throw new Error('Unexpected answer for grants.');
   const grants: MyGrant[] = [];
-  for (const raw of grantRows as { id?: unknown; project_id?: unknown; page_id?: unknown; level?: unknown; revoked_at?: unknown }[]) {
+  for (const raw of grantRows as { id?: unknown; project_id?: unknown; page_id?: unknown; level?: unknown; revoked_at?: unknown; share_scenes?: unknown }[]) {
     // Un permiso con un nivel desconocido (de una versión más nueva de la base) no suma nada, ni uno sacado
     // (`revoked_at`: queda en la tabla sin efecto).
     if (!raw || typeof raw !== 'object' || !isGrantLevel(raw.level)) continue;
@@ -118,7 +123,9 @@ export function parseAccess(memberRow: unknown, grantRows: unknown, now = Date.n
     const project = typeof raw.project_id === 'string' ? raw.project_id : null;
     const page = typeof raw.page_id === 'string' ? raw.page_id : null;
     if ((project === null) === (page === null)) continue;
-    grants.push({ id: String(raw.id ?? ''), project_id: project, page_id: page, level: raw.level });
+    const grant: MyGrant = { id: String(raw.id ?? ''), project_id: project, page_id: page, level: raw.level };
+    if (project !== null && raw.share_scenes === true) grant.share_scenes = true;
+    grants.push(grant);
   }
   return { member, grants, fetchedAt: now };
 }
@@ -330,6 +337,23 @@ export class Permissions {
    */
   canManageProject(projectId: string): boolean {
     return this.canShareProject(projectId);
+  }
+
+  /**
+   * *Share scenes* con vendors (D852, `private.vendor_cap`): dueño o admin que puede compartir el proyecto, o quien tiene
+   * *Can share scenes* en un permiso sobre el proyecto (también un invitado). Sin datos, no se ofrece.
+   */
+  canShareScenes(projectId: string): boolean {
+    if (!this.access || !this.active) return false;
+    if ((this.role === 'owner' || this.role === 'admin') && this.canShareProject(projectId)) return true;
+    return this.access.grants.some((g) => g.project_id === projectId && g.share_scenes === true) && this.projectLevel(projectId) >= 1;
+  }
+
+  /** Hasta qué nivel da a los vendors: 2 Comentar, 1 Ver, 0 ninguno (`private.vendor_cap`). */
+  vendorCap(projectId: string): number {
+    if (!this.canShareScenes(projectId)) return 0;
+    if ((this.role === 'owner' || this.role === 'admin') && this.canShareProject(projectId)) return 2;
+    return Math.min(2, this.projectLevel(projectId));
   }
 
   canSharePage(pageId: string): boolean {

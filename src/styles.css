@@ -5717,30 +5717,33 @@ svg.sd-markup text {
   gap: 8px;
 }
 
-/* *Share scenes* (Doc_Compartir_Escenas.md, v0.330): una ventana ancha con la persona arriba, la tabla de escenas en el
-   medio (lo único que se desplaza) y el pie fijo con lo que cambia y Guardar. */
+/* *Share scenes* con vendors (Doc_Compartir_Escenas.md, sección 11, v0.331): la lista de vendors a la izquierda, la ficha
+   del vendor elegido arriba, la tabla de escenas (lo único que se desplaza) y el pie fijo con lo que cambia y Guardar. */
 .modal.share-scenes {
-  width: min(1040px, 100%);
-  max-height: calc(88vh - 24px);
-  /* La tabla se achica hasta 150px; si ni así entra (una pantalla baja, el teléfono), se desplaza la ventana y el pie
-     queda pegado abajo: Guardar nunca queda fuera de la vista. */
+  width: min(1200px, 100%);
+  max-height: calc(90vh - 24px);
+  /* Si no entra (una pantalla baja, el teléfono), se desplaza la ventana y el pie queda pegado abajo: Guardar nunca queda
+     fuera de la vista. */
   overflow-y: auto;
-  padding: 22px 24px 0;
-  gap: 10px;
+  padding: 20px 24px 0;
+  gap: 12px;
 }
 .share-scenes h2 {
   font-size: 17px;
   letter-spacing: -0.01em;
+  margin: 0;
 }
-.share-scenes-form {
+.share-vendors-head {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1 1 auto;
-  min-height: 0;
+  align-items: flex-start;
+  gap: 16px;
 }
-.share-scenes-form > * {
-  flex: none;
+.share-vendors-head .team-lead {
+  margin: 3px 0 0;
+}
+.share-vendors-head .icon-button {
+  margin-left: auto;
+  color: var(--muted);
 }
 .share-scenes input[type='checkbox'] {
   width: 16px;
@@ -5754,38 +5757,188 @@ svg.sd-markup text {
 .share-scenes input[type='checkbox']:disabled {
   cursor: default;
 }
-
-/* La persona: el correo con su ícono y Ver / Comentar. */
-.share-scenes-who {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+.share-scenes .plus {
+  color: var(--accent-text);
+  font-weight: 600;
 }
-.share-scenes-field {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 40px;
-  padding: 0 12px;
+.share-scenes .minus {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* La rejilla: vendors a la izquierda, el trabajo a la derecha. */
+.share-vendors-grid {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface);
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.share-vendors-rail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+.share-vendors-rail-head {
+  padding: 12px 14px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.share-vendors-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  max-height: 520px;
+}
+.share-vitem {
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 1px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px 8px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+}
+.share-vitem .bar {
+  grid-row: 1 / 3;
+  align-self: stretch;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--vc);
+}
+.share-vitem.all .bar {
+  background: linear-gradient(#2e5a8e, #774dcb, #2e8e7a, #8e7a2e);
+}
+.share-vitem .nm {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.share-vitem .nm-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.share-vitem .nm .cd {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  flex: none;
+}
+.share-vitem .nm svg {
+  flex: none;
   color: var(--faint);
 }
-.share-scenes-field:focus-within {
-  border-color: var(--text);
-  box-shadow: 0 0 0 3px var(--focus);
+.share-vitem .pend {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
-.share-scenes-field input,
-.share-scenes-field input:focus {
-  border: 0;
-  padding: 0;
-  height: 100%;
-  background: transparent;
-  box-shadow: none;
+.share-vitem .meta {
+  grid-column: 2 / 4;
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.share-vitem .nomail {
+  color: var(--faint);
+  font-style: italic;
+}
+.share-vitem[aria-current='true'] {
+  background: var(--project-current);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.share-vendors-add {
+  margin: 4px 8px 10px;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--muted);
+  font-size: 13px;
+}
+.share-vendors-add:hover:not(:disabled) {
   color: var(--text);
+}
+.share-vendors-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 16px 14px;
+}
+
+/* La ficha del vendor elegido. */
+.share-vendor-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 -16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.share-vendor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.share-vendor-swatch-wrap {
+  position: relative;
+  flex: none;
+}
+.share-vendor-swatch {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+}
+.share-vendor-swatch i {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--vc);
+}
+.share-vendor-pop {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  z-index: 30;
+  width: 300px;
+  padding: 12px;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.team-dialog input.share-vendor-name {
+  flex: 1 1 180px;
+  min-width: 0;
+  height: 34px;
+  font-weight: 600;
+}
+.team-dialog input.share-vendor-code {
+  width: 76px;
+  height: 34px;
+  font-size: 13px;
+  text-transform: uppercase;
 }
 .share-scenes-level.segmented {
   grid-auto-columns: auto;
@@ -5793,18 +5946,243 @@ svg.sd-markup text {
   flex: none;
 }
 .share-scenes-level.segmented button {
-  height: 32px;
-  padding: 0 14px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+  gap: 6px;
+}
+.share-vendor-row .icon-button.danger {
+  color: var(--danger);
+}
+.share-vendor-mails {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--faint);
+}
+.share-vendor-mail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.share-vendor-mail .e {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-vendor-mail .s {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.share-vendor-mail.joined .s {
+  color: var(--ok);
+}
+.share-vendor-mail.new,
+.share-vendor-mail.again {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: var(--project-current-strong);
+}
+.share-vendor-mail.new .s,
+.share-vendor-mail.again .s {
+  color: var(--accent-text);
+}
+.share-vendor-mail.removed {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.share-vendor-mail.removed .e {
+  text-decoration: line-through;
+}
+.share-vendor-mail.expired .s {
+  color: var(--warn);
+}
+.share-vendor-mail button {
+  border: 0;
+  padding: 3px;
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: 11px;
+}
+.share-vendor-mail button.link {
+  color: var(--accent-text);
+  padding: 0 4px;
+}
+.share-vendor-mail button:hover:not(:disabled) {
+  color: var(--text);
+}
+.share-vendor-addmail {
+  flex: 1 1 200px;
+  max-width: 300px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+}
+.share-vendor-addmail:focus-within {
+  border-style: solid;
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+.share-vendor-addmail input,
+.share-vendor-addmail input:focus {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.share-vendor-hint,
+.share-vendors-overview,
+.share-vendor-cross {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.share-vendor-hint svg,
+.share-vendors-overview svg,
+.share-vendor-cross svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--faint);
+}
+.share-vendor-hint.err,
+.share-vendor-hint.err svg {
+  color: var(--danger);
+}
+.share-vendors-overview {
+  margin: 0 -16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.share-vendor-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+  color: var(--danger);
   font-size: 13px;
 }
+.share-vendor-confirm span {
+  margin-right: auto;
+}
+.share-vendor-confirm button.danger {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+.share-vendor-cross {
+  padding: 8px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.share-vendor-cross svg {
+  color: var(--warn);
+}
 
-/* El buscador, los desplegables, las vistas y lo de marcar en bloque. */
+/* Los chips de vendor: el color del vendor, siempre con su código (dos colores parecidos se distinguen igual). */
+.share-vchips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 0;
+  min-width: 0;
+}
+.share-vchip {
+  --ink: color-mix(in srgb, var(--vc, var(--faint)) 62%, #fff);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 22px;
+  padding: 0 7px 0 6px;
+  border: 1px solid color-mix(in srgb, var(--vc, var(--faint)) 55%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--vc, var(--faint)) 22%, transparent);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+.share-vchip i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+.share-vchip.plan {
+  border-style: dashed;
+  background: transparent;
+}
+.share-vchip.add {
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+.share-vchip.add::before {
+  content: '+';
+  margin-right: -2px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.share-vchip.rm {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.share-vboth {
+  display: inline-flex;
+  color: var(--warn);
+}
+.share-vendors-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.share-vendors-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* El buscador, los desplegables y las vistas. */
 .share-scenes-tools {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 4px;
 }
 .share-scenes-search {
   flex: 1 1 240px;
@@ -5839,18 +6217,6 @@ svg.sd-markup text {
   font-size: 13px;
   color: var(--text-2);
 }
-.share-scenes-gap {
-  flex: 1;
-}
-.share-scenes-bulk {
-  border-color: transparent;
-  padding: 6px 8px;
-  font-size: 13px;
-  color: var(--muted);
-}
-.share-scenes-bulk:hover:not(:disabled) {
-  color: var(--text);
-}
 .share-scenes-views {
   display: flex;
   flex-wrap: wrap;
@@ -5882,7 +6248,7 @@ svg.sd-markup text {
   color: var(--warn);
 }
 
-/* Quién más la ve de afuera: una vez, arriba de la tabla. */
+/* Quién más la ve de afuera sin vendor: una vez, arriba de la tabla. */
 .share-scenes-outside,
 .share-scenes-limits {
   display: flex;
@@ -5912,9 +6278,10 @@ svg.sd-markup text {
 }
 
 /* La tabla: lo único que se desplaza, con los títulos fijos. */
-.share-scenes-form > .share-scenes-table-wrap {
+.share-vendors-main > .share-scenes-table-wrap {
   flex: 1 1 auto;
   min-height: 150px;
+  max-height: 420px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -5934,19 +6301,16 @@ svg.sd-markup text {
 }
 .share-scenes-table col.c-location,
 .share-scenes-table col.c-set {
-  width: 150px;
+  width: 130px;
 }
 .share-scenes-table col.c-intExt {
-  width: 92px;
+  width: 80px;
 }
-.share-scenes-table col.c-pages {
-  width: 66px;
-}
-.share-scenes-table col.c-outside {
-  width: 70px;
+.share-scenes-table col.c-vendors {
+  width: 170px;
 }
 .share-scenes-table col.c-status {
-  width: 138px;
+  width: 112px;
 }
 .share-scenes-table th {
   position: sticky;
@@ -5987,6 +6351,10 @@ svg.sd-markup text {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.share-scenes-table td.c-vendors {
+  white-space: normal;
+  overflow: visible;
+}
 .share-scenes-table th.c-check,
 .share-scenes-table td.c-check {
   padding: 0 0 0 14px;
@@ -5994,7 +6362,7 @@ svg.sd-markup text {
 .share-scenes-table tbody tr:last-child td {
   border-bottom: 0;
 }
-.share-scenes-table tbody tr[data-scene] {
+.share-scenes-table:not(.overview) tbody tr[data-scene] {
   cursor: pointer;
 }
 .share-scenes-table tbody tr[data-scene]:hover {
@@ -6013,8 +6381,7 @@ svg.sd-markup text {
   text-decoration: line-through;
   text-decoration-color: var(--danger);
 }
-.share-scenes-table tbody tr.blocked,
-.share-scenes-table tbody tr.higher {
+.share-scenes-table:not(.overview) tbody tr.blocked {
   cursor: default;
 }
 .share-scenes-table tbody tr.blocked td {
@@ -6041,7 +6408,7 @@ svg.sd-markup text {
   font-size: 12px;
   color: var(--muted);
 }
-.share-scenes-table tbody tr.blocked td.c-name {
+.share-scenes-table td.c-name:has(.share-scenes-why) {
   white-space: normal;
   padding-block: 7px;
 }
@@ -6051,17 +6418,16 @@ svg.sd-markup text {
   font-size: 12px;
   color: var(--faint);
 }
-.share-scenes-table td.c-intExt,
-.share-scenes-table td.c-pages {
+.share-scenes-table td.c-intExt {
   font-size: 12px;
   color: var(--muted);
 }
 .share-scenes-out {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--warn);
 }
 .share-scenes-st {
@@ -6071,8 +6437,7 @@ svg.sd-markup text {
   font-size: 12px;
   color: var(--muted);
 }
-.share-scenes-st::before {
-  content: '';
+.share-scenes-st i {
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -6088,45 +6453,21 @@ svg.sd-markup text {
 .share-scenes-st.removing {
   color: var(--danger);
 }
-.share-scenes-st.blocked,
-.share-scenes-st.higher {
-  color: var(--faint);
+.share-scenes-st.planned {
+  color: var(--muted);
 }
-.share-scenes-st.blocked::before,
-.share-scenes-st.higher::before {
-  display: none;
+.share-scenes-st.planned i {
+  background: transparent;
+  border: 1.5px dashed currentColor;
+}
+.share-scenes-st.blocked {
+  color: var(--faint);
 }
 .share-scenes-empty td {
   height: 64px;
   color: var(--muted);
   text-align: center;
   cursor: default;
-}
-
-/* Lo compartido que está en la papelera: aparte, para poder sacarlo. */
-.share-scenes-trash-box p {
-  margin: 0 0 4px;
-}
-.share-scenes-trash {
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-  max-height: 120px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.share-scenes-trash li {
-  padding: 5px 14px;
-}
-.share-scenes-trash li.changed {
-  background: var(--danger-bg);
-}
-.share-scenes-trash label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
 }
 
 /* El pie: lo que cambia, Cerrar y Guardar, siempre a la vista. */
@@ -6144,34 +6485,63 @@ svg.sd-markup text {
 .share-scenes-sum {
   margin-right: auto;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
   min-width: 0;
 }
-.share-scenes-diff {
-  font-weight: 600;
+.share-vendors-sum-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
-}
-.share-scenes-diff .add {
-  color: var(--accent-text);
-}
-.share-scenes-diff .remove {
-  color: var(--danger);
 }
 .share-scenes-footer button.primary {
   padding: 7px 18px;
 }
 
-/* En una pantalla angosta: sin las columnas de locación, decorado, INT/EXT y páginas (la locación y el decorado van bajo
-   el nombre), ni la de afuera (lo dice el aviso de arriba); la ventana se desplaza entera, con la tabla de alto fijo. */
+/* En una pantalla mediana: la lista de vendors arriba, en una fila que se desplaza de costado. */
+@media (max-width: 900px) {
+  .share-vendors-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .share-vendors-rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .share-vendors-rail-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: none;
+  }
+  .share-vitem {
+    width: auto;
+    min-width: 160px;
+    max-width: 220px;
+    flex: none;
+  }
+  .share-vendors-add {
+    margin-top: 0;
+  }
+}
+
+/* En una pantalla angosta: sin las columnas de locación, decorado, INT/EXT y estado (la locación y el decorado van bajo el
+   nombre, y el estado se lee por el color de la fila); la ventana se desplaza entera, con la tabla de alto fijo. */
 @media (max-width: 760px) {
   .modal.share-scenes {
     padding: 18px 16px 0;
   }
-  .share-scenes-form {
-    flex: none;
+  .share-vendors-main {
+    padding: 0 12px 12px;
   }
-  .share-scenes-form > .share-scenes-table-wrap {
+  .share-vendor-edit,
+  .share-vendors-overview {
+    margin: 0 -12px;
+    padding: 12px;
+  }
+  .share-vendors-main > .share-scenes-table-wrap {
     flex: none;
     max-height: 60vh;
   }
@@ -6192,13 +6562,6 @@ svg.sd-markup text {
     flex: 1;
     justify-content: center;
   }
-  .share-scenes-who {
-    flex-wrap: wrap;
-  }
-  .share-scenes-level.segmented {
-    width: 100%;
-    grid-auto-columns: minmax(0, 1fr);
-  }
   .share-scenes-tools {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -6210,19 +6573,14 @@ svg.sd-markup text {
     max-width: none;
     width: 100%;
   }
-  .share-scenes-gap {
-    display: none;
-  }
   .share-scenes-table col.c-location,
   .share-scenes-table col.c-set,
   .share-scenes-table col.c-intExt,
-  .share-scenes-table col.c-pages,
-  .share-scenes-table col.c-outside,
+  .share-scenes-table col.c-status,
   .share-scenes-table .c-location,
   .share-scenes-table .c-set,
   .share-scenes-table .c-intExt,
-  .share-scenes-table .c-pages,
-  .share-scenes-table .c-outside {
+  .share-scenes-table .c-status {
     display: none;
   }
   .share-scenes-table col.c-check {
@@ -6235,8 +6593,8 @@ svg.sd-markup text {
   .share-scenes-table col.c-code {
     width: 50px;
   }
-  .share-scenes-table col.c-status {
-    width: 86px;
+  .share-scenes-table col.c-vendors {
+    width: 110px;
   }
   .share-scenes-meta {
     display: block;
@@ -6244,11 +6602,32 @@ svg.sd-markup text {
   .share-scenes-table td.c-name {
     padding-block: 6px;
   }
+  .share-vendor-pop {
+    width: min(300px, calc(100vw - 48px));
+  }
 }
 
 .team-invite-row input {
   flex: 1;
   min-width: 0;
+}
+
+/* *Can share scenes* (D852) bajo el correo de cada persona con permiso sobre el proyecto. */
+.team-share-scenes {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.team-share-scenes input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .team-check {

@@ -1,48 +1,112 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent } from 'react';
 import { useT, type Key } from '../i18n';
 import '../i18n/lazy/teamDialogs';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
-import { LEVEL_LABELS, ROLE_LABELS, type GrantLevel } from '../sync/access';
-import type { InvitationRow, MemberRow, PageShareRow, PageSharesResult } from '../sync/remote';
-import { ChevronDownIcon, ChevronUpIcon, CommentIcon, EyeIcon, InfoIcon, LockIcon, MailIcon, MembersIcon, SearchIcon } from './icons';
+import { LEVEL_LABELS } from '../sync/access';
+import type { SceneVendor, SceneVendorsList, VendorLevel, VendorOp } from '../sync/remote';
+import { ColorPicker } from './ColorPicker';
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CloseIcon,
+  CommentIcon,
+  EyeIcon,
+  HistoryIcon,
+  InfoIcon,
+  LockIcon,
+  MailIcon,
+  MembersIcon,
+  PlusIcon,
+  SearchIcon,
+  TrashIcon,
+  UndoIcon,
+  WarningIcon,
+} from './icons';
 import { inviteAndCopy, useInviteLink } from './MembersDialog';
 import { outsideReadersStore } from './outsideReaders';
-import { markScenes as markAndWait, MARKS_PENDING, projectSceneItems, type SceneItem } from './projectScenes';
+import { loadRecentColors, PROJECT_PRESETS, rememberRecentColor } from './projectColor';
+import { isMarkedScene, markScenes as markAndWait, MARKS_PENDING, projectSceneItems, type SceneItem } from './projectScenes';
 import { existingRelationsSession } from './relationsUi';
-import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate, type ShareScope } from './shareGate';
+import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { filterRows, optionsOf, sceneRows, sortRows, type RowFacts, type RowStatus, type Sort, type SortKey, type View } from './shareScenesTable';
 import { teamErrorText } from './teamText';
 
-// *Share scenes of “<proyecto>”* (Docs/Doc_Compartir_Escenas.md, B-1, D843): las escenas del proyecto que ve una persona
-// de afuera (un vendor). Una persona por guardado; las escenas salen del registro de este dispositivo (quien comparte ve
-// el proyecto entero: dueño o admin) y cada una se comparte con Ver o Comentar sobre su página, que vale para ella y las
-// de adentro (sus fichas). Antes de guardar se escribe la marca de escena a las que no la tienen (el vendor no ve la
-// carpeta: sin la marca no la reconoce) y se espera que suba, y se pasa por la compuerta de lo borrado sin *Share anyway*.
-// La base vuelve a controlar todo (`set_page_shares`): esto solo arma el pedido y lo explica. Una escena con otra
-// entidad adentro (otra escena, una locación, un día, un decorado, algo con forma de escena: un episodio que el registro
-// tomó por escena) no se puede compartir: la fila queda apagada con el motivo, sin opción para seguir.
-// Desde la v0.330 la lista es una tabla (`shareScenesTable.ts`): número, nombre, locación, decorado, INT/EXT, páginas de
-// adentro, cuántos de afuera ya la ven y el estado para la persona elegida; se ordena con un clic en el título de cada
-// columna, se filtra con el buscador, los desplegables y las vistas, y Shift+clic marca un rango. Quién más la ve de
-// afuera se dice una vez arriba de la tabla (antes se repetía en cada fila).
+// *Share scenes of “<proyecto>”* (Docs/Doc_Compartir_Escenas.md, sección 11, D852): los vendors del proyecto y sus
+// escenas. A la izquierda la lista de vendors (y *All vendors*, el reparto completo); arriba, la ficha del vendor elegido
+// (color, nombre, código, Ver o Comentar, correos); abajo, la tabla de la v0.330 con la columna *Vendors*. Marcar una fila
+// asigna esa escena al vendor elegido; un vendor sin correos es solo planificación y no comparte nada. Cada correo de un
+// vendor ve todas sus escenas y lo de adentro. Un solo *Save* manda todo junto (`save_scene_vendors`, todo o nada).
+// Antes: la marca de escena en las que entran y no la tienen (solo quien edita; si no, la fila queda apagada) y la
+// compuerta de lo borrado sin *Share anyway* para lo que empieza a verse. Después: las bases de lo reiniciado (quien
+// edita), la marca del árbol y, si hay correos nuevos de afuera, el link de invitación copiado (uno sirve para todos).
+// La base vuelve a controlar todo: esto arma el pedido y lo explica. La manejan el dueño o un admin que comparte el
+// proyecto y quien tiene *Can share scenes* (hasta su propio nivel).
 
 const EMAIL = /^[^@\s]+@[^@\s]+$/;
-const MAX_PAGES = 200;
-
-const isOutsideRow = (r: PageShareRow) => r.role === 'guest' || r.level === 'view' || r.level === 'comment';
 const noSubscribe = () => () => undefined;
 
-/** Las columnas de la tabla; las de `details` solo con el índice del proyecto (locación, decorado, INT/EXT). */
-const COLUMNS: { key: SortKey; label: Key; tip?: Key; details?: true }[] = [
+/** Un vendor como se edita en la ventana, antes de guardar. */
+interface WorkVendor {
+  /** El id del vendor, o `new:<n>` si todavía no existe. */
+  key: string;
+  id: string | null;
+  name: string;
+  code: string;
+  color: string;
+  level: VendorLevel;
+  emails: string[];
+  scenes: string[];
+  deleted: boolean;
+}
+
+const fromServer = (v: SceneVendor): WorkVendor => ({
+  key: v.id,
+  id: v.id,
+  name: v.name,
+  code: v.code,
+  color: v.color,
+  level: v.level,
+  emails: v.emails.map((e) => e.email),
+  scenes: v.scenes.map((s) => s.page_id),
+  deleted: false,
+});
+
+/** El código que se ve: el propio o, sin código, las primeras letras del nombre. */
+export function vendorCode(v: { code: string; name: string }): string {
+  if (v.code) return v.code;
+  const words = v.name.trim().toUpperCase().replace(/[^A-Z0-9 ]/g, '').split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  return (words.length > 1 ? words.map((w) => w[0]).join('') : words[0]).slice(0, 3);
+}
+
+/** Las columnas; las de `details` solo con el índice del proyecto, y *Status* solo con un vendor elegido. */
+const COLUMNS: { key: SortKey; label: Key; details?: true; vendor?: true }[] = [
   { key: 'code', label: 'scenes.share.colCode' },
   { key: 'name', label: 'scenes.share.colName' },
   { key: 'location', label: 'scenes.share.colLocation', details: true },
   { key: 'set', label: 'scenes.share.colSet', details: true },
   { key: 'intExt', label: 'scenes.share.colIntExt', details: true },
-  { key: 'pages', label: 'scenes.share.colPages', tip: 'scenes.share.colPagesTip' },
-  { key: 'outside', label: 'scenes.share.colOutside', tip: 'scenes.share.colOutsideTip' },
-  { key: 'status', label: 'scenes.share.colStatus' },
+  { key: 'vendors', label: 'scenes.share.colVendors' },
+  { key: 'status', label: 'scenes.share.colStatus', vendor: true },
 ];
+
+const MAIL_STATE: Record<'joined' | 'invited' | 'expired' | 'new' | 'again' | 'removed', Key> = {
+  joined: 'scenes.share.emailJoined',
+  invited: 'scenes.share.emailInvited',
+  expired: 'scenes.share.emailExpired',
+  new: 'scenes.share.emailNew',
+  again: 'scenes.share.emailNew',
+  removed: 'scenes.share.emailRemoved',
+};
+
+const STATUS_WORD: Record<Exclude<RowStatus, 'none'>, Key> = {
+  adding: 'scenes.share.stAdding',
+  removing: 'scenes.share.stRemoving',
+  shared: 'scenes.share.stShared',
+  planned: 'scenes.share.stPlanned',
+  blocked: 'scenes.share.stBlocked',
+};
 
 export function ShareScenesDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const services = useServices();
@@ -55,57 +119,66 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   const gate = useShareGate();
   const projectName = tree.project(projectId)?.name ?? tr('project.thisProject');
 
-  const [rows, setRows] = useState<PageShareRow[] | null>(null);
-  const [members, setMembers] = useState<MemberRow[]>([]);
-  const [invitations, setInvitations] = useState<InvitationRow[]>([]);
+  const [list, setList] = useState<SceneVendorsList | null>(null);
+  const [work, setWork] = useState<WorkVendor[]>([]);
+  const [reinvite, setReinvite] = useState<ReadonlySet<string>>(new Set());
   const [reload, setReload] = useState(0);
-  const [email, setEmail] = useState('');
-  const [level, setLevel] = useState<'view' | 'comment'>('view');
+  const [sel, setSel] = useState<string>('all');
   const [filter, setFilter] = useState('');
-  // Lo que se tocó, sobre lo que la persona ya tiene: `true` agregar, `false` sacar.
-  const [picked, setPicked] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [done, setDone] = useState<(PageSharesResult & { email: string }) | null>(null);
+  const [done, setDone] = useState<null | { pending: number }>(null);
   const [manualLink, setManualLink] = useState<string | null>(null);
-  // Lo agregado en el último guardado: *Same scenes for another email…* lleva solo eso.
-  const [lastAdded, setLastAdded] = useState<string[]>([]);
-  // La tabla: el orden, la vista y la locación o el decorado elegidos; y la última fila tocada (Shift+clic marca el rango).
+  const [mailText, setMailText] = useState('');
+  const [mailError, setMailError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [picking, setPicking] = useState<null | { before: string }>(null);
   const [sort, setSort] = useState<Sort>({ key: 'code', dir: 1 });
   const [view, setView] = useState<View>('all');
   const [location, setLocation] = useState('');
   const [set, setSet] = useState('');
   const anchor = useRef<string | null>(null);
   const headCheck = useRef<HTMLInputElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const focusName = useRef(false);
+  const counter = useRef(0);
+  // Después de guardar, el vendor elegido sigue elegido (uno nuevo cambia `new:<n>` por su id).
+  const keepSelected = useRef<string | null>(null);
 
-  // El índice de relaciones del proyecto abierto (la locación, el decorado y el INT/EXT de cada escena). Con otro
-  // proyecto no hay: `snapshot` es solo del abierto.
+  // El índice de relaciones del proyecto abierto (locación, decorado, INT/EXT). Con otro proyecto no hay.
   const session = existingRelationsSession(services);
   const subscribe = useCallback((fn: () => void) => (session ? session.relations.subscribe(fn) : noSubscribe()), [session]);
   const relRevision = useSyncExternalStore(subscribe, () => session?.relations.getRevision() ?? 0);
   const snap = session?.relations.snapshot(projectId) ?? null;
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (picking) return;
+      onClose();
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, picking]);
 
   useEffect(() => {
     let live = true;
     setLoadError(null);
-    remote.projectPageShares(projectId).then(
-      (list) => live && setRows(list),
+    remote.sceneVendorsList(projectId).then(
+      (got) => {
+        if (!live) return;
+        setList(got);
+        setWork(got.vendors.map(fromServer));
+        setReinvite(new Set());
+        const keep = keepSelected.current;
+        keepSelected.current = null;
+        setSel((cur) => {
+          const want = keep ?? cur;
+          return want !== 'all' && got.vendors.some((v) => v.id === want) ? want : 'all';
+        });
+      },
       (err: unknown) => live && setLoadError(teamErrorText(err)),
-    );
-    remote.listMembers().then(
-      (list) => live && setMembers(list.filter((m) => !m.removed_at)),
-      () => undefined,
-    );
-    remote.listInvitations().then(
-      (list) => live && setInvitations(list ?? []),
-      () => undefined,
     );
     return () => {
       live = false;
@@ -115,11 +188,8 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   // Las escenas del proyecto, en orden de número, con lo de adentro (se arma con el árbol de este dispositivo).
   const scenes = useMemo<SceneItem[]>(
     () => projectSceneItems(tree, engine, projectId),
-    // El árbol cambia de revisión, no de identidad: `useTree` vuelve a dibujar y esto se rearma con cada cambio.
     [tree, tree.getRevision(), projectId, engine], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const sceneIds = useMemo(() => new Set(scenes.map((s) => s.pageId)), [scenes]);
-  // Las filas de la tabla: lo de arriba más el nombre sin el número y, con el índice, locación, decorado e INT/EXT.
   const tableRows = useMemo(
     () => sceneRows(scenes, snap && session ? { snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) } : null),
     [scenes, snap, session, relRevision, tree], // eslint-disable-line react-hooks/exhaustive-deps
@@ -128,111 +198,88 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   const locations = useMemo(() => optionsOf(tableRows, 'locations'), [tableRows]);
   const sets = useMemo(() => optionsOf(tableRows, 'sets'), [tableRows]);
 
-  // La persona: un miembro activo, o alguien a invitar (con o sin una invitación pendiente).
-  const address = email.trim().toLowerCase();
-  const valid = EMAIL.test(address) && address.length <= 320;
-  const member = valid ? members.find((m) => m.email.toLowerCase() === address) : undefined;
-  const memberId = member?.user_id ?? rows?.find((r) => r.user_id && r.email.toLowerCase() === address)?.user_id ?? null;
-  const pending = valid && !memberId ? invitations.find((i) => i.email === address) : undefined;
-  const mine = useMemo(
-    () => (rows ?? []).filter((r) => (memberId ? r.user_id === memberId : valid && !!r.invitation_id && r.email.toLowerCase() === address)),
-    [rows, memberId, valid, address],
-  );
-  const has = useMemo(() => new Map(mine.filter((r) => r.page_id).map((r) => [r.page_id!, r.level] as const)), [mine]);
-  // Lo que tiene sobre páginas en la papelera (ella o una de arriba): no está en la lista de escenas; se muestra aparte
-  // para poder sacarlo (`in_trash`).
-  const trashed = useMemo(
-    () => (memberId ? mine.filter((r) => r.page_id && r.in_trash && r.grant_id && (r.level === 'view' || r.level === 'comment')) : []),
-    [mine, memberId],
-  );
-  const blockedIds = useMemo(() => new Set(scenes.filter((s) => s.blocked).map((s) => s.pageId)), [scenes]);
-  const wholeProject = mine.find((r) => !r.page_id) ?? null;
-  const personKey = valid ? `${memberId ?? 'new'}:${address}` : '';
+  const cap = list?.cap ?? 0;
+  const orig = useMemo(() => new Map((list?.vendors ?? []).map((v) => [v.id, v])), [list]);
+  const live = work.filter((v) => !v.deleted);
+  const current = sel === 'all' ? null : (live.find((v) => v.key === sel) ?? null);
+  // Un vendor con Comentar y quien guarda llega solo a Ver: no le puede sumar escenas ni correos (la base lo rechaza
+  // con `level_not_allowed`); sacar y bajarle el nivel, sí.
+  const overCap = !!current && current.level === 'comment' && cap < 2;
+  const origScenes = (v: WorkVendor) => (v.id ? (orig.get(v.id)?.scenes.map((s) => s.page_id) ?? []) : []);
+  const origEmails = (v: WorkVendor) => (v.id ? (orig.get(v.id)?.emails ?? []) : []);
 
-  // Otra persona: lo sacado no pasa (sería sacarle algo a quien no se eligió); lo agregado, sí («las mismas escenas»).
-  useEffect(() => {
-    setPicked((prev) => (prev.size === 0 || [...prev.values()].every(Boolean) ? prev : new Map([...prev].filter(([, v]) => v))));
-  }, [personKey]);
+  /** Cambia un vendor del borrador. */
+  const patch = (key: string, change: Partial<WorkVendor> | ((v: WorkVendor) => Partial<WorkVendor>)) =>
+    setWork((all) => all.map((v) => (v.key === key ? { ...v, ...(typeof change === 'function' ? change(v) : change) } : v)));
 
-  const isChecked = (id: string) => picked.get(id) ?? has.has(id);
-  /** Se puede tocar: un Editar no se cambia acá, y a una invitación pendiente solo se le suma. */
-  const editable = (id: string) => {
-    const lvl = has.get(id);
-    if (!lvl) return !blockedIds.has(id);
-    if (lvl !== 'view' && lvl !== 'comment') return false;
-    return !!memberId;
-  };
-  const adds = scenes.filter((s) => isChecked(s.pageId) && !has.has(s.pageId) && !s.blocked).map((s) => s.pageId);
-  const removes = memberId
-    ? [
-        ...scenes.filter((s) => !isChecked(s.pageId) && editable(s.pageId) && has.has(s.pageId)).map((s) => s.pageId),
-        ...trashed.filter((r) => !isChecked(r.page_id!)).map((r) => r.page_id!),
-      ]
-    : [];
-  const total = adds.length + removes.length;
+  // Lo que se ve en la tabla: qué vendors tiene cada escena, cuántos con correo la ven, y el estado para el elegido.
+  const byScene = useMemo(() => {
+    const out = new Map<string, WorkVendor[]>();
+    for (const v of live) for (const id of v.scenes) out.set(id, [...(out.get(id) ?? []), v]);
+    return out;
+  }, [live]);
+  // Las que un vendor tenía y se le sacan: el chip queda tachado hasta guardar.
+  const leaving = useMemo(() => {
+    const out = new Map<string, WorkVendor[]>();
+    for (const v of live) for (const id of origScenes(v)) if (!v.scenes.includes(id)) out.set(id, [...(out.get(id) ?? []), v]);
+    return out;
+  }, [live, orig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const seenBy = (id: string) => (byScene.get(id) ?? []).filter((v) => v.emails.length > 0);
 
-  // Lo que la persona ya tiene acá además de las escenas (otras páginas compartidas): se nombra, sin tocarlo.
-  const extras = mine.filter((r) => r.page_id && !r.in_trash && !sceneIds.has(r.page_id));
-  // Quién más de afuera ve cada escena (por ella, por una de arriba o por el proyecto entero).
-  const othersOf = (id: string): string[] => {
-    const chain = new Set([id, ...tree.ancestors(id).map((p) => p.id)]);
-    const list = (rows ?? []).filter(
-      (r) => isOutsideRow(r) && r.email.toLowerCase() !== address && (r.page_id === null || chain.has(r.page_id)),
-    );
-    return [...new Set(list.map((r) => r.email))];
-  };
-
-  // Las sugerencias: primero quien ya tiene páginas compartidas acá (con cuántas), después miembros e invitados.
-  const suggestions = useMemo(() => {
-    const out = new Map<string, string>();
-    const pagesBy = new Map<string, number>();
-    for (const r of rows ?? []) if (r.page_id) pagesBy.set(r.email.toLowerCase(), (pagesBy.get(r.email.toLowerCase()) ?? 0) + 1);
-    for (const [who, n] of pagesBy) out.set(who, tr('scenes.share.suggestPages', { count: n }));
-    for (const m of members) if (!out.has(m.email.toLowerCase())) out.set(m.email.toLowerCase(), tr(ROLE_LABELS[m.role]));
-    for (const i of invitations) if (!out.has(i.email)) out.set(i.email, tr('scenes.share.suggestInvited'));
-    return [...out];
-  }, [rows, members, invitations, tr]);
-
-  // Quién más de afuera ve cada escena, una vez por dibujo (lo usan la columna, el orden, la vista y el aviso de arriba).
-  const others = useMemo(() => new Map(scenes.map((s) => [s.pageId, othersOf(s.pageId)])), [scenes, rows, address, tree.getRevision()]); // eslint-disable-line react-hooks/exhaustive-deps
-  const outsideAll = [...new Set([...others.values()].flat())];
-  const outsideScenes = scenes.filter((s) => (others.get(s.pageId)?.length ?? 0) > 0).length;
-
-  // Lo que la persona ya tiene manda sobre lo bloqueado: una escena que quedó bloqueada después de compartirla se puede
-  // sacar, y la fila tiene que decir que se saca.
+  // Una escena sin la marca: la escribe quien edita al guardar; si no, no se puede asignar.
+  const needsMark = (id: string) => !isMarkedScene(tree.get(id)) && perms.pageLevel(id) < 3;
+  // Bloqueadas: las que la app ve con otra entidad adentro, y las que la base dice que hoy no se pueden dar (`ok` falso
+  // en algún vendor: le sacaron la marca o le movieron algo adentro mientras el vendor no tenía correos).
+  const blockedIds = useMemo(() => {
+    const out = new Set(scenes.filter((s) => s.blocked).map((s) => s.pageId));
+    for (const v of orig.values()) for (const s of v.scenes) if (!s.ok) out.add(s.page_id);
+    return out;
+  }, [scenes, orig]);
   const statusOf = (id: string): RowStatus => {
-    const lvl = has.get(id);
-    if (lvl && lvl !== 'view' && lvl !== 'comment') return 'higher';
-    const checked = isChecked(id);
-    if (lvl) return checked ? 'shared' : 'removing';
-    if (blockedIds.has(id)) return 'blocked';
-    return checked ? 'adding' : 'none';
+    if (!current) return 'none';
+    const now = current.scenes.includes(id);
+    const before = origScenes(current).includes(id);
+    if (now && !before) return 'adding';
+    if (!now && before) return 'removing';
+    // Asignada pero no se da (la base no se la da a sus correos): se ve bloqueada, y se puede sacar.
+    if (now && blockedIds.has(id)) return 'blocked';
+    if (now) return current.emails.length > 0 ? 'shared' : 'planned';
+    if (blockedIds.has(id) || needsMark(id)) return 'blocked';
+    return 'none';
   };
-  const facts: RowFacts = { status: statusOf, outside: (id) => others.get(id)?.length ?? 0 };
-  // La locación o el decorado elegidos valen solo si siguen entre las opciones (otro dispositivo los pudo renombrar, o el
-  // índice no está): si no, un filtro que no se ve dejaría la tabla vacía.
+  /** Se puede tocar: lo que tiene (o tenía) siempre; si no, que no esté bloqueada. */
+  const editable = (id: string) => {
+    if (!current) return false;
+    if (current.scenes.includes(id) || origScenes(current).includes(id)) return true;
+    return !overCap && !blockedIds.has(id) && !needsMark(id);
+  };
+  const facts: RowFacts = {
+    status: statusOf,
+    vendors: (id) => (byScene.get(id) ?? []).map(vendorCode).join(' '),
+    seenBy: (id) => seenBy(id).length,
+    mine: (id) => !!current?.scenes.includes(id),
+  };
   const pickedLocation = details && locations.includes(location) ? location : '';
   const pickedSet = details && sets.includes(set) ? set : '';
-  const shown = sortRows(filterRows(tableRows, { text: filter, view, location: pickedLocation, set: pickedSet }, isChecked, facts), sort, facts);
-  const columns = COLUMNS.filter((c) => details || !c.details);
+  const currentView: View = view === 'mine' && !current ? 'all' : view;
+  const shown = sortRows(filterRows(tableRows, { text: filter, view: currentView, location: pickedLocation, set: pickedSet }, facts), sort, facts);
+  const columns = COLUMNS.filter((c) => (details || !c.details) && (current || !c.vendor));
   const shownEditable = shown.filter((s) => editable(s.pageId));
-  const allShown = shownEditable.length > 0 && shownEditable.every((s) => isChecked(s.pageId));
-  const someShown = shownEditable.some((s) => isChecked(s.pageId));
+  const isOn = (id: string) => !!current?.scenes.includes(id);
+  const allShown = shownEditable.length > 0 && shownEditable.every((s) => isOn(s.pageId));
+  const someShown = shownEditable.some((s) => isOn(s.pageId));
 
-  /** Marca o desmarca varias; volver a lo que ya tenía deja de ser un cambio. */
-  const setMany = (ids: string[], value: boolean) =>
-    setPicked((prev) => {
-      const next = new Map(prev);
-      for (const id of ids) {
-        if (!editable(id)) continue;
-        if (value === has.has(id)) next.delete(id);
-        else next.set(id, value);
-      }
-      return next;
-    });
+  /** Asigna o saca varias al vendor elegido. */
+  const setMany = (ids: string[], value: boolean) => {
+    if (!current) return;
+    const touch = ids.filter((id) => editable(id));
+    patch(current.key, (v) => ({
+      scenes: value ? [...v.scenes, ...touch.filter((id) => !v.scenes.includes(id))] : v.scenes.filter((id) => !touch.includes(id)),
+    }));
+  };
   /** Una fila; con Shift, el rango desde la última tocada (en el orden que se ve), al mismo valor. */
   const toggle = (id: string, shift = false) => {
-    const value = !isChecked(id);
+    const value = !isOn(id);
     const from = shift && anchor.current ? shown.findIndex((s) => s.pageId === anchor.current) : -1;
     const to = shown.findIndex((s) => s.pageId === id);
     anchor.current = id;
@@ -242,410 +289,773 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   };
   const sortBy = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
 
-  // La casilla de los títulos queda a medias si están marcadas algunas de las que se ven.
   useEffect(() => {
     if (headCheck.current) headCheck.current.indeterminate = someShown && !allShown;
   });
-
-  // Otro correo, otras escenas u otro nivel: el aviso de lo pendiente (y su *Retry*) era del pedido de antes.
   useEffect(() => {
-    gate.clearBlocked();
-    // Solo cuando cambia lo que se manda.
-  }, [address, picked, level]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (focusName.current && nameInput.current) {
+      focusName.current = false;
+      nameInput.current.focus();
+    }
+  });
+
+  // Otro vendor elegido: lo del correo y el borrar eran del de antes.
+  useEffect(() => {
+    setMailText('');
+    setMailError(null);
+    setConfirmDelete(false);
+    setPicking(null);
+    anchor.current = null;
+  }, [sel]);
+
+  /** Las operaciones que manda *Save*: lo nuevo, lo cambiado y lo borrado. */
+  const ops = useMemo<VendorOp[]>(() => {
+    const out: VendorOp[] = [];
+    for (const v of work) {
+      if (!v.id) {
+        if (v.deleted) continue;
+        out.push({ op: 'create', key: v.key, name: v.name.trim(), code: v.code, color: v.color, level: v.level, add_scenes: v.scenes, add_emails: v.emails });
+        continue;
+      }
+      if (v.deleted) {
+        out.push({ op: 'delete', id: v.id });
+        continue;
+      }
+      const o = orig.get(v.id);
+      if (!o) continue;
+      const before = o.scenes.map((s) => s.page_id);
+      const mails = o.emails.map((e) => e.email);
+      const op: VendorOp = { op: 'update', id: v.id };
+      if (v.name.trim() !== o.name) op.name = v.name.trim();
+      if (v.code !== o.code) op.code = v.code;
+      if (v.color !== o.color) op.color = v.color;
+      if (v.level !== o.level) op.level = v.level;
+      const addScenes = v.scenes.filter((id) => !before.includes(id));
+      const removeScenes = before.filter((id) => !v.scenes.includes(id));
+      const addEmails = v.emails.filter((e) => !mails.includes(e));
+      const removeEmails = mails.filter((e) => !v.emails.includes(e));
+      const again = v.emails.filter((e) => mails.includes(e) && reinvite.has(`${v.key}:${e}`));
+      if (addScenes.length) op.add_scenes = addScenes;
+      if (removeScenes.length) op.remove_scenes = removeScenes;
+      if (addEmails.length) op.add_emails = addEmails;
+      if (removeEmails.length) op.remove_emails = removeEmails;
+      if (again.length) op.reinvite = again;
+      if (Object.keys(op).length > 2) out.push(op);
+    }
+    return out;
+  }, [work, orig, reinvite]);
+
+  // Lo que cambia en cada vendor, para la lista y el pie.
+  const changesOf = (v: WorkVendor) => {
+    const before = origScenes(v);
+    const mails = origEmails(v).map((e) => e.email);
+    return {
+      add: v.scenes.filter((id) => !before.includes(id)).length,
+      remove: before.filter((id) => !v.scenes.includes(id)).length,
+      invites: v.emails.filter((e) => !mails.includes(e)).length + v.emails.filter((e) => reinvite.has(`${v.key}:${e}`)).length,
+      isNew: !v.id,
+    };
+  };
+  const invites = live.reduce((n, v) => n + changesOf(v).invites, 0);
+  const unnamed = live.some((v) => !v.name.trim());
 
   const cleanOn = status.cleanOn;
-  const canSave = !busy && cleanOn && valid && rows !== null && perms.canInvite && total > 0 && total <= MAX_PAGES;
+  const canSave = !busy && cleanOn && list !== null && ops.length > 0 && !unnamed;
 
-  /** La marca de escena en las elegidas que no la tienen, y esperar a que suba (si no, la base las rechaza). */
-  const markScenes = (ids: string[]) => markAndWait(tree, engine, ids);
+  /** Una vendor nuevo, elegido y con el nombre para escribir. */
+  function addVendor() {
+    const used = new Set(live.map((v) => v.color));
+    const color = PROJECT_PRESETS.find((c) => !used.has(c)) ?? PROJECT_PRESETS[live.length % PROJECT_PRESETS.length];
+    const key = `new:${++counter.current}`;
+    setWork((all) => [...all, { key, id: null, name: '', code: '', color, level: cap >= 2 ? 'comment' : 'view', emails: [], scenes: [], deleted: false }]);
+    focusName.current = true;
+    setSel(key);
+    if (view === 'mine') setView('all');
+  }
 
-  /** Guarda (en el gesto: el link de una invitación se copia sin esperar nada antes). */
-  function save(e?: FormEvent) {
-    e?.preventDefault();
+  /** Suma el correo escrito al vendor elegido (uno por vendor del proyecto). */
+  function addEmail() {
+    if (!current) return;
+    const email = mailText.trim().toLowerCase();
+    if (!email) return;
+    if (overCap) return setMailError(tr('scenes.share.levelNotAllowed'));
+    if (!EMAIL.test(email) || email.length > 320) return setMailError(tr('scenes.share.emailInvalid'));
+    const other = live.find((v) => v.emails.includes(email));
+    if (other) return setMailError(other.key === current.key ? tr('scenes.share.emailHere') : tr('scenes.share.emailOther', { name: other.name || tr('scenes.share.unnamed') }));
+    patch(current.key, (v) => ({ emails: [...v.emails, email] }));
+    setMailText('');
+    setMailError(null);
+  }
+
+  /** Saca un correo (o deshace sacarlo, si estaba guardado). */
+  function toggleEmail(email: string) {
+    if (!current) return;
+    if (current.emails.includes(email)) patch(current.key, (v) => ({ emails: v.emails.filter((e) => e !== email) }));
+    else {
+      const other = live.find((v) => v.emails.includes(email));
+      if (other) return setMailError(tr('scenes.share.emailOther', { name: other.name || tr('scenes.share.unnamed') }));
+      patch(current.key, (v) => ({ emails: [...v.emails, email] }));
+    }
+    setReinvite((r) => {
+      const next = new Set(r);
+      next.delete(`${current.key}:${email}`);
+      return next;
+    });
+  }
+
+  function deleteVendor() {
+    if (!current) return;
+    if (!current.id) setWork((all) => all.filter((v) => v.key !== current.key));
+    else patch(current.key, { deleted: true });
+    setSel('all');
+  }
+
+  /** Guarda todo (en el gesto: el link de invitación se copia sin esperar nada antes). */
+  function save() {
     if (!canSave) return;
-    const who = address;
-    const add = adds;
-    const remove = removes;
-    const lvl = level;
-    const inviting = !memberId;
-    const scope: ShareScope = { pageIds: add };
+    const sending = ops;
+    // Lo que empieza a verse: lo que entra a un vendor con correos, y todo lo de un vendor que suma correos.
+    const exposing = new Set<string>();
+    const entering = new Set<string>();
+    for (const v of live) {
+      const before = origScenes(v);
+      const mails = origEmails(v).map((e) => e.email);
+      const added = v.scenes.filter((id) => !before.includes(id));
+      for (const id of added) entering.add(id);
+      if (v.emails.length > 0) for (const id of added) exposing.add(id);
+      if (v.emails.some((e) => !mails.includes(e) || reinvite.has(`${v.key}:${e}`))) for (const id of v.scenes) exposing.add(id);
+    }
+    const scope = { pageIds: [...exposing] };
+    const editor = perms.projectLevel(projectId) >= 3;
     setError(null);
     setDone(null);
     setManualLink(null);
     gate.clearBlocked();
-    let result: PageSharesResult | null = null;
+    let pending = 0;
     const work = (async () => {
-      await markScenes(add);
+      if (editor) await markAndWait(tree, engine, [...entering]);
       // Sin *Share anyway*: con un vendor no se comparte sin haber subido lo pendiente (M4).
-      // *Retry* manda el formulario de ese momento (no el de este pedido): si se cambió algo, el aviso ya no está.
-      if (add.length > 0 && !(await gate.ready(scope, true, () => latestSave.current(), null))) throw UNSYNCED_BEFORE_SHARE;
-      result = await remote.setPageShares(projectId, who, add, remove, lvl);
+      if (exposing.size > 0 && !(await gate.ready(scope, true, () => latestSave.current(), null))) throw UNSYNCED_BEFORE_SHARE;
+      const result = await remote.saveSceneVendors(projectId, sending);
+      pending = result.pending.length;
       return result;
     })();
     setBusy(true);
     void (async () => {
       try {
         let manual: string | null = null;
-        if (inviting) manual = await inviteAndCopy(work.then(() => makeLink(projectId)));
-        else await work;
+        if (invites > 0) manual = await inviteAndCopy(work.then(() => makeLink(projectId)));
+        const result = await work;
         setManualLink(manual);
-        if (result) setDone({ ...(result as PageSharesResult), email: who });
-        setLastAdded(add);
-        setPicked(new Map());
-        if (add.length > 0) gate.after(scope, true, who);
-        setReload((n) => n + 1);
+        setDone({ pending });
+        if (editor && result.reset.length > 0) gate.after({ pageIds: result.reset }, true, projectName);
         void outsideReadersStore(services)?.invalidate(projectId);
+        keepSelected.current = sel.startsWith('new:') ? (result.keys[sel] ?? null) : sel;
+        setReload((n) => n + 1);
       } catch (err) {
-        // Quedó el aviso de lo pendiente (con Retry): no es un error.
         if (err === UNSYNCED_BEFORE_SHARE) return;
         const message = err instanceof Error ? err.message : String(err);
-        setError(
-          err === MARKS_PENDING
-            ? tr('scenes.share.marksPending')
-            : message === 'page_invalid'
-              ? tr('scenes.share.pageInvalid')
-              : message === 'scene_contains_entities'
-                ? tr('scenes.share.containsEntities')
-                : message === 'invitation_exists' && !inviting
-                  ? tr('scenes.share.memberInvitation')
-                  : teamErrorText(err),
-        );
+        const known: Record<string, Key> = {
+          page_invalid: 'scenes.share.pageInvalid',
+          scene_contains_entities: 'scenes.share.containsEntities',
+          email_in_other_vendor: 'scenes.share.inOtherVendor',
+          level_not_allowed: 'scenes.share.levelNotAllowed',
+          own_email: 'scenes.share.ownEmail',
+          vendor_invalid: 'scenes.share.vendorInvalid',
+          clean_off: 'scenes.share.cleanOff',
+        };
+        setError(err === MARKS_PENDING ? tr('scenes.share.marksPending') : known[message] ? tr(known[message]) : teamErrorText(err));
       } finally {
         setBusy(false);
       }
     })();
   }
-
   const latestSave = useRef(save);
   latestSave.current = save;
 
-  /** «Las mismas escenas para otro correo»: lo agregado en el último guardado (como para agregar) y se pide otro correo. */
-  function another() {
-    setPicked(new Map(lastAdded.filter((id) => sceneIds.has(id)).map((id) => [id, true])));
-    setDone(null);
-    setManualLink(null);
-    setEmail('');
-  }
+  const levelLabel = (l: VendorLevel) => tr(LEVEL_LABELS[l]);
+  const others = list?.others ?? new Map<string, number>();
+  const othersCount = scenes.filter((s) => (others.get(s.pageId) ?? 0) > 0).length;
+  const nMine = current ? current.scenes.length : 0;
+  const nNone = tableRows.filter((r) => !byScene.has(r.pageId)).length;
+  const nMulti = tableRows.filter((r) => seenBy(r.pageId).length >= 2).length;
 
-  const levelLabel = (l: GrantLevel) => tr(LEVEL_LABELS[l]);
-  const checkedCount = scenes.filter((s) => isChecked(s.pageId)).length;
+  // Las escenas del elegido que también ven otros vendors con correo (se ven entre sí).
+  const crossed = current && current.emails.length > 0 ? scenes.filter((s) => current.scenes.includes(s.pageId) && seenBy(s.pageId).length >= 2) : [];
+  const crossedWith = [...new Set(crossed.flatMap((s) => seenBy(s.pageId).filter((v) => v.key !== current?.key).map((v) => v.name || tr('scenes.share.unnamed'))))];
+
+  const chip = (v: WorkVendor, id: string, gone = false) => {
+    const added = !gone && !origScenes(v).includes(id);
+    const cls = ['share-vchip', v.emails.length === 0 ? 'plan' : '', added ? 'add' : '', gone ? 'rm' : ''].filter(Boolean).join(' ');
+    return (
+      <span key={`${v.key}${gone ? ':gone' : ''}`} className={cls} style={{ '--vc': v.color } as CSSProperties} data-tip={v.name || tr('scenes.share.unnamed')}>
+        <i />
+        {vendorCode(v)}
+      </span>
+    );
+  };
+
+  const railItem = (v: WorkVendor) => {
+    const ch = changesOf(v);
+    const n = v.scenes.length;
+    return (
+      <button
+        key={v.key}
+        type="button"
+        className="share-vitem"
+        style={{ '--vc': v.color } as CSSProperties}
+        aria-current={sel === v.key}
+        onClick={() => setSel(v.key)}
+      >
+        <span className="bar" />
+        <span className="nm">
+          <span className="nm-text">{v.name || tr('scenes.share.unnamed')}</span>
+          <span className="cd mono">{vendorCode(v)}</span>
+          {v.level === 'view' ? <EyeIcon size={13} /> : <CommentIcon size={13} />}
+        </span>
+        <span className="pend mono">
+          {ch.add > 0 && <span className="plus">+{ch.add}</span>}
+          {ch.remove > 0 && <span className="minus"> −{ch.remove}</span>}
+        </span>
+        <span className="meta">
+          <span>{tr('scenes.share.sceneCount', { count: n })}</span>
+          <span aria-hidden>·</span>
+          {v.emails.length > 0 ? <span>{tr('scenes.share.emailCount', { count: v.emails.length })}</span> : <span className="nomail">{tr('scenes.share.noEmailShort')}</span>}
+        </span>
+      </button>
+    );
+  };
+
+  const emailRows = current
+    ? [
+        ...current.emails.map((e) => {
+          const was = origEmails(current).find((x) => x.email === e);
+          const again = reinvite.has(`${current.key}:${e}`);
+          const state: keyof typeof MAIL_STATE = !was ? 'new' : again ? 'again' : was.state;
+          return { email: e, state, removed: false };
+        }),
+        ...origEmails(current)
+          .filter((x) => !current.emails.includes(x.email))
+          .map((x) => ({ email: x.email, state: 'removed' as const, removed: true })),
+      ]
+    : [];
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal team-dialog share-scenes" role="dialog" aria-label={tr('scenes.share.label')} onClick={(e) => e.stopPropagation()}>
-        <h2>{tr('scenes.share.title', { name: projectName })}</h2>
-        <p className="muted team-lead">{tr('scenes.share.lead')}</p>
+      <div className="modal team-dialog share-scenes share-vendors" role="dialog" aria-label={tr('scenes.share.label')} onClick={(e) => e.stopPropagation()}>
+        <div className="share-vendors-head">
+          <div>
+            <h2>{tr('scenes.share.title', { name: projectName })}</h2>
+            <p className="muted team-lead">{tr('scenes.share.lead')}</p>
+          </div>
+          <button type="button" className="icon-button" aria-label={tr('common.close')} onClick={onClose}>
+            <CloseIcon size={18} />
+          </button>
+        </div>
         {!cleanOn && (
           <p className="warn small team-lead" role="alert">
             {tr('scenes.share.cleanOff')}
           </p>
         )}
 
-        <form className="share-scenes-form" onSubmit={save}>
-          <div className="share-scenes-who">
-            <label className="share-scenes-field">
-              <MailIcon size={16} />
-              <input
-                type="email"
-                required
-                list="share-scenes-people"
-                maxLength={320}
-                placeholder={tr('scenes.share.emailPlaceholder')}
-                aria-label={tr('team.email')}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <div className="segmented share-scenes-level" role="group" aria-label={tr('team.access')}>
-              {(['view', 'comment'] as const).map((l) => (
-                <button key={l} type="button" aria-pressed={level === l} onClick={() => setLevel(l)}>
-                  {l === 'view' ? <EyeIcon size={16} /> : <CommentIcon size={16} />}
-                  {levelLabel(l)}
-                </button>
-              ))}
+        <div className="share-vendors-grid">
+          <aside className="share-vendors-rail" aria-label={tr('scenes.share.vendors')}>
+            <div className="share-vendors-rail-head">
+              <span>{tr('scenes.share.vendorsCount', { count: live.length })}</span>
             </div>
-          </div>
-          <datalist id="share-scenes-people">
-            {suggestions.map(([who, label]) => (
-              <option key={who} value={who} label={label} />
-            ))}
-          </datalist>
-          {valid && (
-            <p className="muted small team-lead share-scenes-person">
-              {memberId
-                ? tr('scenes.share.member', { role: tr(ROLE_LABELS[member?.role ?? mine[0]?.role ?? 'member']) })
-                : pending
-                  ? tr('scenes.share.pending')
-                  : tr('scenes.share.newPerson')}
-            </p>
-          )}
-          {wholeProject && (
-            <p className="warn small team-lead">
-              {tr('scenes.share.wholeProject', { level: levelLabel(wholeProject.level), name: projectName })}
-            </p>
-          )}
-          {extras.length > 0 && (
-            <p className="muted small team-lead">
-              {tr('scenes.share.alsoHas', {
-                list: extras.map((r) => `“${tree.get(r.page_id!)?.title || tr('common.untitled')}” (${levelLabel(r.level)})`).join(', '),
-              })}
-            </p>
-          )}
-
-          <div className="share-scenes-tools">
-            <label className="share-scenes-search">
-              <SearchIcon size={15} />
-              <input
-                type="search"
-                placeholder={tr(details ? 'scenes.share.search' : 'scenes.share.searchShort')}
-                aria-label={tr(details ? 'scenes.share.search' : 'scenes.share.searchShort')}
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              />
-            </label>
-            {details && locations.length > 0 && (
-              <select className="share-scenes-pick" aria-label={tr('scenes.share.colLocation')} value={pickedLocation} onChange={(e) => setLocation(e.target.value)}>
-                <option value="">{tr('scenes.share.anyLocation')}</option>
-                {locations.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            )}
-            {details && sets.length > 0 && (
-              <select className="share-scenes-pick" aria-label={tr('scenes.share.colSet')} value={pickedSet} onChange={(e) => setSet(e.target.value)}>
-                <option value="">{tr('scenes.share.anySet')}</option>
-                {sets.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            )}
-            <span className="share-scenes-gap" />
-            <button type="button" className="share-scenes-bulk" onClick={() => setMany(shown.map((s) => s.pageId), true)} disabled={shownEditable.length === 0}>
-              {tr('scenes.share.selectShown')}
+            <div className="share-vendors-rail-list">
+              <button type="button" className="share-vitem all" aria-current={sel === 'all'} onClick={() => setSel('all')}>
+                <span className="bar" />
+                <span className="nm">
+                  <span className="nm-text">{tr('scenes.share.allVendors')}</span>
+                </span>
+                <span />
+                <span className="meta">{tr('scenes.share.allVendorsMeta')}</span>
+              </button>
+              {live.map(railItem)}
+            </div>
+            <button type="button" className="share-vendors-add" onClick={addVendor} disabled={list === null}>
+              <PlusIcon size={14} />
+              {tr('scenes.share.newVendor')}
             </button>
-            <button type="button" className="share-scenes-bulk" onClick={() => setMany(shown.map((s) => s.pageId), false)} disabled={shownEditable.length === 0}>
-              {tr('scenes.share.clearShown')}
-            </button>
-          </div>
-          <div className="share-scenes-views" role="group" aria-label={tr('scenes.share.views')}>
-            {(
-              [
-                ['all', 'scenes.share.viewAll', scenes.length],
-                ['selected', 'scenes.share.viewSelected', checkedCount],
-                ['unselected', 'scenes.share.viewUnselected', scenes.length - checkedCount],
-                ['outside', 'scenes.share.viewOutside', outsideScenes],
-                ['blocked', 'scenes.share.viewBlocked', blockedIds.size],
-              ] as const
-            )
-              // Las de afuera y las que no se pueden, solo si hay alguna (o si están elegidas: que no desaparezca el botón).
-              .filter(([v, , n]) => n > 0 || v === 'all' || v === 'selected' || v === 'unselected' || view === v)
-              .map(([v, label, n]) => (
-                <button key={v} type="button" className={`share-scenes-view${v === 'outside' ? ' outside' : ''}`} aria-pressed={view === v} onClick={() => setView(v)}>
-                  {tr(label)}
-                  <span className="mono">{n}</span>
-                </button>
-              ))}
-          </div>
-          {outsideAll.length > 0 && (
-            <p className="share-scenes-outside">
-              <MembersIcon size={16} />
-              <span>{tr('scenes.share.outsideSummary', { count: outsideScenes, list: outsideAll.join(', ') })}</span>
-            </p>
-          )}
+          </aside>
 
-          <div className="share-scenes-table-wrap">
-            <table className={`share-scenes-table${details ? ' with-details' : ''}`} aria-label={tr('scenes.share.list')}>
-              <colgroup>
-                <col className="c-check" />
-                {columns.map((c) => (
-                  <col key={c.key} className={`c-${c.key}`} />
-                ))}
-              </colgroup>
-              <thead>
-                <tr>
-                  <th className="c-check">
-                    <input
-                      ref={headCheck}
-                      type="checkbox"
-                      aria-label={tr('scenes.share.selectShown')}
-                      checked={allShown}
-                      disabled={shownEditable.length === 0}
-                      onChange={() => setMany(shown.map((s) => s.pageId), !allShown)}
-                    />
-                  </th>
-                  {columns.map((c) => (
-                    <th
-                      key={c.key}
-                      className={`c-${c.key}`}
-                      aria-sort={sort.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
+          <div className={`share-vendors-main${current ? '' : ' overview'}`}>
+            {current ? (
+              <div className="share-vendor-edit">
+                <div className="share-vendor-row">
+                  <span className="share-vendor-swatch-wrap">
+                    <button
+                      type="button"
+                      className="share-vendor-swatch"
+                      style={{ '--vc': current.color } as CSSProperties}
+                      aria-label={tr('scenes.share.vendorColor')}
+                      aria-expanded={!!picking}
+                      onClick={() => setPicking(picking ? null : { before: current.color })}
                     >
-                      <button type="button" onClick={() => sortBy(c.key)} data-tip={c.tip ? tr(c.tip) : undefined}>
-                        {tr(c.label)}
-                        {sort.key === c.key && (sort.dir === 1 ? <ChevronUpIcon size={12} /> : <ChevronDownIcon size={12} />)}
-                      </button>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {scenes.length === 0 && (
-                  <tr className="share-scenes-empty">
-                    <td colSpan={columns.length + 1}>{tr('scenes.share.noScenes')}</td>
-                  </tr>
-                )}
-                {scenes.length > 0 && shown.length === 0 && (
-                  <tr className="share-scenes-empty">
-                    <td colSpan={columns.length + 1}>{tr('scenes.share.noMatch')}</td>
-                  </tr>
-                )}
-                {shown.map((s) => {
-                  const st = statusOf(s.pageId);
-                  const lvl = has.get(s.pageId);
-                  const out = others.get(s.pageId) ?? [];
-                  const canTouch = editable(s.pageId);
-                  const pick = (e: MouseEvent) => {
-                    if (canTouch) toggle(s.pageId, e.shiftKey);
-                  };
-                  return (
-                    <tr
-                      key={s.pageId}
-                      data-scene={s.pageId}
-                      className={[st, isChecked(s.pageId) ? 'checked' : '', st === 'adding' || st === 'removing' ? 'changed' : ''].filter(Boolean).join(' ')}
-                      onClick={pick}
-                      // Shift+clic no elige el texto de las filas (eso pasa al apretar, no en el clic: frenar el clic de
-                      // una casilla la devuelve a como estaba y React queda desfasado).
-                      onMouseDown={(e) => e.shiftKey && e.preventDefault()}
-                    >
-                      <td className="c-check">
-                        <input
-                          type="checkbox"
-                          aria-label={`${s.label} ${s.name}`.trim()}
-                          checked={isChecked(s.pageId)}
-                          disabled={!canTouch}
-                          onChange={() => undefined}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (canTouch) toggle(s.pageId, e.shiftKey);
+                      <i />
+                    </button>
+                    {picking && (
+                      <div className="share-vendor-pop" role="dialog" aria-label={tr('scenes.share.vendorColor')}>
+                        <ColorPicker
+                          initial={current.color}
+                          defaultColor={picking.before}
+                          presets={PROJECT_PRESETS}
+                          recents={loadRecentColors()}
+                          onChange={(color) => patch(current.key, { color })}
+                          onCancel={() => {
+                            patch(current.key, { color: picking.before });
+                            setPicking(null);
+                          }}
+                          onAccept={(color) => {
+                            rememberRecentColor(color);
+                            patch(current.key, { color });
+                            setPicking(null);
                           }}
                         />
-                      </td>
-                      <td className="c-code mono share-scenes-code">{s.label}</td>
-                      <td className="c-name">
-                        <span className="share-scenes-title">{s.name || s.title}</span>
-                        {details && (s.locations.length > 0 || s.sets.length > 0) && (
-                          <span className="share-scenes-meta">{[...s.locations, ...s.sets].join(' · ')}</span>
-                        )}
-                        {s.blocked && <span className="share-scenes-why">{tr('scenes.share.blocked')}</span>}
-                      </td>
-                      {details && (
-                        <>
-                          <td className="c-location">{s.locations.join(', ')}</td>
-                          <td className="c-set">{s.sets.join(', ')}</td>
-                          <td className="c-intExt mono">{s.intExt.join(', ')}</td>
-                        </>
+                      </div>
+                    )}
+                  </span>
+                  <input
+                    ref={nameInput}
+                    className="share-vendor-name"
+                    value={current.name}
+                    maxLength={80}
+                    placeholder={tr('scenes.share.vendorName')}
+                    aria-label={tr('scenes.share.vendorName')}
+                    onChange={(e) => patch(current.key, { name: e.target.value })}
+                  />
+                  <input
+                    className="share-vendor-code mono"
+                    value={current.code}
+                    maxLength={4}
+                    placeholder={vendorCode({ code: '', name: current.name })}
+                    aria-label={tr('scenes.share.vendorCode')}
+                    data-tip={tr('scenes.share.vendorCodeTip')}
+                    onChange={(e) => patch(current.key, { code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) })}
+                  />
+                  <div className="segmented share-scenes-level" role="group" aria-label={tr('team.access')}>
+                    {(['view', 'comment'] as const).map((l) => {
+                      // Con Ver sobre el proyecto, Comentar no se da (sí se puede bajar un vendor que ya comenta).
+                      const locked = l === 'comment' && cap < 2 && current.level !== 'comment';
+                      return (
+                        <button
+                          key={l}
+                          type="button"
+                          aria-pressed={current.level === l}
+                          disabled={locked}
+                          data-tip={locked ? tr('scenes.share.levelNotAllowed') : undefined}
+                          onClick={() => patch(current.key, { level: l })}
+                        >
+                          {l === 'view' ? <EyeIcon size={14} /> : <CommentIcon size={14} />}
+                          {levelLabel(l)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-button danger"
+                    aria-label={tr('scenes.share.deleteVendor')}
+                    data-tip={tr('scenes.share.deleteTip')}
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    <TrashIcon size={15} />
+                  </button>
+                </div>
+                <div className="share-vendor-mails">
+                  <MailIcon size={15} />
+                  {emailRows.map((m) => (
+                    <span key={m.email} className={`share-vendor-mail ${m.state}`}>
+                      <span className="e">{m.email}</span>
+                      <span className="s">
+                        {m.state === 'joined' && <CheckIcon size={12} />}
+                        {m.state === 'invited' && <HistoryIcon size={12} />}
+                        {tr(MAIL_STATE[m.state])}
+                      </span>
+                      {m.state === 'expired' && !overCap && (
+                        <button
+                          type="button"
+                          className="link"
+                          onClick={() => setReinvite((r) => new Set(r).add(`${current.key}:${m.email}`))}
+                        >
+                          {tr('scenes.share.reinvite')}
+                        </button>
                       )}
-                      <td className="c-pages mono">{s.inside || ''}</td>
-                      <td className="c-outside">
-                        {out.length > 0 && (
-                          <span
-                            className="share-scenes-out"
-                            role="img"
-                            data-tip={tr('scenes.share.othersTip', { list: out.join(', ') })}
-                            aria-label={tr('scenes.share.othersTip', { list: out.join(', ') })}
-                          >
-                            <MembersIcon size={14} />
-                            {out.length}
-                          </span>
-                        )}
-                      </td>
-                      <td className="c-status">
-                        {st === 'blocked' ? (
-                          <span className="share-scenes-st blocked">
-                            <LockIcon size={13} />
-                            {tr('scenes.share.stBlocked')}
-                          </span>
-                        ) : st === 'higher' ? (
-                          <span className="share-scenes-st higher">{tr('scenes.share.higher', { level: levelLabel(lvl!) })}</span>
-                        ) : st !== 'none' ? (
-                          <span className={`share-scenes-st ${st}`}>
-                            {st === 'shared' ? tr('scenes.share.stShared', { level: levelLabel(lvl ?? level) }) : tr(st === 'adding' ? 'scenes.share.stAdding' : 'scenes.share.stRemoving')}
-                          </span>
-                        ) : null}
-                      </td>
+                      <button
+                        type="button"
+                        aria-label={tr(m.removed ? 'scenes.share.undoRemove' : 'scenes.share.removeEmail', { email: m.email })}
+                        onClick={() => toggleEmail(m.email)}
+                      >
+                        {m.removed ? <UndoIcon size={13} /> : <CloseIcon size={13} />}
+                      </button>
+                    </span>
+                  ))}
+                  <form
+                    className="share-vendor-addmail"
+                    onSubmit={(e) => {
+                      // Enter en el campo suma el correo (el formulario lo manda solo, sin comparar teclas).
+                      e.preventDefault();
+                      addEmail();
+                    }}
+                  >
+                    <PlusIcon size={13} />
+                    <input
+                      type="email"
+                      value={mailText}
+                      maxLength={320}
+                      placeholder={tr('scenes.share.addEmail')}
+                      aria-label={tr('scenes.share.addEmail')}
+                      onChange={(e) => {
+                        setMailText(e.target.value);
+                        setMailError(null);
+                      }}
+                      onBlur={() => mailText.trim() && addEmail()}
+                    />
+                  </form>
+                </div>
+                {mailError && (
+                  <p className="share-vendor-hint err" role="alert">
+                    <WarningIcon size={14} />
+                    <span>{mailError}</span>
+                  </p>
+                )}
+                {current.emails.length === 0 && (
+                  <p className="share-vendor-hint">
+                    <InfoIcon size={14} />
+                    <span>{tr('scenes.share.noEmail')}</span>
+                  </p>
+                )}
+                {confirmDelete && (
+                  <div className="share-vendor-confirm" role="alert">
+                    <span>{tr('scenes.share.confirmDelete', { name: current.name || tr('scenes.share.unnamed') })}</span>
+                    <button type="button" onClick={() => setConfirmDelete(false)}>
+                      {tr('common.cancel')}
+                    </button>
+                    <button type="button" className="danger" onClick={deleteVendor}>
+                      {tr('scenes.share.deleteVendor')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="share-vendors-overview">
+                <MembersIcon size={16} />
+                <span>{tr(live.length > 0 ? 'scenes.share.overview' : 'scenes.share.overviewEmpty')}</span>
+              </p>
+            )}
+
+            <div className="share-scenes-tools">
+              <label className="share-scenes-search">
+                <SearchIcon size={15} />
+                <input
+                  type="search"
+                  placeholder={tr('scenes.share.search')}
+                  aria-label={tr('scenes.share.search')}
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                />
+              </label>
+              {details && locations.length > 0 && (
+                <select className="share-scenes-pick" aria-label={tr('scenes.share.colLocation')} value={pickedLocation} onChange={(e) => setLocation(e.target.value)}>
+                  <option value="">{tr('scenes.share.anyLocation')}</option>
+                  {locations.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {details && sets.length > 0 && (
+                <select className="share-scenes-pick" aria-label={tr('scenes.share.colSet')} value={pickedSet} onChange={(e) => setSet(e.target.value)}>
+                  <option value="">{tr('scenes.share.anySet')}</option>
+                  {sets.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="share-scenes-views" role="group" aria-label={tr('scenes.share.views')}>
+              {(
+                [
+                  ['all', tr('scenes.share.viewAll'), scenes.length],
+                  ...(current ? [['mine', tr('scenes.share.viewMine', { name: current.name || tr('scenes.share.unnamed') }), nMine] as const] : []),
+                  ['none', tr('scenes.share.viewNone'), nNone],
+                  ['multi', tr('scenes.share.viewMulti'), nMulti],
+                  ['blocked', tr('scenes.share.viewBlocked'), blockedIds.size],
+                ] as const
+              )
+                .filter(([v, , n]) => n > 0 || v === 'all' || v === 'mine' || currentView === v)
+                .map(([v, label, n]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={`share-scenes-view${v === 'multi' ? ' outside' : ''}`}
+                    aria-pressed={currentView === v}
+                    onClick={() => setView(currentView === v && v !== 'all' ? 'all' : v)}
+                  >
+                    {label}
+                    <span className="mono">{n}</span>
+                  </button>
+                ))}
+            </div>
+            {othersCount > 0 && (
+              <p className="share-scenes-outside">
+                <MembersIcon size={16} />
+                <span>{tr('scenes.share.othersSummary', { count: othersCount })}</span>
+              </p>
+            )}
+
+            <div className="share-scenes-table-wrap">
+              <table className={`share-scenes-table share-vendors-table${details ? ' with-details' : ''}${current ? '' : ' overview'}`} aria-label={tr('scenes.share.list')}>
+                <colgroup>
+                  {current && <col className="c-check" />}
+                  {columns.map((c) => (
+                    <col key={c.key} className={`c-${c.key}`} />
+                  ))}
+                </colgroup>
+                <thead>
+                  <tr>
+                    {current && (
+                      <th className="c-check">
+                        <input
+                          ref={headCheck}
+                          type="checkbox"
+                          aria-label={tr('scenes.share.selectShown')}
+                          checked={allShown}
+                          disabled={shownEditable.length === 0}
+                          onChange={() => setMany(shown.map((s) => s.pageId), !allShown)}
+                        />
+                      </th>
+                    )}
+                    {columns.map((c) => (
+                      <th key={c.key} className={`c-${c.key}`} aria-sort={sort.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
+                        <button type="button" onClick={() => sortBy(c.key)}>
+                          {tr(c.label)}
+                          {sort.key === c.key && (sort.dir === 1 ? <ChevronUpIcon size={12} /> : <ChevronDownIcon size={12} />)}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {scenes.length === 0 && (
+                    <tr className="share-scenes-empty">
+                      <td colSpan={columns.length + 1}>{tr('scenes.share.noScenes')}</td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {trashed.length > 0 && (
-            <div className="share-scenes-trash-box">
-              <p className="muted small">{tr('scenes.share.trashLead')}</p>
-              <ul className="share-scenes-trash" aria-label={tr('scenes.share.trashList')}>
-                {trashed.map((r) => {
-                  const id = r.page_id!;
-                  const checked = isChecked(id);
-                  return (
-                    <li key={id} className={checked ? undefined : 'changed'} data-scene={id}>
-                      <label>
-                        <input type="checkbox" checked={checked} onChange={() => toggle(id)} />
-                        <span className="share-scenes-title">{tree.get(id)?.title || tr('common.untitled')}</span>
-                        <span className="muted small">{tr('scenes.share.inTrash', { level: levelLabel(r.level) })}</span>
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
+                  )}
+                  {scenes.length > 0 && shown.length === 0 && (
+                    <tr className="share-scenes-empty">
+                      <td colSpan={columns.length + 1}>{tr('scenes.share.noMatch')}</td>
+                    </tr>
+                  )}
+                  {shown.map((s) => {
+                    const st = statusOf(s.pageId);
+                    const canTouch = editable(s.pageId);
+                    const seen = seenBy(s.pageId);
+                    const pick = (e: MouseEvent) => {
+                      if (canTouch) toggle(s.pageId, e.shiftKey);
+                    };
+                    const why = s.blocked ? tr('scenes.share.blocked') : current && needsMark(s.pageId) && !isOn(s.pageId) ? tr('scenes.share.needsMark') : null;
+                    return (
+                      <tr
+                        key={s.pageId}
+                        data-scene={s.pageId}
+                        className={[st, isOn(s.pageId) ? 'checked' : '', st === 'adding' || st === 'removing' ? 'changed' : ''].filter(Boolean).join(' ')}
+                        onClick={current ? pick : undefined}
+                        onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+                      >
+                        {current && (
+                          <td className="c-check">
+                            <input
+                              type="checkbox"
+                              aria-label={`${s.label} ${s.name}`.trim()}
+                              checked={isOn(s.pageId)}
+                              disabled={!canTouch}
+                              onChange={() => undefined}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (canTouch) toggle(s.pageId, e.shiftKey);
+                              }}
+                            />
+                          </td>
+                        )}
+                        <td className="c-code mono share-scenes-code">{s.label}</td>
+                        <td className="c-name">
+                          <span className="share-scenes-title">{s.name || s.title}</span>
+                          {details && (s.locations.length > 0 || s.sets.length > 0) && (
+                            <span className="share-scenes-meta">{[...s.locations, ...s.sets].join(' · ')}</span>
+                          )}
+                          {why && <span className="share-scenes-why">{why}</span>}
+                        </td>
+                        {details && (
+                          <>
+                            <td className="c-location">{s.locations.join(', ')}</td>
+                            <td className="c-set">{s.sets.join(', ')}</td>
+                            <td className="c-intExt mono">{s.intExt.join(', ')}</td>
+                          </>
+                        )}
+                        <td className="c-vendors">
+                          <span className="share-vchips">
+                            {(byScene.get(s.pageId) ?? []).map((v) => chip(v, s.pageId))}
+                            {(leaving.get(s.pageId) ?? []).map((v) => chip(v, s.pageId, true))}
+                            {seen.length >= 2 && (
+                              <span
+                                className="share-vboth"
+                                role="img"
+                                aria-label={tr('scenes.share.bothTip', { list: seen.map((v) => v.name || tr('scenes.share.unnamed')).join(', ') })}
+                                data-tip={tr('scenes.share.bothTip', { list: seen.map((v) => v.name || tr('scenes.share.unnamed')).join(', ') })}
+                              >
+                                <WarningIcon size={14} />
+                              </span>
+                            )}
+                            {(others.get(s.pageId) ?? 0) > 0 && (
+                              <span
+                                className="share-scenes-out"
+                                role="img"
+                                aria-label={tr('scenes.share.othersTip', { count: others.get(s.pageId) ?? 0 })}
+                                data-tip={tr('scenes.share.othersTip', { count: others.get(s.pageId) ?? 0 })}
+                              >
+                                <MembersIcon size={13} />
+                                {others.get(s.pageId)}
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        {current && (
+                          <td className="c-status">
+                            {st !== 'none' && (
+                              <span className={`share-scenes-st ${st}`}>
+                                {st === 'blocked' ? <LockIcon size={13} /> : <i />}
+                                {tr(STATUS_WORD[st])}
+                              </span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-
-          {manualLink && (
-            <div className="team-link">
-              <span className="muted">{tr('team.copyManually')}</span>
-              <input readOnly value={manualLink} onFocus={(e) => e.currentTarget.select()} aria-label={tr('team.inviteLink')} />
-            </div>
-          )}
-          <ShareGateNotes gate={gate} reader />
-          {(error || loadError) && <p className="error">{error ?? loadError}</p>}
-          {done && (
-            <p className="muted team-lead" role="status">
-              {tr(done.result === 'invited' ? 'scenes.share.doneInvited' : 'scenes.share.doneMember', { email: done.email, count: done.pages })}{' '}
-              <button type="button" className="link" onClick={another}>
-                {tr('scenes.share.another')}
-              </button>
-            </p>
-          )}
-          <p className="share-scenes-limits">
-            <InfoIcon size={15} />
-            <span>{tr('scenes.share.limits')}</span>
-          </p>
-
-          <div className="team-invite-actions share-scenes-footer">
-            <span className="share-scenes-sum">
-              {total > MAX_PAGES ? (
-                <span className="warn">{tr('scenes.share.tooMany')}</span>
-              ) : total > 0 ? (
-                <span className="share-scenes-diff">
-                  <span className="add">+{adds.length}</span> <span className="remove">−{removes.length}</span>
+            {crossed.length > 0 && (
+              <p className="share-vendor-cross" role="note">
+                <WarningIcon size={15} />
+                <span>
+                  {tr('scenes.share.cross', {
+                    count: crossed.length,
+                    name: current?.name || tr('scenes.share.unnamed'),
+                    list: crossedWith.join(', '),
+                    codes: crossed.map((s) => sceneRowsLabel(tableRows, s.pageId)).join(', '),
+                  })}
                 </span>
-              ) : null}
-              <span className="muted">
-                {valid ? tr('scenes.share.count', { checked: checkedCount, total: scenes.length }) : tr('scenes.share.pickPerson')}
+              </p>
+            )}
+            <p className="share-vendors-legend">
+              <span>
+                <span className="share-vchip legend">
+                  <i />
+                  AB
+                </span>
+                {tr('scenes.share.legendSeen')}
               </span>
-            </span>
-            <button type="button" onClick={onClose}>
-              {tr('common.close')}
-            </button>
-            <button className="primary" disabled={!canSave}>
-              {busy ? tr('scenes.share.saving') : valid && !memberId && adds.length > 0 ? tr('team.inviteAndCopy') : tr('scenes.share.save')}
-            </button>
+              <span>
+                <span className="share-vchip legend plan">
+                  <i />
+                  AB
+                </span>
+                {tr('scenes.share.legendPlan')}
+              </span>
+              <span>
+                <span className="share-vboth">
+                  <WarningIcon size={14} />
+                </span>
+                {tr('scenes.share.legendBoth')}
+              </span>
+            </p>
           </div>
-        </form>
+        </div>
+
+        {manualLink && (
+          <div className="team-link">
+            <span className="muted">{tr('team.copyManually')}</span>
+            <input readOnly value={manualLink} onFocus={(e) => e.currentTarget.select()} aria-label={tr('team.inviteLink')} />
+          </div>
+        )}
+        <ShareGateNotes gate={gate} reader />
+        {(error || loadError) && <p className="error">{error ?? loadError}</p>}
+        {done && (
+          <p className="muted team-lead" role="status">
+            {done.pending > 0 ? tr('scenes.share.donePending', { count: done.pending }) : tr('scenes.share.done')}
+          </p>
+        )}
+        <p className="share-scenes-limits">
+          <InfoIcon size={15} />
+          <span>{tr('scenes.share.limits')}</span>
+        </p>
+
+        <div className="team-invite-actions share-scenes-footer">
+          <span className="share-scenes-sum">
+            {live.some((v) => {
+              const c = changesOf(v);
+              return c.add || c.remove || c.isNew;
+            }) || ops.length > 0 ? (
+              <>
+                {live.map((v) => {
+                  const c = changesOf(v);
+                  const edited = ops.some((o) => o.op !== 'create' && o.id === v.id);
+                  if (!c.add && !c.remove && !c.isNew && !edited) return null;
+                  return (
+                    <span key={v.key} className="share-vendors-sum-item">
+                      <span className="share-vchip" style={{ '--vc': v.color } as CSSProperties}>
+                        <i />
+                        {vendorCode(v)}
+                      </span>
+                      {c.add > 0 && <span className="plus">+{c.add}</span>}
+                      {c.remove > 0 && <span className="minus">−{c.remove}</span>}
+                      {c.isNew && <span className="muted">{tr('scenes.share.vendorNew')}</span>}
+                      {!c.isNew && !c.add && !c.remove && <span className="muted">{tr('scenes.share.vendorEdited')}</span>}
+                    </span>
+                  );
+                })}
+                {work
+                  .filter((v) => v.deleted && v.id)
+                  .map((v) => (
+                    <span key={v.key} className="share-vendors-sum-item">
+                      <span className="share-vchip rm" style={{ '--vc': v.color } as CSSProperties}>
+                        <i />
+                        {vendorCode(v)}
+                      </span>
+                      <span className="minus">{tr('scenes.share.vendorDeleted')}</span>
+                    </span>
+                  ))}
+                {invites > 0 && (
+                  <span className="muted share-vendors-sum-item">
+                    <MailIcon size={14} />
+                    {tr('scenes.share.invites', { count: invites })}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="muted">{tr('scenes.share.noChanges')}</span>
+            )}
+            {unnamed && <span className="warn">{tr('scenes.share.nameMissing')}</span>}
+          </span>
+          <button type="button" onClick={onClose}>
+            {tr('common.close')}
+          </button>
+          <button type="button" className="primary" disabled={!canSave} onClick={save}>
+            {busy ? tr('scenes.share.saving') : invites > 0 ? tr('scenes.share.inviteAndSave') : tr('scenes.share.save')}
+          </button>
+        </div>
       </div>
     </div>
   );
+}
+
+/** El número de una escena como se ve en la tabla. */
+function sceneRowsLabel(rows: { pageId: string; label: string }[], id: string): string {
+  return rows.find((r) => r.pageId === id)?.label ?? '';
 }

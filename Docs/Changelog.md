@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.331 :
+
+Lega pidió que un productor con permiso de comentar pueda compartir escenas con los vendors, y vendors por proyecto con
+color, varios correos y escenas asignadas antes de tener correo (D852). Ahora *Share scenes* tiene a la izquierda los
+vendors del proyecto (nombre, código, color, Ver o Comentar, correos) y arriba la ficha del elegido; la tabla de la
+v0.330 suma la columna *Vendors* (chip punteado: sin correo, solo planificación; triángulo: dos vendors se ven entre sí)
+y las vistas *No vendor* y *2+ vendors*. Un solo *Save* manda todo. Cada correo ve las escenas de su vendor; uno de
+afuera recibe una invitación de invitado que al aceptarla trae las escenas de ese momento. En *Share* del proyecto, la
+casilla *Can share scenes* deja manejar los vendors hasta el propio nivel, también a un invitado. Migración
+`20261121120000_vendors.sql` (base 31). Pruebas: `vendors_permisos.sql`, `vendors.test.ts` (con mutantes) y
+`shareScenes.test.tsx`. La auditoría encontró que una escena asignada sin correos podía dejar de ser compartible (una
+locación movida adentro) y darse igual al cargar un correo: ahora no se da y se ve bloqueada. [ v0.331: Vendors por proyecto - asignar escenas antes del correo, varios correos por vendor y la casilla Can share scenes ]
+
 v0.330 :
 
 Lega pidió rediseñar *Share scenes*. La casilla de cada fila se estiraba (el `width: 100%` de todos los `input`), el

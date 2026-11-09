@@ -15,6 +15,7 @@ import { confirmOutsideMove, noticeOutsideCreate, outsideReadersStore } from './
 import { storeProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { openShareMenu } from '../test/projectRows';
+import { ShareDialog } from './ShareDialog';
 import { ShareScenesDialog } from './ShareScenesDialog';
 import { Shell } from './Workspace';
 
@@ -130,7 +131,6 @@ const byText = (text: string, root: ParentNode | null = document.querySelector('
   [...(root ?? document).querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text);
 const sceneRow = (pageId: string) => document.querySelector<HTMLElement>(`.share-scenes-table tr[data-scene="${pageId}"]`);
 const checkbox = (pageId: string) => sceneRow(pageId)?.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? null;
-const emailInput = () => document.querySelector<HTMLInputElement>('.share-scenes input[type="email"]')!;
 const saveButton = () => document.querySelector<HTMLButtonElement>('.share-scenes .team-invite-actions .primary')!;
 const levelOf = (server: FakeServer, uid: string, pageId: string) =>
   server.grants.find((g) => g.user_id === uid && g.page_id === pageId)?.level ?? null;
@@ -138,13 +138,15 @@ const levelOf = (server: FakeServer, uid: string, pageId: string) =>
 let n = 0;
 const fakePhoto = async () => `0000${String(++n).padStart(4, '0')}-aaaa-4bbb-8ccc-dddddddddddd`;
 
-/** Un workspace con el equipo, el interruptor de lo borrado y la base 28; el proyecto sintético y Vera (invitada, el vendor). */
+/** Un workspace con el equipo, el interruptor de lo borrado y la base 31; el proyecto sintético y Vera (invitada, el vendor). */
 async function workspace(opts: { clean?: boolean; schema?: number } = {}): Promise<{ server: FakeServer; owner: Device; built: Built }> {
   const server = new FakeServer();
   server.enableTeam();
   if (opts.clean !== false) server.enableClean();
-  if ((opts.schema ?? 28) >= 28) server.enableSceneShares();
-  else server.settings = { ...server.settings!, schemaVersion: opts.schema! };
+  const schema = opts.schema ?? 31;
+  if (schema >= 31) server.enableVendors();
+  else if (schema >= 28) server.enableSceneShares();
+  else server.settings = { ...server.settings!, schemaVersion: schema };
   const owner = await makeDevice(server);
   devices.push(owner);
   const built = await buildProject(owner, fakePhoto, { days: true, indexPage: false });
@@ -514,337 +516,256 @@ describe('Share scenes: las reglas del servidor en memoria', () => {
 // 2. La ventana
 // ---------------------------------------------------------------------------------------------------------------------
 
-describe('Share scenes: la ventana', () => {
-  it('elige a una persona, marca escenas, guarda, saca, y repite las mismas para otro correo (invitación con su link)', async () => {
+describe('Share scenes: la ventana con vendors', () => {
+  const rows = () => document.querySelectorAll('.share-scenes-table tr[data-scene]').length;
+  /** Las escenas y la lista de vendors de la base (hasta entonces, *New vendor* espera). */
+  const loaded = () => rows() === 6 && document.querySelector<HTMLButtonElement>('.share-vendors-add')?.disabled === false;
+  const nameInput = () => document.querySelector<HTMLInputElement>('.share-vendor-name')!;
+  const railItem = (name: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('.share-vitem')].find((b) => b.querySelector('.nm-text')?.textContent === name);
+  const addMail = (email: string) => {
+    const input = document.querySelector<HTMLInputElement>('.share-vendor-addmail input')!;
+    type(input, email);
+    // Enter en el campo manda su formulario: la prueba lo manda directo (jsdom no lo hace solo con la tecla).
+    act(() => void input.form!.requestSubmit());
+  };
+  const status = (id: string) => sceneRow(id)?.querySelector('.c-status')?.textContent ?? '';
+  const chips = (id: string) => [...(sceneRow(id)?.querySelectorAll('.share-vchip') ?? [])].map((c) => `${c.textContent}${c.classList.contains('plan') ? '·plan' : ''}`);
+  const footer = () => document.querySelector('.share-scenes .team-invite-actions')!.textContent ?? '';
+  /** Marca las dos escenas y arma dos vendors por la base: DNEG (S027 y S029, con Vera) y FS (S027, con Nora). */
+  async function twoVendors(owner: Device, built: Built) {
+    for (const id of [built.ids.s027, built.ids.s029]) await setPageType(owner.tree, id, 'scene');
+    await owner.engine.syncNow();
+    await owner.remote.saveSceneVendors(built.projectId, [
+      { op: 'create', key: 'dn', name: 'DNEG', code: 'DN', color: '#2e5a8e', level: 'comment', add_scenes: [built.ids.s027, built.ids.s029], add_emails: ['vera@vendor.test'] },
+      { op: 'create', key: 'fs', name: 'Framestore', code: 'FS', color: '#774dcb', level: 'view', add_scenes: [built.ids.s027], add_emails: ['nora@fs.test'] },
+    ]);
+  }
+
+  it('crea un vendor, le asigna escenas sin correo (planificación), le carga a Vera y la ve', async () => {
     const { server, owner, built } = await workspace();
-    const s027 = built.ids.s027;
-    const s029 = built.ids.s029;
+    const { s027, s029, s025 } = built.ids;
     mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las seis escenas');
-    // En orden de número, con la forma de la post y lo de adentro (las fichas van con la escena).
-    const codes = [...document.querySelectorAll('.share-scenes-code')].map((x) => x.textContent);
-    expect(codes).toEqual(['4008', '4009', '5025', '5026', '5027', '5029']);
-    // La columna de las páginas de adentro.
-    expect(sceneRow(s027)!.querySelector('.c-pages')!.textContent).toBe('3');
-    // Las sugerencias: miembros e invitados del workspace (llegan de la base, después de las escenas).
-    const people = () => [...document.querySelectorAll('#share-scenes-people option')].map((o) => o.getAttribute('value'));
-    await until(() => people().includes('vera@vendor.test'), 'las sugerencias');
-    expect(people()).not.toContain(undefined);
+    await until(loaded, 'las seis escenas');
+    // En orden de número, con la forma de la post; sin vendor elegido no hay casillas.
+    expect([...document.querySelectorAll('.share-scenes-code')].map((x) => x.textContent)).toEqual(['4008', '4009', '5025', '5026', '5027', '5029']);
+    expect(checkbox(s027)).toBeNull();
+    expect(document.querySelector('.share-vendors-overview')!.textContent).toContain('No vendors yet');
     expect(saveButton().disabled).toBe(true);
 
-    type(emailInput(), 'Vera@Vendor.test');
-    await wait();
-    expect(document.querySelector('.share-scenes-person')!.textContent).toBe('In the workspace · Guest');
+    click(byText('New vendor'));
+    expect(document.activeElement).toBe(nameInput());
+    // Sin nombre no se guarda.
+    expect(footer()).toContain('Every vendor needs a name.');
+    expect(saveButton().disabled).toBe(true);
+    type(nameInput(), 'DNEG');
     click(checkbox(s027));
     click(checkbox(s029));
-    expect(sceneRow(s027)!.classList.contains('changed')).toBe(true);
-    expect(document.querySelector('.share-scenes .team-invite-actions')!.textContent).toContain('+2 −0');
+    expect(status(s027)).toBe('Assigning');
+    expect(footer()).toContain('+2');
+    expect(document.querySelector('.share-vendor-hint')!.textContent).toContain('only planning');
     await act(async () => saveButton().click());
-    await until(() => levelOf(server, 'vera', s027) === 'view' && levelOf(server, 'vera', s029) === 'view', 'los permisos de Vera');
-    await until(() => document.querySelector('.share-scenes [role="status"]'), 'el aviso de guardado');
-    expect(document.querySelector('.share-scenes [role="status"]')!.textContent).toContain('vera@vendor.test has 2 pages of this project shared');
-    // Antes de compartir, la app escribió la marca de escena (el vendor no ve la carpeta) y la subió.
+    await until(() => server.vendors.length === 1 && server.vendors[0].scenes.length === 2, 'el vendor guardado');
+    expect(server.vendors[0]).toMatchObject({ name: 'DNEG', code: '', level: 'comment', emails: [] });
+    // Planificación: nadie ve nada. La marca de escena sí se escribió (la base la pide).
+    expect(server.grants.filter((g) => g.user_id === 'vera')).toEqual([]);
     for (const id of [s027, s029]) expect((server.pages.get(id)!.settings as { entity?: { kind?: string } }).entity?.kind).toBe('scene');
-    expect(server.pages.get(built.ids.s025)!.settings?.entity).toBeUndefined();
-    // Nada más: ni Editar, ni otras páginas, ni el proyecto.
+    expect(server.pages.get(s025)!.settings?.entity).toBeUndefined();
+    await until(() => status(s027) === 'Assigned', 'asignada, sin correo');
+    expect(chips(s027)).toEqual(['DNE·plan']);
+
+    addMail('Vera@Vendor.test');
+    expect(document.querySelector('.share-vendor-mail.new')!.textContent).toContain('vera@vendor.test');
+    expect(saveButton().textContent).toBe('Invite & save');
+    await act(async () => saveButton().click());
+    await until(() => levelOf(server, 'vera', s027) === 'comment' && levelOf(server, 'vera', s029) === 'comment', 'Vera ve las dos');
     expect(server.grants.filter((g) => g.user_id === 'vera').map((g) => g.page_id).sort()).toEqual([s027, s029].sort());
-
-    // Sacar una: la ventana la muestra marcada (ya la tiene) y se desmarca.
-    await until(() => checkbox(s029)?.checked && !sceneRow(s029)!.classList.contains('changed'), 'lo que ya tiene');
-    click(checkbox(s029));
-    await act(async () => saveButton().click());
-    await until(() => levelOf(server, 'vera', s029) === null, 'S029 sacada');
-    expect(levelOf(server, 'vera', s027)).toBe('view');
-    // Y vuelve: lo último que se agregó es S029 sola.
-    await until(() => !checkbox(s029)?.checked && saveButton().disabled, 'la ventana al día');
-    click(checkbox(s029));
-    await act(async () => saveButton().click());
-    await until(() => levelOf(server, 'vera', s029) === 'view', 'S029 otra vez');
-
-    // Las mismas escenas para otro correo: lo agregado en el último guardado (S029, no S027, que Vera ya tenía) y se pide
-    // el correo; alguien nuevo se invita con su link.
-    await until(() => byText('Same scenes for another email…'), 'el botón');
-    click(byText('Same scenes for another email…'));
-    expect(emailInput().value).toBe('');
-    expect(checkbox(s029)!.checked).toBe(true);
-    expect(checkbox(s027)!.checked).toBe(false);
-    type(emailInput(), 'nuevo@vendor.test');
-    await wait();
-    expect(document.querySelector('.share-scenes-person')!.textContent).toContain('New to the workspace');
-    // Vera ya ve S027 y S029 de afuera: la ventana lo avisa una vez, arriba de la tabla, y cada fila lo marca con quién.
-    expect(document.querySelector('.share-scenes-outside')!.textContent).toContain('2 scenes are already seen from outside the team by vera@vendor.test');
-    for (const id of [s027, s029]) {
-      expect(sceneRow(id)!.querySelector('.share-scenes-out')!.getAttribute('data-tip')).toBe('Also seen from outside the team by vera@vendor.test');
-    }
-    expect(sceneRow(built.ids.s025)!.querySelector('.share-scenes-out')).toBeNull();
-    // La vista *Seen from outside* deja solo esas dos.
-    click(byText('Seen from outside2'));
-    expect(document.querySelectorAll('.share-scenes-table tr[data-scene]').length).toBe(2);
-    click(byText('All6'));
-    expect(saveButton().textContent).toBe('Invite and copy link');
-    await act(async () => saveButton().click());
-    await until(() => server.invitations.some((i) => i.email === 'nuevo@vendor.test'), 'la invitación');
-    const inv = server.invitations.find((i) => i.email === 'nuevo@vendor.test')!;
-    expect(inv.role).toBe('guest');
-    expect(inv.grants).toEqual([{ page_id: s029, level: 'view' }]);
     await until(() => clip.length === 1, 'el link copiado');
-    expect(clip[0]).toContain('#');
-    await until(() => document.querySelector('.share-scenes [role="status"]')?.textContent?.includes('Invited nuevo@vendor.test with 1 page'), 'el aviso de la invitación');
+    await until(() => status(s027) === 'Seen', 'la ven');
+    expect(chips(s027)).toEqual(['DNE']);
+    expect(document.querySelector('.share-vendor-mail.joined')!.textContent).toContain('in');
+    // Se vuelve a *All vendors*: el reparto, sin casillas ni estado.
+    click(railItem('All vendors'));
+    expect(checkbox(s027)).toBeNull();
+    expect(document.querySelector('.share-scenes-table th.c-status')).toBeNull();
   });
 
-  it('a una invitación pendiente solo se le suman escenas; un Editar no se toca; avisa del proyecto entero; no deja compartir una escena con otra entidad adentro', async () => {
+  it('dos vendors en una escena se avisan; un correo va en un solo vendor; uno nuevo queda invitado; Shift+clic y las vistas', async () => {
     const { server, owner, built } = await workspace();
-    const s027 = built.ids.s027;
-    await owner.remote.setPageShares(built.projectId, 'pend@vendor.test', [], [], 'view').catch(() => undefined);
-    // Una invitación propia (pendiente) con S027, Mario con Editar sobre S027 y Pablo con Ver sobre todo el proyecto.
-    await setPageType(owner.tree, s027, 'scene');
-    await owner.engine.syncNow();
-    await owner.remote.setPageShares(built.projectId, 'pend@vendor.test', [s027], [], 'view');
-    server.addMember('mario', 'member', 'mario@test');
-    server.grant('mario', { pageId: s027 }, 'edit');
-    server.addMember('pablo', 'member', 'pablo@test');
-    server.grant('pablo', { projectId: built.projectId }, 'view');
-    // Una locación guardada adentro de S029, y una página con nombre de escena adentro de la ficha de S025 (como un
-    // episodio que el registro tomó por escena): no se pueden compartir, sin opción para seguir.
-    const inside = await owner.tree.create(built.ids.s029, 'Galpón', built.projectId);
-    await owner.tree.setPatch(inside, { settings: { entity: { kind: 'location' } } as unknown as PageSettings });
-    await owner.tree.create(built.ids.s025_010, '031 | Otra escena', built.projectId);
-    await owner.engine.syncNow();
-
+    const { s027, s029 } = built.ids;
+    await twoVendors(owner, built);
     mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las escenas');
-    for (const id of [built.ids.s029, built.ids.s025]) {
-      expect(sceneRow(id)!.textContent).toContain("Can't be shared: it has another scene, a location, a day or a set inside");
-    }
-    expect(sceneRow(built.ids.s026)!.textContent).not.toContain("Can't be shared");
-    type(emailInput(), 'vera@vendor.test');
-    await wait();
-    for (const id of [built.ids.s029, built.ids.s025]) expect(checkbox(id)!.disabled).toBe(true);
-    // *Select shown* tampoco las marca; la vista *Can't be shared* muestra solo esas dos.
-    click(byText('Select shown'));
-    expect(checkbox(built.ids.s029)!.checked).toBe(false);
-    expect(document.querySelector('.share-scenes .team-invite-actions')!.textContent).toContain('+4 −0');
-    click(byText('Clear shown'));
-    click(byText("Can't be shared2"));
-    expect([...document.querySelectorAll<HTMLElement>('.share-scenes-table tr[data-scene]')].map((r) => r.dataset.scene).sort()).toEqual(
-      [built.ids.s025, built.ids.s029].sort(),
-    );
+    await until(() => rows() === 6 && railItem('DNEG'), 'las escenas y los vendors');
+    expect(chips(s027)).toEqual(['DN', 'FS']);
+    expect(sceneRow(s027)!.querySelector('.share-vboth')!.getAttribute('data-tip')).toBe('DNEG, Framestore see it: they see each other\'s comments and emails');
+    expect(sceneRow(s029)!.querySelector('.share-vboth')).toBeNull();
+    click(byText('2+ vendors1'));
+    expect(rows()).toBe(1);
+    click(byText('No vendor4'));
+    expect(rows()).toBe(4);
     click(byText('All6'));
 
-    type(emailInput(), 'pend@vendor.test');
-    await until(() => checkbox(s027)?.checked, 'lo de la invitación');
-    expect(document.querySelector('.share-scenes-person')!.textContent).toContain('Has a pending invitation');
-    expect(checkbox(s027)!.disabled).toBe(true);
+    click(railItem('DNEG'));
+    expect(document.querySelector('.share-vendor-cross')!.textContent).toContain('1 scene of DNEG is also seen by Framestore');
+    addMail('nora@fs.test');
+    expect(document.querySelector('.share-vendor-hint.err')!.textContent).toContain('already in Framestore');
+    expect(document.querySelectorAll('.share-vendor-mail').length).toBe(1);
 
-    type(emailInput(), 'mario@test');
-    await until(() => checkbox(s027)?.checked, 'el Editar de Mario');
-    expect(checkbox(s027)!.disabled).toBe(true);
-    expect(sceneRow(s027)!.textContent).toContain('Edit: change it in Share');
-
-    type(emailInput(), 'pablo@test');
-    await until(() => document.body.textContent?.includes('Already sees the whole project (View)'), 'el aviso del proyecto');
-  });
-
-  it('los errores de la base se dicen en palabras, y no se escribe nada', async () => {
-    const { server, owner, built } = await workspace();
-    server.addMember('ada', 'admin', 'ada@test');
-    server.invitations.push({ id: 'inv-ada', email: 'otro@vendor.test', role: 'guest', grants: [], used_at: null, invited_by: 'ada' });
-    server.invitations.push({ id: 'inv-rol', email: 'rol@vendor.test', role: 'member', grants: [], used_at: null, invited_by: server.ownerId });
-    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las escenas');
-    for (const [email, text] of [
-      ['otro@vendor.test', 'Someone else already invited this email'],
-      ['rol@vendor.test', 'pending invitation with another role'],
-    ] as const) {
-      type(emailInput(), email);
-      await wait();
-      if (!checkbox(built.ids.s008)!.checked) click(checkbox(built.ids.s008));
-      await act(async () => saveButton().click());
-      await until(() => document.querySelector('.share-scenes .error')?.textContent?.includes(text), text);
-    }
-    expect(server.invitations.find((i) => i.id === 'inv-ada')!.grants).toEqual([]);
-    expect(server.invitations.find((i) => i.id === 'inv-rol')!.grants).toEqual([]);
-    // Una escena que pasó a la papelera en otro dispositivo mientras la ventana estaba abierta: la base la rechaza entera.
-    server.pages.get(built.ids.s009)!.deleted_at = new Date().toISOString();
-    type(emailInput(), 'vera@vendor.test');
-    await wait();
-    click(checkbox(built.ids.s009));
-    await act(async () => saveButton().click());
-    await until(() => document.querySelector('.share-scenes .error')?.textContent?.includes("can't be shared anymore"), 'la escena en la papelera');
-    expect(server.grants.filter((g) => g.user_id === 'vera')).toEqual([]);
-  });
-
-  it('con el interruptor de lo borrado apagado, lo dice y no deja guardar', async () => {
-    const { server, owner, built } = await workspace({ clean: false });
-    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las escenas');
-    expect(document.querySelector('.share-scenes [role="alert"]')!.textContent).toContain('needs the workspace setting that keeps deleted text out');
-    type(emailInput(), 'vera@vendor.test');
-    await wait();
-    click(checkbox(built.ids.s027));
-    expect(saveButton().disabled).toBe(true);
-    await act(async () => (document.querySelector('.share-scenes form') as HTMLFormElement).requestSubmit());
-    await wait();
-    expect(server.grants.filter((g) => g.user_id === 'vera')).toEqual([]);
-    // Ni siquiera escribió la marca.
-    expect(server.pages.get(built.ids.s027)!.settings?.entity).toBeUndefined();
-  });
-
-  it('Retry manda el formulario de ese momento, y cambiar el correo, las escenas o el nivel borra el aviso', async () => {
-    const { server, owner, built } = await workspace();
-    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las escenas');
-    const upload = vi.spyOn(owner.engine, 'uploadPagesFirst').mockResolvedValue(false);
-    const notice = () => document.querySelector('.share-scenes [role="alert"]')?.textContent ?? '';
-    // Vera con S029: queda el aviso; se cambia el correo (y después las escenas y el nivel): el aviso se va.
-    type(emailInput(), 'vera@vendor.test');
-    await wait();
-    click(checkbox(built.ids.s029));
-    await act(async () => saveButton().click());
-    await until(() => notice().includes('Retry'), 'el aviso');
-    type(emailInput(), 'otro@vendor.test');
-    await wait();
-    expect(notice()).not.toContain('Retry');
-    await act(async () => saveButton().click());
-    await until(() => notice().includes('Retry'), 'el aviso, otra vez');
-    click(checkbox(built.ids.s027));
-    await wait();
-    expect(notice()).not.toContain('Retry');
-    await act(async () => saveButton().click());
-    await until(() => notice().includes('Retry'), 'el aviso, una vez más');
-    click(byText('Comment'));
-    await wait();
-    expect(notice()).not.toContain('Retry');
-    // Con el aviso a la vista y sin cambiar nada, *Retry* manda lo que muestra la ventana: otro@, S027 y S029, Comentar.
-    await act(async () => saveButton().click());
-    await until(() => notice().includes('Retry'), 'el último aviso');
-    upload.mockResolvedValue(true);
-    await act(async () => byText('Retry')!.click());
-    await until(() => server.invitations.some((i) => i.email === 'otro@vendor.test'), 'la invitación de otro');
-    expect(server.invitations.find((i) => i.email === 'otro@vendor.test')!.grants.map((g) => ('page_id' in g ? `${g.page_id}:${g.level}` : '')).sort()).toEqual(
-      [`${built.ids.s027}:comment`, `${built.ids.s029}:comment`].sort(),
-    );
-    // A Vera, nada.
-    expect(server.grants.filter((g) => g.user_id === 'vera')).toEqual([]);
-    expect(server.invitations.some((i) => i.email === 'vera@vendor.test')).toBe(false);
-  });
-
-  it('lo que la persona tiene en la papelera se muestra aparte y se puede sacar', async () => {
-    const { server, owner, built } = await workspace();
-    await shareTwo(server, owner, built);
-    await owner.tree.trash(built.ids.s029);
-    await owner.engine.syncNow();
-    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 5, 'las escenas vivas');
-    type(emailInput(), 'vera@vendor.test');
-    const trashRow = () => document.querySelector<HTMLElement>(`.share-scenes-trash li[data-scene="${built.ids.s029}"]`);
-    await until(() => trashRow(), 'la fila de la papelera');
-    expect(trashRow()!.textContent).toContain('In trash · View');
-    expect(checkbox(built.ids.s027)!.checked).toBe(true);
-    click(trashRow()!.querySelector('input'));
-    expect(document.querySelector('.share-scenes .team-invite-actions')!.textContent).toContain('+0 −1');
-    await act(async () => saveButton().click());
-    await until(() => levelOf(server, 'vera', built.ids.s029) === null, 'S029 sacada de la papelera');
-    expect(server.revokedGrants.some((g) => g.user_id === 'vera' && g.page_id === built.ids.s029)).toBe(true);
-    expect(levelOf(server, 'vera', built.ids.s027)).toBe('view');
-  });
-
-  it('si no sube lo pendiente de las escenas, avisa con Retry y sin Share anyway, y no comparte', async () => {
-    const { server, owner, built } = await workspace();
-    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las escenas');
-    type(emailInput(), 'vera@vendor.test');
-    await wait();
-    click(checkbox(built.ids.s027));
-    const upload = vi.spyOn(owner.engine, 'uploadPagesFirst').mockResolvedValue(false);
-    await act(async () => saveButton().click());
-    await until(() => document.querySelector('.share-scenes [role="alert"]')?.textContent?.includes('Retry'), 'el aviso de lo pendiente');
-    expect(document.querySelector('.share-scenes [role="alert"]')!.textContent).not.toContain('Share anyway');
-    expect(byText('Share anyway')).toBeUndefined();
-    // Subió la escena y su rama (las fichas de adentro).
-    expect([...(upload.mock.calls[0][0] as string[])].sort()).toEqual([...owner.engine.branchOf(built.ids.s027)].sort());
-    expect(server.grants.filter((g) => g.user_id === 'vera')).toEqual([]);
-    expect(document.querySelector('.share-scenes .error')).toBeNull();
-  });
-
-  it('una escena que la persona ya tiene y después quedó bloqueada se puede sacar, y la fila dice que se saca', async () => {
-    const { server, owner, built } = await workspace();
-    const s029 = built.ids.s029;
-    server.grant('vera', { pageId: s029 }, 'view');
-    const inside = await owner.tree.create(s029, 'Galpón', built.projectId);
-    await owner.tree.setPatch(inside, { settings: { entity: { kind: 'location' } } as unknown as PageSettings });
-    await owner.engine.syncNow();
-    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las escenas');
-    type(emailInput(), 'vera@vendor.test');
-    await until(() => checkbox(s029)?.checked, 'lo que ya tiene');
-    expect(checkbox(s029)!.disabled).toBe(false);
-    expect(sceneRow(s029)!.querySelector('.c-status')!.textContent).toBe('Shared · View');
-    expect(sceneRow(s029)!.textContent).toContain("Can't be shared: it has another scene, a location, a day or a set inside");
-    click(checkbox(s029));
-    expect(sceneRow(s029)!.classList.contains('removing')).toBe(true);
-    expect(sceneRow(s029)!.querySelector('.c-status')!.textContent).toBe('Removing');
-    expect(document.querySelector('.share-scenes .team-invite-actions')!.textContent).toContain('+0 −1');
-    // Volver a marcarla no la comparte de nuevo: es lo que ya tenía.
-    click(checkbox(s029));
-    expect(sceneRow(s029)!.classList.contains('changed')).toBe(false);
-  });
-
-  it('la tabla se ordena con un clic en cada título, se busca, y Shift+clic marca un rango en el orden que se ve', async () => {
-    const { owner, built } = await workspace();
-    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las escenas');
-    const order = () => [...document.querySelectorAll('.share-scenes-table .share-scenes-code')].map((x) => x.textContent);
-    const header = (label: string) => [...document.querySelectorAll<HTMLElement>('.share-scenes-table th')].find((th) => th.textContent === label)!;
-    expect(order()).toEqual(['4008', '4009', '5025', '5026', '5027', '5029']);
-    expect(header('No.').getAttribute('aria-sort')).toBe('ascending');
-    // Otro clic en el mismo título invierte el orden.
-    click(header('No.').querySelector('button'));
-    expect(order()).toEqual(['5029', '5027', '5026', '5025', '4009', '4008']);
-    expect(header('No.').getAttribute('aria-sort')).toBe('descending');
-    // Por las páginas de adentro: de menos a más (los empates, por número).
-    click(header('Pages').querySelector('button'));
-    expect(header('No.').getAttribute('aria-sort')).toBeNull();
-    const pages = [...document.querySelectorAll('.share-scenes-table td.c-pages')].map((x) => Number(x.textContent || 0));
-    expect(pages).toEqual([...pages].sort((a, b) => a - b));
-    // Sin el índice de relaciones del proyecto no hay columnas de locación ni decorado.
-    expect(header('Location')).toBeUndefined();
-    // El nombre va sin el número de adelante.
-    expect(sceneRow(built.ids.s027)!.querySelector('.share-scenes-title')!.textContent).not.toMatch(/^\s*0?27\s*\|/);
-
-    // Shift+clic: de la primera a la tercera que se ven (en el orden de número), las tres marcadas.
-    click(header('No.').querySelector('button'));
-    type(emailInput(), 'vera@vendor.test');
-    await wait();
+    // Shift+clic: de la primera a la tercera que se ven, las tres asignadas.
     const ids = [...document.querySelectorAll<HTMLElement>('.share-scenes-table tr[data-scene]')].map((r) => r.dataset.scene!);
     click(checkbox(ids[0]));
     act(() => void checkbox(ids[2])!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true })));
-    // Con la casilla y en la fila: el estado de la pantalla es el de React (frenar el clic los desfasaba).
-    expect(sceneRow(ids[2])!.classList.contains('checked')).toBe(true);
-    expect(ids.map((id) => checkbox(id)!.checked)).toEqual([true, true, true, false, false, false]);
-    expect(document.querySelector('.share-scenes .team-invite-actions')!.textContent).toContain('+3 −0');
-    // Un clic en la fila (no en la casilla) también la marca.
-    click(sceneRow(ids[5])!.querySelector('.c-name'));
-    expect(checkbox(ids[5])!.checked).toBe(true);
-    // El buscador, por número; *Select shown* marca solo lo que se ve.
-    type(document.querySelector<HTMLInputElement>('.share-scenes input[type="search"]')!, '5026');
-    expect(document.querySelectorAll('.share-scenes-table tr[data-scene]').length).toBe(1);
-    click(byText('Select shown'));
-    expect(document.querySelector('.share-scenes .team-invite-actions')!.textContent).toContain('+5 −0');
+    expect(ids.map((id) => checkbox(id)!.checked)).toEqual([true, true, true, false, true, true]);
+    expect(footer()).toContain('+3');
+    // Un correo nuevo: invitación de invitado del vendor, sin páginas; el link se copia.
+    addMail('nuevo@dneg.test');
+    await act(async () => saveButton().click());
+    await until(() => server.invitations.some((i) => i.email === 'nuevo@dneg.test'), 'la invitación');
+    const inv = server.invitations.find((i) => i.email === 'nuevo@dneg.test')!;
+    expect(inv).toMatchObject({ role: 'guest', grants: [], vendor_id: server.vendors.find((v) => v.name === 'DNEG')!.id });
+    await until(() => document.querySelector('.share-scenes [role="status"]')?.textContent?.includes('1 email has to join'), 'el aviso');
+    expect(clip.length).toBe(1);
+    // Vera ve las cinco de DNEG.
+    expect(server.grants.filter((g) => g.user_id === 'vera').length).toBe(5);
   });
 
-  it('sin poder subir la marca de escena (sin red), no comparte nada', async () => {
+  it('borrar un vendor y sacar un correo revocan al guardar; cambiar el nivel y el color', async () => {
+    const { server, owner, built } = await workspace();
+    await twoVendors(owner, built);
+    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => rows() === 6 && railItem('DNEG'), 'los vendors');
+    click(railItem('DNEG'));
+    click(byText('View'));
+    await act(async () => saveButton().click());
+    await until(() => levelOf(server, 'vera', built.ids.s027) === 'view', 'Vera con Ver');
+    await until(() => railItem('DNEG') && !saveButton().disabled === false, 'al día');
+    click(railItem('DNEG'));
+    click(document.querySelector('.share-vendor-mail button[aria-label="Remove vera@vendor.test"]'));
+    expect(document.querySelector('.share-vendor-mail.removed')).toBeTruthy();
+    await act(async () => saveButton().click());
+    await until(() => levelOf(server, 'vera', built.ids.s027) === null, 'Vera afuera');
+    await until(() => railItem('Framestore'), 'la lista');
+    click(railItem('Framestore'));
+    click(document.querySelector('.share-vendor-row button[aria-label="Delete vendor"]'));
+    click([...document.querySelectorAll<HTMLButtonElement>('.share-vendor-confirm button')].find((b) => b.textContent === 'Delete vendor'));
+    expect(footer()).toContain('deleted');
+    await act(async () => saveButton().click());
+    await until(() => server.vendors.find((v) => v.name === 'Framestore')!.deleted_at, 'Framestore borrado');
+    expect(server.invitations.filter((i) => i.email === 'nora@fs.test' && !i.revoked_at)).toEqual([]);
+  });
+
+  it('con el interruptor de lo borrado apagado, lo dice y no deja guardar', async () => {
+    const { owner, built } = await workspace({ clean: false });
+    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(loaded, 'las escenas');
+    expect(document.querySelector('.share-scenes [role="alert"]')!.textContent).toContain('needs the workspace setting that keeps deleted text out');
+  });
+
+  it('los errores de la base se dicen en palabras, y no se guarda nada', async () => {
+    const { server, owner, built } = await workspace();
+    await twoVendors(owner, built);
+    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => rows() === 6 && railItem('DNEG'), 'los vendors');
+    click(railItem('DNEG'));
+    // Una escena que pasó a la papelera en otro dispositivo mientras la ventana estaba abierta: la base rechaza todo.
+    await setPageType(owner.tree, built.ids.s025, 'scene');
+    await owner.engine.syncNow();
+    server.pages.get(built.ids.s025)!.deleted_at = new Date().toISOString();
+    click(checkbox(built.ids.s025));
+    type(nameInput(), 'DNEG Ltd');
+    await act(async () => saveButton().click());
+    await until(() => document.querySelector('.share-scenes .error')?.textContent?.includes("can't be shared anymore"), 'el error');
+    expect(server.vendors.find((v) => v.id === server.vendors[0].id)!.name).toBe('DNEG');
+    expect(server.vendors[0].scenes).not.toContain(built.ids.s025);
+  });
+
+  it('si no sube lo pendiente de lo que empieza a verse, avisa con Retry y sin Share anyway, y no guarda', async () => {
+    const { server, owner, built } = await workspace();
+    await twoVendors(owner, built);
+    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => rows() === 6 && railItem('DNEG'), 'los vendors');
+    click(railItem('DNEG'));
+    click(checkbox(built.ids.s026));
+    const upload = vi.spyOn(owner.engine, 'uploadPagesFirst').mockResolvedValue(false);
+    await act(async () => saveButton().click());
+    await until(() => document.querySelector('.share-scenes [role="alert"]')?.textContent?.includes('Retry'), 'el aviso de lo pendiente');
+    expect(byText('Share anyway')).toBeUndefined();
+    expect([...(upload.mock.calls[0][0] as string[])].sort()).toEqual([...owner.engine.branchOf(built.ids.s026)].sort());
+    expect(levelOf(server, 'vera', built.ids.s026)).toBeNull();
+    upload.mockResolvedValue(true);
+    await act(async () => byText('Retry')!.click());
+    await until(() => levelOf(server, 'vera', built.ids.s026) === 'comment', 'compartida al reintentar');
+  });
+
+  it('sin poder subir la marca de escena (sin red), no guarda nada', async () => {
     const { server, owner, built } = await workspace();
     mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
-    await until(() => document.querySelectorAll('.share-scenes-table tr[data-scene]').length === 6, 'las escenas');
-    type(emailInput(), 'vera@vendor.test');
-    await wait();
+    await until(loaded, 'las escenas');
+    click(byText('New vendor'));
+    type(nameInput(), 'DNEG');
     click(checkbox(built.ids.s027));
     server.online = false;
     await act(async () => saveButton().click());
     await until(() => document.querySelector('.share-scenes .error')?.textContent?.includes("scene marks couldn't be uploaded"), 'el error de la marca');
     server.online = true;
-    expect(server.grants.filter((g) => g.user_id === 'vera')).toEqual([]);
+    expect(server.vendors).toEqual([]);
+  });
+
+  it('la tabla se ordena con un clic en cada título y se busca por vendor', async () => {
+    const { owner, built } = await workspace();
+    await twoVendors(owner, built);
+    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => rows() === 6 && railItem('DNEG'), 'los vendors');
+    const order = () => [...document.querySelectorAll('.share-scenes-table .share-scenes-code')].map((x) => x.textContent);
+    const header = (label: string) => [...document.querySelectorAll<HTMLElement>('.share-scenes-table th')].find((th) => th.textContent === label)!;
+    expect(header('No.').getAttribute('aria-sort')).toBe('ascending');
+    click(header('No.').querySelector('button'));
+    expect(order()).toEqual(['5029', '5027', '5026', '5025', '4009', '4008']);
+    click(header('Vendors').querySelector('button'));
+    expect(order().slice(0, 2)).toEqual(['5029', '5027']);
+    expect(sceneRow(built.ids.s027)!.querySelector('.share-scenes-title')!.textContent).not.toMatch(/^\s*0?27\s*\|/);
+    type(document.querySelector<HTMLInputElement>('.share-scenes input[type="search"]')!, 'fs');
+    expect(rows()).toBe(1);
+  });
+
+  it('con *Can share scenes* y Ver sobre el proyecto: maneja vendors solo con Ver', async () => {
+    const { server, built } = await workspace();
+    server.addMember('quinn', 'member', 'quinn@test');
+    server.grant('quinn', { projectId: built.projectId }, 'view');
+    server.grants.find((g) => g.user_id === 'quinn' && g.project_id === built.projectId)!.share_scenes = true;
+    const quinn = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'quinn', email: 'quinn@test' });
+    devices.push(quinn);
+    await quinn.engine.syncNow();
+    await quinn.engine.syncNow();
+    mount(quinn, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(loaded, 'las escenas');
+    click(byText('New vendor'));
+    expect(byText('View')!.getAttribute('aria-pressed')).toBe('true');
+    expect(byText('Comment')!.disabled).toBe(true);
+    // Sin la marca de escena (y sin poder editar), una escena no se asigna.
+    expect(checkbox(built.ids.s027)!.disabled).toBe(true);
+    expect(sceneRow(built.ids.s027)!.textContent).toContain('Not marked as a scene yet');
+  });
+
+  it('con tope Ver, a un vendor con Comentar no le suma correos (lo dice antes de guardar)', async () => {
+    const { server, built } = await workspace();
+    server.addMember('quinn', 'member', 'quinn@test');
+    server.grant('quinn', { projectId: built.projectId }, 'view');
+    server.grants.find((g) => g.user_id === 'quinn' && g.project_id === built.projectId)!.share_scenes = true;
+    server.vendors.push({
+      id: crypto.randomUUID(), project_id: built.projectId, name: 'DNEG', code: 'DN', color: '#2e5a8e', level: 'comment',
+      created_at: new Date().toISOString(), deleted_at: null, emails: [], scenes: [],
+    });
+    const quinn = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'quinn', email: 'quinn@test' });
+    devices.push(quinn);
+    await quinn.engine.syncNow();
+    await quinn.engine.syncNow();
+    mount(quinn, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => !!railItem('DNEG'), 'el vendor');
+    click(railItem('DNEG')!);
+    addMail('nora@dneg.test');
+    expect(document.querySelector('.share-vendor-hint.err')?.textContent).toContain('up to your own access');
+    expect(document.querySelector('.share-vendor-mails')!.textContent).not.toContain('nora@dneg.test');
   });
 });
 
@@ -859,7 +780,7 @@ describe('Share scenes: las entradas', () => {
     await wait();
   };
 
-  it('en el selector de proyectos, para la dueña con la base 28; abre la ventana', async () => {
+  it('en el selector de proyectos, para la dueña con la base 31; abre la ventana', async () => {
     const { owner, built } = await workspace();
     storeProject(services(owner).workspace.config.storage, owner.remote.userId, built.projectId);
     mount(owner, <ProjectSwitcher />);
@@ -871,8 +792,8 @@ describe('Share scenes: las entradas', () => {
     expect(document.querySelector('.share-scenes h2')!.textContent).toBe('Share scenes of “Serie de prueba”');
   });
 
-  it('no está con una base anterior a la 28, ni para un miembro que no es dueño ni admin', async () => {
-    const old = await workspace({ schema: 27 });
+  it('no está con una base anterior a la 31, ni para un miembro sin *Can share scenes*; con la casilla, solo eso', async () => {
+    const old = await workspace({ schema: 30 });
     storeProject(services(old.owner).workspace.config.storage, old.owner.remote.userId, old.built.projectId);
     mount(old.owner, <ProjectSwitcher />);
     await openSwitcher();
@@ -891,7 +812,42 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(beto).workspace.config.storage, 'beto', built.projectId);
     mount(beto, <ProjectSwitcher />);
     await openSwitcher();
+    act(() => void openShareMenu());
     expect(byText('Share scenes of “Serie de prueba”')).toBeUndefined();
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    document.body.innerHTML = '';
+
+    // Gina, invitada con Comentar y *Can share scenes*: el menú *Share* trae solo compartir escenas.
+    server.addMember('gina', 'guest', 'gina@prod.test');
+    server.grant('gina', { projectId: built.projectId }, 'comment');
+    server.grants.find((g) => g.user_id === 'gina' && g.project_id === built.projectId)!.share_scenes = true;
+    const gina = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'gina', email: 'gina@prod.test' });
+    devices.push(gina);
+    await gina.engine.syncNow();
+    await gina.engine.syncNow();
+    storeProject(services(gina).workspace.config.storage, 'gina', built.projectId);
+    mount(gina, <ProjectSwitcher />);
+    await openSwitcher();
+    act(() => void openShareMenu());
+    expect(byText('Share “Serie de prueba”', document)).toBeUndefined();
+    click(byText('Share scenes of “Serie de prueba”', document));
+    await until(() => document.querySelector('.share-scenes'), 'la ventana');
+  });
+
+  it('*Can share scenes* en la ventana Share del proyecto: la dueña la pone y la saca', async () => {
+    const { server, owner, built } = await workspace();
+    server.addMember('pablo', 'member', 'pablo@test');
+    server.grant('pablo', { projectId: built.projectId }, 'comment');
+    mount(owner, <ShareDialog target={{ projectId: built.projectId }} onClose={() => undefined} />);
+    const flag = () => document.querySelector<HTMLInputElement>('.team-share-scenes input');
+    await until(() => flag(), 'la casilla');
+    expect(document.querySelector('.team-share-scenes')!.textContent).toBe('Can share scenes');
+    const grant = () => server.grants.find((g) => g.user_id === 'pablo' && g.project_id === built.projectId)!;
+    await act(async () => flag()!.click());
+    await until(() => grant().share_scenes === true, 'la casilla puesta');
+    await until(() => flag()!.checked, 'la casilla marcada');
+    await act(async () => flag()!.click());
+    await until(() => grant().share_scenes === false, 'la casilla sacada');
   });
 
   it('en el Panorama, en la lista de escenas', async () => {

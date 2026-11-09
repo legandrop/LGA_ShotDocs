@@ -2919,3 +2919,20 @@ palabra repetida (correo, buscar, ojo y globo de Ver y Comentar, personas de afu
 en columnas, vistas y acciones. Color por estado, siempre con su palabra (se suma, se saca, compartida, no se puede).
 Detalle: `Doc_Compartir_Escenas.md`, sección 2.
 
+### D852 · Vendors por proyecto y *Can share scenes* (2026-11-09)
+**Pedido de Lega:** que un productor o coordinador de post, con permiso de comentar, pueda compartir escenas con los
+vendors; y vendors por proyecto, creados desde la misma ventana, con color, más de un correo y escenas asignadas antes
+de tener correo. **Decidido con Lega:** (1) el permiso es una casilla al lado del nivel, **Can share scenes**, no un nivel
+nuevo; (2) quien la tiene maneja **todos** los vendors del proyecto, también los que armó otro; (3) sacarle la casilla o
+el acceso no toca lo que ya compartió; (4) también la puede tener alguien de afuera (un invitado). (5) Vendors: nombre,
+código corto opcional (hasta 4), color de la paleta de los proyectos, Ver o Comentar por vendor, cero o más correos;
+escenas (no planos), una escena en más de un vendor; sin correos es solo planificación; un correo, un solo vendor por
+proyecto; todo lo que sale hacia afuera pasa por un vendor (lo compartido antes persona por persona pasa a un vendor por
+persona); los vendors nunca ven la lista de vendors; dos vendors en la misma escena se ven entre sí y la ventana lo
+avisa. Lega aprobó la maqueta y dijo «va así, implementá». **Decidido en la implementación:** quien tiene la casilla da
+hasta su propio nivel (con Ver, solo Ver) y solo escenas que ve; una escena sin la marca la escribe al guardar solo quien
+edita (si no, la fila queda apagada); la invitación de un correo de afuera es de invitado y no copia las escenas: al
+aceptarla se dan las que el vendor tiene en ese momento; la casilla se apaga si el permiso se revoca y no vuelve sola;
+una escena asignada que deja de poder compartirse no se le da a nadie y se ve bloqueada; el vendor no se toma un permiso
+propio de la persona; con la casilla, uno no se carga a sí mismo en un vendor. Detalle: `Doc_Compartir_Escenas.md`,
+sección 11.

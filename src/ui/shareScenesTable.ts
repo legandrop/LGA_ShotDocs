@@ -9,6 +9,8 @@ import { sceneTitleName } from './sceneTitle';
 // INT/EXT salen del índice de relaciones del proyecto abierto (`sceneLive`, lo mismo que el índice de una carpeta de
 // escenas): con otro proyecto, o antes de que el índice termine su primera pasada, no hay y las columnas no se muestran.
 // Esto solo arma lo que se ve: qué se comparte lo decide la ventana y lo vuelve a controlar la base.
+// Desde la v0.331 (vendors, D852) el estado es el del vendor elegido, la columna *Vendors* muestra los chips de cada
+// escena y las vistas son: todas, las del vendor, sin vendor, con dos o más vendors con correo, y las bloqueadas.
 
 export interface SceneRow extends SceneItem {
   /** El número como se muestra (la forma de la post: `1013`). */
@@ -43,21 +45,28 @@ export function sceneRows(items: SceneItem[], src: LiveSource | null): SceneRow[
   });
 }
 
-export type SortKey = 'code' | 'name' | 'location' | 'set' | 'intExt' | 'pages' | 'outside' | 'status';
+export type SortKey = 'code' | 'name' | 'location' | 'set' | 'intExt' | 'vendors' | 'status';
 export interface Sort {
   key: SortKey;
   /** 1 de menor a mayor, -1 al revés. */
   dir: 1 | -1;
 }
 
-/** El estado de una fila para la persona elegida (también es el orden de la columna *Status*). */
-export type RowStatus = 'adding' | 'removing' | 'shared' | 'higher' | 'none' | 'blocked';
-const STATUS_ORDER: RowStatus[] = ['adding', 'removing', 'shared', 'higher', 'none', 'blocked'];
+/**
+ * El estado de una fila para el vendor elegido (también es el orden de la columna *Status*): se le asigna, se le saca, la
+ * ven (el vendor tiene correos), asignada sin correos (solo planificación), nada, o bloqueada.
+ */
+export type RowStatus = 'adding' | 'removing' | 'shared' | 'planned' | 'none' | 'blocked';
+const STATUS_ORDER: RowStatus[] = ['adding', 'removing', 'shared', 'planned', 'none', 'blocked'];
 
 export interface RowFacts {
   status(id: string): RowStatus;
-  /** Cuántas personas de afuera ya la ven. */
-  outside(id: string): number;
+  /** Los códigos de los vendors que la tienen asignada, en orden (vacío: ninguno). */
+  vendors(id: string): string;
+  /** Cuántos vendors con correo la ven (dos o más: se ven entre sí). */
+  seenBy(id: string): number;
+  /** Si el vendor elegido la tiene asignada (la vista *De <vendor>*). */
+  mine(id: string): boolean;
 }
 
 const byCode = (a: SceneRow, b: SceneRow) => a.code.localeCompare(b.code, 'en', { numeric: true });
@@ -77,10 +86,8 @@ function value(row: SceneRow, column: SortKey, facts: RowFacts): string | number
       return text(row.sets) || null;
     case 'intExt':
       return text(row.intExt) || null;
-    case 'pages':
-      return row.inside;
-    case 'outside':
-      return facts.outside(row.pageId);
+    case 'vendors':
+      return facts.vendors(row.pageId) || null;
     case 'status':
       return STATUS_ORDER.indexOf(facts.status(row.pageId));
   }
@@ -98,7 +105,7 @@ export function sortRows(rows: SceneRow[], sort: Sort, facts: RowFacts): SceneRo
   });
 }
 
-export type View = 'all' | 'selected' | 'unselected' | 'outside' | 'blocked';
+export type View = 'all' | 'mine' | 'none' | 'multi' | 'blocked';
 
 export interface Filter {
   text: string;
@@ -108,18 +115,18 @@ export interface Filter {
   set: string;
 }
 
-/** Las filas que pasan el buscador (número, nombre, locación, decorado), la vista y la locación y el decorado elegidos. */
-export function filterRows(rows: SceneRow[], f: Filter, checked: (id: string) => boolean, facts: RowFacts): SceneRow[] {
+/** Las filas que pasan el buscador (número, nombre, locación, decorado, vendor), la vista y la locación y el decorado. */
+export function filterRows(rows: SceneRow[], f: Filter, facts: RowFacts): SceneRow[] {
   const needle = f.text.trim().toLowerCase();
   return rows.filter((r) => {
     if (f.location && !r.locations.includes(f.location)) return false;
     if (f.set && !r.sets.includes(f.set)) return false;
-    if (f.view === 'selected' && !checked(r.pageId)) return false;
-    if (f.view === 'unselected' && checked(r.pageId)) return false;
-    if (f.view === 'outside' && facts.outside(r.pageId) === 0) return false;
+    if (f.view === 'mine' && !facts.mine(r.pageId)) return false;
+    if (f.view === 'none' && facts.vendors(r.pageId) !== '') return false;
+    if (f.view === 'multi' && facts.seenBy(r.pageId) < 2) return false;
     if (f.view === 'blocked' && !r.blocked) return false;
     if (!needle) return true;
-    return [r.code, r.label, r.title, ...r.locations, ...r.sets].some((x) => x.toLowerCase().includes(needle));
+    return [r.code, r.label, r.title, facts.vendors(r.pageId), ...r.locations, ...r.sets].some((x) => x.toLowerCase().includes(needle));
   });
 }
 

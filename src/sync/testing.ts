@@ -20,11 +20,15 @@ import {
   PROJECT_PURGE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
   SCENE_SHARES_SCHEMA_VERSION,
+  VENDORS_SCHEMA_VERSION,
   SNAPSHOT_SCHEMA_VERSION,
   type AccessRow,
   type PageShareRow,
   type PageSharesResult,
   type SceneSharesRemote,
+  type SaveVendorsResult,
+  type SceneVendorsList,
+  type VendorOp,
   type CompactionClaim,
   type NewSnapshot,
   type SnapshotPushResult,
@@ -305,6 +309,76 @@ export const SCENE_REQUEST_MUTANTS = [
 ] as const;
 export type SceneRequestMutant = (typeof SCENE_REQUEST_MUTANTS)[number];
 
+/**
+ * Los chequeos de los vendors y de *Can share scenes* (20261121120000_vendors.sql) que las pruebas sacan de a uno
+ * (`FakeServer.vendorMutants`): con cualquiera de ellos afuera, una prueba de `src/sync/vendors.test.ts` tiene que fallar.
+ */
+export const VENDOR_MUTANTS = [
+  /** Sin la casilla (ni dueño o admin que comparte), nadie maneja vendors. */
+  'manage',
+  /** Con la casilla, el tope es su propio nivel sobre el proyecto. */
+  'capLevel',
+  /** Crear o subir un vendor por encima del tope (`level_not_allowed`). */
+  'levelSet',
+  /** Sumar acceso (escenas, correos) a un vendor con un nivel por encima del tope. */
+  'levelAdd',
+  /** Cada escena que entra tiene la marca de escena. */
+  'sceneMark',
+  /** Cada escena que entra es de este proyecto. */
+  'sceneProject',
+  /** Cada escena que entra está viva. */
+  'sceneAlive',
+  /** Con la casilla, solo escenas que ve; dueño o admin, solo las que puede compartir. */
+  'sceneSees',
+  /** Nada adentro marcado como otra escena, locación, día o decorado. */
+  'sceneEntities',
+  /** Un correo, un solo vendor vivo del proyecto. */
+  'emailOne',
+  /** Todo o nada: valida todo antes de escribir. */
+  'allOrNothing',
+  /** Sacar una escena del vendor revoca los permisos de sus correos. */
+  'syncRemove',
+  /** Bajar el nivel del vendor baja los permisos de sus correos. */
+  'syncLevel',
+  /** Borrar un vendor revoca sus invitaciones (y su vendor deja de valer para la invitación). */
+  'deleteRevokes',
+  /** Las invitaciones de vendors cuentan como personas de afuera (marca, freno). */
+  'outside',
+  /** *Members* no muestra las invitaciones de vendors. */
+  'membersHide',
+  /** Aceptar trae las escenas que el vendor tiene ahora, con su nivel. */
+  'acceptNow',
+  /** Una escena asignada que hoy no se puede dar (sin marca, con otra entidad adentro) no se le da a nadie. */
+  'sceneOk',
+  /** El vendor no se toma un permiso propio (sin vendor) de la persona: sacarla del vendor no se lo lleva. */
+  'ownGrant',
+  /** Con la casilla, uno no se carga a sí mismo en un vendor. */
+  'ownEmail',
+  /** La invitación de un vendor de un proyecto borrado no vale. */
+  'deletedProject',
+  /** La casilla la pone solo un dueño o admin que comparte el proyecto. */
+  'flagWho',
+  /** Revocar un permiso apaga la casilla (volver a compartir no la devuelve). */
+  'flagRevoke',
+  /** Cambiar el nivel de un permiso del vendor por otro camino le saca el vendor. */
+  'guardLevel',
+] as const;
+export type VendorMutant = (typeof VENDOR_MUTANTS)[number];
+
+/** Un vendor del servidor en memoria (`scene_vendors`). */
+export interface FakeVendor {
+  id: string;
+  project_id: string;
+  name: string;
+  code: string;
+  color: string;
+  level: 'view' | 'comment';
+  created_at: string;
+  deleted_at: string | null;
+  emails: string[];
+  scenes: string[];
+}
+
 /** Una fila de `scene_access_requests` (B-2). */
 export interface SceneAccessRequestRow {
   id: string;
@@ -421,7 +495,18 @@ export class FakeServer {
    */
   team = false;
   readonly members = new Map<string, { email: string; role: Role; removed_at: string | null }>();
-  readonly grants: { id: string; user_id: string; project_id: string | null; page_id: string | null; level: GrantLevel; granted_by?: string }[] = [];
+  readonly grants: {
+    id: string;
+    user_id: string;
+    project_id: string | null;
+    page_id: string | null;
+    level: GrantLevel;
+    granted_by?: string;
+    /** *Can share scenes* (solo sobre un proyecto). */
+    share_scenes?: boolean;
+    /** El vendor que maneja este permiso (solo sobre una página). */
+    vendor_id?: string | null;
+  }[] = [];
   readonly invitations: {
     id: string;
     email: string;
@@ -434,6 +519,8 @@ export class FakeServer {
     expires_at?: string;
     /** Quien entró con ella (para las menciones de un invitado, ME3). */
     used_by?: string;
+    /** La de un vendor (sin páginas: las toma del vendor al aceptarla). */
+    vendor_id?: string | null;
   }[] = [];
   /** Simula una base sin `list_invitations`/`revoke_invitation` (PGRST202). */
   noInvitationList = false;
@@ -1186,6 +1273,19 @@ export class FakeServer {
    */
   readonly revokedGrants: (FakeServer['grants'][number] & { revoked_at: string; revoked_by: string })[] = [];
 
+  /** Los vendors (`scene_vendors`, con sus correos y escenas adentro). */
+  readonly vendors: FakeVendor[] = [];
+  /** Mutantes de los vendors (`VENDOR_MUTANTS`). */
+  readonly vendorMutants = new Set<VendorMutant>();
+  /** Solo para el mutante `flagRevoke`: las casillas de permisos revocados («persona:proyecto»). */
+  readonly revokedFlags = new Set<string>();
+
+  /** Prende los vendors y *Can share scenes*: la base en la versión 31. Después de `enableClean`. */
+  enableVendors(): void {
+    this.enableSceneShares();
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, VENDORS_SCHEMA_VERSION) };
+  }
+
   /** Prende *Share scenes*: la base en la versión 28. Llamarlo después de los otros `enable` (y de `enableClean`). */
   enableSceneShares(): void {
     this.settings = {
@@ -1512,6 +1612,8 @@ export class FakeServer {
     const page = 'pageId' in target ? target.pageId : null;
     const found = this.grants.find((g) => g.user_id === userId && g.project_id === project && g.page_id === page);
     if (found) {
+      // Otro camino que cambia el nivel le saca el vendor (`grants_vendor_guard`).
+      if (found.level !== level && !this.vendorMutants.has('guardLevel')) found.vendor_id = null;
       found.level = level;
       return found.id;
     }
@@ -2999,7 +3101,7 @@ export class FakeRemote
     const uid = this.userId;
     let n = 0;
     for (const inv of this.server.invitations) {
-      if (inv.used_at || inv.revoked_at || inv.email !== this.email) continue;
+      if (inv.vendor_id || inv.used_at || inv.revoked_at || inv.email !== this.email) continue;
       this.checkTeamWriteVersion();
       const cur = this.server.members.get(uid);
       if (!cur) this.server.members.set(uid, { email: this.email, role: inv.role, removed_at: null });
@@ -3018,6 +3120,25 @@ export class FakeRemote
         if (!existing || levelValue(g.level) > levelValue(existing.level)) this.server.grant(uid, target, g.level);
       }
       inv.used_at = new Date().toISOString();
+      n++;
+    }
+    // Las de vendors: entra como invitado y recibe las escenas vivas que el vendor tiene ahora, con su nivel.
+    for (const inv of this.liveVendorInvitations(this.email)) {
+      this.checkTeamWriteVersion();
+      const cur = this.server.members.get(uid);
+      if (!cur) this.server.members.set(uid, { email: this.email, role: 'guest', removed_at: null });
+      else if (cur.removed_at) {
+        for (let i = this.server.grants.length - 1; i >= 0; i--) if (this.server.grants[i].user_id === uid) this.server.grants.splice(i, 1);
+        this.server.members.set(uid, { ...cur, role: 'guest', removed_at: null });
+      }
+      const v = this.server.vendors.find((x) => x.id === inv.vendor_id)!;
+      const scenes = this.server.vendorMutants.has('acceptNow') ? v.scenes.slice(0, 1) : v.scenes;
+      for (const p of scenes) {
+        if (!this.vendorSceneOk(p) || this.server.pageLevel(uid, p) >= levelValue(v.level)) continue;
+        this.vendorGrant(uid, p, v);
+      }
+      inv.used_at = new Date().toISOString();
+      inv.used_by = uid;
       n++;
     }
     return n;
@@ -3068,7 +3189,7 @@ export class FakeRemote
     const mine = this.server.role(this.userId);
     if (mine !== 'owner' && mine !== 'admin') return [];
     return this.server.invitations
-      .filter((i) => !i.used_at && !i.revoked_at)
+      .filter((i) => !i.used_at && !i.revoked_at && (!i.vendor_id || this.server.vendorMutants.has('membersHide')))
       .map((i) => ({
         id: i.id,
         email: i.email,
@@ -3135,6 +3256,9 @@ export class FakeRemote
     );
     if (!same) this.checkTeamWriteVersion();
     const id = this.server.grant(userId, target, level);
+    if ('projectId' in target && this.server.revokedFlags.delete(`${userId}:${target.projectId}`)) {
+      this.server.grants.find((g) => g.id === id)!.share_scenes = true;
+    }
     // Con Ver, Comentar o a un invitado, lo alcanzado empieza de una base nueva.
     if (level === 'view' || level === 'comment' || this.server.role(userId) === 'guest') this.server.cleanReset(target);
     return id;
@@ -3148,6 +3272,7 @@ export class FakeRemote
       throw new RemoteError('grant_not_found', true, 'P0002');
     }
     this.checkTeamWriteVersion();
+    if (g.share_scenes && g.project_id && this.server.vendorMutants.has('flagRevoke')) this.server.revokedFlags.add(`${g.user_id}:${g.project_id}`);
     this.server.grants.splice(at, 1);
   }
 
@@ -3160,14 +3285,16 @@ export class FakeRemote
       for (let cur: string | null = target.pageId; cur && !chain.has(cur); cur = this.server.pages.get(cur)?.parent_id ?? null) chain.add(cur);
     }
     const rows: AccessRow[] = [];
-    const add = (uid: string, level: GrantLevel, source: AccessRow['source'], grant: string | null, project: string | null, page: string | null) => {
+    const add = (uid: string, level: GrantLevel, source: AccessRow['source'], grant: string | null, project: string | null, page: string | null, flag = false) => {
       const m = this.server.members.get(uid);
-      if (m && !m.removed_at) rows.push({ user_id: uid, email: m.email, role: m.role, level, source, grant_id: grant, project_id: project, page_id: page });
+      if (m && !m.removed_at) {
+        rows.push({ user_id: uid, email: m.email, role: m.role, level, source, grant_id: grant, project_id: project, page_id: page, share_scenes: flag });
+      }
     };
     const owner = this.server.projects.get(projectId)?.owner_id;
     if (owner) add(owner, 'edit_pages', 'creator', null, projectId, null);
     for (const g of this.server.grants) {
-      if (g.project_id === projectId) add(g.user_id, g.level, 'project', g.id, g.project_id, null);
+      if (g.project_id === projectId) add(g.user_id, g.level, 'project', g.id, g.project_id, null, g.share_scenes === true);
       else if (g.page_id && chain.has(g.page_id)) {
         add(g.user_id, g.level, 'pageId' in target && g.page_id === target.pageId ? 'page' : 'parent_page', g.id, null, g.page_id);
       }
@@ -3195,8 +3322,32 @@ export class FakeRemote
     return this.server.invitations.filter((i) => {
       const by = this.server.role(i.invited_by ?? this.server.ownerId);
       const alive = !i.expires_at || Date.parse(i.expires_at) > now;
-      return !i.used_at && !i.revoked_at && alive && (email === undefined || i.email === email) && (by === 'owner' || by === 'admin');
+      return !i.vendor_id && !i.used_at && !i.revoked_at && alive && (email === undefined || i.email === email) && (by === 'owner' || by === 'admin');
     });
+  }
+
+  /** `private.live_vendor_invitations`: vivas, con el vendor sin borrar y el correo todavía en él. */
+  private liveVendorInvitations(email?: string): FakeServer['invitations'] {
+    const now = this.server.now();
+    return this.server.invitations.filter((i) => {
+      if (!i.vendor_id || i.used_at || i.revoked_at || (i.expires_at && Date.parse(i.expires_at) <= now)) return false;
+      if (email !== undefined && i.email !== email) return false;
+      const v = this.server.vendors.find((x) => x.id === i.vendor_id);
+      if (this.server.vendorMutants.has('deleteRevokes')) return !!v;
+      const projectAlive = this.server.vendorMutants.has('deletedProject') || !this.server.projectDeleted(v?.project_id);
+      return !!v && !v.deleted_at && v.emails.includes(i.email) && projectAlive;
+    });
+  }
+
+  /** Las escenas vivas que ven por invitaciones de vendors, con quiénes (`i:<id>`). */
+  private vendorInvitationReaders(): [string, string][] {
+    if (this.server.vendorMutants.has('outside')) return [];
+    const out: [string, string][] = [];
+    for (const inv of this.liveVendorInvitations()) {
+      const v = this.server.vendors.find((x) => x.id === inv.vendor_id)!;
+      for (const p of v.scenes) out.push([p, `i:${inv.id}`]);
+    }
+    return out;
   }
 
   /** `private.page_outside_readers`: un permiso o una invitación de afuera puestos sobre esa misma página. */
@@ -3208,6 +3359,7 @@ export class FakeRemote
       const level = this.server.pageLevel(g.user_id, pageId);
       if (role === 'guest' || (level >= 1 && level <= 2)) return true;
     }
+    if (this.vendorInvitationReaders().some(([p]) => p === pageId)) return true;
     return this.liveInvitations().some(
       (inv) => inv.grants.some((el) => 'page_id' in el && el.page_id === pageId && (inv.role === 'guest' || el.level === 'view' || el.level === 'comment')),
     );
@@ -3454,6 +3606,7 @@ export class FakeRemote
         if (inv.role === 'guest' || el.level === 'view' || el.level === 'comment') note(el.page_id, `i:${inv.id}`);
       }
     }
+    for (const [p, id] of this.vendorInvitationReaders()) if (this.server.pages.has(p) && inProject(p)) note(p, id);
     return new Map([...who].filter(([pageId]) => this.pageAlive(pageId)).map(([pageId, ids]) => [pageId, ids.size]));
   }
 
@@ -3463,6 +3616,292 @@ export class FakeRemote
     if (!this.server.pages.has(pageId) || !role) return false;
     if (!this.sceneMutants.has('hasEdit') && (role === 'guest' || this.server.pageLevel(this.userId, pageId) < 3)) return false;
     return this.chainOutsideReaders(pageId, false);
+  }
+
+  // --- Vendors: las reglas de 20261121120000_vendors.sql, con sus mutantes (`VENDOR_MUTANTS`) ---
+
+  private get vm(): Set<VendorMutant> {
+    return this.server.vendorMutants;
+  }
+
+  /** `private.vendor_cap`: 0 no los maneja, 1 Ver, 2 Comentar. */
+  private vendorCap(projectId: string): number {
+    const role = this.server.role(this.userId);
+    if (!role) return 0;
+    if ((role === 'owner' || role === 'admin') && this.canShare({ projectId })) return 2;
+    const g = this.server.grants.find((x) => x.user_id === this.userId && x.project_id === projectId);
+    if (!g || (!g.share_scenes && !this.vm.has('manage'))) return 0;
+    return this.vm.has('capLevel') ? 2 : Math.min(2, this.server.projectLevel(this.userId, projectId));
+  }
+
+  /**
+   * Un permiso del vendor sobre una página (el upsert que solo sube un permiso de vendor; uno propio, sin vendor, no se
+   * toma), y la rama empieza de una base nueva. Devuelve si cambió algo.
+   */
+  private vendorGrant(uid: string, pageId: string, v: FakeVendor): boolean {
+    const live = this.server.grants.find((g) => g.user_id === uid && g.page_id === pageId);
+    if (live) {
+      if (!live.vendor_id && !this.vm.has('ownGrant')) return false;
+      if (levelValue(v.level) <= levelValue(live.level)) return false;
+      Object.assign(live, { level: v.level, vendor_id: v.id, granted_by: this.userId });
+    } else {
+      this.server.grants.push({ id: crypto.randomUUID(), user_id: uid, project_id: null, page_id: pageId, level: v.level, granted_by: this.userId, vendor_id: v.id });
+    }
+    this.server.cleanReset({ pageId });
+    return true;
+  }
+
+  /** `private.vendor_scene_ok`: viva, con la marca de escena, sin la de carpeta y sin otra entidad adentro. */
+  private vendorSceneOk(pageId: string): boolean {
+    if (this.vm.has('sceneOk')) return this.pageAlive(pageId);
+    const page = this.server.pages.get(pageId);
+    return !!page && isSceneRow(page) && !isFolderMarked(page.settings) && this.pageAlive(pageId) && !this.branchHasEntities(pageId);
+  }
+
+  /** `private.vendor_sync_email`: lo que el correo ve por vendors en el proyecto, igual a lo que dicen los vendors. */
+  private vendorSyncEmail(projectId: string, email: string): string[] {
+    const reset: string[] = [];
+    const vendor = this.server.vendors.find((v) => v.project_id === projectId && !v.deleted_at && v.emails.includes(email));
+    const ids = new Set(this.server.vendors.filter((v) => v.project_id === projectId).map((v) => v.id));
+    const now = this.server.now();
+    const revokeInvitations = (keep?: string) => {
+      for (const i of this.server.invitations) {
+        if (i.email === email && i.vendor_id && ids.has(i.vendor_id) && !i.used_at && !i.revoked_at && i.vendor_id !== keep) {
+          i.revoked_at = new Date(now).toISOString();
+        }
+      }
+    };
+    const uid = [...this.server.members].find(([, m]) => !m.removed_at && m.email.toLowerCase() === email)?.[0];
+    if (uid) {
+      const grants = this.server.grants;
+      for (let i = grants.length - 1; i >= 0; i--) {
+        const g = grants[i];
+        if (g.user_id !== uid || !g.vendor_id || !ids.has(g.vendor_id)) continue;
+        const stays =
+          !!vendor && g.vendor_id === vendor.id && (vendor.scenes.includes(g.page_id ?? '') || this.vm.has('syncRemove')) && this.vendorSceneOk(g.page_id ?? '');
+        if (!stays) {
+          grants.splice(i, 1);
+          continue;
+        }
+        if (g.level !== vendor!.level && !this.vm.has('syncLevel')) g.level = vendor!.level;
+      }
+      if (vendor) {
+        for (const p of vendor.scenes) {
+          if (!this.vendorSceneOk(p) || this.server.pageLevel(uid, p) >= levelValue(vendor.level)) continue;
+          if (this.vendorGrant(uid, p, vendor)) reset.push(p);
+        }
+      }
+      revokeInvitations();
+      return reset;
+    }
+    revokeInvitations(vendor?.id);
+    if (vendor) {
+      const live = this.server.invitations.find(
+        (i) => i.email === email && i.vendor_id === vendor.id && !i.used_at && !i.revoked_at && (!i.expires_at || Date.parse(i.expires_at) > now),
+      );
+      const expires = new Date(now + 30 * 86_400_000).toISOString();
+      if (live) live.expires_at = expires;
+      else {
+        this.server.invitations.push({ id: crypto.randomUUID(), email, role: 'guest', grants: [], used_at: null, invited_by: this.userId, vendor_id: vendor.id, expires_at: expires });
+        for (const p of vendor.scenes) {
+          if (!this.vendorSceneOk(p)) continue;
+          this.server.cleanReset({ pageId: p });
+          reset.push(p);
+        }
+      }
+    }
+    return reset;
+  }
+
+  async sceneVendorsList(projectId: string): Promise<SceneVendorsList> {
+    this.server.check();
+    const cap = this.vendorCap(projectId);
+    if (cap === 0) throw this.denied('not_allowed');
+    const role = this.server.role(this.userId);
+    const admin = (role === 'owner' || role === 'admin') && this.canShare({ projectId });
+    const joined = (email: string) => [...this.server.members.values()].some((m) => !m.removed_at && m.email.toLowerCase() === email);
+    const vendors = this.server.vendors
+      .filter((v) => v.project_id === projectId && !v.deleted_at)
+      .map((v) => ({
+        id: v.id,
+        name: v.name,
+        code: v.code,
+        color: v.color,
+        level: v.level,
+        created_at: v.created_at,
+        emails: v.emails.map((email) => ({
+          email,
+          state: joined(email) ? ('joined' as const) : this.liveVendorInvitations(email).some((i) => i.vendor_id === v.id) ? ('invited' as const) : ('expired' as const),
+        })),
+        scenes: v.scenes.map((page_id) => ({ page_id, alive: this.pageAlive(page_id), ok: this.vendorSceneOk(page_id) })),
+      }));
+    // Lo que ven personas de afuera sin vendor.
+    const who = new Map<string, Set<string>>();
+    const note = (pageId: string, id: string) => who.set(pageId, (who.get(pageId) ?? new Set()).add(id));
+    for (const g of this.server.grants) {
+      if (!g.page_id || g.vendor_id || this.server.pages.get(g.page_id)?.workspace_id !== projectId) continue;
+      const r = this.server.role(g.user_id);
+      const level = this.server.pageLevel(g.user_id, g.page_id);
+      if (r && (r === 'guest' || (level >= 1 && level <= 2))) note(g.page_id, `u:${g.user_id}`);
+    }
+    for (const inv of this.liveInvitations()) {
+      for (const el of inv.grants) {
+        if ('page_id' in el && this.server.pages.get(el.page_id)?.workspace_id === projectId && (inv.role === 'guest' || el.level === 'view' || el.level === 'comment')) {
+          note(el.page_id, `i:${inv.id}`);
+        }
+      }
+    }
+    const others = new Map([...who].filter(([p]) => this.pageAlive(p)).map(([p, ids]) => [p, ids.size]));
+    return { cap: cap as 1 | 2, admin, vendors, others };
+  }
+
+  async saveSceneVendors(projectId: string, ops: VendorOp[]): Promise<SaveVendorsResult> {
+    this.server.check();
+    const vm = this.vm;
+    const fail = (message: string, code = '22023') => new RemoteError(message, true, code);
+    const cap = this.vendorCap(projectId);
+    if (cap === 0) throw this.denied('not_allowed');
+    const role = this.server.role(this.userId);
+    const admin = (role === 'owner' || role === 'admin') && this.canShare({ projectId });
+    if (!this.server.cleanOn()) throw fail('clean_off', 'P0001');
+    if (!Array.isArray(ops) || ops.length === 0 || ops.length > 100) throw fail('ops_invalid');
+    const lv = (l: string) => levelValue(l as GrantLevel);
+    const validFields = (name: unknown, code: unknown, color: unknown, level: unknown) =>
+      typeof name === 'string' && name === name.trim() && name.length >= 1 && name.length <= 80 &&
+      typeof code === 'string' && /^[A-Z0-9]{0,4}$/.test(code) &&
+      typeof color === 'string' && /^#[0-9a-f]{6}$/.test(color) &&
+      (level === 'view' || level === 'comment');
+    const backup = vm.has('allOrNothing') ? null : structuredClone(this.server.vendors);
+    const keys: Record<string, string> = {};
+    const seen = new Set<string>();
+    const emails = new Set<string>();
+    const resetPages: string[] = [];
+    try {
+      for (const op of ops) {
+        let v: FakeVendor;
+        let touch = false;
+        if (op.op === 'create') {
+          if (this.server.vendors.filter((x) => x.project_id === projectId && !x.deleted_at).length >= 100) throw fail('too_many_vendors');
+          const name = typeof op.name === 'string' ? op.name.trim() : op.name;
+          if (!validFields(name, op.code ?? '', op.color, op.level)) throw fail('vendor_invalid');
+          if (lv(op.level) > cap && !vm.has('levelSet')) throw this.denied('level_not_allowed');
+          v = { id: crypto.randomUUID(), project_id: projectId, name: name as string, code: op.code ?? '', color: op.color, level: op.level, created_at: new Date(this.server.now()).toISOString(), deleted_at: null, emails: [], scenes: [] };
+          this.server.vendors.push(v);
+          if (op.key) keys[op.key] = v.id;
+        } else if (op.op === 'update' || op.op === 'delete') {
+          const found = this.server.vendors.find((x) => x.id === op.id && x.project_id === projectId && !x.deleted_at);
+          if (!found) throw new RemoteError('vendor_not_found', true, 'P0002');
+          if (seen.has(found.id)) throw fail('ops_invalid');
+          v = found;
+          seen.add(v.id);
+          if (op.op === 'delete') {
+            v.deleted_at = new Date(this.server.now()).toISOString();
+            if (!vm.has('deleteRevokes')) for (const e of v.emails) emails.add(e);
+            continue;
+          }
+          const next = {
+            name: op.name !== undefined ? op.name.trim() : v.name,
+            code: op.code !== undefined ? op.code : v.code,
+            color: op.color !== undefined ? op.color : v.color,
+            level: op.level !== undefined ? op.level : v.level,
+          };
+          if (!validFields(next.name, next.code, next.color, next.level)) throw fail('vendor_invalid');
+          if (op.level !== undefined && op.level !== v.level) {
+            if (lv(op.level) > cap && lv(op.level) > lv(v.level) && !vm.has('levelSet')) throw this.denied('level_not_allowed');
+            touch = true;
+          }
+          Object.assign(v, next);
+        } else {
+          throw fail('ops_invalid');
+        }
+        seen.add(v.id);
+        const list = (key: 'add_scenes' | 'remove_scenes' | 'add_emails' | 'remove_emails' | 'reinvite'): string[] => {
+          const x = (op as Record<string, unknown>)[key];
+          if (x === undefined) return [];
+          if (!Array.isArray(x) || x.some((y) => typeof y !== 'string')) throw fail('ops_invalid');
+          return x as string[];
+        };
+        const more = list('add_scenes').length + list('add_emails').length + list('reinvite').length > 0;
+        if (more && lv(v.level) > cap && !vm.has('levelAdd')) throw this.denied('level_not_allowed');
+        for (const p of list('remove_scenes')) {
+          const at = v.scenes.indexOf(p);
+          if (at < 0) throw fail('page_invalid');
+          v.scenes.splice(at, 1);
+          touch = true;
+        }
+        const added: string[] = [];
+        for (const p of list('add_scenes')) {
+          const page = this.server.pages.get(p);
+          const ok =
+            !!page &&
+            (vm.has('sceneProject') || page.workspace_id === projectId) &&
+            (vm.has('sceneAlive') || this.pageAlive(p)) &&
+            (vm.has('sceneMark') || isSceneRow(page)) &&
+            (vm.has('sceneSees') || (admin ? this.server.userCanSharePage(this.userId, p) : this.server.pageLevel(this.userId, p) >= 1));
+          if (!ok) throw fail('page_invalid');
+          if (!vm.has('sceneEntities') && (isFolderMarked(page.settings) || this.branchHasEntities(p))) throw fail('scene_contains_entities', 'P0001');
+          if (v.scenes.includes(p)) throw fail('page_invalid');
+          v.scenes.push(p);
+          added.push(p);
+          touch = true;
+        }
+        for (const raw of list('remove_emails')) {
+          const e = raw.trim().toLowerCase();
+          const at = v.emails.indexOf(e);
+          if (at < 0) throw new RemoteError('email_not_found', true, 'P0002');
+          v.emails.splice(at, 1);
+          emails.add(e);
+        }
+        for (const raw of list('add_emails')) {
+          const e = raw.trim().toLowerCase();
+          if (!/^[^@\s]+@[^@\s]+$/.test(e) || e.length > 320) throw fail('email_invalid');
+          if (!admin && !vm.has('ownEmail') && e === this.email.toLowerCase()) throw this.denied('own_email');
+          if (v.emails.includes(e)) throw new RemoteError('email_exists', true, 'P0001');
+          v.emails.push(e);
+          emails.add(e);
+        }
+        for (const raw of list('reinvite')) {
+          const e = raw.trim().toLowerCase();
+          if (!v.emails.includes(e)) throw new RemoteError('email_not_found', true, 'P0002');
+          emails.add(e);
+        }
+        if (v.emails.length > 30) throw fail('too_many_emails');
+        if (touch) for (const e of v.emails) emails.add(e);
+        if (added.length > 0 && v.emails.length > 0) resetPages.push(...added);
+      }
+      if (!vm.has('emailOne')) {
+        const count = new Map<string, number>();
+        for (const v of this.server.vendors) {
+          if (v.project_id !== projectId || v.deleted_at) continue;
+          for (const e of v.emails) count.set(e, (count.get(e) ?? 0) + 1);
+        }
+        if ([...count.values()].some((n) => n > 1)) throw fail('email_in_other_vendor', 'P0001');
+      }
+      this.checkTeamWriteVersion();
+    } catch (err) {
+      if (backup) this.server.vendors.splice(0, this.server.vendors.length, ...backup);
+      throw err;
+    }
+    for (const p of resetPages) this.server.cleanReset({ pageId: p });
+    const reset = new Set(resetPages);
+    const pending: string[] = [];
+    for (const e of [...emails].sort()) {
+      for (const p of this.vendorSyncEmail(projectId, e)) reset.add(p);
+      if (this.liveVendorInvitations(e).some((i) => this.server.vendors.find((v) => v.id === i.vendor_id)?.project_id === projectId)) pending.push(e);
+    }
+    return { keys, reset: [...reset], pending };
+  }
+
+  async setShareScenes(projectId: string, userId: string, on: boolean): Promise<void> {
+    this.server.check();
+    const role = this.server.role(this.userId);
+    if (!role || (!this.vm.has('flagWho') && (!(role === 'owner' || role === 'admin') || !this.canShare({ projectId })))) {
+      throw this.denied('not_allowed');
+    }
+    const g = this.server.grants.find((x) => x.user_id === userId && x.project_id === projectId);
+    if (!g || !this.server.role(userId)) throw new RemoteError('grant_not_found', true, 'P0002');
+    this.checkTeamWriteVersion();
+    g.share_scenes = on;
   }
 
   /** `private.can_share`. */
