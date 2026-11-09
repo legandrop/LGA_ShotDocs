@@ -5,6 +5,10 @@
 
 begin;
 
+-- D14 (`clean_min_version`) está prendido en la base desde el 2026-11-06. Esta prueba baja `min_app_version` y
+-- chocaría con `workspace_settings_clean_min_le_min_app`: se apaga acá, dentro de la transacción que se deshace.
+update public.workspace_settings set clean_min_version = null where id;
+
 -- Las funciones de archivos de abajo van sin versión (las de siempre): con una mínima de 0.090 o más no andan
 -- (version_minima_archivos_permisos.sql). La prueba arranca sin mínima; se deshace al final.
 update public.workspace_settings set min_app_version = null;

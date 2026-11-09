@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.332 :
+
+27 pruebas SQL de permisos fallaban contra la base real, sin que la app tuviera nada roto. 26 bajan
+`min_app_version` para probar funciones viejas y, desde que D14 se prendió en Wanka (2026-11-06, `clean_min_version`),
+chocan con `workspace_settings_clean_min_le_min_app`: fueron escritas con D14 apagado. Ahora cada una lo apaga al
+empezar, dentro de la misma transacción que se deshace, como ya hacían las pruebas nuevas
+(`compartir_escenas_permisos.sql`, `vendors_permisos.sql`). La otra, `proyectos_favoritos_permisos.sql`, contaba
+todos los favoritos de la tabla y hoy hay favoritos reales: ahora cuenta solo los de sus dos proyectos de prueba. Las 52
+pruebas SQL corren en verde contra la base real, cada una en una transacción que se deshace. [ v0.332: Pruebas SQL al día con D14 prendido - apagarlo dentro de la transacción y favoritos contados solo en la prueba ]
+
 v0.331 :
 
 Lega pidió que un productor con permiso de comentar pueda compartir escenas con los vendors, y vendors por proyecto con

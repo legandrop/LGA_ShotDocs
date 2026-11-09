@@ -6,6 +6,10 @@
 
 begin;
 
+-- D14 (`clean_min_version`) está prendido en la base desde el 2026-11-06. Esta prueba baja `min_app_version` y
+-- chocaría con `workspace_settings_clean_min_le_min_app`: se apaga acá, dentro de la transacción que se deshace.
+update public.workspace_settings set clean_min_version = null where id;
+
 create function pg_temp.u(s text) returns uuid language sql immutable as $$
   select ('00000000-0000-4000-8000-00000000' || s)::uuid;
 $$;

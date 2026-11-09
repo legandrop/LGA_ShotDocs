@@ -5,6 +5,10 @@
 
 begin;
 
+-- D14 (`clean_min_version`) está prendido en la base desde el 2026-11-06. Esta prueba baja `min_app_version` y
+-- chocaría con `workspace_settings_clean_min_le_min_app`: se apaga acá, dentro de la transacción que se deshace.
+update public.workspace_settings set clean_min_version = null where id;
+
 select set_config('request.headers', '{"x-shotdocs-version": "9.999"}', true);
 
 create function pg_temp.as_user(uid uuid, method text default 'otp') returns void language sql as $$
@@ -111,9 +115,11 @@ delete from public.project_favorites where project_id = '00000000-0000-4000-8000
 select set_config('role', 'postgres', true), set_config('request.jwt.claims', '', true);
 do $$
 begin
-  assert (select count(*) from public.project_favorites) = 2, 'los favoritos no quedaron como se esperaba';
+  assert (select count(*) from public.project_favorites
+          where project_id in ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000e2')) = 2, 'los favoritos no quedaron como se esperaba';
   delete from public.workspaces where id = '00000000-0000-4000-8000-0000000000e1';
-  assert (select count(*) from public.project_favorites) = 0, 'borrar el proyecto dejó favoritos';
+  assert (select count(*) from public.project_favorites
+          where project_id in ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000e2')) = 0, 'borrar el proyecto dejó favoritos';
   assert (select schema_version from public.workspace_settings where id) >= 30, 'schema_version no llegó a 30';
 end;
 $$;

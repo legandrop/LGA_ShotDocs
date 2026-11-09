@@ -7,6 +7,10 @@
 
 begin;
 
+-- D14 (`clean_min_version`) está prendido en la base desde el 2026-11-06. Esta prueba baja `min_app_version` y
+-- chocaría con `workspace_settings_clean_min_le_min_app`: se apaga acá, dentro de la transacción que se deshace.
+update public.workspace_settings set clean_min_version = null where id;
+
 create function pg_temp.as_user(uid uuid) returns void language sql as $$
   select set_config('role', 'authenticated', true),
          set_config('request.jwt.claims',
