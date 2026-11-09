@@ -1,354 +1,189 @@
 # LGA Shot Docs
 
-ZIP export saves pending local changes, including the current title and text moved from a long title into the page, before writing the archive. Changed page selections require preparing it again; cancelled or outdated attempts cannot offer a late download. The archive format stays compatible with existing imports.
+Documentation for VFX work, in the spirit of Notion or Coda but much simpler. Write the pre-production notes
+for each scene, fill in the on-set reports during the shoot, and keep each show in its own project. It works
+on macOS, Windows, iPhone, iPad and Android, online and offline, and never loses what you write.
 
-Long export titles wrap within the dialog, and its file name and action buttons use another row when needed so Close stays reachable.
+The app runs at **[shotdocs.lega.com.ar](https://shotdocs.lega.com.ar)**. Each team connects it to its own
+*workspace*.
 
-Documentation for VFX work, in the spirit of Notion or Coda but much simpler. Write the VFX
-pre-production notes for each scene, fill in the on-set reports during the shoot, and keep each show in
-its own project: a tree of pages you own.
+## Contents
 
-## Goals
+- [What it does](#what-it-does)
+- [How it works](#how-it-works)
+- [Set up a new workspace](#set-up-a-new-workspace)
+- [Run your own copy of the app (optional)](#run-your-own-copy-of-the-app-optional)
+- [Development](#development)
+- [Status and docs](#status-and-docs)
+- [License](#license)
 
-- Copy one annotated JPEG/PNG or simple static WebP photo from the photo viewer as a full-size PNG: prepare it first, then tap Copy. Browser image-clipboard support is required; the unchanged original remains available. HEIC, large mobile images, folders and FrameRev export remain pending.
-- On phones, the Download and Copy menus in the photo viewer stay within the screen, wrap the complete file name and show the dimensions. Scroll the menu when its remaining buttons are below.
-- On editable workspace pages, an annotated Drive photo’s existing Download button also offers annotated Download and Copy, including photos in rows, inline and in table cells. Original stays available.
+## What it does
 
-- **Projects.** Each show or job is a project with its own tree of pages. Switch between them from the
-  top of the sidebar without leaving the page you are on. Each project has a color dot (chosen with a color picker
-  by whoever can rename it) that also marks its tabs; Ctrl/⌘+click on a project in the list opens it in a new tab.
-- **Search.** Ctrl/⌘+F finds and replaces in the open page. Ctrl/⌘+K (or the magnifying glass next to
-  "+" in the sidebar) searches the titles and text of every page in the project, on your device and
-  offline, including the complete text of valid photo annotations. Selecting an **Annotation** result opens that same photo in the viewer, including inline photos and table cells. Text results take you to the exact spot (collapsed sections that hide a match open while you search and fold back when
-  you close the bar), and lists matching projects to switch to. Its arrow opens **Replace
-  across the project**: a preview of every change, replace one, a page or all of them (after a confirmation that
-  says how many changes in how many pages), and *Undo* puts back everything nobody changed afterwards.
-- **Pages and subpages.** A sidebar with a tree of pages, as deep as you need. Every page can hold
-  content and other pages; a "folder" is just a page with no content. Selecting a page expands its direct subpages
-  by default; clicking the open page again collapses it. Set **Expand subpages → Manual** in the account menu to keep expansion manual.
-- **Visual editor.** Headings H1–H5 in gradual steps, with H1–H4 slightly larger and H1 kept below the page title on each layout. Lists, checklists, tables and images. H5 matches normal bold text; existing H6 content remains supported and looks like H5. You never see Markdown; it is only
-  used behind the scenes to import, export and back up your pages.
-- **Undo in the order you edited.** Ctrl/⌘+Z undoes your last change in the project even if it was on another page:
-  the app takes you there and undoes it in view (*Back* returns you). A replace across the project is one step, undone
-  and redone in every page it changed. If a page was in the trash during undo, restore it before your next undo to
-  undo its replacement first, then the earlier edits. Ctrl/⌘+Shift+Z redoes. It lasts until you reload the tab.
-- **Script text.** Paste a screenplay and turn it into *Script*: it shows in a screenplay typeface, with
-  INT/EXT, DAY, NIGHT and DAWN/DUSK marked in color.
-- **Templates.** Reusable page layouts such as *Pre-production Notes*, *On-Set Report* or *Shot
-  Breakdown*. Pick one when you create a page and start filling it in, or save any page as your own template.
-- **Works everywhere.** macOS, Windows and iPhone, from the same app.
-- **Real page sizes.** A page can be free-form or set to a paper size (A5, A4, A3, Letter), per page or
-  for a whole branch. What you see while editing is exactly what the PDF export looks like.
-- **Assistant with your own key.** Add your own API key from NVIDIA, Anthropic, OpenAI, Google Gemini or an
-  OpenAI-compatible service (OpenRouter, or a local model such as Ollama) and fix, improve, shorten, translate,
-  rewrite or reshape what you select, summarize and translate a whole page, or suggest a caption for a photo. You see
-  a preview first; applying it is a regular edit: synced, versioned and undoable. The workspace owner can turn it off or allow only local models.
-- **Dictate to report.** Write or dictate (with the app's microphone or your keyboard's) an informal note on set, like “this shot
-  was a 50 mm”, and the assistant places each piece where it goes in the report: the right row and column, the line
-  after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
-- **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
-  back online. Edits made offline on two devices are merged, never overwritten.
-  Reordering blocks within the same group no longer lets a concurrent deletion remove an untouched neighbor.
-  Writing concurrently inside a block that the move recreates can still be removed; while that page stays open
-  in the writing session, it offers the affected text to copy. The notice after reopening remains pending.
-  Concurrent moves can leave duplicate blocks, which receive separate ids on the next edit.
-  Reload from an app notice and switching, joining or creating a workspace from an open workspace wait up to eight seconds for local saving, including the current page title. A failure or a changed page keeps the current view open for another attempt. Ordinary cross-workspace clicks from the page editor also wait for local saving before opening the destination. Browser exits and signing out keep their existing behavior.
-- **Share a branch, never the tree.** Inside a workspace, people get a role and a permission on a
-  project or a page (view, comment, edit, or edit and create pages). A permission covers everything under
-  that page and nothing above it: parent pages and sibling branches stay private. Clients join as guests
-  and sign in to see only the pages shared with them. A page can also be shared with *Anyone with the link*: they
-  open it without an account, see that page and the ones inside, and comment with a name. Whoever can share the
-  page with the link sees, on each of those comments, which link it came from.
-- **Your look, everywhere.** Light or dark theme, a default or an editorial typeface, text contrast
-  (No contrast, Normal contrast or More contrast, with bold close to headings and softer body text, also in the PDF), text size and page width, saved in
-  your account and applied on every device. Scene titles like `064 | Name | Place` show
-  as a short code and a name in the sidebar, and each page can show the pages that contain it above its
-  title.
-- **One app, many workspaces.** The same app connects to several workspaces. Each workspace is an island
-  that runs on its owner's own Supabase, Google Drive and file gateway: nothing from one workspace goes
-  through anyone else's servers, and nobody needs to publish their own copy of the app.
+**Projects and pages**
+- Each show is a project with a tree of pages as deep as you need; a "folder" is just a page with no content.
+  Favorite projects (synced to your account), project colors, archive, delete and restore.
+- A new project starts with its stage folders: *Preproduction* (*Scenes*, *Locations*), *Scouting reports*,
+  *Tests and previs*, *Shoot*, *References* and *Archive*.
+- See how much each project takes in Drive, and its files from heaviest to lightest.
+- Back and forward, tabs in the installed app, and full keyboard navigation of the page tree.
 
-## Status
+**Editor**
+- A visual block editor: headings, lists, checklists, quotes, tables, page links and a `/` menu.
+- *Script* paragraphs for pasted screenplays, with INT/EXT, DAY and NIGHT marked in color.
+- Collapsible sections by heading (just for you, or for everyone), and undo in the order you edited, across pages.
+- Real paper sizes (A5, A4, A3, Letter) per page or per branch, with page breaks: what you see is what prints.
 
-In development. What works today:
+**Photos, videos and files**
+- Photos and videos go to the workspace owner's Google Drive, uploaded in resumable parts, with a thumbnail on
+  the page. iPhone HEIC photos are converted on the device.
+- Photos in the line of text, in rows, and inside table cells; a full-screen viewer with zoom and video playback.
+- Annotate photos (arrows, shapes, text, numbered markers) on a computer, phone or iPad with a pencil; the
+  original never changes. Download or copy a photo with its annotations.
+- Attach any file, drop a whole folder (browse it and download it as a zip), or paste a Drive link as a card.
+- Take a photo or record a video straight from the phone's camera.
 
-- Annotation edits count in version-history sessions and authors. Annotation-only sessions show the photo name from that version when it is unambiguous; manual version names take priority. **Show changes** compares supported drawings in separate **Before / Selected version** panels, without loading the original photo or attributing individual shapes to an author. Unsupported data is marked as partial. Turn it off to view the existing historical annotations. Restore also restores supported line fields when the photo, drawing parent and frame still match. When later changes arrive for a removed line, **Recover drawing** previews the missing fields while keeping all current values. It saves on this device first and can be undone in one step. Ambiguous or unsupported data prevents restoration; recovering a deleted drawing parent remains pending.
+**Scenes, locations and shoot days**
+- Scenes, locations, sets and shoot days are pages the app recognizes; the *Scenes* and *Locations* folders show
+  a live table of their pages.
+- A scene's page shows where everything about it is, stage by stage; *Copy link* opens that scene on any device.
+- *Overview* gathers the whole project for post: every scene and where each stage talks about it, locations,
+  shoot days, every shot in one sortable table, and what is still pending.
+- Scene numbers and location names are recognized as you write; link them with `/e 027` or `/l name`. A
+  location can have other names, and *Leave out of relations* keeps archives and old copies out.
+- *Merge…* joins two pages of the same scene or shoot day without losing anything.
+- Templates (*Pre-production Notes*, *On-Set Report*, *Shot Breakdown*, scene, location and scout pages, or your
+  own), and *New day report* / *New day plan* filled in from the day's plan.
 
-- Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
-  open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
-- The page tree, the block editor with autosave and pasted images, light and dark themes and
-  per-account appearance settings. Back and forward buttons (‹ ›) at the top of the page return to the pages you
-  opened before, also in the installed app; Alt+← / Alt+→ (⌘[ / ⌘] on a Mac) do the same. The installed app has tabs: Ctrl/⌘+T opens one, Ctrl/⌘+click or the mouse wheel opens a page in a tab behind, and each tab keeps its own back and forward. In a browser you can keep several tabs open: the one you use takes over and the others wait. The app can be installed (PWA): *Install app* in the account menu (and a
-  dismissible banner on phones) shows the exact steps for iPhone, Android and desktop, with a direct *Install*
-  button where the browser offers one. On iPhone the installed app keeps its own storage, which Safari does not
-  clear. *Update now* shows an activity indicator and a waiting message immediately, and disables update buttons
-  while the attempt is running. Pending changes remain counted; cancelling or a failed attempt lets you try again.
-- Offline first: every edit is saved on the device first and synced when a connection is available;
-  edits made offline on several devices are merged.
-- Projects, each with its own page tree (v0.013).
-- Script text, a resizable sidebar and paper sizes per branch (v0.015).
-- Hosting on Cloudflare, and encrypted database backups four times a day.
-- A guard against content the running version does not know (the page does not open and nothing is
-  deleted), a minimum app version per workspace, and a database generation so devices re-upload their
-  work after a backup is restored (v0.021).
-- The file gateway with Google Drive: resumable uploads and streaming, tested on desktop and iPhone
-  (v0.022 to v0.028).
-- Photos and videos in pages go to the owner's Google Drive: saved on the device first, uploaded in parts
-  that resume after closing the app or losing the connection, with a small thumbnail on the page that is
-  swapped for a sharp version (up to 2048 px, made on the device) when the photo is shown large. The
-  owner chooses where the folder goes (account menu → *Google Drive*).
-- The media carousel: tap a photo or video on a page to see all of the page's photos and videos full
-  screen, in order, with swipe, pinch and wheel zoom, video playback, download of the original and the
-  thumbnail when offline or when the browser can't play a file.
-- The team: the owner and admins manage people from the account menu (*Members*: invite with a link to
-  send, change roles, remove), and projects and pages are shared from their menu (*Share…*) with view,
-  comment, edit, or edit and create pages. What you cannot change shows read-only, also offline.
-  The owner and admins can also *Share scenes* of a project with a vendor: one person at a time, with view or
-  comment, they see only the scenes picked and the pages inside them (never the locations, shoot days, other
-  scenes or the folders above). The scenes are picked from a table you can sort by number, location, set or
-  INT/EXT and filter by location or set, with a range on Shift+click; an eye in the page tree marks what people outside the team can see.
-- Comments and questions: comment on any block (or the whole page) from a side panel, or a bottom sheet
-  on the phone, with replies, resolve and edit, also offline; a *Question* paragraph is answered in its
-  comment thread, so a guest with *Comment* can answer without editing the page. If you edit the same
-  comment on two devices, the edit that arrives second does not replace the first: the comment shows both
-  texts and you choose which one stays. A reply or an edit you are writing stays in its box when the thread
-  is resolved or the comment is deleted from somewhere else, so you can still send it or copy it.
-- Several workspaces: a welcome screen to join one with an invitation link or connect one you created with
-  the guide, and a workspace list in the project menu to switch, join, create or remove one from the device.
-- Long pasted titles keep their full text until the title and overflow save locally. If saving fails, the
-  draft stays available in that page for a retry; once saved, the overflow moves into the page without duplication.
-- A file trash per project: photos and videos no page uses anymore show in the *Files* tab of the trash, and
-  the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
-- How much each project takes in the owner's Drive: in the project menu, in the *Google Drive* dialog (owner
-  only, with the Drive trash and what is still uploading) and at the top of the file trash (v0.050; it shows
-  once the workspace database is on version 7). After *Delete forever*, files that never reached Drive no longer
-  count toward the project size; files in the Drive trash keep counting there for 30 days.
-- *Files by size*, at the bottom of the project menu: a project's photos, videos, folders and files from heaviest
-  to lightest, each with a link to the pages that use it, and the ones no page uses marked; the project is chosen
-  at the top, heaviest first. It only reads, loads 100 files at a time and needs a connection; it is for the
-  people who see the project's size.
-- In *Share*, the team sees the exact number of files added through all links to the page, including earlier
-  links, even beyond 500 files; the list shows the newest 20.
-- Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
-- Page links in the editor keep their workspace when you use the browser’s Copy link address or Open link in new tab. An ordinary click opens a page in the current workspace or waits for local saving before opening another workspace. Reloading a normal page keeps its explicit workspace, even if this tab previously opened a public link. In a public link, old links to pages in that workspace keep its access only if they have no explicit workspace or existing fragment. Copying formatted selections, dragging links, older public links with fragments and complete import/export support remain pending; this is partial cross-workspace support.
-- Photos in the line of text (v0.078): pasted, dropped or picked photos and videos go into the line, where the
-  text cursor is (or where you drop them), like characters: text can sit next to them, they flow to the next line
-  when they don't fit, and you select several with Shift+click, Shift+arrows or by dragging. A single one comes
-  in at its own size, several at a third of the line each. They do everything the older block photos do: resize
-  handles that snap to 1/1, 1/2, 1/3 and 1/4, and the same toolbar for both, in groups: view and download | sizes
-  (for every selected photo) and *Arrange in rows* for the selected ones | align | comment | replace, rename and
-  delete. There is no caption button anymore (existing captions still show). Other files still come in as a card
-  below. The PDF splits a paragraph of photos between sheets only between rows.
-- Photos in table cells: with the cursor in a cell, pasted, dropped or picked photos go into that cell as
-  thumbnails as tall as a row, side by side. Their toolbar has *Thumbnail* and *Full cell width* (handles resize them inside the cell);
-  they open full screen like any photo and print the same. Photos in a cell of a Coda table stay in their cell.
-- On phones, *Take photo* and *Record video* in the slash menu and page menu open the phone's camera and add
-  the result at the cursor. Videos need the workspace's Drive. Computers and tablets can add existing photos and
-  videos. If Request Desktop Site hides a phone's identity, switch back to the mobile site for the camera actions.
-- Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
-  (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
-  photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
-  rows and breaks sheets where the page shows them. Photos added before v0.078 keep working this way.
-- Replacing a photo block or a photo in a row keeps your latest file choice when saves finish out of order,
-  even after selecting text and returning to the photo. If that choice fails, the current photo stays with an error;
-  an older pending choice does not replace it. A changed source or a closed or read-only page stays untouched.
-- Replace one annotated Drive photo on an editable page: **Keep annotations?** offers **Yes** when the new image has exactly the same proportions after orientation. **Yes** copies all its drawings, **No** replaces without copying, and **Cancel** or Escape keeps the current photo. This works for blocks, rows, inline photos and table cells, also offline. The original stays intact, replacing and copying share one undo step, and a newer choice never revives an older pending replacement. If dimensions or annotation data cannot be checked, replacement without annotations remains an explicit choice.
-- Annotate photos on a computer: *Annotate* in a photo's toolbar (or A in the full-screen viewer) draws arrows,
-  ellipses, rectangles, lines, pencil and marker strokes, text and numbered markers on top, with the tools, letters,
-  colors and thickness of LGA FrameRev. The original never changes; annotations show on the page, in table cells, in
-  the viewer and in the PDF, are saved as you draw (also offline) and appear live for everyone editing the page. Only
-  people who can edit the page annotate.
-- Annotate photos on a phone or an iPad: the tools sit in a strip at the bottom and the color dot opens the colors and
-  thickness. The selected tool stays visible when opening, choosing a tool or resizing the window; the strip can still be swiped.
-  A system interruption preserves a developed new drawing up to its last accepted point; Undo removes it. Escape
-  discards an unfinished drawing without closing the annotator. One finger draws, two fingers zoom and move the photo
-  without drawing, and text is typed in a regular box
-  with the phone keyboard. Once you use a pencil (Apple Pencil on the iPad), only the pencil draws and your finger moves
-  the photo, like in Notes.
-- In the full-screen viewer, **Download → With annotations** prepares a local JPEG/PNG copy with the page’s drawings at full original dimensions. The original stays untouched, and it works offline with a full local original. Simple static WebP (one VP8 or VP8L chunk) is exported as PNG with its filename and full dimensions shown before saving. Animated WebP and WebP with metadata are rejected without flattening; Original keeps the unchanged bytes. HEIC and other formats, public links, and photos too large for the device (including 48 MP on phones) are not supported yet; Original remains available, with no automatic reduction.
-- Copy or cut an annotated photo and paste it on another page of the same project: its annotations come with it (also
-  into another window of the app), pasting twice doesn't repeat them, and undo right after pasting removes the photo
-  with them. On a page of another project it arrives without them, and nothing of the annotations goes to the
-  clipboard.
-- iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
-  shows them; the converter is downloaded only the first time it is needed.
-  Older HEIC photos still queued on this device are also prepared as JPEG before their upload starts. Registration is checked before the original is replaced; an already registered HEIC keeps its original format, and uncertain results keep the original protected.
-- Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
-  a PDF shows its first page as a preview (also offline once seen), opens in a new tab, and everything else
-  downloads with its name. In the full-screen viewer, files appear large among the photos, with Open and Download.
-- Drop a whole folder, subfolders included (or, on a computer, type `/` and choose *Folder* to pick it): a window shows what goes up, it uploads to the owner's Drive and
-  stays in the page as a folder card. Opening it shows what is in that Drive folder right now, with thumbnails,
-  the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it.
-  Choose List or Grid to browse the same folder; Grid shows full thumbnails, and this device remembers your view.
-  *Download all*
-  saves the whole folder as a .zip (in Chrome and Edge on a computer, written as it arrives and with no size limit,
-  or straight into a folder; elsewhere, built in memory up to 1 GB, 500 MB on a phone). Cancel also stops a download
-  whose server error response stalls; it discards the unfinished zip or keeps completed files in the chosen folder.
-  While listing more pages, it skips checks for subfolders already set aside in that pass, keeping checks for the
-  remaining folders. Folders deferred for another pass are checked again when their turn starts.
-- Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
-  of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
-  Shift+click collapses or expands the shared view (if you can edit it); each person can override that view locally.
-  The triangle stays visible when the shared view is collapsed or differs from yours. Its direction shows your view;
-  an accent color, tooltip and accessible label explain any difference. Dragging a collapsed heading, or Ctrl/⌘+Shift+↑/↓, moves its whole section.
-  Deleting a collapsed heading deletes its whole section; sheet marks still count everything and the PDF
-  prints it all open (or as shown, with *Print as shown* in the page menu).
-- Archive and delete projects: icons next to each project in the project menu (a "⋯" on the phone). Archiving keeps
-  the project as it is, out of the everyday list; deleting asks you to type *delete* and moves it to *Deleted
-  projects*, from where it can be restored exactly as it was. Nothing is erased, and its files stay in Google Drive
-  unless the owner or an admin ticks *Also send its files to the Google Drive trash*: then its whole folder goes to
-  the Drive trash, and restoring the project within Google's 30 days brings it back.
-- Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
-- Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets. A manual page break (*Page break* in the / menu, or Ctrl+Enter, ⌘↩ on a Mac) makes what follows start on a new sheet, on screen and in the PDF.
-- Export a branch or a whole project as PDF: *Export…* in the page menu (the page and the pages inside) or *Export project…* in the project list. It starts with a contents page that links to each page and says on which PDF page it starts, every page keeps its own paper size (in Chrome or Edge on a computer), photos keep their annotations and go as they were taken, at full resolution (tick *Smaller file* for a lighter PDF with photos scaled to their printed size), and comments can be included with names but never email addresses. If it is too much for one PDF on the device, it comes out in parts (*Part 1*, *Part 2*…), split between pages, and at the end any page that could not be exported is listed with a link and *Export again*. Pages in the trash are never included, and a guest exports only what they can see.
-- Original photo downloads for a PDF can take as long as needed while data keeps arriving. If a download receives
-  no data for 30 seconds, the PDF uses the available lower-resolution copy and lists the page with *Export again*.
-- Export PDF waits for pending local writes, including the open title and any overflow text moving into the page. A failed save keeps the window open. Preparing the next part checks that page order and layout still match the previous part; if they changed, the previous PDF stays available and Export again starts from the beginning. Cancel stops preparation without cancelling an accepted local write.
-- Links to files in a PDF: in an exported or printed PDF, every attachment, folder and video block links to the file, with its name below. An inline video links only its frame, keeping its line or table cell unchanged; photos don't link. Whoever opens the link signs in and sees the file only if they can see a page where it is; if not, they just see that they don't have access. *Export…* can use the page's public link instead, after saying which page and level it opens. Offline, it warns about file links only when the PDF contains attachments, folders or videos, and about lower-resolution photos only when their originals are missing from this device.
-  Photos reduced because full-size conversion exceeds the export limit have a separate count and explanation; they are not reported as missing originals. The conversion and PDF size limits stay the same.
-  Media previews shown as markers in the PDF have a separate count; this does not mean their originals are missing.
-- Request access: whoever opens a file link or a page link without access can ask for it, even with nothing shared yet; the people who can share that page (or a page with that file) see the request in the bell and in *Share*, and give access to that page (never less than the person already has) or decline it.
-- Request a scene from its link: whoever opens a link to a scene (from PipeSync, or *Copy link*) without access sees only "You don't have access to this. Request access?", with nothing about the project or the scene, not even whether they exist; the owner and the admins who can share that project see the request in the bell, check which scene it is and how many pages it holds, and give it with view or comment (the same rules as *Share scenes*) or decline it.
-- Export a branch or a whole project as a zip to archive it: a folder for each page with the page as a web page that opens in any browser without a connection, its text as Markdown, a JPEG of every photo (also iPhone HEIC photos), the original photos, attachments and videos from Drive if you tick them, and the comments with names but never email addresses. It also keeps the blocks and the page tree for importing it back later. On Chrome and Edge on a computer it is written as it is made (or into a folder); in other browsers it is built in memory. Only the workspace owner and admins can export a zip, and only from a computer.
-- Import a Shot Docs archive: *New › Import Shot Docs archive* in the project list brings an exported zip (or its unzipped folder) back as a new project, never on top of an existing one, with its pages in order, sheet sizes, blocks, collapsed headings, photo annotations, template marks, comments with their names and dates, and photos and files, which upload to the workspace's Drive. A photo whose original was left out comes back from its preview; a video or file that is not in the zip keeps its name in its place. If it stops, choose the same zip again and *Resume*: it continues in the same project without repeating anything, and a page that was waiting for a file comes in whole. *Import into a new project* starts a separate one and leaves the earlier project as it is. Only the workspace owner and admins can import.
-- English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
-- Available offline: mark a page (with its subpages) or a whole project from its menu, choose what to keep (large
-  photos, original photos, attachments, videos) with the size of each, and it downloads everything needed to use it
-  without a connection and keeps it up to date. *Storage on this device* (account menu) shows what the app keeps,
-  with a limit you choose (2 GB by default): past it, the app asks before removing copies of files already in Drive.
-  Without a connection the app says *Offline* with what is waiting to upload.
-- Help and guided tours: the "?" at the bottom of the sidebar (or *Help and shortcuts* in the account menu) opens
-  the help, resizable, with *Tours* first, then *Topics* (every feature, folded, with a search box) and *Shortcuts*.
-  Tours come in chapters where you do each step for real. *Getting around* walks through the app on a practice page;
-  *A project from scratch* builds a short film from an empty project (scenes, their locations and sets, a scouting, the
-  day's plan and report, and how the Overview gathers it all for post) in a separate practice project with no
-  connection, never saved or synced. The first time someone signs in, *Getting around* starts by itself; the help
-  remembers where you left each tour. *Show me* on an entry opens the practice page at just
-  that step and brings you back; a dot on the "?" means there is something new, listed under *What's new*.
-- Assistant (account menu → *Assistant…*): choose NVIDIA, Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service,
-  paste your API key and pick a model from your provider's list. The key is stored encrypted on that device and sent
-  to that provider. NVIDIA requests and keys pass through the gatekeeper of your workspace without being stored or logged there; other providers are contacted directly. NVIDIA supports Qwen (text and captions), Llama (text), and manually selected Kimi K3 or GLM 5.3 (text only, up to 16,000 generation tokens). Automatic selection still prefers Qwen, then Llama; saved settings are preserved. No audio is sent to NVIDIA. Test lists admitted models and does not prove inference access. Gateway preparation has its own waiting limit and timeout message before the key is sent. Gateway preparation and Stop also work with the native connection in Chromium. Stop uses a separate control request to the same gatekeeper and waits for confirmation; until it finishes, new requests and Apply stay disabled. If confirmation cannot be obtained, the app says so. Incomplete answers cannot be applied and partial catalogues are discarded. A confirmed Stop does not guarantee that the provider stops processing or charging for work it already received. Verification also includes the catalogue and one real Kimi K3 text response through the app and its workspace gatekeeper, online on Windows, preserving synthetic facts. Apply, Undo and Redo restored the exact expected texts without another request. Real Stop, concurrent edits, other devices, other models or captions, physical metadata expiry and crash recovery remain unverified; phase 5 and MCP remain open. Existing settings are preserved. *Sync across my devices* encrypts it on the device with a six-word passphrase the app proposes
-  and stores only that encrypted copy in the workspace, so another device unlocks it with the passphrase (on a borrowed
-  computer, only for that tab); *Change passphrase…* re-encrypts it, the voice key travels in the same copy, and *Sign
-  out other devices* in the account menu is there for a lost device. Select text and press Ctrl+Alt+J (⌘⌥J on a Mac), or use *Assistant* in the toolbar or the
-  page menu: *Fix spelling & grammar*, *Improve writing*, *Make shorter*, *Translate to…* or *Ask…*. The preview marks
-  what changes word by word; *Apply* replaces it as one edit you undo with Ctrl+Z, and nothing is applied if the text
-  changed while the assistant was working. Photos and links inside the selection stay. *Format as…* turns the selected
-  lines into a bulleted list, a checklist, a table or headings. The preview warns before Apply if this removes Script formatting; Discard keeps the original, and Undo restores its Script formatting too. *Summarize page* adds a summary at the top or below the
-  cursor, and *Translate page* replaces the text of every block in place or creates a translated subpage. *Suggest
-  caption*, in a photo's toolbar or in the assistant with the photo selected, first asks before sending the photo to
-  your provider (a copy of up to 1,024 pixels without its location data, never the original, and nothing else from the
-  page), then shows the suggested caption in a field you can edit; *Apply* adds it as a normal line under the photo
-  (in a table, in the same cell). The owner
-  and the admins choose, in *Assistant…*, whether the workspace allows the assistant, only local models, or none.
-- Dictate to report (the microphone in the page bar, the round button on the phone, the page menu or Ctrl+Alt+Shift+D,
-  ⌘⌥⇧D on a Mac): write the note or dictate it with your keyboard's microphone and choose *Place*. The open page goes to
-  your provider as a map of its tables, rows, labeled lines and checkboxes; the answer is checked against that map and
-  shown change by change, each with its checkbox and its place (*Setups & takes › 12 · 010 · 3 › Lens*). *Apply* applies
-  the checked ones as one edit you undo with *Undo* or Ctrl+Z, and nothing is applied if those places changed meanwhile.
-  If it is not clear which shot, it asks with a button per row. What it could not place, and what you unchecked, stays
-  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it. Without internet,
-  *Save for later* keeps the note on the device: *N voice notes to place*, under the sync status, lists them, and each
-  one is placed in its page with its preview, inserted as text at the end of the page, or discarded after asking.
-  The big microphone button records a voice note on the device (tap to start, tap to stop, up to 2 minutes) and your
-  provider turns it into text (OpenAI, Gemini or a compatible service, with the assistant's key or a second one in
-  *Voice*); then it is placed like a written note, or written where the cursor was with *Insert at cursor*. Without
-  internet the recording is saved and transcribed when you are back online.
-- Templates: a new empty page offers the built-in ones that fit where it is (*Pre-production Notes*, *On-Set Report*
-  and *Shot Breakdown*; *Scene*, *Location*, *Tech scout* and *Creative scout* in the project's folders), and *More…* lists them with your project's own templates
-  and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
-  *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new
-  pages get a copy. *New day report* creates the day's on-set report with today's date, the next shoot day, the
-  location that day's plan names (or yesterday's) and yesterday's camera package, offline too, from the report folder's
-  template; the title carries the place you typed or the plan's. *New day plan* (and *Plan
-  tomorrow* in the day's header) creates the day's plan right above its report, with the same name and `| Plan`, so
-  plan and report sit next to each other, each row tagged PLN (amber) or REP (green) in the sidebar. A new plan
-  already lists the scenes the breakdown plans for that date, linked, and proposes their location.
-- A new project starts with its stage folders, empty: *Preproduction* (*Scenes* and *Locations*), *Scouting reports*,
-  *Tests and previs*, *Shoot*, *References* and *Archive*. *Scenes* shows *New scene* (the next number, in gray, and
-  you type the name) and a table built from every scene page: photo, number, name, location and set; *Locations* does
-  the same. Click a row's photo to see that row's photos; *Use as thumbnail* picks the one the table shows, for
-  everyone. A page opened from a row goes back to the table with Esc. Locations are always blue and sets violet, in
-  the sidebar and everywhere else. A set is a page inside its location (*New set* in the location's header, or
-  *Create page* next to the set a scene names), and moving a page never changes what it is. Every table the app
-  builds lets you widen its columns (drag or double-click a header edge) and keeps its header on top while you scroll.
-- Scenes, locations and shoot days: *Type* in a folder's menu sets what's created inside it, the folder shows a small
-  SCENES, LOCATIONS or SHOOT DAYS label, and its pages are marked as such, with the scene number taken from the title
-  (`101_074`). A scene's breakdown cards, a location's scouts and a day's plan count as part of it.
-- *Overview*, above the pages, in every project (an empty part shows 0 and says where to write it): every scene with
-  where a report has a section of it, every location in time, the shoot days, every shot of every scene in one table
-  (sortable, to copy into a spreadsheet) and what's still pending, built from what the pages say. It's read-only: you
-  write in *Pages*, stage by stage, and a scene, location or set in the overview opens a summary with links to every
-  page that talks about it. In the sidebar it lists its scenes, locations,
-  sets and shoot days, one part open at a time. *Copy overview* and *Copy JSON*
-  hand it to an assistant, and the search finds a scene by any form of its number (`101-074`, `1074`, `5027b`) or a
-  location by name, first.
-- *Scenes*, first in *Overview* in the sidebar: scenes by episode with their
-  live titles, and each one says where everything about it is, one line per stage (*Preproduction | Breakdown*,
-  *Scouting | Reports*, *Planning | Day plan*, *Shoot | Reports*…), each link to the page or the exact section; index
-  pages stay folded. *Copy link* copies a link that opens that scene of that project on any device, for whoever can see
-  the project. The scene's own page shows the same lines above its text, and its shots can live inside it, one
-  heading each: *Bring them into this page…* (or *Bring them all in* in *Overview › Pending*) moves shots that are still
-  subpages, as imported from Coda, into the scene.
-- While you write, scene numbers and location names that exist in the project are written in their color with a subtle
-  dotted underline (nothing pops up). Hover one, or tap it with the keyboard closed, for a preview with *Open* and *Make it a link*
-  (Ctrl+Alt+K / ⌘⌥K); links to scenes and locations show as chips, and a link to a set page is written in violet. On a phone, a shoot day report has a *Today* bar above
-  the keyboard with the day's scenes, its location, the camera and dictation.
-- Type `/e 027` or `/l cen` to link a scene or a location (it shows as a chip). A number that doesn't exist yet can be
-  created right there, in its folder, only when it's safe (you see the whole project, you're online and it isn't
-  anywhere, not even in the trash); a report section without a scene number gets *Assign* to say which scene it is, and
-  so does a mistyped number in *Overview › Pending*, with *Undo*. On the last shoot day, the *Tomorrow* card creates and
-  prepares tomorrow's report in one step.
-- A location's other names (what the crew calls it, the abbreviations in day titles) go in an *Other names* line on its
-  page (or come from *Link to a location…* on a shoot day whose title names none), and are recognized only where they are
-  written; *Leave out of relations* in the page menu keeps archives and old copies out of scenes, locations and the Overview.
-- Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
+**Search and comments**
+- Find and replace in the page, and search titles and text across the project (offline too), with replace
+  across the whole project and an undo for it.
+- Comments on any block or page, with replies, mentions and resolve; *Question* paragraphs answered in their
+  thread, so a guest who can only comment can still answer.
 
-Connecting other AI apps (MCP) comes later. The plan, the decisions and the roadmap are in
-[`Docs/`](Docs/index.md) (in Spanish).
+**Sharing and people**
+- The owner and admins invite people from *Members* with a link; one device can join several workspaces.
+- Roles (owner, admin, member, guest) and four permissions (view, comment, edit, edit and create pages) on a
+  project or a page. A permission covers everything below and nothing above.
+- *Share scenes* with a vendor: they see only their scenes and the pages inside them, never the locations,
+  shoot days or other scenes. An eye in the page tree marks what people outside the team can see.
+- *Anyone with the link* for a page and the pages inside: *Can view* (also comments, with a name) or *Can edit*
+  once the workspace turns it on; no account needed.
+- Access requests from a file link, a page link or a scene link.
+
+**Never lose anything**
+- Every edit is saved on the device first and synced when online; edits made offline on several devices
+  merge, never overwrite. The app always shows how many changes are waiting to upload.
+- Version history per page with restore, a trash for projects, pages and Drive files, and pages kept
+  available offline with a storage limit you choose.
+- People who only view or comment get a clean copy of each page, without what was deleted (once the workspace
+  turns it on).
+
+**Assistant and dictation** (with your own API key from one of the supported providers, any compatible
+service, or a local model)
+- Fix, improve, shorten, translate or reformat a selection; summarize or translate a page; suggest a photo
+  caption. Always a preview first, and applying it is a normal edit you can undo.
+- *Dictate to report*: write or dictate an informal note on set and the assistant places each piece in the
+  right row and field of the report, for you to check before applying. Voice notes recorded offline are
+  transcribed when you are back online; on iPhone you can start dictating from a shortcut.
+- The key can sync across your devices, encrypted with a passphrase. The owner and admins can turn the
+  assistant off or allow only local models. Connecting outside chat apps through MCP is being tested.
+
+**Export and import**
+- PDF of a page, a branch or a whole project, with a contents page, annotated photos and links to files.
+- A zip archive (web pages, Markdown, photos and files) that imports back as a new project (owner and admins;
+  export from a computer).
+
+**Everywhere**
+- Installable app (PWA); light and dark themes, typefaces, text contrast and size saved in your account;
+  English and Spanish; built-in help with guided tours on a practice page.
+
+## How it works
+
+- **One app, many workspaces.** Each workspace is an island: its owner's Supabase, Google Drive and file
+  gateway. Nothing goes through anyone else's servers.
+- **Supabase** (database, sign-in with an emailed 8-digit code, and permissions enforced in the database
+  with Row Level Security). Sign-up is invite-only.
+- **Google Drive** keeps original photos, videos and files, in the owner's Drive.
+- **The file gateway** is a small Cloudflare Worker (`portero/`) that keeps the connection to the owner's Drive
+  and checks each request against the workspace's permissions. It holds no database keys.
+- **Pages** are [Yjs](https://yjs.dev) documents edited with [BlockNote](https://www.blocknotejs.org), stored
+  on the device (IndexedDB) and in an append-only table on the server.
+- **The web app** is React, hosted on Cloudflare Workers (`wrangler.jsonc`).
+
+## Set up a new workspace
+
+You do **not** need your own copy of the app: you create the accounts and connect them to
+[shotdocs.lega.com.ar](https://shotdocs.lega.com.ar). No programming is needed; plan on an afternoon.
+
+**What you need** (the services all have free plans):
+
+| | What for |
+|---|---|
+| A domain of your own, with access to its DNS | The sign-in code is emailed from an address on it |
+| A computer with [Node.js](https://nodejs.org) 22 or later | To run the setup command |
+| [GitHub](https://github.com) | A fork of this repo, and a private repo for encrypted database backups |
+| [Supabase](https://supabase.com) | Database, sign-in and permissions |
+| [Resend](https://resend.com) | Sends the sign-in email from your domain |
+| [Google Cloud](https://console.cloud.google.com) and Google Drive | Access to your Drive, where photos and videos go |
+| [Cloudflare](https://cloudflare.com) | Runs your file gateway |
+
+**Steps**, in short:
+
+1. Fork this repo and download it.
+2. Create a Supabase project.
+3. Verify your domain in Resend.
+4. Run `node scripts/setup-workspace.mjs` with your Supabase token: it creates the tables and permissions,
+   code sign-in, the email templates, your mail server and you as the owner. It only changes what is missing.
+5. Publish the file gateway on Cloudflare from your fork.
+6. Create the Google Cloud project (Drive and Picker access) for the gateway, then run the setup command again
+   with `--media-url`.
+7. Create the private backup repository from its template (ask Lega for access) and add its two secrets.
+8. Open the app, choose *Create my workspace*, paste your Supabase address and key, sign in and connect
+   Google Drive.
+9. Test sign-in, an upload and a backup.
+10. Open sign-up for invited people only.
+
+**Keep it up to date:** when the app changes, *Sync fork*, download it again and rerun the setup command
+(database changes and gateway).
+
+The full guide, button by button: [`Docs/Guide_Create_Workspace.md`](Docs/Guide_Create_Workspace.md).
+
+## Run your own copy of the app (optional)
+
+Only if you want to host the web app yourself instead of using shotdocs.lega.com.ar:
+
+1. In Cloudflare, create a Worker named `shotdocs` from your fork (build `npm run build`, deploy
+   `npx wrangler deploy`). The optional build variables `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (the
+   public one) open that workspace by default.
+2. Run the setup command again with `--redirect-url <your address>`, and add the address to the gateway's
+   `APP_ORIGINS` and to the Picker API key's website restrictions.
+3. Apply new database migrations (`npm run db:migrate`) before publishing a new version of the app.
 
 ## Development
 
 ```sh
-npm install
+npm install                  # also applies the patches in patches/ (y-prosemirror and yjs)
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 1410 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # every test: sync, editor, UI, gateway client and Worker
 npm run typecheck            # app types
-npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
+npx tsc -p portero --noEmit  # file gateway types
 npm run build                # production build in dist/
 ```
 
-`npm install` also applies the app's fixes to y-prosemirror (`patches/`, via `patch-package`): two small ones
-for editing at the same time, and how a line with inline photos is stored; the build and the tests refuse to
-run without them. Why and how to redo them on an upgrade: `Docs/Doc_Colaboracion.md`.
+- The build and the tests refuse to run without the patches; why they exist: `Docs/Doc_Colaboracion.md`.
+- Database migrations are in `supabase/migrations/` and the permission tests in `supabase/tests/`; how to
+  apply and run them: [`Docs/Doc_Supabase.md`](Docs/Doc_Supabase.md).
 
-The database migrations are in `supabase/migrations/`. See [`Docs/Doc_Supabase.md`](Docs/Doc_Supabase.md)
-to apply them and run the permission tests. Apply new migrations before deploying a new version of the
-app.
+## Status and docs
 
-To create your own workspace (your own Supabase, Resend, Google Drive, file gateway and backups), follow
-[`Docs/Guide_Create_Workspace.md`](Docs/Guide_Create_Workspace.md), in English.
-
-## Stack
-
-- React web app installable as a PWA (desktop and iPhone), with native wrappers later if needed.
-- [Supabase](https://supabase.com) for the database, sign-in and access rules. Its file storage only
-  holds the images pasted into pages so far.
-- [Google Drive](https://developers.google.com/drive) for original photos, videos and documents, in the
-  workspace owner's Drive.
-- [Cloudflare Workers](https://developers.cloudflare.com/workers/static-assets/) for hosting the web app
-  (`wrangler.jsonc`) and for the file gateway (`portero/`, with its own `wrangler.jsonc`), which keeps the
-  connection to the owner's Drive and passes files to and from it.
-- A [Yjs](https://yjs.dev) document per page for conflict-free offline editing, and a
-  [BlockNote](https://www.blocknotejs.org) block editor.
+In development, used by its author on real shows. What is pending and the design decisions are in
+[`Docs/`](Docs/index.md) (in Spanish): the roadmap, the decisions and one document per feature.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
-
-Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The app uses libheif
-([`libheif-js`](https://www.npmjs.com/package/libheif-js), LGPL-3.0), loaded on demand as a separate file to
-convert HEIC photos; the BlockNote editor (MPL-2.0); and fonts under the SIL Open Font License.
+MIT, see [LICENSE](LICENSE). Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The app
+uses libheif ([`libheif-js`](https://www.npmjs.com/package/libheif-js), LGPL-3.0), loaded on demand to convert
+HEIC photos; the BlockNote editor (MPL-2.0); and fonts under the SIL Open Font License.
 
 Lega Pugliese · [github.com/legandrop](https://github.com/legandrop)
