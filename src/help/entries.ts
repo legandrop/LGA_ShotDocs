@@ -1063,6 +1063,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
     // Sin `when`: el ojo y los avisos les llegan también a quienes solo editan.
     since: '0.323',
   },
+  // El equipo de un vendor y sus artistas (Doc_Compartir_Escenas.md, sección 12, D854).
+  {
+    id: 'vendorTeam',
+    section: 'sharing',
+    title: 'help.vendorTeam.title',
+    text: 'help.vendorTeam.text',
+    words: ['vendor', 'artist', 'artista', 'team', 'equipo', 'share all scenes', 'compartir todas las escenas', 'producer', 'productor', 'coordinator', 'coordinador'],
+    // Sin `when`: la lee quien recibe escenas de un vendor (un invitado) y quien maneja los vendors.
+    since: '0.334',
+  },
   // Pedir una escena desde su link (Doc_Compartir_Escenas.md, B-2).
   {
     id: 'sceneRequests',

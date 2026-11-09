@@ -4,7 +4,7 @@ import { locale, t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
 import { useOffline, usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
 import { isOnlyActiveProject, nextProjectAfter } from '../sync/projectStates';
-import { PROJECT_COLOR_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION, VENDORS_SCHEMA_VERSION } from '../sync/remote';
+import { PROJECT_COLOR_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION, VENDOR_TEAM_SCHEMA_VERSION, VENDORS_SCHEMA_VERSION } from '../sync/remote';
 import { pagePath } from '../router';
 import { modPressed } from './findUi';
 import { newTab, openInNewTab, tabsOn } from './tabs';
@@ -18,6 +18,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ExportIcon,
+  MembersIcon,
   MoreIcon,
   OfflineMarkIcon,
   PaletteIcon,
@@ -39,7 +40,7 @@ import { ColorPicker } from './ColorPicker';
 import { useSearchSession } from './projectSearchUi';
 import { adoptDeviceFavorites, favoritesFirst } from './projectFavorites';
 import { tipRows } from './tipRows';
-import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, ShareScenesDialog, TrashPanel } from './lazyDialogs';
+import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, ShareScenesDialog, TrashPanel, VendorTeamDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { OfflineBadge, offlineSupported, offlineTipOf, openOffline } from './SpaceHost';
 import { openExport } from './ExportHost';
@@ -158,6 +159,8 @@ export function ProjectSwitcher() {
   const [sharing, setSharing] = useState<string | null>(null);
   // *Share scenes of “<proyecto>”* (Doc_Compartir_Escenas.md): el proyecto cuyas escenas se comparten.
   const [sharingScenes, setSharingScenes] = useState<string | null>(null);
+  // Lo del equipo de un vendor (D854): sumar gente al equipo (`team`) o repartir las escenas entre artistas.
+  const [vendorTeam, setVendorTeam] = useState<{ id: string; kind: 'team' | 'artists' } | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
   const switchTo = useSwitchProject();
   const [workspaces, setWorkspaces] = useState<WorkspacesMode | null>(null);
@@ -229,6 +232,7 @@ export function ProjectSwitcher() {
               onClose={() => setPosition(null)}
               onShare={(id) => setSharing(id)}
               onShareScenes={(id) => setSharingScenes(id)}
+              onVendorTeam={(id, kind) => setVendorTeam({ id, kind })}
               onDelete={(id, name) => setDeleting({ id, name })}
               onWorkspaces={(mode) => setWorkspaces(mode)}
               onRemoveWorkspace={() => setRemoving(true)}
@@ -249,6 +253,17 @@ export function ProjectSwitcher() {
         createPortal(
           <Part onClose={() => setSharingScenes(null)}>
             <ShareScenesDialog projectId={sharingScenes} onClose={() => setSharingScenes(null)} />
+          </Part>,
+          document.body,
+        )}
+      {vendorTeam &&
+        createPortal(
+          <Part onClose={() => setVendorTeam(null)}>
+            {vendorTeam.kind === 'team' ? (
+              <VendorTeamDialog projectId={vendorTeam.id} onClose={() => setVendorTeam(null)} />
+            ) : (
+              <ShareScenesDialog projectId={vendorTeam.id} artists onClose={() => setVendorTeam(null)} />
+            )}
           </Part>,
           document.body,
         )}
@@ -430,6 +445,8 @@ function ProjectMenu(props: {
   onShare: (projectId: string) => void;
   /** *Share scenes of “<proyecto>”* (Doc_Compartir_Escenas.md): dueño y admins, con la base en la 28. */
   onShareScenes: (projectId: string) => void;
+  /** Lo del equipo de un vendor (D854): *Share all scenes…* (`team`) o *Share scenes with artists…*. */
+  onVendorTeam: (projectId: string, kind: 'team' | 'artists') => void;
   onDelete: (projectId: string, name: string) => void;
   onWorkspaces: (mode: WorkspacesMode) => void;
   onRemoveWorkspace: () => void;
@@ -474,6 +491,7 @@ function ProjectMenu(props: {
   // *Share scenes* con vendors (Doc_Compartir_Escenas.md, sección 11, D852): dueño o admin que comparte el proyecto, o quien
   // tiene *Can share scenes*, con la base en la 31. La base vuelve a pedir todo (`save_scene_vendors`).
   const scenesReady = (status.schemaVersion ?? 0) >= VENDORS_SCHEMA_VERSION;
+  const teamReady = (status.schemaVersion ?? 0) >= VENDOR_TEAM_SCHEMA_VERSION;
   const { workspace, user } = useServices();
   const keys = workspace.config.storage;
   // La estrella de cada renglón: los favoritos de la persona van primero (`ProjectRow.favorite`, se sincronizan). Lo que la
@@ -715,6 +733,9 @@ function ProjectMenu(props: {
     // Compartir, como antes en el pie y en la hoja del teléfono: también un archivado (se sigue abriendo y editando).
     const canShareIt = perms.canShareProject(id);
     const canScenesOf = scenesReady && perms.canShareScenes(id);
+    // Del equipo de un vendor (D854, la columna `vendor_team`, base 32): sumar gente al equipo y repartir sus escenas
+    // entre artistas. Quien ya maneja los vendors del proyecto no lo necesita (los ve todos desde *Share scenes…*).
+    const isVendorTeam = teamReady && !canScenesOf && tree.project(id)?.vendor_team === true;
     const reason = blockedReason(id, archived);
     const deleteReason = offline ? tr('fileTrash.needsInternet') : archived ? null : reason;
     const groups: (PopEntry | false)[][] = [
@@ -763,6 +784,26 @@ function ProjectMenu(props: {
           run: () => {
             props.onClose();
             props.onShareScenes(id);
+          },
+        },
+        isVendorTeam && {
+          key: 'vendorTeam',
+          label: tr('project.vendorTeamItem'),
+          aria: tr('project.vendorTeamNamed', { name }),
+          icon: <MembersIcon size={16} />,
+          run: () => {
+            props.onClose();
+            props.onVendorTeam(id, 'team');
+          },
+        },
+        isVendorTeam && {
+          key: 'vendorArtists',
+          label: tr('project.vendorArtistsItem'),
+          aria: tr('project.vendorArtistsNamed', { name }),
+          icon: <ShareIcon size={16} />,
+          run: () => {
+            props.onClose();
+            props.onVendorTeam(id, 'artists');
           },
         },
         canExport && {

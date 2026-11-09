@@ -68,6 +68,8 @@ The app runs at **[shotdocs.lega.com.ar](https://shotdocs.lega.com.ar)**. Each t
   emails), you assign them scenes before they have an email, and each email sees only its vendor's scenes and the
   pages inside them, never the locations, shoot days or other scenes. *Can share scenes* lets a producer do it too.
   An eye in the page tree marks what people outside the team can see.
+- A vendor's team adds people who see all its scenes and splits them among its artists, each seeing only theirs;
+  the project sees and can remove everything set up under each vendor.
 - *Anyone with the link* for a page and the pages inside: *Can view* (also comments, with a name) or *Can edit*
   once the workspace turns it on; no account needed.
 - Access requests from a file link, a page link or a scene link.

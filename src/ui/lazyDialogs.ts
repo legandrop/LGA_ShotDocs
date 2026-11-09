@@ -29,3 +29,5 @@ export const InstallDialog = lazyPart(() => import('./InstallDialog').then((m) =
 export const ExportDialog = lazyPart(() => import('./ExportDialog').then((m) => m.ExportDialog));
 // *Share scenes of “<proyecto>”* (Docs/Doc_Compartir_Escenas.md): en el selector de proyectos y en el Panorama.
 export const ShareScenesDialog = lazyPart(() => import('./ShareScenesDialog').then((m) => m.ShareScenesDialog));
+// *Share all scenes of “<vendor>”* (D854): el equipo de un vendor suma gente al equipo.
+export const VendorTeamDialog = lazyPart(() => import('./VendorTeamDialog').then((m) => m.VendorTeamDialog));

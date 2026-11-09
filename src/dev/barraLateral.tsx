@@ -3,7 +3,9 @@
 // login ni red, con el proyecto sintético de las relaciones (escenas, locaciones y días): sirve para mirar los títulos
 // de la barra lateral (Overview, Pages), las partes de *Overview* y su selección contra la de una página. `?map` abre el mapa; `?muchas`
 // suma 120 escenas al episodio 5 y una rama *Preproducción › Decorados* con 80 páginas, para ver qué queda pegado arriba
-// al bajar (D771). `?compartir` abre encima *Share scenes* (v0.331), con dos vendors.
+// al bajar (D771). `?compartir` abre encima *Share scenes* (v0.331), con dos vendors; DNEG con dos artistas y un correo
+// que sumó su equipo (D854). `?equipo` abre la app como Vera, del equipo de DNEG: su ⋯ del proyecto ofrece *Share all
+// scenes…* y *Share scenes with artists…*.
 import { createRoot } from 'react-dom/client';
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
@@ -40,10 +42,11 @@ async function main() {
   const server = new FakeServer();
   // `?compartir`: abre *Share scenes* (v0.331) con la base 31, el interruptor de lo borrado y dos vendors.
   const share = new URLSearchParams(location.search).has('compartir');
-  if (share) {
+  const asTeam = new URLSearchParams(location.search).has('equipo');
+  if (share || asTeam) {
     server.enableTeam();
     server.enableClean();
-    server.enableVendors();
+    server.enableVendorTeam();
   }
   const A = await makeDevice(server);
   await A.engine.syncNow();
@@ -79,7 +82,8 @@ async function main() {
     for (const name of ['MGTZD comercial Mercado Libre segunda tanda', 'ERSO | El Robo del Siglo', 'Prueba color de proyecto con nombre largo', 'VLLF'])
       await A.tree.createProject(name);
   }
-  if (share) {
+  let vera: Device | null = null;
+  if (share || asTeam) {
     server.addMember('vera', 'guest', 'vera@vendor.test');
     for (const k of ['s027', 's029']) await A.tree.setPatch(built.ids[k], { settings: { entity: { kind: 'scene', code: k } } });
     await A.engine.syncNow();
@@ -87,15 +91,25 @@ async function main() {
       { op: 'create', key: 'dn', name: 'DNEG', code: 'DN', color: '#2e5a8e', level: 'comment', add_scenes: [built.ids.s027, built.ids.s029], add_emails: ['vera@vendor.test'] },
       { op: 'create', key: 'fs', name: 'Framestore', code: 'FS', color: '#774dcb', level: 'view', add_scenes: [built.ids.s027], add_emails: [] },
     ]);
+    // El equipo de DNEG (Vera): suma a Celia y arma dos artistas, uno con correo.
+    vera = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'vera', email: 'vera@vendor.test' });
+    await vera.remote.saveVendorTeam(built.projectId, [
+      { op: 'team', add_emails: ['celia@vendor.test'] },
+      { op: 'create', key: 'so', name: 'Sofi', code: 'SO', color: '#2f8f6b', level: 'comment', add_scenes: [built.ids.s027], add_emails: ['sofia@art.test'] },
+      { op: 'create', key: 'ju', name: 'Juan', code: 'JU', color: '#c4572e', level: 'view', add_scenes: [built.ids.s027, built.ids.s029], add_emails: [] },
+    ]);
   }
   await A.engine.syncNow();
+  if (vera && asTeam) await vera.engine.syncNow();
+  const who = vera && asTeam ? vera : A;
+  const whoId = vera && asTeam ? 'vera' : server.ownerId;
   // El proyecto sintético como el elegido (en `/map` no hay página abierta que lo diga).
-  localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [server.ownerId]: built.projectId }));
+  localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [whoId]: built.projectId }));
   installNavHistory();
-  history.replaceState(null, '', new URLSearchParams(location.search).has('map') ? mapPath() : pagePath(built.ids.notas));
+  history.replaceState(null, '', new URLSearchParams(location.search).has('map') ? mapPath() : pagePath(asTeam ? built.ids.s027 : built.ids.notas));
   createRoot(document.getElementById('root')!).render(
     <>
-      <ServicesContext.Provider value={services(A, server.ownerId)}>
+      <ServicesContext.Provider value={services(who, whoId)}>
         <Shell />
         {share && <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />}
       </ServicesContext.Provider>

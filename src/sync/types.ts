@@ -149,6 +149,11 @@ export interface ProjectRow {
    * se listan primero. Ausente: no (o una base anterior).
    */
   favorite?: boolean;
+  /**
+   * Si la persona es del equipo de un vendor del proyecto (la columna calculada `vendor_team`, versión 32 de la base,
+   * D854): su menú ⋯ ofrece sumar gente al equipo y repartir las escenas del vendor entre artistas. Ausente: no.
+   */
+  vendor_team?: boolean;
 }
 
 /** Una fila de `trashed_projects` (P.14): un proyecto en la papelera de proyectos que la sesión veía. */

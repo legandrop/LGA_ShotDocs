@@ -2944,3 +2944,20 @@ proyecto, en este orden: *Available offline…*, *Color…* y *Rename…*; *Shar
 *Archive* y *Delete…*. **Decidido:** la lista mide 400 px (la papelera y *Files by size* siguen en 520 por su contenido);
 el pie queda con *Files by size* y *Trash*; en el teléfono, el ⋯ despliega la misma lista con el mismo orden. Un
 archivado se sigue compartiendo, como antes. Detalle: `Doc_Navegacion.md`, «El selector de proyectos».
+
+### D854 · El equipo de un vendor y sus artistas (2026-11-09)
+**Pedido de Lega:** que un vendor (el productor o el coordinador de post) pueda, desde el ⋯ del proyecto, compartirle
+todo a otra persona de su equipo y repartir sus escenas entre artistas (3D, comp, roto…), con artistas armados antes de
+tener correo, como los vendors; que en ese ⋯ no tenga color, renombrar, compartir, exportar, archivar ni borrar; y que el
+dueño vea y pueda sacar todo lo que se armó debajo de cada vendor. **Decidido con Lega:** (1) el equipo saca solo lo que
+sumó el equipo, nunca lo que sumó el proyecto; (2) *Available offline…* se queda en el ⋯; (3) los nombres *Share all
+scenes…* y *Share scenes with artists…* (y en castellano, *Compartir todas las escenas…* y *Compartir escenas con
+artistas…*); (4) maqueta primero, aprobada con «hacelo». **Decidido en la maqueta y aceptado:** dos niveles nada más (un
+artista no comparte); un artista nunca tiene más nivel que el vendor ni una escena que el vendor no tiene; sacarle una
+escena al vendor se la saca a sus artistas, bajarlo a Ver los baja y borrarlo los borra; el nombre, el color y el nivel del
+vendor los decide el proyecto; un correo, un solo lugar por proyecto (vendor o artista); el vendor nunca ve los otros
+vendors (si un correo ya tiene acceso por otro lado, se dice sin decir dónde); ante el vendor, lo del proyecto firma como
+el proyecto; el proyecto puede sacar correos y artistas, pero no reparte las escenas de un artista; dos artistas de una
+escena se ven entre sí, como dos vendors. **Decidido en la implementación:** un artista es un vendor hijo en la misma
+tabla (reusa el acceso que se arma solo, las invitaciones y los frenos); quien ya maneja los vendors del proyecto no ve
+las dos entradas del equipo (los ve todos desde *Share scenes…*). Detalle: `Doc_Compartir_Escenas.md`, sección 12.

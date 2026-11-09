@@ -5704,8 +5704,9 @@ svg.sd-markup text {
   grid-template-columns: 220px minmax(0, 1fr);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  min-height: 0;
-  flex: 1 1 auto;
+  /* Nunca más baja que lo que tiene adentro: si no entra, se desplaza la ventana (con el pie pegado abajo). Encogida, la
+     tabla se le montaba encima a los avisos de abajo. */
+  flex: none;
 }
 .share-vendors-rail {
   display: flex;
@@ -6026,6 +6027,221 @@ svg.sd-markup text {
 }
 .share-vendor-confirm span {
   margin-right: auto;
+}
+/* Lo que sumó el equipo del vendor (D854), y los artistas de un vendor en la ventana del proyecto. */
+.share-vendor-mail .by {
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.share-vendor-mail.small {
+  height: 24px;
+  font-size: 12px;
+}
+.share-artists {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.share-artists-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 8px 12px;
+  background: var(--surface-2, var(--hover));
+  font-size: 12px;
+  color: var(--faint);
+}
+.share-artists-head b {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.share-artists-head .muted {
+  margin-left: auto;
+}
+.share-artist {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 0.8fr) minmax(0, 2fr) minmax(60px, 0.8fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.share-artist.del {
+  background: var(--danger-bg);
+}
+.share-artist.del .share-artist-name {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+.share-artist-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-2);
+}
+.share-artist-name svg {
+  color: var(--faint);
+}
+.share-artist-mails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.share-artist-mails .nomail {
+  font-size: 12px;
+  font-style: italic;
+}
+.share-artist-scenes {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-artist .icon-button.danger {
+  color: var(--danger);
+}
+@media (max-width: 640px) {
+  .share-artist {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .share-artist-mails,
+  .share-artist-scenes {
+    grid-column: 2 / 4;
+  }
+}
+/* *Share all scenes…*: el equipo de un vendor (D854). */
+.vendor-team {
+  width: min(560px, calc(100vw - 32px));
+}
+.vendor-team-level {
+  margin: 4px 0 0;
+}
+.vendor-team-level b {
+  color: var(--text-2);
+}
+.vendor-team-label {
+  margin: 16px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+.vendor-team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.vendor-team-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 10px;
+}
+.vendor-team-row + .vendor-team-row {
+  border-top: 1px solid var(--border);
+}
+.vendor-team-row.new {
+  background: var(--project-current-strong);
+}
+.vendor-team-row.removed {
+  background: var(--danger-bg);
+}
+.vendor-team-row.removed b {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+.vendor-team-avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.vendor-team-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.vendor-team-who b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.vendor-team-who b .muted {
+  font-weight: 400;
+}
+.vendor-team-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.vendor-team-meta .s {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.vendor-team-meta .s.joined {
+  color: var(--ok);
+}
+.vendor-team-meta .s.new,
+.vendor-team-meta .s.again {
+  color: var(--accent-text);
+}
+.vendor-team-meta .s.expired {
+  color: var(--warn);
+}
+.vendor-team-meta .s.removed {
+  color: var(--danger);
+}
+.vendor-team-meta button.link {
+  padding: 0;
+  border: 0;
+  color: var(--accent-text);
+  font-size: 12px;
+}
+.vendor-team-lock {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+.vendor-team-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.vendor-team-add input {
+  flex: 1;
+  min-width: 0;
+}
+.vendor-team-add button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.vendor-team .share-vendor-hint.err {
+  margin-top: 8px;
 }
 .share-vendor-confirm button.danger {
   color: var(--danger);

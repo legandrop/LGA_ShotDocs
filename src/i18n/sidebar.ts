@@ -163,6 +163,11 @@ export const sidebar = {
   'project.newMenu': { en: "New", es: "Nuevo" },
   'project.shareItem': { en: "Share…", es: "Compartir…" },
   'project.shareScenesItem': { en: "Share scenes…", es: "Compartir escenas…" },
+  // El ⋯ de quien es del equipo de un vendor (D854): sumar gente al equipo y repartir las escenas entre artistas.
+  'project.vendorTeamItem': { en: "Share all scenes…", es: "Compartir todas las escenas…" },
+  'project.vendorTeamNamed': { en: "Share all scenes of “{name}”", es: "Compartir todas las escenas de “{name}”" },
+  'project.vendorArtistsItem': { en: "Share scenes with artists…", es: "Compartir escenas con artistas…" },
+  'project.vendorArtistsNamed': { en: "Share scenes of “{name}” with artists", es: "Compartir escenas de “{name}” con artistas" },
   'project.createNamed': { en: "Create “{name}”", es: "Crear “{name}”" },
   'project.archive': { en: "Archive", es: "Archivar" },
   'project.unarchive': { en: "Unarchive", es: "Desarchivar" },

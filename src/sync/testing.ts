@@ -21,14 +21,18 @@ import {
   PROJECT_STATES_SCHEMA_VERSION,
   SCENE_SHARES_SCHEMA_VERSION,
   VENDORS_SCHEMA_VERSION,
+  VENDOR_TEAM_SCHEMA_VERSION,
   SNAPSHOT_SCHEMA_VERSION,
   type AccessRow,
   type PageShareRow,
   type PageSharesResult,
   type SceneSharesRemote,
   type SaveVendorsResult,
+  type SceneVendor,
   type SceneVendorsList,
   type VendorOp,
+  type VendorTeam,
+  type VendorTeamOp,
   type CompactionClaim,
   type NewSnapshot,
   type SnapshotPushResult,
@@ -365,10 +369,40 @@ export const VENDOR_MUTANTS = [
 ] as const;
 export type VendorMutant = (typeof VENDOR_MUTANTS)[number];
 
-/** Un vendor del servidor en memoria (`scene_vendors`). */
+/**
+ * Los chequeos del equipo de un vendor y sus artistas (20261122120000_vendor_artistas.sql) que las pruebas sacan de a
+ * uno (`FakeServer.artistMutants`): con cualquiera afuera, una prueba de `src/sync/vendorArtists.test.ts` tiene que fallar.
+ */
+export const ARTIST_MUTANTS = [
+  /** Solo es del equipo quien tiene su correo en un vendor (no en un artista). */
+  'teamWho',
+  /** El equipo solo saca los correos que sumó el equipo. */
+  'teamLocked',
+  /** El equipo no se saca a sí mismo. */
+  'teamOwn',
+  /** Un artista nunca tiene más nivel que su vendor. */
+  'artistLevel',
+  /** Un artista solo recibe escenas de su vendor. */
+  'artistScenes',
+  /** Sobre un artista, el proyecto solo saca correos o lo borra. */
+  'ownerArtistOps',
+  /** La lista del proyecto muestra solo los vendors (los artistas, debajo de cada uno). */
+  'listTop',
+  /** Sacarle una escena al vendor se la saca a sus artistas. */
+  'followScenes',
+  /** Bajar el nivel del vendor baja a sus artistas. */
+  'followLevel',
+  /** Borrar el vendor borra a sus artistas. */
+  'followDelete',
+] as const;
+export type ArtistMutant = (typeof ARTIST_MUTANTS)[number];
+
+/** Un vendor del servidor en memoria (`scene_vendors`), o un artista (`parent_id`). */
 export interface FakeVendor {
   id: string;
   project_id: string;
+  /** El vendor de un artista (base 32); ausente o null: es un vendor. */
+  parent_id?: string | null;
   name: string;
   code: string;
   color: string;
@@ -376,6 +410,8 @@ export interface FakeVendor {
   created_at: string;
   deleted_at: string | null;
   emails: string[];
+  /** Los correos que sumó el equipo del vendor (`by_team`, base 32). */
+  byTeam?: string[];
   scenes: string[];
 }
 
@@ -1284,6 +1320,15 @@ export class FakeServer {
   enableVendors(): void {
     this.enableSceneShares();
     this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, VENDORS_SCHEMA_VERSION) };
+  }
+
+  /** Mutantes del equipo de un vendor y sus artistas (`ARTIST_MUTANTS`). */
+  readonly artistMutants = new Set<ArtistMutant>();
+
+  /** Prende el equipo de un vendor y los artistas: la base en la versión 32. Después de `enableClean`. */
+  enableVendorTeam(): void {
+    this.enableVendors();
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, VENDOR_TEAM_SCHEMA_VERSION) };
   }
 
   /** Prende *Share scenes*: la base en la versión 28. Llamarlo después de los otros `enable` (y de `enableClean`). */
@@ -2227,6 +2272,9 @@ export class FakeRemote
     const withFavorites =
       (schemaVersion ?? 0) >= PROJECT_FAVORITES_SCHEMA_VERSION &&
       (this.server.settings?.schemaVersion ?? 0) >= PROJECT_FAVORITES_SCHEMA_VERSION;
+    // La columna calculada `vendor_team`, con la 32.
+    const withVendorTeam =
+      (schemaVersion ?? 0) >= VENDOR_TEAM_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= VENDOR_TEAM_SCHEMA_VERSION;
     return [...this.server.projects.values()]
       .filter((p) => !this.server.projectDeleted(p.id))
       .filter((p) => !this.team || this.server.canViewProject(this.userId, p.id))
@@ -2236,6 +2284,7 @@ export class FakeRemote
           ...p,
           ...(withColor ? { color: color ?? null } : {}),
           ...(withFavorites ? { favorite: this.server.favorites.has(`${this.userId}|${p.id}`) } : {}),
+          ...(withVendorTeam ? { vendor_team: !!this.vendorTeamOf(p.id) } : {}),
           ...(withArchived ? { archived_at: archived_at ?? null } : {}),
           ...(withDrive ? { drive_trash_requested_at: d?.requested_at ?? null, drive_missing_at: d?.missing_at ?? null } : {}),
         };
@@ -3624,6 +3673,75 @@ export class FakeRemote
     return this.server.vendorMutants;
   }
 
+  private get am(): Set<ArtistMutant> {
+    return this.server.artistMutants;
+  }
+
+  /** Un vendor (o artista) como lo devuelven las listas: correos con su estado y `by_team`, escenas y artistas. */
+  private vendorRow(v: FakeVendor, withArtists: boolean): SceneVendor {
+    const joined = (email: string) => [...this.server.members.values()].some((m) => !m.removed_at && m.email.toLowerCase() === email);
+    const row: SceneVendor = {
+      id: v.id,
+      name: v.name,
+      code: v.code,
+      color: v.color,
+      level: v.level,
+      created_at: v.created_at,
+      emails: v.emails.map((email) => ({
+        email,
+        state: joined(email) ? ('joined' as const) : this.liveVendorInvitations(email).some((i) => i.vendor_id === v.id) ? ('invited' as const) : ('expired' as const),
+        ...(v.byTeam?.includes(email) ? { by_team: true } : {}),
+      })),
+      scenes: v.scenes.map((page_id) => ({ page_id, alive: this.pageAlive(page_id), ok: this.vendorSceneOk(page_id) })),
+    };
+    if (withArtists && !v.parent_id) {
+      row.artists = this.server.vendors.filter((a) => a.parent_id === v.id && !a.deleted_at).map((a) => this.vendorRow(a, false));
+    }
+    return row;
+  }
+
+  /** `private.vendor_team_of`: el vendor (sin padre, vivo) que tiene el correo de la sesión. */
+  private vendorTeamOf(projectId: string): FakeVendor | undefined {
+    if (!this.server.role(this.userId) || this.server.projectDeleted(projectId)) return undefined;
+    const me = this.email.toLowerCase();
+    return this.server.vendors.find(
+      (v) => v.project_id === projectId && !v.deleted_at && (!v.parent_id || this.am.has('teamWho')) && v.emails.includes(me),
+    );
+  }
+
+  /**
+   * `private.vendor_artists_follow`: lo que un cambio sobre un vendor les hace a sus artistas (escenas que el vendor ya no
+   * tiene, nivel por encima del suyo, borrado). Devuelve los correos de los artistas que cambiaron.
+   */
+  private followArtists(v: FakeVendor): string[] {
+    if (v.parent_id) return [];
+    const out: string[] = [];
+    for (const a of this.server.vendors) {
+      if (a.parent_id !== v.id || a.deleted_at) continue;
+      let changed = false;
+      if (v.deleted_at) {
+        if (!this.am.has('followDelete')) {
+          a.deleted_at = v.deleted_at;
+          changed = true;
+        }
+      } else {
+        if (!this.am.has('followScenes')) {
+          const keep = a.scenes.filter((p) => v.scenes.includes(p));
+          if (keep.length !== a.scenes.length) {
+            a.scenes = keep;
+            changed = true;
+          }
+        }
+        if (!this.am.has('followLevel') && levelValue(a.level) > levelValue(v.level)) {
+          a.level = v.level;
+          changed = true;
+        }
+      }
+      if (changed) out.push(...a.emails);
+    }
+    return out;
+  }
+
   /** `private.vendor_cap`: 0 no los maneja, 1 Ver, 2 Comentar. */
   private vendorCap(projectId: string): number {
     const role = this.server.role(this.userId);
@@ -3719,22 +3837,10 @@ export class FakeRemote
     if (cap === 0) throw this.denied('not_allowed');
     const role = this.server.role(this.userId);
     const admin = (role === 'owner' || role === 'admin') && this.canShare({ projectId });
-    const joined = (email: string) => [...this.server.members.values()].some((m) => !m.removed_at && m.email.toLowerCase() === email);
+    const team = (this.server.settings?.schemaVersion ?? 0) >= VENDOR_TEAM_SCHEMA_VERSION;
     const vendors = this.server.vendors
-      .filter((v) => v.project_id === projectId && !v.deleted_at)
-      .map((v) => ({
-        id: v.id,
-        name: v.name,
-        code: v.code,
-        color: v.color,
-        level: v.level,
-        created_at: v.created_at,
-        emails: v.emails.map((email) => ({
-          email,
-          state: joined(email) ? ('joined' as const) : this.liveVendorInvitations(email).some((i) => i.vendor_id === v.id) ? ('invited' as const) : ('expired' as const),
-        })),
-        scenes: v.scenes.map((page_id) => ({ page_id, alive: this.pageAlive(page_id), ok: this.vendorSceneOk(page_id) })),
-      }));
+      .filter((v) => v.project_id === projectId && !v.deleted_at && (!team || !v.parent_id || this.am.has('listTop')))
+      .map((v) => this.vendorRow(v, team));
     // Lo que ven personas de afuera sin vendor.
     const who = new Map<string, Set<string>>();
     const note = (pageId: string, id: string) => who.set(pageId, (who.get(pageId) ?? new Set()).add(id));
@@ -3781,7 +3887,7 @@ export class FakeRemote
         let v: FakeVendor;
         let touch = false;
         if (op.op === 'create') {
-          if (this.server.vendors.filter((x) => x.project_id === projectId && !x.deleted_at).length >= 100) throw fail('too_many_vendors');
+          if (this.server.vendors.filter((x) => x.project_id === projectId && !x.deleted_at && !x.parent_id).length >= 100) throw fail('too_many_vendors');
           const name = typeof op.name === 'string' ? op.name.trim() : op.name;
           if (!validFields(name, op.code ?? '', op.color, op.level)) throw fail('vendor_invalid');
           if (lv(op.level) > cap && !vm.has('levelSet')) throw this.denied('level_not_allowed');
@@ -3792,11 +3898,17 @@ export class FakeRemote
           const found = this.server.vendors.find((x) => x.id === op.id && x.project_id === projectId && !x.deleted_at);
           if (!found) throw new RemoteError('vendor_not_found', true, 'P0002');
           if (seen.has(found.id)) throw fail('ops_invalid');
+          // Un artista: el proyecto solo lo borra o le saca correos.
+          if (found.parent_id && op.op === 'update' && !this.am.has('ownerArtistOps') &&
+              Object.keys(op).some((k) => !['op', 'id', 'remove_emails'].includes(k))) {
+            throw fail('ops_invalid');
+          }
           v = found;
           seen.add(v.id);
           if (op.op === 'delete') {
             v.deleted_at = new Date(this.server.now()).toISOString();
             if (!vm.has('deleteRevokes')) for (const e of v.emails) emails.add(e);
+            for (const e of this.followArtists(v)) emails.add(e);
             continue;
           }
           const next = {
@@ -3850,6 +3962,7 @@ export class FakeRemote
           const at = v.emails.indexOf(e);
           if (at < 0) throw new RemoteError('email_not_found', true, 'P0002');
           v.emails.splice(at, 1);
+          v.byTeam = v.byTeam?.filter((x) => x !== e);
           emails.add(e);
         }
         for (const raw of list('add_emails')) {
@@ -3866,7 +3979,10 @@ export class FakeRemote
           emails.add(e);
         }
         if (v.emails.length > 30) throw fail('too_many_emails');
-        if (touch) for (const e of v.emails) emails.add(e);
+        if (touch) {
+          for (const e of v.emails) emails.add(e);
+          for (const e of this.followArtists(v)) emails.add(e);
+        }
         if (added.length > 0 && v.emails.length > 0) resetPages.push(...added);
       }
       if (!vm.has('emailOne')) {
@@ -3902,6 +4018,169 @@ export class FakeRemote
     if (!g || !this.server.role(userId)) throw new RemoteError('grant_not_found', true, 'P0002');
     this.checkTeamWriteVersion();
     g.share_scenes = on;
+  }
+
+  // --- El equipo de un vendor y sus artistas: las reglas de 20261122120000_vendor_artistas.sql (`ARTIST_MUTANTS`) ---
+
+  async vendorTeamGet(projectId: string): Promise<VendorTeam> {
+    this.server.check();
+    const v = this.vendorTeamOf(projectId);
+    if (!v) throw this.denied('not_allowed');
+    const row = this.vendorRow(v, true);
+    const artists = row.artists ?? [];
+    delete row.artists;
+    return { me: this.email.toLowerCase(), vendor: row, artists };
+  }
+
+  async saveVendorTeam(projectId: string, ops: VendorTeamOp[], vendorId?: string): Promise<SaveVendorsResult> {
+    this.server.check();
+    const am = this.am;
+    const fail = (message: string, code = '22023') => new RemoteError(message, true, code);
+    const parent = this.vendorTeamOf(projectId);
+    if (!parent) throw this.denied('not_allowed');
+    // La ventana tenía abierto otro vendor (a la sesión la pasaron de equipo mientras tanto).
+    if (vendorId && vendorId !== parent.id) throw fail('vendor_changed', 'P0001');
+    if (!this.server.cleanOn()) throw fail('clean_off', 'P0001');
+    if (!Array.isArray(ops) || ops.length === 0 || ops.length > 100) throw fail('ops_invalid');
+    const me = this.email.toLowerCase();
+    const validFields = (name: unknown, code: unknown, color: unknown, level: unknown) =>
+      typeof name === 'string' && name === name.trim() && name.length >= 1 && name.length <= 80 &&
+      typeof code === 'string' && /^[A-Z0-9]{0,4}$/.test(code) &&
+      typeof color === 'string' && /^#[0-9a-f]{6}$/.test(color) &&
+      (level === 'view' || level === 'comment');
+    const backup = structuredClone(this.server.vendors);
+    const keys: Record<string, string> = {};
+    const seen = new Set<string>();
+    const emails = new Set<string>();
+    const resetPages: string[] = [];
+    const list = (op: VendorTeamOp, key: 'add_scenes' | 'remove_scenes' | 'add_emails' | 'remove_emails' | 'reinvite'): string[] => {
+      const x = (op as Record<string, unknown>)[key];
+      if (x === undefined) return [];
+      if (!Array.isArray(x) || x.some((y) => typeof y !== 'string')) throw fail('ops_invalid');
+      return x as string[];
+    };
+    try {
+      for (const op of ops) {
+        if (op.op === 'team') {
+          if (Object.keys(op).some((k) => !['op', 'add_emails', 'remove_emails', 'reinvite'].includes(k))) throw fail('ops_invalid');
+          for (const raw of list(op, 'remove_emails')) {
+            const e = raw.trim().toLowerCase();
+            if (e === me && !am.has('teamOwn')) throw this.denied('own_email');
+            const at = parent.emails.indexOf(e);
+            if (at >= 0 && !parent.byTeam?.includes(e) && !am.has('teamLocked')) throw this.denied('email_locked');
+            if (at < 0) throw new RemoteError('email_not_found', true, 'P0002');
+            parent.emails.splice(at, 1);
+            parent.byTeam = parent.byTeam?.filter((x) => x !== e);
+            emails.add(e);
+          }
+          for (const raw of list(op, 'add_emails')) {
+            const e = raw.trim().toLowerCase();
+            if (!/^[^@\s]+@[^@\s]+$/.test(e) || e.length > 320) throw fail('email_invalid');
+            if (parent.emails.includes(e)) throw new RemoteError('email_exists', true, 'P0001');
+            parent.emails.push(e);
+            parent.byTeam = [...(parent.byTeam ?? []), e];
+            emails.add(e);
+          }
+          for (const raw of list(op, 'reinvite')) {
+            const e = raw.trim().toLowerCase();
+            if (!parent.emails.includes(e)) throw new RemoteError('email_not_found', true, 'P0002');
+            emails.add(e);
+          }
+          if (parent.emails.length > 30) throw fail('too_many_emails');
+          continue;
+        }
+        let a: FakeVendor;
+        let touch = false;
+        if (op.op === 'create') {
+          if (this.server.vendors.filter((x) => x.parent_id === parent.id && !x.deleted_at).length >= 100) throw fail('too_many_vendors');
+          const name = typeof op.name === 'string' ? op.name.trim() : op.name;
+          if (!validFields(name, op.code ?? '', op.color, op.level)) throw fail('vendor_invalid');
+          a = { id: crypto.randomUUID(), project_id: projectId, parent_id: parent.id, name: name as string, code: op.code ?? '', color: op.color, level: op.level, created_at: new Date(this.server.now()).toISOString(), deleted_at: null, emails: [], byTeam: [], scenes: [] };
+          this.server.vendors.push(a);
+          if (op.key) keys[op.key] = a.id;
+        } else if (op.op === 'update' || op.op === 'delete') {
+          const found = this.server.vendors.find((x) => x.id === op.id && x.parent_id === parent.id && !x.deleted_at);
+          if (!found) throw new RemoteError('vendor_not_found', true, 'P0002');
+          if (seen.has(found.id)) throw fail('ops_invalid');
+          a = found;
+          seen.add(a.id);
+          if (op.op === 'delete') {
+            a.deleted_at = new Date(this.server.now()).toISOString();
+            for (const e of a.emails) emails.add(e);
+            continue;
+          }
+          const next = {
+            name: op.name !== undefined ? op.name.trim() : a.name,
+            code: op.code !== undefined ? op.code : a.code,
+            color: op.color !== undefined ? op.color : a.color,
+            level: op.level !== undefined ? op.level : a.level,
+          };
+          if (!validFields(next.name, next.code, next.color, next.level)) throw fail('vendor_invalid');
+          if (op.level !== undefined && op.level !== a.level) touch = true;
+          Object.assign(a, next);
+        } else {
+          throw fail('ops_invalid');
+        }
+        seen.add(a.id);
+        if (levelValue(a.level) > levelValue(parent.level) && !am.has('artistLevel')) throw this.denied('level_not_allowed');
+        for (const p of list(op, 'remove_scenes')) {
+          const at = a.scenes.indexOf(p);
+          if (at < 0) throw fail('page_invalid');
+          a.scenes.splice(at, 1);
+          touch = true;
+        }
+        const added: string[] = [];
+        for (const p of list(op, 'add_scenes')) {
+          if ((!parent.scenes.includes(p) && !am.has('artistScenes')) || !this.vendorSceneOk(p) || a.scenes.includes(p)) throw fail('page_invalid');
+          a.scenes.push(p);
+          added.push(p);
+          touch = true;
+        }
+        for (const raw of list(op, 'remove_emails')) {
+          const e = raw.trim().toLowerCase();
+          const at = a.emails.indexOf(e);
+          if (at < 0) throw new RemoteError('email_not_found', true, 'P0002');
+          a.emails.splice(at, 1);
+          emails.add(e);
+        }
+        for (const raw of list(op, 'add_emails')) {
+          const e = raw.trim().toLowerCase();
+          if (!/^[^@\s]+@[^@\s]+$/.test(e) || e.length > 320) throw fail('email_invalid');
+          if (e === me) throw this.denied('own_email');
+          if (a.emails.includes(e)) throw new RemoteError('email_exists', true, 'P0001');
+          a.emails.push(e);
+          a.byTeam = [...(a.byTeam ?? []), e];
+          emails.add(e);
+        }
+        for (const raw of list(op, 'reinvite')) {
+          const e = raw.trim().toLowerCase();
+          if (!a.emails.includes(e)) throw new RemoteError('email_not_found', true, 'P0002');
+          emails.add(e);
+        }
+        if (a.emails.length > 30) throw fail('too_many_emails');
+        if (touch) for (const e of a.emails) emails.add(e);
+        if (added.length > 0 && a.emails.length > 0) resetPages.push(...added);
+      }
+      // Un correo, un solo lugar vivo del proyecto. El error no dice dónde está el otro.
+      const count = new Map<string, number>();
+      for (const v of this.server.vendors) {
+        if (v.project_id !== projectId || v.deleted_at) continue;
+        for (const e of v.emails) count.set(e, (count.get(e) ?? 0) + 1);
+      }
+      if ([...count.values()].some((n) => n > 1)) throw fail('email_in_use', 'P0001');
+      this.checkTeamWriteVersion();
+    } catch (err) {
+      this.server.vendors.splice(0, this.server.vendors.length, ...backup);
+      throw err;
+    }
+    for (const p of resetPages) this.server.cleanReset({ pageId: p });
+    const reset = new Set(resetPages);
+    const pending: string[] = [];
+    for (const e of [...emails].sort()) {
+      for (const p of this.vendorSyncEmail(projectId, e)) reset.add(p);
+      if (this.liveVendorInvitations(e).some((i) => this.server.vendors.find((v) => v.id === i.vendor_id)?.project_id === projectId)) pending.push(e);
+    }
+    return { keys, reset: [...reset], pending };
   }
 
   /** `private.can_share`. */

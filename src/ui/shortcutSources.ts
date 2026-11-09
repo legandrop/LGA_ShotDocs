@@ -87,6 +87,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'MoveDialog.tsx',
     'ShareDialog.tsx',
     'ShareScenesDialog.tsx',
+    'VendorTeamDialog.tsx',
     'AccessRequests.tsx',
     'MembersDialog.tsx',
     'DriveDialog.tsx',

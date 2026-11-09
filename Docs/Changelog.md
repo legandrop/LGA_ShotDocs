@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.334 :
+
+Lega pidió que un vendor (el productor o el coordinador de post) pueda compartirle todo a otra persona de su equipo y
+repartir sus escenas entre artistas, y que el dueño vea y pueda sacar lo que se armó (D854). Ahora el ⋯ del proyecto de
+quien es del equipo de un vendor trae *Share all scenes…* (sumar gente al equipo; lo que sumó el proyecto lleva candado)
+y *Share scenes with artists…*, la ventana de vendors con solo sus escenas: artistas con nombre, color, nivel (nunca más
+que el vendor) y correos. En la base (versión 32) un artista es un vendor hijo, y lo que se le hace al vendor los
+arrastra: sacarle una escena, bajarlo a Ver, borrarlo. El dueño ve los artistas debajo de cada vendor y los saca. De paso:
+la tabla ya no se monta sobre los avisos a ancho mediano. Ayuda, docs, pruebas y prueba SQL contra la base. [ v0.334: El equipo de un vendor y sus artistas - compartir todas las escenas y repartirlas entre artistas desde el menú del proyecto ]
+
 v0.333 :
 
 Lega pidió que el selector de proyectos ocupe menos (D853): las columnas de páginas, peso y fecha se llevaban la mitad

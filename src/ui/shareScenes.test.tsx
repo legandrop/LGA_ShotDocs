@@ -14,9 +14,10 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { confirmOutsideMove, noticeOutsideCreate, outsideReadersStore } from './outsideReaders';
 import { storeProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
-import { rowLabel } from '../test/projectRows';
+import { openRowMenu, rowLabel } from '../test/projectRows';
 import { ShareDialog } from './ShareDialog';
 import { ShareScenesDialog } from './ShareScenesDialog';
+import { VendorTeamDialog } from './VendorTeamDialog';
 import { Shell } from './Workspace';
 
 // *Share scenes* (Docs/Doc_Compartir_Escenas.md, B-1) contra el servidor en memoria, que tiene las mismas reglas que
@@ -144,7 +145,8 @@ async function workspace(opts: { clean?: boolean; schema?: number } = {}): Promi
   server.enableTeam();
   if (opts.clean !== false) server.enableClean();
   const schema = opts.schema ?? 31;
-  if (schema >= 31) server.enableVendors();
+  if (schema >= 32) server.enableVendorTeam();
+  else if (schema >= 31) server.enableVendors();
   else if (schema >= 28) server.enableSceneShares();
   else server.settings = { ...server.settings!, schemaVersion: schema };
   const owner = await makeDevice(server);
@@ -1056,5 +1058,197 @@ describe('Share scenes: la marca del árbol', () => {
     await wait(60);
     window.removeEventListener('shotdocs:notice', listen);
     expect(notices).toEqual(['People outside the team see “PRUEBA_105_027_010 Ambulancia”: they will see this new page too.']);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 6. El equipo de un vendor y sus artistas (D854, base 32)
+// ---------------------------------------------------------------------------------------------------------------------
+
+describe('Share scenes: el equipo de un vendor y sus artistas', () => {
+  /** La base 32 con DNEG (S027 y S029, Comentar, con Vera) y Vera abriendo la app en su dispositivo. */
+  async function withTeam(level: 'view' | 'comment' = 'comment') {
+    const { server, owner, built } = await workspace({ schema: 32 });
+    for (const id of [built.ids.s027, built.ids.s029]) await setPageType(owner.tree, id, 'scene');
+    await owner.engine.syncNow();
+    const r = await owner.remote.saveSceneVendors(built.projectId, [
+      { op: 'create', key: 'dn', name: 'DNEG', code: 'DN', color: '#2e5a8e', level, add_scenes: [built.ids.s027, built.ids.s029], add_emails: ['vera@vendor.test'] },
+    ]);
+    const vera = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'vera', email: 'vera@vendor.test' });
+    devices.push(vera);
+    await vera.engine.syncNow();
+    await vera.engine.syncNow();
+    return { server, owner, built, vera, dneg: r.keys.dn };
+  }
+  const openSwitcher = async () => {
+    await until(() => document.querySelector('.project-button'), 'el selector');
+    await act(async () => document.querySelector<HTMLButtonElement>('.project-button')!.click());
+    await wait();
+  };
+  const menuItems = () => [...document.querySelectorAll<HTMLButtonElement>('.project-pop button')].map((b) => b.textContent);
+  const rows = () => document.querySelectorAll('.share-scenes-table tr[data-scene]').length;
+  const railItem = (name: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('.share-vitem')].find((b) => b.querySelector('.nm-text')?.textContent === name);
+  const addMail = (email: string, selector = '.share-vendor-addmail input') => {
+    const input = document.querySelector<HTMLInputElement>(selector)!;
+    type(input, email);
+    act(() => void input.form!.requestSubmit());
+  };
+
+  it('el ⋯ del proyecto de quien es del equipo: solo sin conexión y las dos de compartir; nada con la base 31 ni para un artista', async () => {
+    const { server, built, vera } = await withTeam();
+    storeProject(services(vera).workspace.config.storage, 'vera', built.projectId);
+    mount(vera, <ProjectSwitcher />);
+    await openSwitcher();
+    act(() => void openRowMenu('Serie de prueba'));
+    const items = menuItems().filter((t) => t !== 'Available offline…');
+    expect(items).toEqual(['Share all scenes…', 'Share scenes with artists…']);
+    for (const no of ['Color…', 'Rename…', 'Share…', 'Share scenes…', 'Export project…', 'Archive', 'Delete…']) expect(menuItems()).not.toContain(no);
+    click(byText('Share all scenes…', document));
+    await until(() => document.querySelector('.vendor-team'), 'la ventana del equipo');
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    document.body.innerHTML = '';
+
+    // Sofi, artista de DNEG: ve su escena, pero no es del equipo (no comparte nada).
+    await vera.remote.saveVendorTeam(built.projectId, [{ op: 'create', key: 'so', name: 'Sofi', code: '', color: '#2f8f6b', level: 'view', add_scenes: [built.ids.s027], add_emails: ['sofia@art.test'] }]);
+    server.addMember('sofia', 'guest', 'sofia@art.test');
+    const sofia = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'sofia', email: 'sofia@art.test' });
+    devices.push(sofia);
+    await sofia.engine.syncNow();
+    await sofia.engine.syncNow();
+    storeProject(services(sofia).workspace.config.storage, 'sofia', built.projectId);
+    mount(sofia, <ProjectSwitcher />);
+    await openSwitcher();
+    act(() => void openRowMenu('Serie de prueba'));
+    expect(menuItems().filter((t) => t !== 'Available offline…')).toEqual([]);
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    document.body.innerHTML = '';
+
+    // Con la base en la 31 (la columna no viene): nada.
+    server.settings = { ...server.settings!, schemaVersion: 31 };
+    await vera.engine.syncNow();
+    mount(vera, <ProjectSwitcher />);
+    await openSwitcher();
+    act(() => void openRowMenu('Serie de prueba'));
+    expect(menuItems()).not.toContain('Share all scenes…');
+  });
+
+  it('Share all scenes: suma gente al equipo; lo del proyecto con candado; un artista o uno mismo no entran', async () => {
+    const { server, built, vera } = await withTeam();
+    await vera.remote.saveVendorTeam(built.projectId, [{ op: 'create', key: 'so', name: 'Sofi', code: '', color: '#2f8f6b', level: 'view', add_scenes: [built.ids.s027], add_emails: ['sofia@art.test'] }]);
+    mount(vera, <VendorTeamDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => document.querySelectorAll('.vendor-team-row').length === 1, 'el equipo');
+    expect(document.querySelector('.vendor-team h2')!.textContent).toBe('Share all scenes of “DNEG”');
+    expect(document.querySelector('.vendor-team .team-lead')!.textContent).toContain('DNEG\'s 2 scenes');
+    // Vera la sumó el proyecto: candado, y dice «you».
+    const me = document.querySelector('.vendor-team-row')!;
+    expect(me.textContent).toContain('you');
+    expect(me.textContent).toContain('added by Serie de prueba');
+    expect(me.querySelector('.vendor-team-lock')).toBeTruthy();
+    expect(me.querySelector('button')).toBeNull();
+
+    const field = '.vendor-team-add input';
+    addMail('sofia@art.test', field);
+    expect(document.querySelector('.vendor-team [role="alert"]')!.textContent).toBe("It's already an artist (Sofi): remove it there first.");
+    addMail('vera@vendor.test', field);
+    expect(document.querySelector('.vendor-team [role="alert"]')!.textContent).toBe("You can't add or remove your own email.");
+    addMail('Celia@Vendor.test', field);
+    expect(document.querySelector('.vendor-team-row.new')!.textContent).toContain('celia@vendor.test');
+    const save = () => document.querySelector<HTMLButtonElement>('.vendor-team .team-invite-actions .primary')!;
+    expect(save().textContent).toBe('Invite & save');
+    await act(async () => save().click());
+    await until(() => server.vendors.find((v) => v.name === 'DNEG')!.emails.includes('celia@vendor.test'), 'Celia en el equipo');
+    await until(() => clip.length === 1, 'el link copiado');
+    await until(() => document.querySelector('.vendor-team [role="status"]')?.textContent?.startsWith('Saved. 1 email has to join'), 'guardado');
+    // Lo sumó el equipo: se puede sacar.
+    const celia = [...document.querySelectorAll('.vendor-team-row')].find((r) => r.textContent?.includes('celia@vendor.test'))!;
+    expect(celia.textContent).toContain('added by DNEG');
+    click(celia.querySelector('button[aria-label="Remove celia@vendor.test"]'));
+    await act(async () => save().click());
+    await until(() => !server.vendors.find((v) => v.name === 'DNEG')!.emails.includes('celia@vendor.test'), 'Celia afuera');
+    // Sin invitar a nadie, el aviso no habla del link.
+    await until(() => document.querySelector('.vendor-team [role="status"]')?.textContent === 'Saved.', 'guardado sin link');
+  });
+
+  it('Share scenes with artists: solo las escenas del vendor; un artista con una escena y un correo la ve, nada más', async () => {
+    const { server, built, vera } = await withTeam();
+    const { s027, s029 } = built.ids;
+    server.addMember('sofia', 'guest', 'sofia@art.test');
+    mount(vera, <ShareScenesDialog projectId={built.projectId} artists onClose={() => undefined} />);
+    await until(() => rows() === 2 && document.querySelector<HTMLButtonElement>('.share-vendors-add')?.disabled === false, 'las dos escenas de DNEG');
+    expect(document.querySelector('.share-scenes h2')!.textContent).toBe('Share scenes of “DNEG” with artists');
+    expect(document.querySelector('.share-scenes .team-lead')!.textContent).toBe('You only see the 2 scenes Serie de prueba shared with DNEG. Each artist sees only theirs.');
+    expect(document.querySelector('.share-vendors-rail-head')!.textContent).toBe('ARTISTS · 0');
+
+    click(byText('New artist'));
+    type(document.querySelector<HTMLInputElement>('.share-vendor-name')!, 'Sofi');
+    click(checkbox(s027));
+    addMail('vera@vendor.test');
+    expect(document.querySelector('.share-vendor-hint.err')!.textContent).toBe("You can't add or remove your own email.");
+    addMail('sofia@art.test');
+    await act(async () => saveButton().click());
+    await until(() => levelOf(server, 'sofia', s027) === 'comment', 'Sofi ve la 027');
+    expect(levelOf(server, 'sofia', s029)).toBeNull();
+    await until(() => railItem('Sofi')?.textContent?.includes('1 scene'), 'Sofi guardada');
+    expect(server.vendors.find((v) => v.name === 'Sofi')).toMatchObject({ parent_id: server.vendors.find((v) => v.name === 'DNEG')!.id });
+  });
+
+  it('si a la sesión la pasan a otro vendor con la ventana abierta, no guarda nada y lo dice', async () => {
+    const { server, owner, built, vera, dneg } = await withTeam();
+    mount(vera, <VendorTeamDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => document.querySelectorAll('.vendor-team-row').length === 1, 'el equipo');
+    // Mientras tanto, el proyecto pasa a Vera de DNEG a Framestore.
+    await owner.remote.saveSceneVendors(built.projectId, [
+      { op: 'update', id: dneg, remove_emails: ['vera@vendor.test'] },
+      { op: 'create', key: 'fs', name: 'Framestore', code: 'FS', color: '#774dcb', level: 'view', add_scenes: [built.ids.s027], add_emails: ['vera@vendor.test'] },
+    ]);
+    addMail('celia@vendor.test', '.vendor-team-add input');
+    await act(async () => document.querySelector<HTMLButtonElement>('.vendor-team .team-invite-actions .primary')!.click());
+    await until(() => document.querySelector('.vendor-team .error'), 'el error');
+    expect(document.querySelector('.vendor-team .error')!.textContent).toBe("You're on another vendor's team now. Nothing was saved: close this and open it again.");
+    expect(server.vendors.some((v) => v.emails.includes('celia@vendor.test'))).toBe(false);
+  });
+
+  it('con el vendor en Ver, sus artistas no pueden tener Comentar', async () => {
+    const { built, vera } = await withTeam('view');
+    mount(vera, <ShareScenesDialog projectId={built.projectId} artists onClose={() => undefined} />);
+    await until(() => rows() === 2 && document.querySelector<HTMLButtonElement>('.share-vendors-add')?.disabled === false, 'las escenas');
+    click(byText('New artist'));
+    const comment = [...document.querySelectorAll<HTMLButtonElement>('.share-scenes-level button')].find((b) => b.textContent === 'Comment')!;
+    expect(comment.disabled).toBe(true);
+    expect(comment.getAttribute('data-tip')).toBe('Up to View: the access Serie de prueba gave DNEG.');
+  });
+
+  it('el proyecto ve los artistas debajo del vendor, avisa lo que se les cae, y los saca', async () => {
+    const { server, owner, built, vera, dneg } = await withTeam();
+    const { s027, s029 } = built.ids;
+    server.addMember('sofia', 'guest', 'sofia@art.test');
+    server.addMember('juan', 'guest', 'juan@art.test');
+    await vera.remote.saveVendorTeam(built.projectId, [
+      { op: 'team', add_emails: ['celia@vendor.test'] },
+      { op: 'create', key: 'so', name: 'Sofi', code: '', color: '#2f8f6b', level: 'comment', add_scenes: [s027], add_emails: ['sofia@art.test'] },
+      { op: 'create', key: 'ju', name: 'Juan', code: '', color: '#c4572e', level: 'view', add_scenes: [s029], add_emails: ['juan@art.test'] },
+    ]);
+    // Antes: los dos artistas ven su escena.
+    expect(levelOf(server, 'sofia', s027)).toBe('comment');
+    expect(levelOf(server, 'juan', s029)).toBe('view');
+    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => railItem('DNEG')?.textContent?.includes('2 artists'), 'DNEG con dos artistas');
+    click(railItem('DNEG'));
+    expect(document.querySelector('.share-artists-head')!.textContent).toContain('DNEG artists · 2');
+    expect([...document.querySelectorAll('.share-artist-name')].map((n) => n.textContent)).toEqual(['Sofi', 'Juan']);
+    // El correo que sumó el equipo lo dice.
+    const celia = [...document.querySelectorAll('.share-vendor-mail')].find((m) => m.textContent?.includes('celia@vendor.test'))!;
+    expect(celia.querySelector('.by')!.textContent).toBe('added by DNEG');
+    // Sacarle a DNEG la 027 se la saca a Sofi: avisa.
+    click(checkbox(s027));
+    expect(document.querySelector('.share-vendor-cross')!.textContent).toContain('1 scene you take from DNEG is also taken from its artists');
+    // Juan, borrado; nada más.
+    click(document.querySelector('button[aria-label="Delete Juan"]'));
+    await act(async () => saveButton().click());
+    await until(() => levelOf(server, 'sofia', s027) === null && levelOf(server, 'juan', s029) === null, 'Sofi y Juan sin acceso');
+    expect(levelOf(server, 'vera', s029)).toBe('comment');
+    expect(server.vendors.find((v) => v.name === 'Juan')!.deleted_at).toBeTruthy();
+    expect(server.vendors.find((v) => v.id === dneg)!.scenes).toEqual([s029]);
   });
 });

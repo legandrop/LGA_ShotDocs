@@ -3,7 +3,7 @@ import { useT, type Key } from '../i18n';
 import '../i18n/lazy/teamDialogs';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { LEVEL_LABELS } from '../sync/access';
-import type { SceneVendor, SceneVendorsList, VendorLevel, VendorOp } from '../sync/remote';
+import type { SceneVendor, SceneVendorsList, VendorLevel, VendorOp, VendorTeam } from '../sync/remote';
 import { ColorPicker } from './ColorPicker';
 import {
   CheckIcon,
@@ -41,9 +41,75 @@ import { teamErrorText } from './teamText';
 // compuerta de lo borrado sin *Share anyway* para lo que empieza a verse. Después: las bases de lo reiniciado (quien
 // edita), la marca del árbol y, si hay correos nuevos de afuera, el link de invitación copiado (uno sirve para todos).
 // La base vuelve a controlar todo: esto arma el pedido y lo explica. La manejan el dueño o un admin que comparte el
-// proyecto y quien tiene *Can share scenes* (hasta su propio nivel).
+// proyecto y quien tiene *Can share scenes* (hasta su propio nivel). Abajo de la ficha de cada vendor, sus artistas
+// (los arma su equipo): el proyecto les puede sacar correos o borrarlos, y lo que le saca al vendor se les saca a ellos.
+//
+// Con `artists` es *Share scenes with artists…* (D854): la misma ventana para el equipo de un vendor, que reparte las
+// escenas del vendor (solo esas) entre sus artistas, con `vendor_team_get` y `save_vendor_team`. Nunca ve los otros
+// vendors ni a quién más se compartió una escena; un artista no tiene más nivel que el vendor.
 
 const EMAIL = /^[^@\s]+@[^@\s]+$/;
+
+/** Los textos que cambian entre la ventana de vendors y la de artistas. */
+const TEXT = {
+  vendor: {
+    list: 'scenes.share.vendors',
+    count: 'scenes.share.vendorsCount',
+    all: 'scenes.share.allVendors',
+    overview: 'scenes.share.overview',
+    overviewEmpty: 'scenes.share.overviewEmpty',
+    add: 'scenes.share.newVendor',
+    name: 'scenes.share.vendorName',
+    color: 'scenes.share.vendorColor',
+    del: 'scenes.share.deleteVendor',
+    delTip: 'scenes.share.deleteTip',
+    confirmDelete: 'scenes.share.confirmDelete',
+    emailHere: 'scenes.share.emailHere',
+    emailOther: 'scenes.share.emailOther',
+    search: 'scenes.share.search',
+    viewNone: 'scenes.share.viewNone',
+    viewMulti: 'scenes.share.viewMulti',
+    col: 'scenes.share.colVendors',
+    bothTip: 'scenes.share.bothTip',
+    legendBoth: 'scenes.share.legendBoth',
+    nameMissing: 'scenes.share.nameMissing',
+  },
+  artist: {
+    list: 'scenes.artists.list',
+    count: 'scenes.artists.count',
+    all: 'scenes.artists.all',
+    overview: 'scenes.artists.overview',
+    overviewEmpty: 'scenes.artists.overviewEmpty',
+    add: 'scenes.artists.new',
+    name: 'scenes.artists.name',
+    color: 'scenes.artists.color',
+    del: 'scenes.artists.delete',
+    delTip: 'scenes.artists.deleteTip',
+    confirmDelete: 'scenes.artists.confirmDelete',
+    emailHere: 'scenes.artists.emailHere',
+    emailOther: 'scenes.artists.emailOther',
+    search: 'scenes.artists.search',
+    viewNone: 'scenes.artists.viewNone',
+    viewMulti: 'scenes.artists.viewMulti',
+    col: 'scenes.artists.col',
+    bothTip: 'scenes.artists.bothTip',
+    legendBoth: 'scenes.artists.legendBoth',
+    nameMissing: 'scenes.artists.nameMissing',
+  },
+} as const satisfies Record<string, Record<string, Key>>;
+
+/** Lo que la base contesta al guardar, con su texto. */
+const SAVE_ERRORS: Record<string, Key> = {
+  page_invalid: 'scenes.share.pageInvalid',
+  scene_contains_entities: 'scenes.share.containsEntities',
+  email_in_other_vendor: 'scenes.share.inOtherVendor',
+  email_in_use: 'scenes.team.emailInUse',
+  email_locked: 'scenes.team.emailLocked',
+  level_not_allowed: 'scenes.share.levelNotAllowed',
+  own_email: 'scenes.share.ownEmail',
+  vendor_invalid: 'scenes.share.vendorInvalid',
+  clean_off: 'scenes.share.cleanOff',
+};
 const noSubscribe = () => () => undefined;
 
 /** Un vendor como se edita en la ventana, antes de guardar. */
@@ -108,7 +174,7 @@ const STATUS_WORD: Record<Exclude<RowStatus, 'none'>, Key> = {
   blocked: 'scenes.share.stBlocked',
 };
 
-export function ShareScenesDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+export function ShareScenesDialog({ projectId, onClose, artists = false }: { projectId: string; onClose: () => void; artists?: boolean }) {
   const services = useServices();
   const { remote, engine } = services;
   const tree = useTree();
@@ -118,8 +184,14 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   const tr = useT();
   const gate = useShareGate();
   const projectName = tree.project(projectId)?.name ?? tr('project.thisProject');
+  const T = TEXT[artists ? 'artist' : 'vendor'];
 
   const [list, setList] = useState<SceneVendorsList | null>(null);
+  // Con `artists`: el vendor del que la sesión es del equipo (sus escenas, su nivel y su equipo).
+  const [team, setTeam] = useState<VendorTeam | null>(null);
+  // Lo que el proyecto le hace a los artistas de sus vendors: borrarlos y sacarles correos (`<id>:<correo>`).
+  const [artistDel, setArtistDel] = useState<ReadonlySet<string>>(new Set());
+  const [artistMailRm, setArtistMailRm] = useState<ReadonlySet<string>>(new Set());
   const [work, setWork] = useState<WorkVendor[]>([]);
   const [reinvite, setReinvite] = useState<ReadonlySet<string>>(new Set());
   const [reload, setReload] = useState(0);
@@ -165,12 +237,22 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   useEffect(() => {
     let live = true;
     setLoadError(null);
-    remote.sceneVendorsList(projectId).then(
+    // Para el equipo de un vendor, sus artistas se manejan como los vendors del proyecto: hasta el nivel del vendor y
+    // sin lectores de afuera (no los ve).
+    const load: Promise<SceneVendorsList> = artists
+      ? remote.vendorTeamGet(projectId).then((got) => {
+          if (live) setTeam(got);
+          return { cap: got.vendor.level === 'comment' ? 2 : 1, admin: false, vendors: got.artists, others: new Map() };
+        })
+      : remote.sceneVendorsList(projectId);
+    load.then(
       (got) => {
         if (!live) return;
         setList(got);
         setWork(got.vendors.map(fromServer));
         setReinvite(new Set());
+        setArtistDel(new Set());
+        setArtistMailRm(new Set());
         const keep = keepSelected.current;
         keepSelected.current = null;
         setSel((cur) => {
@@ -178,17 +260,28 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
           return want !== 'all' && got.vendors.some((v) => v.id === want) ? want : 'all';
         });
       },
-      (err: unknown) => live && setLoadError(teamErrorText(err)),
+      (err: unknown) => {
+        if (!live) return;
+        // Ya no es del equipo (le sacaron el correo o borraron el vendor): se dice así, sin el error de permisos.
+        const gone = artists && err instanceof Error && err.message === 'not_allowed';
+        setLoadError(gone ? tr('scenes.team.gone') : teamErrorText(err));
+      },
     );
     return () => {
       live = false;
     };
-  }, [remote, projectId, reload]);
+  }, [remote, projectId, reload, artists]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Las escenas del proyecto, en orden de número, con lo de adentro (se arma con el árbol de este dispositivo).
+  // Las escenas del proyecto, en orden de número, con lo de adentro (se arma con el árbol de este dispositivo). Para
+  // el equipo de un vendor, solo las del vendor (las que la base le da).
+  const teamScenes = useMemo(() => (team ? new Set(team.vendor.scenes.filter((s) => s.alive).map((s) => s.page_id)) : null), [team]);
   const scenes = useMemo<SceneItem[]>(
-    () => projectSceneItems(tree, engine, projectId),
-    [tree, tree.getRevision(), projectId, engine], // eslint-disable-line react-hooks/exhaustive-deps
+    () => {
+      const all = projectSceneItems(tree, engine, projectId);
+      if (!artists) return all;
+      return teamScenes ? all.filter((s) => teamScenes.has(s.pageId)) : [];
+    },
+    [tree, tree.getRevision(), projectId, engine, artists, teamScenes], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const tableRows = useMemo(
     () => sceneRows(scenes, snap && session ? { snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) } : null),
@@ -227,14 +320,16 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   const seenBy = (id: string) => (byScene.get(id) ?? []).filter((v) => v.emails.length > 0);
 
   // Una escena sin la marca: la escribe quien edita al guardar; si no, no se puede asignar.
-  const needsMark = (id: string) => !isMarkedScene(tree.get(id)) && perms.pageLevel(id) < 3;
+  // (El equipo de un vendor reparte escenas que ya tienen la marca: si no, la base no se las daría.)
+  const needsMark = (id: string) => !artists && !isMarkedScene(tree.get(id)) && perms.pageLevel(id) < 3;
   // Bloqueadas: las que la app ve con otra entidad adentro, y las que la base dice que hoy no se pueden dar (`ok` falso
   // en algún vendor: le sacaron la marca o le movieron algo adentro mientras el vendor no tenía correos).
   const blockedIds = useMemo(() => {
     const out = new Set(scenes.filter((s) => s.blocked).map((s) => s.pageId));
     for (const v of orig.values()) for (const s of v.scenes) if (!s.ok) out.add(s.page_id);
+    for (const s of team?.vendor.scenes ?? []) if (!s.ok) out.add(s.page_id);
     return out;
-  }, [scenes, orig]);
+  }, [scenes, orig, team]);
   const statusOf = (id: string): RowStatus => {
     if (!current) return 'none';
     const now = current.scenes.includes(id);
@@ -342,8 +437,24 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
       if (again.length) op.reinvite = again;
       if (Object.keys(op).length > 2) out.push(op);
     }
+    // Los artistas de cada vendor (solo el proyecto): borrarlos o sacarles correos, después de lo de los vendors. Los de un
+    // vendor que se borra caen con él.
+    for (const v of list?.vendors ?? []) {
+      if (work.find((w) => w.id === v.id)?.deleted) continue;
+      for (const a of v.artists ?? []) {
+        if (artistDel.has(a.id)) {
+          out.push({ op: 'delete', id: a.id });
+          continue;
+        }
+        const gone = a.emails.filter((e) => artistMailRm.has(`${a.id}:${e.email}`)).map((e) => e.email);
+        if (gone.length) out.push({ op: 'update', id: a.id, remove_emails: gone });
+      }
+    }
     return out;
-  }, [work, orig, reinvite]);
+  }, [work, orig, reinvite, list, artistDel, artistMailRm]);
+  // Si el proyecto tocó a algún artista de un vendor (para el pie).
+  const artistsTouched = (v: WorkVendor) =>
+    (orig.get(v.id ?? '')?.artists ?? []).some((a) => artistDel.has(a.id) || a.emails.some((e) => artistMailRm.has(`${a.id}:${e.email}`)));
 
   // Lo que cambia en cada vendor, para la lista y el pie.
   const changesOf = (v: WorkVendor) => {
@@ -378,10 +489,15 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
     if (!current) return;
     const email = mailText.trim().toLowerCase();
     if (!email) return;
-    if (overCap) return setMailError(tr('scenes.share.levelNotAllowed'));
+    if (overCap) return setMailError(levelCapText());
     if (!EMAIL.test(email) || email.length > 320) return setMailError(tr('scenes.share.emailInvalid'));
+    if (artists && email === team?.me) return setMailError(tr('scenes.team.ownEmail'));
     const other = live.find((v) => v.emails.includes(email));
-    if (other) return setMailError(other.key === current.key ? tr('scenes.share.emailHere') : tr('scenes.share.emailOther', { name: other.name || tr('scenes.share.unnamed') }));
+    if (other) return setMailError(other.key === current.key ? tr(T.emailHere) : tr(T.emailOther, { name: other.name || tr('scenes.share.unnamed') }));
+    if (team?.vendor.emails.some((e) => e.email === email)) return setMailError(tr('scenes.artists.emailTeam', { name: team.vendor.name }));
+    // El proyecto ve a los artistas de sus vendors: un correo que ya es artista no va en un vendor.
+    const artistOf = (list?.vendors ?? []).find((v) => (v.artists ?? []).some((a) => a.emails.some((e) => e.email === email) && !artistDel.has(a.id) && !artistMailRm.has(`${a.id}:${email}`)));
+    if (artistOf) return setMailError(tr('scenes.share.emailOther', { name: artistOf.name }));
     patch(current.key, (v) => ({ emails: [...v.emails, email] }));
     setMailText('');
     setMailError(null);
@@ -393,7 +509,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
     if (current.emails.includes(email)) patch(current.key, (v) => ({ emails: v.emails.filter((e) => e !== email) }));
     else {
       const other = live.find((v) => v.emails.includes(email));
-      if (other) return setMailError(tr('scenes.share.emailOther', { name: other.name || tr('scenes.share.unnamed') }));
+      if (other) return setMailError(tr(T.emailOther, { name: other.name || tr('scenes.share.unnamed') }));
       patch(current.key, (v) => ({ emails: [...v.emails, email] }));
     }
     setReinvite((r) => {
@@ -426,7 +542,8 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
       if (v.emails.some((e) => !mails.includes(e) || reinvite.has(`${v.key}:${e}`))) for (const id of v.scenes) exposing.add(id);
     }
     const scope = { pageIds: [...exposing] };
-    const editor = perms.projectLevel(projectId) >= 3;
+    // El equipo de un vendor no escribe marcas (reparte escenas que ya las tienen) ni reinicia bases.
+    const editor = !artists && perms.projectLevel(projectId) >= 3;
     setError(null);
     setDone(null);
     setManualLink(null);
@@ -436,7 +553,9 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
       if (editor) await markAndWait(tree, engine, [...entering]);
       // Sin *Share anyway*: con un vendor no se comparte sin haber subido lo pendiente (M4).
       if (exposing.size > 0 && !(await gate.ready(scope, true, () => latestSave.current(), null))) throw UNSYNCED_BEFORE_SHARE;
-      const result = await remote.saveSceneVendors(projectId, sending);
+      const result = artists
+        ? await remote.saveVendorTeam(projectId, sending, team?.vendor.id)
+        : await remote.saveSceneVendors(projectId, sending);
       pending = result.pending.length;
       return result;
     })();
@@ -447,24 +566,27 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
         if (invites > 0) manual = await inviteAndCopy(work.then(() => makeLink(projectId)));
         const result = await work;
         setManualLink(manual);
-        setDone({ pending });
+        // «Falta que entren…, el link ya está copiado» solo si este guardado invitó y el link se copió; si no, «Guardado»
+        // (y, si no se pudo copiar, el link a la vista para copiarlo a mano).
+        setDone({ pending: invites > 0 && !manual ? pending : 0 });
         if (editor && result.reset.length > 0) gate.after({ pageIds: result.reset }, true, projectName);
-        void outsideReadersStore(services)?.invalidate(projectId);
+        if (!artists) void outsideReadersStore(services)?.invalidate(projectId);
         keepSelected.current = sel.startsWith('new:') ? (result.keys[sel] ?? null) : sel;
         setReload((n) => n + 1);
       } catch (err) {
         if (err === UNSYNCED_BEFORE_SHARE) return;
         const message = err instanceof Error ? err.message : String(err);
-        const known: Record<string, Key> = {
-          page_invalid: 'scenes.share.pageInvalid',
-          scene_contains_entities: 'scenes.share.containsEntities',
-          email_in_other_vendor: 'scenes.share.inOtherVendor',
-          level_not_allowed: 'scenes.share.levelNotAllowed',
-          own_email: 'scenes.share.ownEmail',
-          vendor_invalid: 'scenes.share.vendorInvalid',
-          clean_off: 'scenes.share.cleanOff',
+        // En la de artistas: lo que cambió mientras la ventana estaba abierta se dice en palabras del equipo.
+        const forTeam: Record<string, Key> = {
+          own_email: 'scenes.team.ownEmail',
+          not_allowed: 'scenes.team.gone',
+          vendor_changed: 'scenes.team.changed',
+          vendor_not_found: 'scenes.team.artistGone',
         };
-        setError(err === MARKS_PENDING ? tr('scenes.share.marksPending') : known[message] ? tr(known[message]) : teamErrorText(err));
+        const known: Key | undefined = (artists ? forTeam[message] : undefined) ?? SAVE_ERRORS[message];
+        if (err === MARKS_PENDING) setError(tr('scenes.share.marksPending'));
+        else if (artists && message === 'level_not_allowed') setError(levelCapText());
+        else setError(known ? tr(known) : teamErrorText(err));
       } finally {
         setBusy(false);
       }
@@ -474,6 +596,12 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   latestSave.current = save;
 
   const levelLabel = (l: VendorLevel) => tr(LEVEL_LABELS[l]);
+  /** Por qué no se da Comentar: en la de vendors, el propio nivel; en la de artistas, el que el proyecto le dio al vendor. */
+  function levelCapText() {
+    return team
+      ? tr('scenes.artists.levelCap', { level: levelLabel(team.vendor.level), project: projectName, name: team.vendor.name })
+      : tr('scenes.share.levelNotAllowed');
+  }
   const others = list?.others ?? new Map<string, number>();
   const othersCount = scenes.filter((s) => (others.get(s.pageId) ?? 0) > 0).length;
   const nMine = current ? current.scenes.length : 0;
@@ -498,6 +626,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   const railItem = (v: WorkVendor) => {
     const ch = changesOf(v);
     const n = v.scenes.length;
+    const nArtists = (orig.get(v.id ?? '')?.artists ?? []).filter((a) => !artistDel.has(a.id)).length;
     return (
       <button
         key={v.key}
@@ -521,10 +650,106 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
           <span>{tr('scenes.share.sceneCount', { count: n })}</span>
           <span aria-hidden>·</span>
           {v.emails.length > 0 ? <span>{tr('scenes.share.emailCount', { count: v.emails.length })}</span> : <span className="nomail">{tr('scenes.share.noEmailShort')}</span>}
+          {nArtists > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{tr('scenes.share.artistCount', { count: nArtists })}</span>
+            </>
+          )}
         </span>
       </button>
     );
   };
+
+  // Los artistas del vendor elegido (solo en la ventana del proyecto), con lo que el proyecto les saca.
+  const currentArtists = !artists && current?.id ? (orig.get(current.id)?.artists ?? []) : [];
+  const artistsBlock = currentArtists.length > 0 && current && (
+    <div className="share-artists">
+      <div className="share-artists-head">
+        <MembersIcon size={14} />
+        <b>{tr('scenes.share.artistsOf', { name: current.name || tr('scenes.share.unnamed'), count: currentArtists.length })}</b>
+        <span className="muted">{tr('scenes.share.artistsNote')}</span>
+      </div>
+      {currentArtists.map((a) => {
+        const del = artistDel.has(a.id);
+        const codes = tableRows.filter((r) => a.scenes.some((s) => s.page_id === r.pageId)).map((r) => r.label);
+        return (
+          <div key={a.id} className={`share-artist${del ? ' del' : ''}`}>
+            <span className="share-vchip" style={{ '--vc': a.color } as CSSProperties}>
+              <i />
+              {vendorCode(a)}
+            </span>
+            <span className="share-artist-name">
+              {a.name}
+              <span role="img" aria-label={levelLabel(a.level)} data-tip={levelLabel(a.level)}>
+                {a.level === 'view' ? <EyeIcon size={12} /> : <CommentIcon size={12} />}
+              </span>
+            </span>
+            <span className="share-artist-mails">
+              {a.emails.length === 0 && <span className="muted nomail">{tr('scenes.share.noEmailShort')}</span>}
+              {a.emails.map((e) => {
+                const k = `${a.id}:${e.email}`;
+                const rm = artistMailRm.has(k);
+                return (
+                  <span key={e.email} className={`share-vendor-mail small${rm ? ' removed' : ''}`}>
+                    <span className="e">{e.email}</span>
+                    <button
+                      type="button"
+                      disabled={del}
+                      aria-label={tr(rm ? 'scenes.share.undoRemove' : 'scenes.share.removeEmail', { email: e.email })}
+                      onClick={() => {
+                        // Deshacer: si mientras tanto el correo se sumó a un vendor, no vuelve (un correo, un lugar).
+                        const taken = rm ? live.find((v) => v.emails.includes(e.email)) : undefined;
+                        if (taken) return setMailError(tr('scenes.share.emailOther', { name: taken.name || tr('scenes.share.unnamed') }));
+                        setArtistMailRm((s) => {
+                          const next = new Set(s);
+                          if (rm) next.delete(k);
+                          else next.add(k);
+                          return next;
+                        });
+                      }}
+                    >
+                      {rm ? <UndoIcon size={12} /> : <CloseIcon size={12} />}
+                    </button>
+                  </span>
+                );
+              })}
+            </span>
+            <span className="share-artist-scenes mono" data-tip={tr('scenes.share.artistScenes')}>
+              {codes.length > 0 ? codes.join(' ') : '—'}
+            </span>
+            <button
+              type="button"
+              className={`icon-button${del ? '' : ' danger'}`}
+              aria-label={tr(del ? 'scenes.share.keepArtist' : 'scenes.share.deleteArtist', { name: a.name })}
+              data-tip={del ? undefined : tr('scenes.share.deleteArtistTip')}
+              onClick={() => {
+                // Deshacer el borrado: si mientras tanto uno de sus correos se sumó a un vendor, no vuelve.
+                const taken = del ? live.find((v) => a.emails.some((e) => v.emails.includes(e.email) && !artistMailRm.has(`${a.id}:${e.email}`))) : undefined;
+                if (taken) return setMailError(tr('scenes.share.emailOther', { name: taken.name || tr('scenes.share.unnamed') }));
+                setArtistDel((s) => {
+                  const next = new Set(s);
+                  if (del) next.delete(a.id);
+                  else next.add(a.id);
+                  return next;
+                });
+              }}
+            >
+              {del ? <UndoIcon size={14} /> : <TrashIcon size={14} />}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+  // Lo que se les cae a los artistas del elegido: las escenas que se le sacan y que tenía algún artista vivo, y el nivel.
+  const cascadeCount = current
+    ? origScenes(current).filter(
+        (id) => !current.scenes.includes(id) && currentArtists.some((a) => !artistDel.has(a.id) && a.scenes.some((s) => s.page_id === id)),
+      ).length
+    : 0;
+  const cascadeLevel =
+    !!current && current.level === 'view' && currentArtists.some((a) => !artistDel.has(a.id) && a.level === 'comment');
 
   const emailRows = current
     ? [
@@ -542,11 +767,22 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal team-dialog share-scenes share-vendors" role="dialog" aria-label={tr('scenes.share.label')} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal team-dialog share-scenes share-vendors"
+        role="dialog"
+        aria-label={artists ? tr('project.vendorArtistsItem') : tr('scenes.share.label')}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="share-vendors-head">
           <div>
-            <h2>{tr('scenes.share.title', { name: projectName })}</h2>
-            <p className="muted team-lead">{tr('scenes.share.lead')}</p>
+            <h2>{artists ? tr('scenes.artists.title', { name: team?.vendor.name ?? projectName }) : tr('scenes.share.title', { name: projectName })}</h2>
+            {(!artists || team) && (
+              <p className="muted team-lead">
+                {team
+                  ? tr('scenes.artists.lead', { count: scenes.length, project: projectName, name: team.vendor.name })
+                  : tr('scenes.share.lead')}
+              </p>
+            )}
           </div>
           <button type="button" className="icon-button" aria-label={tr('common.close')} onClick={onClose}>
             <CloseIcon size={18} />
@@ -559,15 +795,15 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
         )}
 
         <div className="share-vendors-grid">
-          <aside className="share-vendors-rail" aria-label={tr('scenes.share.vendors')}>
+          <aside className="share-vendors-rail" aria-label={tr(T.list)}>
             <div className="share-vendors-rail-head">
-              <span>{tr('scenes.share.vendorsCount', { count: live.length })}</span>
+              <span>{tr(T.count, { count: live.length })}</span>
             </div>
             <div className="share-vendors-rail-list">
               <button type="button" className="share-vitem all" aria-current={sel === 'all'} onClick={() => setSel('all')}>
                 <span className="bar" />
                 <span className="nm">
-                  <span className="nm-text">{tr('scenes.share.allVendors')}</span>
+                  <span className="nm-text">{tr(T.all)}</span>
                 </span>
                 <span />
                 <span className="meta">{tr('scenes.share.allVendorsMeta')}</span>
@@ -576,7 +812,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
             </div>
             <button type="button" className="share-vendors-add" onClick={addVendor} disabled={list === null}>
               <PlusIcon size={14} />
-              {tr('scenes.share.newVendor')}
+              {tr(T.add)}
             </button>
           </aside>
 
@@ -589,14 +825,14 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                       type="button"
                       className="share-vendor-swatch"
                       style={{ '--vc': current.color } as CSSProperties}
-                      aria-label={tr('scenes.share.vendorColor')}
+                      aria-label={tr(T.color)}
                       aria-expanded={!!picking}
                       onClick={() => setPicking(picking ? null : { before: current.color })}
                     >
                       <i />
                     </button>
                     {picking && (
-                      <div className="share-vendor-pop" role="dialog" aria-label={tr('scenes.share.vendorColor')}>
+                      <div className="share-vendor-pop" role="dialog" aria-label={tr(T.color)}>
                         <ColorPicker
                           initial={current.color}
                           defaultColor={picking.before}
@@ -621,8 +857,8 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                     className="share-vendor-name"
                     value={current.name}
                     maxLength={80}
-                    placeholder={tr('scenes.share.vendorName')}
-                    aria-label={tr('scenes.share.vendorName')}
+                    placeholder={tr(T.name)}
+                    aria-label={tr(T.name)}
                     onChange={(e) => patch(current.key, { name: e.target.value })}
                   />
                   <input
@@ -644,7 +880,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                           type="button"
                           aria-pressed={current.level === l}
                           disabled={locked}
-                          data-tip={locked ? tr('scenes.share.levelNotAllowed') : undefined}
+                          data-tip={locked ? levelCapText() : undefined}
                           onClick={() => patch(current.key, { level: l })}
                         >
                           {l === 'view' ? <EyeIcon size={14} /> : <CommentIcon size={14} />}
@@ -656,8 +892,8 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                   <button
                     type="button"
                     className="icon-button danger"
-                    aria-label={tr('scenes.share.deleteVendor')}
-                    data-tip={tr('scenes.share.deleteTip')}
+                    aria-label={tr(T.del)}
+                    data-tip={tr(T.delTip)}
                     onClick={() => setConfirmDelete(true)}
                   >
                     <TrashIcon size={15} />
@@ -668,6 +904,9 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                   {emailRows.map((m) => (
                     <span key={m.email} className={`share-vendor-mail ${m.state}`}>
                       <span className="e">{m.email}</span>
+                      {!artists && current.id && origEmails(current).some((x) => x.email === m.email && x.by_team) && (
+                        <span className="by">{tr('scenes.share.byTeam', { name: current.name || tr('scenes.share.unnamed') })}</span>
+                      )}
                       <span className="s">
                         {m.state === 'joined' && <CheckIcon size={12} />}
                         {m.state === 'invited' && <HistoryIcon size={12} />}
@@ -726,14 +965,19 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                     <span>{tr('scenes.share.noEmail')}</span>
                   </p>
                 )}
+                {artistsBlock}
                 {confirmDelete && (
                   <div className="share-vendor-confirm" role="alert">
-                    <span>{tr('scenes.share.confirmDelete', { name: current.name || tr('scenes.share.unnamed') })}</span>
+                    <span>
+                      {currentArtists.length > 0
+                        ? tr('scenes.share.confirmDeleteAll', { name: current.name || tr('scenes.share.unnamed'), count: currentArtists.length })
+                        : tr(T.confirmDelete, { name: current.name || tr('scenes.share.unnamed') })}
+                    </span>
                     <button type="button" onClick={() => setConfirmDelete(false)}>
                       {tr('common.cancel')}
                     </button>
                     <button type="button" className="danger" onClick={deleteVendor}>
-                      {tr('scenes.share.deleteVendor')}
+                      {tr(T.del)}
                     </button>
                   </div>
                 )}
@@ -741,7 +985,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
             ) : (
               <p className="share-vendors-overview">
                 <MembersIcon size={16} />
-                <span>{tr(live.length > 0 ? 'scenes.share.overview' : 'scenes.share.overviewEmpty')}</span>
+                <span>{tr(live.length > 0 ? T.overview : T.overviewEmpty)}</span>
               </p>
             )}
 
@@ -750,8 +994,8 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                 <SearchIcon size={15} />
                 <input
                   type="search"
-                  placeholder={tr('scenes.share.search')}
-                  aria-label={tr('scenes.share.search')}
+                  placeholder={tr(T.search)}
+                  aria-label={tr(T.search)}
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 />
@@ -782,8 +1026,8 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                 [
                   ['all', tr('scenes.share.viewAll'), scenes.length],
                   ...(current ? [['mine', tr('scenes.share.viewMine', { name: current.name || tr('scenes.share.unnamed') }), nMine] as const] : []),
-                  ['none', tr('scenes.share.viewNone'), nNone],
-                  ['multi', tr('scenes.share.viewMulti'), nMulti],
+                  ['none', tr(T.viewNone), nNone],
+                  ['multi', tr(T.viewMulti), nMulti],
                   ['blocked', tr('scenes.share.viewBlocked'), blockedIds.size],
                 ] as const
               )
@@ -833,7 +1077,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                     {columns.map((c) => (
                       <th key={c.key} className={`c-${c.key}`} aria-sort={sort.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
                         <button type="button" onClick={() => sortBy(c.key)}>
-                          {tr(c.label)}
+                          {tr(c.key === 'vendors' ? T.col : c.label)}
                           {sort.key === c.key && (sort.dir === 1 ? <ChevronUpIcon size={12} /> : <ChevronDownIcon size={12} />)}
                         </button>
                       </th>
@@ -843,7 +1087,13 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                 <tbody>
                   {scenes.length === 0 && (
                     <tr className="share-scenes-empty">
-                      <td colSpan={columns.length + 1}>{tr('scenes.share.noScenes')}</td>
+                      <td colSpan={columns.length + 1}>
+                        {artists
+                          ? team
+                            ? tr('scenes.artists.noScenes', { name: team.vendor.name, project: projectName })
+                            : ''
+                          : tr('scenes.share.noScenes')}
+                      </td>
                     </tr>
                   )}
                   {scenes.length > 0 && shown.length === 0 && (
@@ -905,8 +1155,8 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                               <span
                                 className="share-vboth"
                                 role="img"
-                                aria-label={tr('scenes.share.bothTip', { list: seen.map((v) => v.name || tr('scenes.share.unnamed')).join(', ') })}
-                                data-tip={tr('scenes.share.bothTip', { list: seen.map((v) => v.name || tr('scenes.share.unnamed')).join(', ') })}
+                                aria-label={tr(T.bothTip, { list: seen.map((v) => v.name || tr('scenes.share.unnamed')).join(', ') })}
+                                data-tip={tr(T.bothTip, { list: seen.map((v) => v.name || tr('scenes.share.unnamed')).join(', ') })}
                               >
                                 <WarningIcon size={14} />
                               </span>
@@ -953,6 +1203,16 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                 </span>
               </p>
             )}
+            {(cascadeCount > 0 || cascadeLevel) && current && (
+              <p className="share-vendor-cross" role="note">
+                <WarningIcon size={15} />
+                <span>
+                  {cascadeCount > 0 && tr('scenes.share.cascade', { count: cascadeCount, name: current.name || tr('scenes.share.unnamed') })}
+                  {cascadeCount > 0 && cascadeLevel && ' '}
+                  {cascadeLevel && tr('scenes.share.cascadeLevel')}
+                </span>
+              </p>
+            )}
             <p className="share-vendors-legend">
               <span>
                 <span className="share-vchip legend">
@@ -972,7 +1232,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                 <span className="share-vboth">
                   <WarningIcon size={14} />
                 </span>
-                {tr('scenes.share.legendBoth')}
+                {tr(T.legendBoth)}
               </span>
             </p>
           </div>
@@ -1005,7 +1265,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
               <>
                 {live.map((v) => {
                   const c = changesOf(v);
-                  const edited = ops.some((o) => o.op !== 'create' && o.id === v.id);
+                  const edited = ops.some((o) => o.op !== 'create' && o.id === v.id) || artistsTouched(v);
                   if (!c.add && !c.remove && !c.isNew && !edited) return null;
                   return (
                     <span key={v.key} className="share-vendors-sum-item">
@@ -1041,7 +1301,7 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
             ) : (
               <span className="muted">{tr('scenes.share.noChanges')}</span>
             )}
-            {unnamed && <span className="warn">{tr('scenes.share.nameMissing')}</span>}
+            {unnamed && <span className="warn">{tr(T.nameMissing)}</span>}
           </span>
           <button type="button" onClick={onClose}>
             {tr('common.close')}

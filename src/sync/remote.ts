@@ -209,10 +209,20 @@ export interface SceneSharesRemote {
   saveSceneVendors(projectId: string, ops: VendorOp[]): Promise<SaveVendorsResult>;
   /** Pone o saca *Can share scenes* a una persona con permiso sobre el proyecto (dueño o admin que lo comparte). */
   setShareScenes(projectId: string, userId: string, on: boolean): Promise<void>;
+  /** Lo que ve el equipo de un vendor (base 32): su vendor y sus artistas, nunca los otros vendors. */
+  vendorTeamGet(projectId: string): Promise<VendorTeam>;
+  /**
+   * Guarda lo del equipo de un vendor (su equipo y sus artistas), todo o nada (`save_vendor_team`). `vendorId`: el vendor
+   * que la ventana tenía abierto; si la sesión ya no es de su equipo, `vendor_changed`.
+   */
+  saveVendorTeam(projectId: string, ops: VendorTeamOp[], vendorId?: string): Promise<SaveVendorsResult>;
 }
 
 /** La versión de la base con vendors y *Can share scenes* (20261121120000_vendors.sql, D852). */
 export const VENDORS_SCHEMA_VERSION = 31;
+
+/** La versión de la base con el equipo de un vendor y sus artistas (20261122120000_vendor_artistas.sql, D854). */
+export const VENDOR_TEAM_SCHEMA_VERSION = 32;
 
 /** El nivel de un vendor: siempre Ver o Comentar. */
 export type VendorLevel = 'view' | 'comment';
@@ -221,9 +231,11 @@ export type VendorLevel = 'view' | 'comment';
 export interface SceneVendorEmail {
   email: string;
   state: 'joined' | 'invited' | 'expired';
+  /** Lo sumó el equipo del vendor (base 32): el equipo solo puede sacar estos. Ausente: lo sumó el proyecto. */
+  by_team?: boolean;
 }
 
-/** Un vendor vivo de `scene_vendors_list`. */
+/** Un vendor vivo de `scene_vendors_list`, o un artista de un vendor (base 32). */
 export interface SceneVendor {
   id: string;
   name: string;
@@ -237,7 +249,22 @@ export interface SceneVendor {
    * marca de escena, marcada como carpeta o con otra entidad adentro): la base no se la da a ningún correo del vendor.
    */
   scenes: { page_id: string; alive: boolean; ok: boolean }[];
+  /** Sus artistas (base 32; un artista no tiene). Los arma el equipo del vendor; el proyecto los ve y los puede sacar. */
+  artists?: SceneVendor[];
 }
+
+/** Lo que devuelve `vendor_team_get`: el vendor del que la sesión es del equipo, y sus artistas. */
+export interface VendorTeam {
+  /** El correo de la sesión (está en el equipo). */
+  me: string;
+  vendor: SceneVendor;
+  artists: SceneVendor[];
+}
+
+/** Una operación de `save_vendor_team`: el equipo, o crear, cambiar o borrar un artista. */
+export type VendorTeamOp =
+  | { op: 'team'; add_emails?: string[]; remove_emails?: string[]; reinvite?: string[] }
+  | VendorOp;
 
 /** Lo que devuelve `scene_vendors_list`. */
 export interface SceneVendorsList {
@@ -296,32 +323,53 @@ export function parseSceneVendorsList(data: unknown): SceneVendorsList {
   if (!row || (cap !== 1 && cap !== 2) || !Array.isArray(row.vendors)) {
     throw new RemoteError(`scene_vendors_list: unexpected answer ${JSON.stringify(data)?.slice(0, 200)}`, true);
   }
-  const vendors: SceneVendor[] = [];
-  for (const raw of row.vendors as Record<string, unknown>[]) {
-    if (!raw || typeof raw.id !== 'string' || typeof raw.name !== 'string') continue;
-    vendors.push({
-      id: raw.id,
-      name: raw.name,
-      code: typeof raw.code === 'string' ? raw.code : '',
-      color: typeof raw.color === 'string' ? raw.color : '#2e5a8e',
-      level: raw.level === 'comment' ? 'comment' : 'view',
-      created_at: typeof raw.created_at === 'string' ? raw.created_at : '',
-      emails: (Array.isArray(raw.emails) ? (raw.emails as Record<string, unknown>[]) : [])
-        .filter((e) => e && typeof e.email === 'string')
-        .map((e) => ({
-          email: e.email as string,
-          state: e.state === 'joined' || e.state === 'invited' ? e.state : 'expired',
-        })),
-      scenes: (Array.isArray(raw.scenes) ? (raw.scenes as Record<string, unknown>[]) : [])
-        .filter((x) => x && typeof x.page_id === 'string')
-        .map((x) => ({ page_id: x.page_id as string, alive: x.alive !== false, ok: x.ok !== false })),
-    });
-  }
+  const vendors = parseVendors(row.vendors, true);
   const others = new Map<string, number>();
   for (const o of Array.isArray(row.others) ? (row.others as Record<string, unknown>[]) : []) {
     if (o && typeof o.page_id === 'string') others.set(o.page_id, Number(o.readers) || 0);
   }
   return { cap, admin: row.admin === true, vendors, others };
+}
+
+/** Un vendor (o artista) de una respuesta; `null` si no tiene la forma esperada. */
+function parseVendor(raw: Record<string, unknown> | null | undefined, withArtists: boolean): SceneVendor | null {
+  if (!raw || typeof raw.id !== 'string' || typeof raw.name !== 'string') return null;
+  const vendor: SceneVendor = {
+    id: raw.id,
+    name: raw.name,
+    code: typeof raw.code === 'string' ? raw.code : '',
+    color: typeof raw.color === 'string' ? raw.color : '#2e5a8e',
+    level: raw.level === 'comment' ? 'comment' : 'view',
+    created_at: typeof raw.created_at === 'string' ? raw.created_at : '',
+    emails: (Array.isArray(raw.emails) ? (raw.emails as Record<string, unknown>[]) : [])
+      .filter((e) => e && typeof e.email === 'string')
+      .map((e) => ({
+        email: e.email as string,
+        state: e.state === 'joined' || e.state === 'invited' ? e.state : 'expired',
+        ...(e.by_team === true ? { by_team: true } : {}),
+      })),
+    scenes: (Array.isArray(raw.scenes) ? (raw.scenes as Record<string, unknown>[]) : [])
+      .filter((x) => x && typeof x.page_id === 'string')
+      .map((x) => ({ page_id: x.page_id as string, alive: x.alive !== false, ok: x.ok !== false })),
+  };
+  if (withArtists && Array.isArray(raw.artists)) vendor.artists = parseVendors(raw.artists, false);
+  return vendor;
+}
+
+function parseVendors(list: unknown, withArtists: boolean): SceneVendor[] {
+  return (Array.isArray(list) ? (list as Record<string, unknown>[]) : [])
+    .map((raw) => parseVendor(raw, withArtists))
+    .filter((v): v is SceneVendor => v !== null);
+}
+
+/** La respuesta de `vendor_team_get`, comprobada. */
+export function parseVendorTeam(data: unknown): VendorTeam {
+  const row = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+  const vendor = parseVendor(row?.vendor as Record<string, unknown> | undefined, false);
+  if (!row || !vendor || typeof row.me !== 'string' || !Array.isArray(row.artists)) {
+    throw new RemoteError(`vendor_team_get: unexpected answer ${JSON.stringify(data)?.slice(0, 200)}`, true);
+  }
+  return { me: row.me, vendor, artists: parseVendors(row.artists, false) };
 }
 
 /** La respuesta de `save_scene_vendors`, comprobada. */
@@ -1121,6 +1169,7 @@ export class SupabaseRemote
   /** Lo mismo con `workspaces.color` (versión 27). */
   private colorMissingAt = 0;
   private favoritesMissingAt = 0;
+  private vendorTeamMissingAt = 0;
 
   /** Desde cuándo la base no tiene `workspace_settings` (o la subida con versión); se reintenta cada tanto. */
   private settingsTableMissingAt = 0;
@@ -1402,12 +1451,16 @@ export class SupabaseRemote
     // Los favoritos de la sesión (versión 30), embebidos: la RLS de `project_favorites` deja ver solo los propios.
     const favorites =
       (schemaVersion ?? 0) >= PROJECT_FAVORITES_SCHEMA_VERSION && Date.now() - this.favoritesMissingAt >= 10 * 60_000;
+    // Si la sesión es del equipo de un vendor del proyecto (versión 32): una columna calculada (`public.vendor_team`).
+    const vendorTeam =
+      (schemaVersion ?? 0) >= VENDOR_TEAM_SCHEMA_VERSION && Date.now() - this.vendorTeamMissingAt >= 10 * 60_000;
     const columns = [
       'id, name, created_at, owner_id',
       ...(archived ? ['archived_at'] : []),
       ...(drive ? ['drive_trash_requested_at, drive_missing_at'] : []),
       ...(color ? ['color'] : []),
       ...(favorites ? ['favorites:project_favorites(project_id)'] : []),
+      ...(vendorTeam ? ['vendor_team'] : []),
     ];
     // Por fecha de creación (el orden de la lista) y, a igual fecha, por id: cada pedido sigue al último proyecto
     // recibido, hasta el total que dice la API. Una lista de proyectos cortada dejaría sin bajar las páginas de los
@@ -1420,6 +1473,11 @@ export class SupabaseRemote
       // Sin la tabla (la versión dice 30 pero la migración no está): PostgREST no encuentra la relación.
       if (favorites && (error?.code === MISSING_RELATIONSHIP || MISSING_TABLE.has(String(error?.code)))) {
         this.favoritesMissingAt = Date.now();
+        return this.fetchProjects(schemaVersion);
+      }
+      // Sin la columna calculada (la versión dice 32 pero la migración no está): se deja primero ella.
+      if (vendorTeam && error?.code === UNDEFINED_COLUMN) {
+        this.vendorTeamMissingAt = Date.now();
         return this.fetchProjects(schemaVersion);
       }
       if (color && error?.code === UNDEFINED_COLUMN) {
@@ -2149,6 +2207,22 @@ export class SupabaseRemote
   async setShareScenes(projectId: string, userId: string, on: boolean): Promise<void> {
     const { error, status } = await timed(this.client.rpc('set_share_scenes', { p_project: projectId, p_user: userId, p_on: on }));
     if (error) throw toRemoteError(error, status);
+  }
+
+  // --- El equipo de un vendor y sus artistas (20261122120000_vendor_artistas.sql) ---
+
+  async vendorTeamGet(projectId: string): Promise<VendorTeam> {
+    const { data, error, status } = await timed(this.client.rpc('vendor_team_get', { p_project: projectId }));
+    if (error) throw toRemoteError(error, status);
+    return parseVendorTeam(data);
+  }
+
+  async saveVendorTeam(projectId: string, ops: VendorTeamOp[], vendorId?: string): Promise<SaveVendorsResult> {
+    const { data, error, status } = await timed(
+      this.client.rpc('save_vendor_team', { p_project: projectId, p_ops: ops, ...(vendorId ? { p_vendor: vendorId } : {}) }),
+    );
+    if (error) throw toRemoteError(error, status);
+    return parseSaveVendorsResult(data);
   }
 
   /**

@@ -92,7 +92,7 @@ export const teamDialogs = {
   },
   'scenes.share.overviewEmpty': {
     en: "No vendors yet. Create one with New vendor: give it a name and its scenes, and add its emails when you have them.",
-    es: "Todavía no hay vendors. Creá uno con New vendor: ponele nombre y sus escenas, y cargale los correos cuando los tengas.",
+    es: "Todavía no hay vendors. Creá uno con Nuevo vendor: ponele nombre y sus escenas, y cargale los correos cuando los tengas.",
   },
   'scenes.share.newVendor': { en: "New vendor", es: "Nuevo vendor" },
   'scenes.share.unnamed': { en: "No name", es: "Sin nombre" },
@@ -261,6 +261,141 @@ export const teamDialogs = {
       one: "Guardado. Falta que entre {count} correo: mandale el link (ya está copiado). Entra con ese correo y ve sus escenas.",
       other: "Guardado. Falta que entren {count} correos: mandales el link (ya está copiado). Entran con ese correo y ven sus escenas.",
     },
+  },
+  // En la ventana de vendors del proyecto: lo que armó el equipo de cada vendor (D854).
+  'scenes.share.byTeam': { en: "added by {name}", es: "lo sumó {name}" },
+  'scenes.share.artistsOf': { en: "{name} artists · {count}", es: "Artistas de {name} · {count}" },
+  'scenes.share.artistsNote': {
+    en: "The vendor sets them up. You can remove anyone.",
+    es: "Los arma el vendor. Vos podés sacar a cualquiera.",
+  },
+  'scenes.share.artistScenes': { en: "Their scenes", es: "Sus escenas" },
+  'scenes.share.deleteArtist': { en: "Delete {name}", es: "Borrar {name}" },
+  'scenes.share.deleteArtistTip': {
+    en: "Their emails stop seeing their scenes when you save",
+    es: "Sus correos dejan de ver sus escenas al guardar",
+  },
+  'scenes.share.keepArtist': { en: "Keep {name}", es: "Dejar {name}" },
+  'scenes.share.cascade': {
+    en: {
+      one: "{count} scene you take from {name} is also taken from its artists. An artist never has a scene their vendor doesn't.",
+      other: "{count} scenes you take from {name} are also taken from its artists. An artist never has a scene their vendor doesn't.",
+    },
+    es: {
+      one: "{count} escena que le sacás a {name} también se les saca a sus artistas. Un artista nunca tiene una escena que su vendor no tiene.",
+      other: "{count} escenas que le sacás a {name} también se les sacan a sus artistas. Un artista nunca tiene una escena que su vendor no tiene.",
+    },
+  },
+  'scenes.share.cascadeLevel': {
+    en: "Its artists with Comment drop to View too.",
+    es: "Sus artistas con Comentar también bajan a Ver.",
+  },
+  'scenes.share.confirmDeleteAll': {
+    en: "Delete {name}? When you save, its team and its {count} artists stop seeing its scenes.",
+    es: "¿Borrar {name}? Al guardar, su equipo y sus {count} artistas dejan de ver sus escenas.",
+  },
+  'scenes.share.artistCount': {
+    en: { one: "{count} artist", other: "{count} artists" },
+    es: { one: "{count} artista", other: "{count} artistas" },
+  },
+  // La ventana del equipo de un vendor que reparte sus escenas entre artistas (*Share scenes with artists…*, D854).
+  'scenes.artists.title': { en: "Share scenes of “{name}” with artists", es: "Compartir escenas de “{name}” con artistas" },
+  'scenes.artists.lead': {
+    en: { one: "You only see the {count} scene {project} shared with {name}. Each artist sees only theirs.", other: "You only see the {count} scenes {project} shared with {name}. Each artist sees only theirs." },
+    es: { one: "Ves solo la {count} escena que {project} compartió con {name}. Cada artista ve solo las suyas.", other: "Ves solo las {count} escenas que {project} compartió con {name}. Cada artista ve solo las suyas." },
+  },
+  'scenes.artists.list': { en: "Artists", es: "Artistas" },
+  'scenes.artists.count': { en: "ARTISTS · {count}", es: "ARTISTAS · {count}" },
+  'scenes.artists.all': { en: "All artists", es: "Todos los artistas" },
+  'scenes.artists.overview': {
+    en: "The whole split of your scenes. To assign scenes, pick an artist on the left.",
+    es: "El reparto completo de tus escenas. Para asignar escenas, elegí un artista a la izquierda.",
+  },
+  'scenes.artists.overviewEmpty': {
+    en: "No artists yet. Create one with New artist: give them a name and their scenes, and add their emails when you have them.",
+    es: "Todavía no hay artistas. Creá uno con Nuevo artista: ponele nombre y sus escenas, y cargale los correos cuando los tengas.",
+  },
+  'scenes.artists.new': { en: "New artist", es: "Nuevo artista" },
+  'scenes.artists.name': { en: "Artist name", es: "Nombre del artista" },
+  'scenes.artists.color': { en: "Artist color", es: "Color del artista" },
+  'scenes.artists.delete': { en: "Delete artist", es: "Borrar artista" },
+  'scenes.artists.deleteTip': {
+    en: "Their emails stop seeing their scenes when you save",
+    es: "Sus correos dejan de ver sus escenas al guardar",
+  },
+  'scenes.artists.confirmDelete': {
+    en: "Delete {name}? When you save, their emails stop seeing their scenes.",
+    es: "¿Borrar {name}? Al guardar, sus correos dejan de ver sus escenas.",
+  },
+  'scenes.artists.emailHere': { en: "It's already on this artist.", es: "Ya está en este artista." },
+  'scenes.artists.emailOther': {
+    en: "It already belongs to {name}: remove it there first.",
+    es: "Ya es de {name}: sacalo de ahí primero.",
+  },
+  'scenes.artists.emailTeam': {
+    en: "It's already on the team of {name}: it already sees all its scenes.",
+    es: "Ya está en el equipo de {name}: ya ve todas sus escenas.",
+  },
+  'scenes.artists.search': { en: "Search number, scene, location, set or artist", es: "Buscar número, escena, locación, decorado o artista" },
+  'scenes.artists.viewNone': { en: "No artist", es: "Sin artista" },
+  'scenes.artists.viewMulti': { en: "2+ artists", es: "Con 2+ artistas" },
+  'scenes.artists.col': { en: "Artists", es: "Artistas" },
+  'scenes.artists.bothTip': {
+    en: "{list} see it: they see each other's comments and emails",
+    es: "La ven {list}: se ven entre sí los comentarios y los correos",
+  },
+  'scenes.artists.legendBoth': { en: "two artists see each other", es: "dos artistas se ven entre sí" },
+  'scenes.artists.levelCap': {
+    en: "Up to {level}: the access {project} gave {name}.",
+    es: "Hasta {level}: el nivel que {project} le dio a {name}.",
+  },
+  'scenes.artists.nameMissing': { en: "Every artist needs a name.", es: "Cada artista necesita un nombre." },
+  'scenes.artists.noScenes': {
+    en: "{name} has no scenes yet: {project} hasn't shared any with it.",
+    es: "{name} todavía no tiene escenas: {project} no le compartió ninguna.",
+  },
+  // Lo que contesta la base al equipo de un vendor (`save_vendor_team`).
+  'scenes.team.emailInUse': {
+    en: "That email is already on another vendor or artist of this project. Ask the project to check it.",
+    es: "Ese correo ya está en otro vendor o artista de este proyecto. Pedile al proyecto que lo revise.",
+  },
+  'scenes.team.changed': {
+    en: "You're on another vendor's team now. Nothing was saved: close this and open it again.",
+    es: "Ahora estás en el equipo de otro vendor. No se guardó nada: cerrá esto y abrilo de nuevo.",
+  },
+  'scenes.team.artistGone': {
+    en: "The project changed one of the artists in the meantime. Nothing was saved: close this and open it again.",
+    es: "El proyecto cambió uno de los artistas mientras tanto. No se guardó nada: cerrá esto y abrilo de nuevo.",
+  },
+  'scenes.team.emailLocked': {
+    en: "The project added that email: only the project can remove it.",
+    es: "Ese correo lo sumó el proyecto: solo el proyecto lo puede sacar.",
+  },
+  'scenes.team.ownEmail': { en: "You can't add or remove your own email.", es: "No podés sumar ni sacar tu propio correo." },
+  'scenes.team.gone': {
+    en: "You're not on a vendor's team in this project anymore.",
+    es: "Ya no estás en el equipo de un vendor de este proyecto.",
+  },
+  // *Share all scenes…*: el equipo de un vendor suma gente que ve todas sus escenas (D854).
+  'scenes.team.title': { en: "Share all scenes of “{name}”", es: "Compartir todas las escenas de “{name}”" },
+  'scenes.team.lead': {
+    en: { one: "Anyone you add to the team sees {name}'s {count} scene and can share it with artists, just like you.", other: "Anyone you add to the team sees {name}'s {count} scenes and can share them with artists, just like you." },
+    es: { one: "Quien sumes al equipo ve la {count} escena de {name} y puede compartirla con artistas, igual que vos.", other: "Quien sumes al equipo ve las {count} escenas de {name} y puede compartirlas con artistas, igual que vos." },
+  },
+  'scenes.team.level': { en: "Access: {level} · set by {project}", es: "Nivel: {level} · lo decide {project}" },
+  'scenes.team.members': { en: "{name} TEAM · {count}", es: "EQUIPO DE {name} · {count}" },
+  'scenes.team.you': { en: "you", es: "vos" },
+  'scenes.team.addedBy': { en: "added by {name}", es: "lo sumó {name}" },
+  'scenes.team.lockedTip': {
+    en: "Added by {name}: only {name} can remove it.",
+    es: "Lo sumó {name}: solo {name} lo puede sacar.",
+  },
+  'scenes.team.addEmail': { en: "Add email to the team", es: "Agregar correo al equipo" },
+  'scenes.team.add': { en: "Add", es: "Agregar" },
+  'scenes.team.already': { en: "It's already on the team.", es: "Ya está en el equipo." },
+  'scenes.team.isArtist': {
+    en: "It's already an artist ({name}): remove it there first.",
+    es: "Ya es artista ({name}): sacalo de ahí primero.",
   },
   'share.label': { en: "Share", es: "Compartir" },
   'share.scenesFlag': { en: "Can share scenes", es: "Puede compartir escenas" },

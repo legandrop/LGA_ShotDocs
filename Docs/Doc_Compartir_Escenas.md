@@ -637,3 +637,110 @@ tener correo. Lega aprobó la maqueta (en `LGA_RepoTools`, `DISENO.md`) y las de
   por eso `min_app_version` sube a 0.331 apenas se publica.
 - Partir una escena por planos entre vendors, también.
 
+## 12. El equipo de un vendor y sus artistas (v0.334, D854)
+
+Pedido de Lega (2026-11-09): que un vendor (el productor o el coordinador de post a quien se le compartieron escenas)
+pueda, desde el ⋯ del proyecto, compartirle **todo** a otra persona de su equipo, y **repartir sus escenas entre
+artistas** (un 3D, dos compositores, uno de roto…), con artistas armados antes de tener correo, igual que los vendors.
+El dueño ve todo lo que se armó debajo de cada vendor y lo puede sacar. Lega aprobó la maqueta (en `LGA_RepoTools`,
+`DISENO.md`) y las decisiones de D854.
+
+### 12.1 El modelo
+
+- **El equipo de un vendor** son los correos del vendor (sección 11.1): cada uno ve todas sus escenas, como antes.
+  **Lo que suma el equipo queda marcado** (`scene_vendor_emails.by_team`).
+- **Un artista** es un vendor hijo (`scene_vendors.parent_id`), en la misma tabla: nombre, código, color, nivel, correos y
+  escenas. Así reusa todo lo de los vendors: un correo en un solo lugar vivo del proyecto (vendor o artista), el acceso que
+  se arma solo (`vendor_sync_email`), las invitaciones de vendor, la marca del árbol y el freno de movimientos.
+- **Un artista**: solo escenas que el vendor tiene y que hoy se pueden dar; **nunca más nivel que el vendor**; sin correos
+  es solo planificación; **no comparte nada** (no tiene equipo ni artistas). Hasta 100 por vendor.
+- **Lo que le pasa al vendor arrastra a sus artistas** (`private.vendor_artists_follow`): sacarle una escena se la saca a
+  sus artistas, bajarlo a Ver los baja a Ver y borrarlo los borra. Se hace en la base, en el mismo guardado; la ventana
+  de vendors de la 0.331 a la 0.333 (que no ve a los artistas) lo arrastra igual.
+
+### 12.2 Quién hace qué
+
+- **El equipo** (quien tiene su correo confirmado en un vendor vivo, sin padre, de un proyecto vivo:
+  `private.vendor_team_of`):
+  - *Share all scenes…*: suma y saca correos del equipo. **Solo saca lo que sumó el equipo** (`email_locked`): lo que
+    sumó el proyecto lleva candado. **Nunca se saca a sí mismo** ni se carga como artista (`own_email`). El nivel lo
+    decide el proyecto.
+  - *Share scenes with artists…*: crea, cambia y borra artistas de su vendor, con todo lo de arriba.
+  - **Nunca ve los otros vendors** ni a quién más se compartió una escena: si un correo ya está en otro vendor o artista
+    del proyecto, la base contesta `email_in_use` sin decir cuál (la app: «Ese correo ya está en otro vendor o artista de
+    este proyecto. Pedile al proyecto que lo revise.»). Un correo que ya ve páginas por *Share*, o que es miembro del
+    workspace, sí entra: pasa a ver también las escenas del vendor (como cuando lo carga el proyecto).
+  - En su ⋯ del proyecto: *Available offline…* y estas dos. Color, renombrar, compartir, archivar y borrar ya no estaban
+    (piden permisos que un vendor no tiene); *Export* aparece solo si además tiene un permiso sobre el proyecto entero.
+- **Un artista** no tiene nada de esto: ve sus escenas y lo de adentro.
+- **El proyecto** (sección 11.2: dueño, admin, o quien tiene *Can share scenes*) ve, debajo de cada vendor, sus artistas
+  con sus correos y escenas, y los correos que sumó el equipo marcados *added by <vendor>*. **Puede borrar un artista o
+  sacarle correos**; no le reparte escenas (eso lo arma el vendor). Tiene control total sobre el vendor, con el arrastre
+  de arriba.
+
+### 12.3 La base (`20261122120000_vendor_artistas.sql`, versión 32)
+
+- `vendor_team(workspaces)`: columna calculada que viene con la lista de proyectos (`select=…,vendor_team`): si la
+  sesión es del equipo de un vendor de ese proyecto. Con ella el ⋯ ofrece las dos entradas.
+- `vendor_team_get(p_project)`: para el equipo; `me` (su correo), **su** vendor (nombre, código, color, nivel, correos
+  con `by_team`, escenas con `alive` y `ok`) y sus artistas. Nada de los otros vendors.
+- `save_vendor_team(p_project, p_ops, p_vendor)`: hasta 100 operaciones, **todo o nada**. De qué vendor es la sesión se
+  mira **después** del candado del proyecto (el mismo de `save_scene_vendors`): así, si el proyecto borra el vendor al
+  mismo tiempo, el equipo no deja un artista vivo debajo de un vendor borrado (lo encontró la auditoría). `p_vendor` es
+  el vendor que la ventana tenía abierto: si la sesión ya es de otro, `vendor_changed` y no guarda nada. Operaciones: `team` (sumar, sacar, volver a
+  invitar), y `create` / `update` / `delete` de un artista de su vendor. Valida quién guarda, el interruptor de lo
+  borrado, la forma, los candados, el propio correo, el nivel, cada escena (del vendor y que hoy se puede dar: una sola
+  respuesta, `page_invalid`, que no dice cuál), los topes y el correo único (mirado al final). Sincroniza cada correo
+  tocado y devuelve lo mismo que `save_scene_vendors`.
+- `scene_vendors_list` trae solo los vendors (sin padre), cada uno con `artists`, y cada correo con `by_team`.
+- `save_scene_vendors`: sobre **un artista** el proyecto solo puede `delete` o `update` con `remove_emails` (otra cosa:
+  `ops_invalid`); después de cada operación sobre un vendor, el arrastre. Un correo que suma el proyecto queda con
+  `by_team` falso.
+
+### 12.4 Las ventanas
+
+- **`VendorTeamDialog.tsx`** (*Share all scenes of “<vendor>”*): el nivel (lo decide el proyecto), el equipo con su
+  estado y quién lo sumó (candado en lo del proyecto; *you* en uno mismo), un campo para sumar, y *Save* / *Invite &
+  save*, que copia el link de invitación.
+- **`ShareScenesDialog.tsx` con `artists`** (*Share scenes of “<vendor>” with artists*): la misma ventana de los vendors,
+  con solo las escenas del vendor, *Artists* en lugar de *Vendors*, sin lectores de afuera, y Comentar apagado si el
+  vendor tiene Ver («Up to View: the access <proyecto> gave <vendor>.»).
+- **En la ventana del proyecto**, la ficha de cada vendor suma el bloque *<vendor> artists*: chip, nombre y nivel,
+  correos (con sacar y deshacer), sus escenas y borrar (con deshacer). La lista de vendors cuenta los artistas. Si se le
+  saca al vendor una escena que tiene algún artista, o se lo baja a Ver con artistas que comentan, lo avisa antes de
+  guardar; borrar un vendor con artistas lo dice en la confirmación.
+- De paso: la rejilla de la ventana ya no se encoge por debajo de lo que tiene adentro (a un ancho mediano la tabla se
+  le montaba a los avisos de abajo), y «falta que entren…, el link ya está copiado» se dice solo si ese guardado invitó y
+  el link se copió.
+
+### 12.5 Pruebas
+
+- `supabase/tests/vendor_artistas_permisos.sql`: las puertas, quién es del equipo, el equipo suma y saca (candados,
+  propio correo, correo de otro lado sin decir dónde), los artistas (escenas del vendor, nivel, planificación, correo
+  único) y lo que ve y hace el proyecto (la lista con artistas, lo que puede tocar de un artista, el arrastre de
+  escenas, nivel y borrado). Corrió contra la base real en una transacción que se deshace, con la migración adelante:
+  `ok`; y la de vendors (`vendors_permisos.sql`) sigue en `ok` con la migración puesta.
+- `src/sync/vendorArtists.test.ts`: las mismas reglas en el servidor en memoria, con un mutante por chequeo
+  (`ARTIST_MUTANTS`: quién es del equipo, candados, propio correo, nivel y escenas del artista, lo que el proyecto le
+  hace a un artista, la lista, y los tres arrastres), de punta a punta, y la lectura de las respuestas.
+- `src/ui/shareScenes.test.tsx`: el ⋯ de quien es del equipo (y de un artista, y con la base 31), *Share all scenes*
+  (candado, uno mismo, un artista, invitar y sacar), *Share scenes with artists* (solo las del vendor, un artista con
+  una escena y un correo) con el tope de nivel, y lo que ve y hace el proyecto con los artistas.
+- Con clics, en el arnés (`src/dev/barra-lateral.html?compartir` y `?equipo`): el ⋯ de Vera, las dos ventanas, sacarle a
+  DNEG una escena que tiene una artista, borrar un artista y sacarle un correo; en escritorio, a ancho mediano y en el
+  teléfono.
+
+### 12.6 Lo que queda
+
+- **El equipo puede saber si un correo ya es miembro del workspace**: sumándolo, ve *in* en lugar de *invited* (y lo
+  puede volver a sacar, porque lo sumó él). Es lo mismo que ve el proyecto en la ventana de vendors; queda anotado para
+  que Lega decida si al equipo hay que mostrarle menos.
+- Cuando el equipo hace que una escena empiece a verse, la base reinicia su copia limpia, pero la arma recién el próximo
+  editor que sincronice (el equipo no edita): mientras tanto el artista nuevo ve la escena preparándose.
+
+- **Sin paso en los recorridos**, por lo mismo que *Share scenes*: lo usa un invitado que recibe escenas de un vendor
+  (necesita otra persona y la base 32). La ayuda (*A vendor's team and its artists*) lo explica.
+- Dos artistas de una misma escena se ven entre sí (comentarios y correos), y el resto del vendor también los ve: dentro
+  de un vendor se aceptó (D854). Separar los comentarios sigue para otra tanda (sección 11.6).
+- Con la v0.331 a la 0.333 abierta, el proyecto no ve a los artistas (sí el arrastre); `min_app_version` sube a la 0.334
+  apenas se publica.
