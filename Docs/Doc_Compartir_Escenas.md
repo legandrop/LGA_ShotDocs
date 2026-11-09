@@ -42,16 +42,33 @@ Panorama, en *Scenes*, *Share scenes…* al lado de *Copy overview* (solo en la 
 1. **Una persona por guardado.** Un campo de correo con sugerencias: primero quienes ya tienen páginas compartidas en el
    proyecto (con cuántas), después los miembros y los invitados pendientes del workspace, o un correo nuevo. Debajo dice
    quién es: *In the workspace · <rol>*, *Has a pending invitation…* o *New to the workspace…*.
-2. **Nivel:** *Can view* (de fábrica) o *Can comment*. Nunca Editar.
+2. **Nivel:** *View* (de fábrica) o *Comment*, dos botones con su ícono (ojo y globo). Nunca Editar.
 3. **Las escenas del proyecto**, del registro de este dispositivo (`registerProject`: el mismo de *Overview › Scenes*;
-   quien comparte ve el proyecto entero), en orden de número con la forma de la post (`sceneLabel`), con buscador y
-   *All* / *None* de lo filtrado. Cada una marcada si la persona ya la tiene; lo tocado queda resaltado y la cuenta
-   (`+n −m`) va al lado de *Save*. Al lado de cada escena: cuántas páginas lleva adentro (sus fichas, que van con ella)
-   y un aviso si la escena **ya la ve otra persona de afuera** (se ven los comentarios y los correos entre ellos, M5).
+   quien comparte ve el proyecto entero), en una **tabla** (v0.330, D851; `src/ui/shareScenesTable.ts`):
+   - **Columnas:** *No.* (la forma de la post, `sceneLabel`), *Scene* (el título sin el número: desde D849 el título
+     empieza con él), *Location*, *Set*, *INT/EXT*, *Pages* (las de adentro, que van con ella), *Outside* (cuántas
+     personas de afuera ya la ven, con quiénes en el tooltip) y *Status* para la persona elegida: *Adding*, *Removing*,
+     *Shared · View/Comment*, *Edit: change it in Share* o *Can't be shared*. Locación, decorado e INT/EXT salen del
+     índice de relaciones (`sceneLive`, lo mismo que el índice de una carpeta de escenas): solo del proyecto abierto, así
+     que compartiendo otro desde el selector (o antes de la primera pasada del índice) esas tres columnas no están.
+   - **Orden:** un clic en el título de una columna ordena por ella y otro lo invierte; lo vacío va siempre al final y
+     los empates van por número. De fábrica, por número.
+   - **Filtros:** el buscador (número, escena, locación o decorado), los desplegables de locación y decorado, y las vistas
+     de un clic: *All*, *Selected*, *Not selected*, *Seen from outside* y *Can't be shared* (las dos últimas solo si hay
+     alguna). *Select shown* / *Clear shown* (y la casilla de los títulos, que queda a medias) marcan lo que se ve.
+   - **Marcar:** la casilla o un clic en la fila; **Shift+clic** marca o desmarca el rango desde la última tocada, en el
+     orden que se ve. Lo tocado queda resaltado (turquesa si se suma; rojo y tachado si se saca) y el pie dice `+n −m`.
+   - **Quién más la ve de afuera** se dice **una vez**, arriba de la tabla («N escenas ya las ven de afuera del equipo
+     a, b: se ven entre ellos los comentarios y los correos», M5), sin contar a la persona elegida. Antes se repetía en
+     cada fila.
+   - La ventana mide hasta 1040 px; la tabla es lo único que se desplaza y el pie (lo que cambia, *Close*, *Save*) queda
+     fijo. En una pantalla angosta, sin las columnas de locación, decorado, INT/EXT, páginas y afuera: la locación y el
+     decorado van bajo el nombre y se desplaza la ventana entera, con el pie pegado abajo.
 4. **Una escena con otra entidad adentro no se comparte** (sin opción para seguir): si en su rama (también en la papelera)
    hay una página que el registro reconoce como escena, locación, día o decorado, una con esa marca en sus ajustes o que
    guarda alguna (`settings.holds`), o una con título de escena (`sceneCode`), la fila queda apagada con el motivo
-   (*Can't be shared: …*). Es el caso de un episodio («101 | Piloto») que el registro tomó por escena. *All* no la marca.
+   (*Can't be shared: …*). Es el caso de un episodio («101 | Piloto») que el registro tomó por escena. *Select shown* no
+   la marca.
    La base lo vuelve a frenar (`scene_contains_entities`).
 5. **Lo que la persona ya tiene además:** otras páginas compartidas en el proyecto (se nombran, sin tocarlas), el aviso si
    ve **el proyecto entero** («ya ve todo; se cambia en *Share*»), y **lo que tiene en la papelera** (la escena o una de

@@ -127,7 +127,7 @@ describe('selector: archivar', () => {
     const archive = label('Archive “Bosque Negro”')!;
     expect(archive.textContent).toBe('Archive');
     expect(label('Delete “Bosque Negro”…')!.textContent).toBe('Delete…');
-    expect(label('Rename “Bosque Negro”')!.textContent).toBe('Rename');
+    expect(label('Rename “Bosque Negro”')!.textContent).toBe('Rename…');
     expect(document.querySelector('.project-menu [title]')).toBeNull();
     // La línea "Rename “X”" ya no está: renombrar es un renglón del ⋯.
     expect(byText('Rename “My project”')).toBeUndefined();
@@ -293,7 +293,7 @@ describe('selector en el teléfono', () => {
     expect([...sheet.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
       // "Available offline" (P.10) no aparece: jsdom no tiene Web Locks (sin ellos, la opción no se ofrece).
       'Export project…',
-      'Rename',
+      'Rename…',
       'Share “Bosque Negro”',
       'Archive',
       'Delete…',

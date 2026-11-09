@@ -3713,6 +3713,13 @@ code {
     border-radius: 18px 18px 0 0;
   }
 
+  /* El pie llega a los bordes de la hoja y cubre el área segura de abajo (el de escritorio está calculado para 8px). */
+  .project-foot {
+    margin: 10px -12px calc(-16px - env(safe-area-inset-bottom));
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-radius: 0;
+  }
+
   /* Sin columnas: nombre y, abajo, la línea de datos de siempre (páginas · peso · fecha). */
   .menu.project-list-menu,
   .menu.project-list-menu.no-size {
@@ -5710,56 +5717,533 @@ svg.sd-markup text {
   gap: 8px;
 }
 
-/* *Share scenes* (Doc_Compartir_Escenas.md): la lista de escenas con buscador, todas/ninguna y lo tocado resaltado. */
-.share-scenes-tools {
+/* *Share scenes* (Doc_Compartir_Escenas.md, v0.330): una ventana ancha con la persona arriba, la tabla de escenas en el
+   medio (lo único que se desplaza) y el pie fijo con lo que cambia y Guardar. */
+.modal.share-scenes {
+  width: min(1040px, 100%);
+  max-height: calc(88vh - 24px);
+  /* La tabla se achica hasta 150px; si ni así entra (una pantalla baja, el teléfono), se desplaza la ventana y el pie
+     queda pegado abajo: Guardar nunca queda fuera de la vista. */
+  overflow-y: auto;
+  padding: 22px 24px 0;
+  gap: 10px;
+}
+.share-scenes h2 {
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+.share-scenes-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.share-scenes-form > * {
+  flex: none;
+}
+.share-scenes input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.share-scenes input[type='checkbox']:disabled {
+  cursor: default;
+}
+
+/* La persona: el correo con su ícono y Ver / Comentar. */
+.share-scenes-who {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.share-scenes-field {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 10px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--faint);
 }
-.share-scenes-tools input {
-  flex: 1;
-  min-width: 0;
+.share-scenes-field:focus-within {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px var(--focus);
 }
-.share-scenes-list {
-  list-style: none;
-  margin: 6px 0 0;
+.share-scenes-field input,
+.share-scenes-field input:focus {
+  border: 0;
   padding: 0;
-  max-height: 40vh;
-  overflow-y: auto;
+  height: 100%;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+}
+.share-scenes-level.segmented {
+  grid-auto-columns: auto;
+  padding: 3px;
+  flex: none;
+}
+.share-scenes-level.segmented button {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* El buscador, los desplegables, las vistas y lo de marcar en bloque. */
+.share-scenes-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.share-scenes-search {
+  flex: 1 1 240px;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--faint);
+}
+.share-scenes-search:focus-within {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+.share-scenes-search input,
+.share-scenes-search input:focus {
+  border: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font-size: 13px;
+}
+.team-dialog select.share-scenes-pick {
+  height: 34px;
+  max-width: 200px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.share-scenes-gap {
+  flex: 1;
+}
+.share-scenes-bulk {
+  border-color: transparent;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.share-scenes-bulk:hover:not(:disabled) {
+  color: var(--text);
+}
+.share-scenes-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.share-scenes-view {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  gap: 7px;
+}
+.share-scenes-view .mono {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.share-scenes-view[aria-pressed='true'] {
+  background: var(--project-current);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.share-scenes-view[aria-pressed='true'] .mono {
+  color: inherit;
+}
+.share-scenes-view.outside[aria-pressed='true'] {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+
+/* Quién más la ve de afuera: una vez, arriba de la tabla. */
+.share-scenes-outside,
+.share-scenes-limits {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.share-scenes-outside {
+  padding: 8px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.share-scenes-outside svg,
+.share-scenes-limits svg {
+  flex: none;
+  margin-top: 1px;
+}
+.share-scenes-limits {
+  color: var(--muted);
+}
+.share-scenes-limits svg {
+  color: var(--faint);
+}
+
+/* La tabla: lo único que se desplaza, con los títulos fijos. */
+.share-scenes-form > .share-scenes-table-wrap {
+  flex: 1 1 auto;
+  min-height: 150px;
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.share-scenes-list li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
-  padding: 5px 8px;
+.share-scenes-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 13px;
 }
-.share-scenes-list li.changed {
+.share-scenes-table col.c-check {
+  width: 40px;
+}
+.share-scenes-table col.c-code {
+  width: 66px;
+}
+.share-scenes-table col.c-location,
+.share-scenes-table col.c-set {
+  width: 150px;
+}
+.share-scenes-table col.c-intExt {
+  width: 92px;
+}
+.share-scenes-table col.c-pages {
+  width: 66px;
+}
+.share-scenes-table col.c-outside {
+  width: 70px;
+}
+.share-scenes-table col.c-status {
+  width: 138px;
+}
+.share-scenes-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 34px;
+  padding: 0 8px;
+  background: var(--menu-bg);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.share-scenes-table th button {
+  border: 0;
+  padding: 2px 0;
+  border-radius: 4px;
+  gap: 3px;
+  font: inherit;
+  color: inherit;
+  max-width: 100%;
+}
+.share-scenes-table th button:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+.share-scenes-table th[aria-sort] button {
+  color: var(--text);
+}
+.share-scenes-table td {
+  height: 38px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.share-scenes-table th.c-check,
+.share-scenes-table td.c-check {
+  padding: 0 0 0 14px;
+}
+.share-scenes-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.share-scenes-table tbody tr[data-scene] {
+  cursor: pointer;
+}
+.share-scenes-table tbody tr[data-scene]:hover {
   background: var(--hover);
 }
-.share-scenes-list label {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  flex: 1 1 auto;
+.share-scenes-table tbody tr.checked {
+  background: var(--project-current);
+}
+.share-scenes-table tbody tr.adding {
+  background: var(--project-current-strong);
+}
+.share-scenes-table tbody tr.removing {
+  background: var(--danger-bg);
+}
+.share-scenes-table tbody tr.removing .share-scenes-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+}
+.share-scenes-table tbody tr.blocked,
+.share-scenes-table tbody tr.higher {
+  cursor: default;
+}
+.share-scenes-table tbody tr.blocked td {
+  color: var(--faint);
 }
 .share-scenes-code {
-  flex: none;
-  min-width: 4.5em;
+  font-weight: 500;
+  color: var(--text);
 }
-.share-scenes-title {
-  min-width: 0;
+.share-scenes-table td.c-name {
+  color: var(--text);
+  font-size: 13.5px;
+}
+.share-scenes-title,
+.share-scenes-meta {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.share-scenes-note {
-  flex-basis: 100%;
-  padding-left: 26px;
+/* La locación y el decorado bajo el nombre: solo en una pantalla angosta, sin sus columnas. */
+.share-scenes-meta {
+  display: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.share-scenes-table tbody tr.blocked td.c-name {
+  white-space: normal;
+  padding-block: 7px;
+}
+.share-scenes-why {
+  display: block;
+  white-space: normal;
+  font-size: 12px;
+  color: var(--faint);
+}
+.share-scenes-table td.c-intExt,
+.share-scenes-table td.c-pages {
+  font-size: 12px;
+  color: var(--muted);
+}
+.share-scenes-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--warn);
+}
+.share-scenes-st {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.share-scenes-st::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.share-scenes-st.shared {
+  color: var(--ok);
+}
+.share-scenes-st.adding {
+  color: var(--accent-text);
+}
+.share-scenes-st.removing {
+  color: var(--danger);
+}
+.share-scenes-st.blocked,
+.share-scenes-st.higher {
+  color: var(--faint);
+}
+.share-scenes-st.blocked::before,
+.share-scenes-st.higher::before {
+  display: none;
+}
+.share-scenes-empty td {
+  height: 64px;
+  color: var(--muted);
+  text-align: center;
+  cursor: default;
+}
+
+/* Lo compartido que está en la papelera: aparte, para poder sacarlo. */
+.share-scenes-trash-box p {
+  margin: 0 0 4px;
+}
+.share-scenes-trash {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.share-scenes-trash li {
+  padding: 5px 14px;
+}
+.share-scenes-trash li.changed {
+  background: var(--danger-bg);
+}
+.share-scenes-trash label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* El pie: lo que cambia, Cerrar y Guardar, siempre a la vista. */
+.team-invite-actions.share-scenes-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 4px -24px 0;
+  padding: 14px 24px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--menu-bg);
+  justify-content: flex-end;
+  font-size: 13px;
+}
+.share-scenes-sum {
+  margin-right: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.share-scenes-diff {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.share-scenes-diff .add {
+  color: var(--accent-text);
+}
+.share-scenes-diff .remove {
+  color: var(--danger);
+}
+.share-scenes-footer button.primary {
+  padding: 7px 18px;
+}
+
+/* En una pantalla angosta: sin las columnas de locación, decorado, INT/EXT y páginas (la locación y el decorado van bajo
+   el nombre), ni la de afuera (lo dice el aviso de arriba); la ventana se desplaza entera, con la tabla de alto fijo. */
+@media (max-width: 760px) {
+  .modal.share-scenes {
+    padding: 18px 16px 0;
+  }
+  .share-scenes-form {
+    flex: none;
+  }
+  .share-scenes-form > .share-scenes-table-wrap {
+    flex: none;
+    max-height: 60vh;
+  }
+  /* Dos renglones (lo que cambia; *Close* y *Save* lado a lado), no los tres de la regla de los diálogos de equipo. */
+  .team-invite-actions.share-scenes-footer {
+    margin-inline: -16px;
+    padding-inline: 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .share-scenes-footer .share-scenes-sum {
+    flex-basis: 100%;
+    margin-right: 0;
+  }
+  .share-scenes-footer button {
+    flex: 1;
+    justify-content: center;
+  }
+  .share-scenes-who {
+    flex-wrap: wrap;
+  }
+  .share-scenes-level.segmented {
+    width: 100%;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  .share-scenes-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .share-scenes-search {
+    grid-column: 1 / -1;
+  }
+  .team-dialog select.share-scenes-pick {
+    max-width: none;
+    width: 100%;
+  }
+  .share-scenes-gap {
+    display: none;
+  }
+  .share-scenes-table col.c-location,
+  .share-scenes-table col.c-set,
+  .share-scenes-table col.c-intExt,
+  .share-scenes-table col.c-pages,
+  .share-scenes-table col.c-outside,
+  .share-scenes-table .c-location,
+  .share-scenes-table .c-set,
+  .share-scenes-table .c-intExt,
+  .share-scenes-table .c-pages,
+  .share-scenes-table .c-outside {
+    display: none;
+  }
+  .share-scenes-table col.c-check {
+    width: 34px;
+  }
+  .share-scenes-table th.c-check,
+  .share-scenes-table td.c-check {
+    padding-left: 10px;
+  }
+  .share-scenes-table col.c-code {
+    width: 50px;
+  }
+  .share-scenes-table col.c-status {
+    width: 86px;
+  }
+  .share-scenes-meta {
+    display: block;
+  }
+  .share-scenes-table td.c-name {
+    padding-block: 6px;
+  }
 }
 
 .team-invite-row input {

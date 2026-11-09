@@ -742,7 +742,7 @@ function ProjectMenu(props: {
         },
         canRename && {
           key: 'rename',
-          label: tr('common.rename'),
+          label: tr('project.renameMenu'),
           aria: tr('project.renameNamed', { name }),
           run: () => setMode({ name: 'rename', id }),
         },
@@ -1015,6 +1015,9 @@ function ProjectMenu(props: {
                       aria-label={tr('project.moreNamed', { name: p.name })}
                       aria-haspopup={touch ? undefined : 'menu'}
                       aria-expanded={moreOpen}
+                      // Escondido (con `opacity`, para que el renglón no salte) seguiría en el orden de Tab: solo el del
+                      // renglón activo (el de las flechas del buscador) o con su menú abierto; en el teléfono, todos.
+                      tabIndex={touch || i === active || moreOpen ? 0 : -1}
                       onClick={(e) => (touch ? setOpened((o) => (o === p.id ? null : p.id)) : togglePop({ kind: 'row', id: p.id }, e.currentTarget))}
                     >
                       <MoreIcon size={18} />
@@ -1052,7 +1055,7 @@ function ProjectMenu(props: {
                     )}
                     {perms.canRenameProject(p.id) && !archived && (
                       <button onClick={() => setMode({ name: 'rename', id: p.id })}>
-                        <RenameIcon size={16} /> {tr('common.rename')}
+                        <RenameIcon size={16} /> {tr('project.renameMenu')}
                       </button>
                     )}
                     {perms.canShareProject(p.id) && (

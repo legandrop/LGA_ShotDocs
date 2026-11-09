@@ -3,7 +3,7 @@
 // login ni red, con el proyecto sintético de las relaciones (escenas, locaciones y días): sirve para mirar los títulos
 // de la barra lateral (Overview, Pages), las partes de *Overview* y su selección contra la de una página. `?map` abre el mapa; `?muchas`
 // suma 120 escenas al episodio 5 y una rama *Preproducción › Decorados* con 80 páginas, para ver qué queda pegado arriba
-// al bajar (D771).
+// al bajar (D771). `?compartir` abre encima *Share scenes* (v0.330), con dos personas de afuera.
 import { createRoot } from 'react-dom/client';
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
@@ -14,6 +14,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { Shell } from '../ui/Workspace';
+import { ShareScenesDialog } from '../ui/ShareScenesDialog';
 import { TooltipLayer } from '../ui/Tooltip';
 import { prefs } from '../prefs';
 import { mapPath, pagePath } from '../router';
@@ -37,6 +38,13 @@ const fakePhoto = async () => `0000${String(++n).padStart(4, '0')}-aaaa-4bbb-8cc
 async function main() {
   prefs.init();
   const server = new FakeServer();
+  // `?compartir`: abre *Share scenes* (v0.330) con la base 28, el interruptor de lo borrado y dos personas de afuera.
+  const share = new URLSearchParams(location.search).has('compartir');
+  if (share) {
+    server.enableTeam();
+    server.enableClean();
+    server.enableSceneShares();
+  }
   const A = await makeDevice(server);
   await A.engine.syncNow();
   const built = await buildProject(A, fakePhoto, { days: true });
@@ -71,6 +79,12 @@ async function main() {
     for (const name of ['MGTZD comercial Mercado Libre segunda tanda', 'ERSO | El Robo del Siglo', 'Prueba color de proyecto con nombre largo', 'VLLF'])
       await A.tree.createProject(name);
   }
+  if (share) {
+    server.addMember('vera', 'guest', 'vera@vendor.test');
+    server.addMember('juan', 'guest', 'juan@vendor.test');
+    for (const k of ['s027', 's029']) server.grant('vera', { pageId: built.ids[k] }, 'view');
+    server.grant('juan', { pageId: built.ids.s027 }, 'comment');
+  }
   await A.engine.syncNow();
   // El proyecto sintético como el elegido (en `/map` no hay página abierta que lo diga).
   localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [server.ownerId]: built.projectId }));
@@ -80,6 +94,7 @@ async function main() {
     <>
       <ServicesContext.Provider value={services(A, server.ownerId)}>
         <Shell />
+        {share && <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />}
       </ServicesContext.Provider>
       <TooltipLayer />
     </>,

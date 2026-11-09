@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.330 :
+
+Lega pidió rediseñar *Share scenes*. La casilla de cada fila se estiraba (el `width: 100%` de todos los `input`), el
+número salía dos veces (desde D849 el título ya lo trae), el aviso de quiénes de afuera ven la escena se repetía en cada
+fila y no se podía ordenar. Ahora es una tabla (D851, propuesta A): número, escena sin el número, locación, decorado,
+INT/EXT (del índice de relaciones, solo del proyecto abierto), páginas, cuántos de afuera la ven y el estado, ordenable
+por cualquier columna; buscador, desplegables de locación y decorado, vistas de un clic y Shift+clic para un rango; el
+aviso de afuera una vez arriba; Ver y Comentar como botones; el pie fijo con *Save*. Además, la auditoría de la v0.329:
+el ⋯ escondido de cada proyecto ya no entra en el orden de Tab, la ayuda de compartir y la del peso dicen lo que pasa,
+*Color…* y *Rename…* llevan sus puntos y el pie del selector llega a los bordes en el teléfono. Pruebas:
+`shareScenesTable.test.ts`, `shareScenes.test.tsx` y `projectTable.test.tsx`. [ v0.330: Share scenes como tabla - ordenar por locación o decorado, filtros y el aviso de afuera una vez; arreglos de la auditoría del selector ]
+
 v0.329 :
 
 Lega pidió rediseñar el selector de proyectos: tenía siete íconos casi iguales por renglón (dos descargas, pincel y lápiz

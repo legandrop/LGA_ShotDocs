@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useT } from '../i18n';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent } from 'react';
+import { useT, type Key } from '../i18n';
 import '../i18n/lazy/teamDialogs';
-import { sceneLabel } from '../relations/reader';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { LEVEL_LABELS, ROLE_LABELS, type GrantLevel } from '../sync/access';
 import type { InvitationRow, MemberRow, PageShareRow, PageSharesResult } from '../sync/remote';
+import { ChevronDownIcon, ChevronUpIcon, CommentIcon, EyeIcon, InfoIcon, LockIcon, MailIcon, MembersIcon, SearchIcon } from './icons';
 import { inviteAndCopy, useInviteLink } from './MembersDialog';
 import { outsideReadersStore } from './outsideReaders';
 import { markScenes as markAndWait, MARKS_PENDING, projectSceneItems, type SceneItem } from './projectScenes';
+import { existingRelationsSession } from './relationsUi';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate, type ShareScope } from './shareGate';
+import { filterRows, optionsOf, sceneRows, sortRows, type RowFacts, type RowStatus, type Sort, type SortKey, type View } from './shareScenesTable';
 import { teamErrorText } from './teamText';
 
 // *Share scenes of “<proyecto>”* (Docs/Doc_Compartir_Escenas.md, B-1, D843): las escenas del proyecto que ve una persona
@@ -19,11 +21,28 @@ import { teamErrorText } from './teamText';
 // La base vuelve a controlar todo (`set_page_shares`): esto solo arma el pedido y lo explica. Una escena con otra
 // entidad adentro (otra escena, una locación, un día, un decorado, algo con forma de escena: un episodio que el registro
 // tomó por escena) no se puede compartir: la fila queda apagada con el motivo, sin opción para seguir.
+// Desde la v0.330 la lista es una tabla (`shareScenesTable.ts`): número, nombre, locación, decorado, INT/EXT, páginas de
+// adentro, cuántos de afuera ya la ven y el estado para la persona elegida; se ordena con un clic en el título de cada
+// columna, se filtra con el buscador, los desplegables y las vistas, y Shift+clic marca un rango. Quién más la ve de
+// afuera se dice una vez arriba de la tabla (antes se repetía en cada fila).
 
 const EMAIL = /^[^@\s]+@[^@\s]+$/;
 const MAX_PAGES = 200;
 
 const isOutsideRow = (r: PageShareRow) => r.role === 'guest' || r.level === 'view' || r.level === 'comment';
+const noSubscribe = () => () => undefined;
+
+/** Las columnas de la tabla; las de `details` solo con el índice del proyecto (locación, decorado, INT/EXT). */
+const COLUMNS: { key: SortKey; label: Key; tip?: Key; details?: true }[] = [
+  { key: 'code', label: 'scenes.share.colCode' },
+  { key: 'name', label: 'scenes.share.colName' },
+  { key: 'location', label: 'scenes.share.colLocation', details: true },
+  { key: 'set', label: 'scenes.share.colSet', details: true },
+  { key: 'intExt', label: 'scenes.share.colIntExt', details: true },
+  { key: 'pages', label: 'scenes.share.colPages', tip: 'scenes.share.colPagesTip' },
+  { key: 'outside', label: 'scenes.share.colOutside', tip: 'scenes.share.colOutsideTip' },
+  { key: 'status', label: 'scenes.share.colStatus' },
+];
 
 export function ShareScenesDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const services = useServices();
@@ -52,6 +71,20 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
   const [manualLink, setManualLink] = useState<string | null>(null);
   // Lo agregado en el último guardado: *Same scenes for another email…* lleva solo eso.
   const [lastAdded, setLastAdded] = useState<string[]>([]);
+  // La tabla: el orden, la vista y la locación o el decorado elegidos; y la última fila tocada (Shift+clic marca el rango).
+  const [sort, setSort] = useState<Sort>({ key: 'code', dir: 1 });
+  const [view, setView] = useState<View>('all');
+  const [location, setLocation] = useState('');
+  const [set, setSet] = useState('');
+  const anchor = useRef<string | null>(null);
+  const headCheck = useRef<HTMLInputElement>(null);
+
+  // El índice de relaciones del proyecto abierto (la locación, el decorado y el INT/EXT de cada escena). Con otro
+  // proyecto no hay: `snapshot` es solo del abierto.
+  const session = existingRelationsSession(services);
+  const subscribe = useCallback((fn: () => void) => (session ? session.relations.subscribe(fn) : noSubscribe()), [session]);
+  const relRevision = useSyncExternalStore(subscribe, () => session?.relations.getRevision() ?? 0);
+  const snap = session?.relations.snapshot(projectId) ?? null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -86,6 +119,14 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
     [tree, tree.getRevision(), projectId, engine], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const sceneIds = useMemo(() => new Set(scenes.map((s) => s.pageId)), [scenes]);
+  // Las filas de la tabla: lo de arriba más el nombre sin el número y, con el índice, locación, decorado e INT/EXT.
+  const tableRows = useMemo(
+    () => sceneRows(scenes, snap && session ? { snap, title: (id) => tree.get(id)?.title, content: (id) => session.index.content(id) } : null),
+    [scenes, snap, session, relRevision, tree], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const details = snap !== null;
+  const locations = useMemo(() => optionsOf(tableRows, 'locations'), [tableRows]);
+  const sets = useMemo(() => optionsOf(tableRows, 'sets'), [tableRows]);
 
   // La persona: un miembro activo, o alguien a invitar (con o sin una invitación pendiente).
   const address = email.trim().toLowerCase();
@@ -152,25 +193,59 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
     return [...out];
   }, [rows, members, invitations, tr]);
 
-  const needle = filter.trim().toLowerCase();
-  const shown = needle
-    ? scenes.filter((s) => s.code.toLowerCase().includes(needle) || sceneLabel(s.code).toLowerCase().includes(needle) || s.title.toLowerCase().includes(needle))
-    : scenes;
-  const setMany = (value: boolean) =>
+  // Quién más de afuera ve cada escena, una vez por dibujo (lo usan la columna, el orden, la vista y el aviso de arriba).
+  const others = useMemo(() => new Map(scenes.map((s) => [s.pageId, othersOf(s.pageId)])), [scenes, rows, address, tree.getRevision()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const outsideAll = [...new Set([...others.values()].flat())];
+  const outsideScenes = scenes.filter((s) => (others.get(s.pageId)?.length ?? 0) > 0).length;
+
+  // Lo que la persona ya tiene manda sobre lo bloqueado: una escena que quedó bloqueada después de compartirla se puede
+  // sacar, y la fila tiene que decir que se saca.
+  const statusOf = (id: string): RowStatus => {
+    const lvl = has.get(id);
+    if (lvl && lvl !== 'view' && lvl !== 'comment') return 'higher';
+    const checked = isChecked(id);
+    if (lvl) return checked ? 'shared' : 'removing';
+    if (blockedIds.has(id)) return 'blocked';
+    return checked ? 'adding' : 'none';
+  };
+  const facts: RowFacts = { status: statusOf, outside: (id) => others.get(id)?.length ?? 0 };
+  // La locación o el decorado elegidos valen solo si siguen entre las opciones (otro dispositivo los pudo renombrar, o el
+  // índice no está): si no, un filtro que no se ve dejaría la tabla vacía.
+  const pickedLocation = details && locations.includes(location) ? location : '';
+  const pickedSet = details && sets.includes(set) ? set : '';
+  const shown = sortRows(filterRows(tableRows, { text: filter, view, location: pickedLocation, set: pickedSet }, isChecked, facts), sort, facts);
+  const columns = COLUMNS.filter((c) => details || !c.details);
+  const shownEditable = shown.filter((s) => editable(s.pageId));
+  const allShown = shownEditable.length > 0 && shownEditable.every((s) => isChecked(s.pageId));
+  const someShown = shownEditable.some((s) => isChecked(s.pageId));
+
+  /** Marca o desmarca varias; volver a lo que ya tenía deja de ser un cambio. */
+  const setMany = (ids: string[], value: boolean) =>
     setPicked((prev) => {
       const next = new Map(prev);
-      for (const s of shown) if (editable(s.pageId)) next.set(s.pageId, value);
+      for (const id of ids) {
+        if (!editable(id)) continue;
+        if (value === has.has(id)) next.delete(id);
+        else next.set(id, value);
+      }
       return next;
     });
-  const toggle = (id: string) =>
-    setPicked((prev) => {
-      const next = new Map(prev);
-      const value = !isChecked(id);
-      // Volver a lo que ya tenía deja de ser un cambio.
-      if (value === has.has(id)) next.delete(id);
-      else next.set(id, value);
-      return next;
-    });
+  /** Una fila; con Shift, el rango desde la última tocada (en el orden que se ve), al mismo valor. */
+  const toggle = (id: string, shift = false) => {
+    const value = !isChecked(id);
+    const from = shift && anchor.current ? shown.findIndex((s) => s.pageId === anchor.current) : -1;
+    const to = shown.findIndex((s) => s.pageId === id);
+    anchor.current = id;
+    if (from < 0 || to < 0) return setMany([id], value);
+    const [a, b] = from < to ? [from, to] : [to, from];
+    setMany(shown.slice(a, b + 1).map((s) => s.pageId), value);
+  };
+  const sortBy = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
+
+  // La casilla de los títulos queda a medias si están marcadas algunas de las que se ven.
+  useEffect(() => {
+    if (headCheck.current) headCheck.current.indeterminate = someShown && !allShown;
+  });
 
   // Otro correo, otras escenas u otro nivel: el aviso de lo pendiente (y su *Retry*) era del pedido de antes.
   useEffect(() => {
@@ -266,22 +341,29 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
           </p>
         )}
 
-        <form className="team-invite" onSubmit={save}>
-          <div className="team-invite-row">
-            <input
-              type="email"
-              required
-              list="share-scenes-people"
-              maxLength={320}
-              placeholder={tr('scenes.share.emailPlaceholder')}
-              aria-label={tr('team.email')}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <select aria-label={tr('team.access')} value={level} onChange={(e) => setLevel(e.target.value as 'view' | 'comment')}>
-              <option value="view">{levelLabel('view')}</option>
-              <option value="comment">{levelLabel('comment')}</option>
-            </select>
+        <form className="share-scenes-form" onSubmit={save}>
+          <div className="share-scenes-who">
+            <label className="share-scenes-field">
+              <MailIcon size={16} />
+              <input
+                type="email"
+                required
+                list="share-scenes-people"
+                maxLength={320}
+                placeholder={tr('scenes.share.emailPlaceholder')}
+                aria-label={tr('team.email')}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </label>
+            <div className="segmented share-scenes-level" role="group" aria-label={tr('team.access')}>
+              {(['view', 'comment'] as const).map((l) => (
+                <button key={l} type="button" aria-pressed={level === l} onClick={() => setLevel(l)}>
+                  {l === 'view' ? <EyeIcon size={16} /> : <CommentIcon size={16} />}
+                  {levelLabel(l)}
+                </button>
+              ))}
+            </div>
           </div>
           <datalist id="share-scenes-people">
             {suggestions.map(([who, label]) => (
@@ -311,46 +393,199 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
           )}
 
           <div className="share-scenes-tools">
-            <input type="search" placeholder={tr('scenes.share.filter')} aria-label={tr('scenes.share.filter')} value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <button type="button" className="link" onClick={() => setMany(true)} disabled={shown.length === 0}>
-              {tr('scenes.share.all')}
+            <label className="share-scenes-search">
+              <SearchIcon size={15} />
+              <input
+                type="search"
+                placeholder={tr(details ? 'scenes.share.search' : 'scenes.share.searchShort')}
+                aria-label={tr(details ? 'scenes.share.search' : 'scenes.share.searchShort')}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </label>
+            {details && locations.length > 0 && (
+              <select className="share-scenes-pick" aria-label={tr('scenes.share.colLocation')} value={pickedLocation} onChange={(e) => setLocation(e.target.value)}>
+                <option value="">{tr('scenes.share.anyLocation')}</option>
+                {locations.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            )}
+            {details && sets.length > 0 && (
+              <select className="share-scenes-pick" aria-label={tr('scenes.share.colSet')} value={pickedSet} onChange={(e) => setSet(e.target.value)}>
+                <option value="">{tr('scenes.share.anySet')}</option>
+                {sets.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            )}
+            <span className="share-scenes-gap" />
+            <button type="button" className="share-scenes-bulk" onClick={() => setMany(shown.map((s) => s.pageId), true)} disabled={shownEditable.length === 0}>
+              {tr('scenes.share.selectShown')}
             </button>
-            <button type="button" className="link" onClick={() => setMany(false)} disabled={shown.length === 0}>
-              {tr('scenes.share.none')}
+            <button type="button" className="share-scenes-bulk" onClick={() => setMany(shown.map((s) => s.pageId), false)} disabled={shownEditable.length === 0}>
+              {tr('scenes.share.clearShown')}
             </button>
-            <span className="muted small">{tr('scenes.share.count', { checked: checkedCount, total: scenes.length })}</span>
           </div>
-          <ul className="share-scenes-list" aria-label={tr('scenes.share.list')}>
-            {scenes.length === 0 && <li className="muted">{tr('scenes.share.noScenes')}</li>}
-            {scenes.length > 0 && shown.length === 0 && <li className="muted">{tr('scenes.share.noMatch')}</li>}
-            {shown.map((s) => {
-              const checked = isChecked(s.pageId);
-              const changed = checked !== has.has(s.pageId);
-              const lvl = has.get(s.pageId);
-              const others = othersOf(s.pageId);
-              return (
-                <li key={s.pageId} className={changed ? 'changed' : undefined} data-scene={s.pageId}>
-                  <label>
-                    <input type="checkbox" checked={checked} disabled={!editable(s.pageId)} onChange={() => toggle(s.pageId)} />
-                    <span className="mono share-scenes-code">{sceneLabel(s.code)}</span>
-                    <span className="share-scenes-title">{s.title}</span>
-                    {s.inside > 0 && <span className="muted small">{tr('scenes.share.inside', { count: s.inside })}</span>}
-                    {lvl && lvl !== 'view' && lvl !== 'comment' && (
-                      <span className="muted small">{tr('scenes.share.higher', { level: levelLabel(lvl) })}</span>
-                    )}
-                  </label>
-                  {s.blocked && <span className="warn small share-scenes-note">{tr('scenes.share.blocked')}</span>}
-                  {others.length > 0 && (
-                    <span className="warn small share-scenes-note">{tr('scenes.share.others', { list: others.join(', ') })}</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <div className="share-scenes-views" role="group" aria-label={tr('scenes.share.views')}>
+            {(
+              [
+                ['all', 'scenes.share.viewAll', scenes.length],
+                ['selected', 'scenes.share.viewSelected', checkedCount],
+                ['unselected', 'scenes.share.viewUnselected', scenes.length - checkedCount],
+                ['outside', 'scenes.share.viewOutside', outsideScenes],
+                ['blocked', 'scenes.share.viewBlocked', blockedIds.size],
+              ] as const
+            )
+              // Las de afuera y las que no se pueden, solo si hay alguna (o si están elegidas: que no desaparezca el botón).
+              .filter(([v, , n]) => n > 0 || v === 'all' || v === 'selected' || v === 'unselected' || view === v)
+              .map(([v, label, n]) => (
+                <button key={v} type="button" className={`share-scenes-view${v === 'outside' ? ' outside' : ''}`} aria-pressed={view === v} onClick={() => setView(v)}>
+                  {tr(label)}
+                  <span className="mono">{n}</span>
+                </button>
+              ))}
+          </div>
+          {outsideAll.length > 0 && (
+            <p className="share-scenes-outside">
+              <MembersIcon size={16} />
+              <span>{tr('scenes.share.outsideSummary', { count: outsideScenes, list: outsideAll.join(', ') })}</span>
+            </p>
+          )}
+
+          <div className="share-scenes-table-wrap">
+            <table className={`share-scenes-table${details ? ' with-details' : ''}`} aria-label={tr('scenes.share.list')}>
+              <colgroup>
+                <col className="c-check" />
+                {columns.map((c) => (
+                  <col key={c.key} className={`c-${c.key}`} />
+                ))}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="c-check">
+                    <input
+                      ref={headCheck}
+                      type="checkbox"
+                      aria-label={tr('scenes.share.selectShown')}
+                      checked={allShown}
+                      disabled={shownEditable.length === 0}
+                      onChange={() => setMany(shown.map((s) => s.pageId), !allShown)}
+                    />
+                  </th>
+                  {columns.map((c) => (
+                    <th
+                      key={c.key}
+                      className={`c-${c.key}`}
+                      aria-sort={sort.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
+                    >
+                      <button type="button" onClick={() => sortBy(c.key)} data-tip={c.tip ? tr(c.tip) : undefined}>
+                        {tr(c.label)}
+                        {sort.key === c.key && (sort.dir === 1 ? <ChevronUpIcon size={12} /> : <ChevronDownIcon size={12} />)}
+                      </button>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {scenes.length === 0 && (
+                  <tr className="share-scenes-empty">
+                    <td colSpan={columns.length + 1}>{tr('scenes.share.noScenes')}</td>
+                  </tr>
+                )}
+                {scenes.length > 0 && shown.length === 0 && (
+                  <tr className="share-scenes-empty">
+                    <td colSpan={columns.length + 1}>{tr('scenes.share.noMatch')}</td>
+                  </tr>
+                )}
+                {shown.map((s) => {
+                  const st = statusOf(s.pageId);
+                  const lvl = has.get(s.pageId);
+                  const out = others.get(s.pageId) ?? [];
+                  const canTouch = editable(s.pageId);
+                  const pick = (e: MouseEvent) => {
+                    if (canTouch) toggle(s.pageId, e.shiftKey);
+                  };
+                  return (
+                    <tr
+                      key={s.pageId}
+                      data-scene={s.pageId}
+                      className={[st, isChecked(s.pageId) ? 'checked' : '', st === 'adding' || st === 'removing' ? 'changed' : ''].filter(Boolean).join(' ')}
+                      onClick={pick}
+                      // Shift+clic no elige el texto de las filas (eso pasa al apretar, no en el clic: frenar el clic de
+                      // una casilla la devuelve a como estaba y React queda desfasado).
+                      onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+                    >
+                      <td className="c-check">
+                        <input
+                          type="checkbox"
+                          aria-label={`${s.label} ${s.name}`.trim()}
+                          checked={isChecked(s.pageId)}
+                          disabled={!canTouch}
+                          onChange={() => undefined}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (canTouch) toggle(s.pageId, e.shiftKey);
+                          }}
+                        />
+                      </td>
+                      <td className="c-code mono share-scenes-code">{s.label}</td>
+                      <td className="c-name">
+                        <span className="share-scenes-title">{s.name || s.title}</span>
+                        {details && (s.locations.length > 0 || s.sets.length > 0) && (
+                          <span className="share-scenes-meta">{[...s.locations, ...s.sets].join(' · ')}</span>
+                        )}
+                        {s.blocked && <span className="share-scenes-why">{tr('scenes.share.blocked')}</span>}
+                      </td>
+                      {details && (
+                        <>
+                          <td className="c-location">{s.locations.join(', ')}</td>
+                          <td className="c-set">{s.sets.join(', ')}</td>
+                          <td className="c-intExt mono">{s.intExt.join(', ')}</td>
+                        </>
+                      )}
+                      <td className="c-pages mono">{s.inside || ''}</td>
+                      <td className="c-outside">
+                        {out.length > 0 && (
+                          <span
+                            className="share-scenes-out"
+                            role="img"
+                            data-tip={tr('scenes.share.othersTip', { list: out.join(', ') })}
+                            aria-label={tr('scenes.share.othersTip', { list: out.join(', ') })}
+                          >
+                            <MembersIcon size={14} />
+                            {out.length}
+                          </span>
+                        )}
+                      </td>
+                      <td className="c-status">
+                        {st === 'blocked' ? (
+                          <span className="share-scenes-st blocked">
+                            <LockIcon size={13} />
+                            {tr('scenes.share.stBlocked')}
+                          </span>
+                        ) : st === 'higher' ? (
+                          <span className="share-scenes-st higher">{tr('scenes.share.higher', { level: levelLabel(lvl!) })}</span>
+                        ) : st !== 'none' ? (
+                          <span className={`share-scenes-st ${st}`}>
+                            {st === 'shared' ? tr('scenes.share.stShared', { level: levelLabel(lvl ?? level) }) : tr(st === 'adding' ? 'scenes.share.stAdding' : 'scenes.share.stRemoving')}
+                          </span>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {trashed.length > 0 && (
-            <>
-              <p className="muted small team-lead">{tr('scenes.share.trashLead')}</p>
-              <ul className="share-scenes-list share-scenes-trash" aria-label={tr('scenes.share.trashList')}>
+            <div className="share-scenes-trash-box">
+              <p className="muted small">{tr('scenes.share.trashLead')}</p>
+              <ul className="share-scenes-trash" aria-label={tr('scenes.share.trashList')}>
                 {trashed.map((r) => {
                   const id = r.page_id!;
                   const checked = isChecked(id);
@@ -365,17 +600,9 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
                   );
                 })}
               </ul>
-            </>
+            </div>
           )}
 
-          <div className="team-invite-actions">
-            <span className="muted">
-              {total > MAX_PAGES ? tr('scenes.share.tooMany') : total > 0 ? tr('scenes.share.changes', { add: adds.length, remove: removes.length }) : ''}
-            </span>
-            <button className="primary" disabled={!canSave}>
-              {busy ? tr('scenes.share.saving') : valid && !memberId && adds.length > 0 ? tr('team.inviteAndCopy') : tr('scenes.share.save')}
-            </button>
-          </div>
           {manualLink && (
             <div className="team-link">
               <span className="muted">{tr('team.copyManually')}</span>
@@ -383,22 +610,41 @@ export function ShareScenesDialog({ projectId, onClose }: { projectId: string; o
             </div>
           )}
           <ShareGateNotes gate={gate} reader />
-        </form>
-
-        {(error || loadError) && <p className="error">{error ?? loadError}</p>}
-        {done && (
-          <p className="muted team-lead" role="status">
-            {tr(done.result === 'invited' ? 'scenes.share.doneInvited' : 'scenes.share.doneMember', { email: done.email, count: done.pages })}{' '}
-            <button type="button" className="link" onClick={another}>
-              {tr('scenes.share.another')}
-            </button>
+          {(error || loadError) && <p className="error">{error ?? loadError}</p>}
+          {done && (
+            <p className="muted team-lead" role="status">
+              {tr(done.result === 'invited' ? 'scenes.share.doneInvited' : 'scenes.share.doneMember', { email: done.email, count: done.pages })}{' '}
+              <button type="button" className="link" onClick={another}>
+                {tr('scenes.share.another')}
+              </button>
+            </p>
+          )}
+          <p className="share-scenes-limits">
+            <InfoIcon size={15} />
+            <span>{tr('scenes.share.limits')}</span>
           </p>
-        )}
-        <p className="muted small team-lead">{tr('scenes.share.limits')}</p>
 
-        <div className="modal-actions">
-          <button onClick={onClose}>{tr('common.close')}</button>
-        </div>
+          <div className="team-invite-actions share-scenes-footer">
+            <span className="share-scenes-sum">
+              {total > MAX_PAGES ? (
+                <span className="warn">{tr('scenes.share.tooMany')}</span>
+              ) : total > 0 ? (
+                <span className="share-scenes-diff">
+                  <span className="add">+{adds.length}</span> <span className="remove">−{removes.length}</span>
+                </span>
+              ) : null}
+              <span className="muted">
+                {valid ? tr('scenes.share.count', { checked: checkedCount, total: scenes.length }) : tr('scenes.share.pickPerson')}
+              </span>
+            </span>
+            <button type="button" onClick={onClose}>
+              {tr('common.close')}
+            </button>
+            <button className="primary" disabled={!canSave}>
+              {busy ? tr('scenes.share.saving') : valid && !memberId && adds.length > 0 ? tr('team.inviteAndCopy') : tr('scenes.share.save')}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

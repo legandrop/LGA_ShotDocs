@@ -2905,3 +2905,17 @@ lugar fijo; las acciones del renglón en un menú ⋯ con texto; *New* junto al 
 abajo con *Share*, *Files by size* y *Trash*. Íconos que quedan: buscar, estrella, ⋯, +, flechas, *Files by size* y
 *Trash*. Detalle: `Doc_Navegacion.md`, «El selector de proyectos como tabla».
 
+### D851 · *Share scenes* como tabla (2026-11-08)
+**Pedido de Lega:** rediseñar la ventana de compartir escenas («tiene poco cariño»): espacios, íconos, qué es ícono y qué
+es texto, y poder ordenar por número de escena, locación y decorado, filtrar y ver colores. **Qué pasaba:** la casilla se
+estiraba (el `width: 100%` de todos los `input`) y desordenaba cada fila; el número salía dos veces desde D849; el aviso de
+quiénes de afuera ya ven la escena se repetía en cada fila con los mismos correos; no se podía ordenar ni agrupar; los
+avisos quedaban debajo de *Save*. **Decidido:** de tres propuestas (A tabla, B dos paneles con el resumen a la derecha,
+C fichas por locación), **la A**: una tabla con columnas ordenables (número, escena, locación, decorado, INT/EXT,
+páginas de adentro, cuántos de afuera la ven y el estado para la persona), buscador, desplegables de locación y decorado,
+vistas de un clic (*Selected*, *Not selected*, *Seen from outside*, *Can't be shared*), Shift+clic para un rango, el
+aviso de afuera una sola vez arriba de la tabla y el pie fijo con lo que cambia y *Save*. Ícono solo donde ahorra una
+palabra repetida (correo, buscar, ojo y globo de Ver y Comentar, personas de afuera, candado, flechas del orden); texto
+en columnas, vistas y acciones. Color por estado, siempre con su palabra (se suma, se saca, compartida, no se puede).
+Detalle: `Doc_Compartir_Escenas.md`, sección 2.
+

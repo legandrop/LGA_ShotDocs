@@ -1059,7 +1059,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'sharing',
     title: 'help.shareScenes.title',
     text: 'help.shareScenes.text',
-    words: ['vendor', 'escenas', 'scenes', 'share scenes', 'compartir escenas', 'guest', 'invitado', 'ojo', 'eye', 'afuera', 'outside', 'nda'],
+    words: ['vendor', 'escenas', 'scenes', 'share scenes', 'compartir escenas', 'guest', 'invitado', 'ojo', 'eye', 'afuera', 'outside', 'nda', 'ordenar', 'sort', 'decorado', 'locación'],
     // Sin `when`: el ojo y los avisos les llegan también a quienes solo editan.
     since: '0.323',
   },

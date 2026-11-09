@@ -76,7 +76,9 @@ export const sidebar = {
   'project.rename': { en: "Rename project", es: "Renombrar proyecto" },
   'project.renameNamed': { en: "Rename “{name}”", es: "Renombrar “{name}”" },
   // El color del proyecto (Docs/Doc_Navegacion.md, «Color del proyecto»).
-  'project.color': { en: "Color", es: "Color" },
+  // Con «…»: abren otro panel, como *Export project…* y *Delete…* en el mismo menú.
+  'project.color': { en: "Color…", es: "Color…" },
+  'project.renameMenu': { en: "Rename…", es: "Renombrar…" },
   'project.favoriteNamed': { en: "Add “{name}” to favorites", es: "Marcar “{name}” como favorito" },
   'project.unfavoriteNamed': { en: "Remove “{name}” from favorites", es: "Quitar “{name}” de favoritos" },
   'project.favoriteFailed': { en: "Couldn't save the favorite on this device", es: "No se pudo guardar el favorito en este dispositivo" },

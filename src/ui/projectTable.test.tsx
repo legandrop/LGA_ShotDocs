@@ -201,6 +201,16 @@ describe('selector: la lista y el teclado', () => {
 });
 
 describe('selector: el menú ⋯ de un renglón', () => {
+  it('Tab no pasa por el ⋯ escondido de cada renglón: solo por el del renglón activo (auditoría de la v0.329)', async () => {
+    const { server, owner } = await workspace();
+    await openFor(owner, server.ownerId);
+    const mores = [...document.querySelectorAll<HTMLButtonElement>('.project-more')];
+    expect(mores.length).toBeGreaterThan(1);
+    const reachable = mores.filter((b) => b.tabIndex === 0);
+    expect(reachable).toHaveLength(1);
+    expect(reachable[0].closest('.project-line')!.classList.contains('active')).toBe(true);
+  });
+
   it('lista con texto lo que la persona puede hacer, en grupos, y no deja íconos sueltos en el renglón', async () => {
     const { server, owner, o } = await workspace();
     await openFor(owner, server.ownerId);
@@ -209,7 +219,7 @@ describe('selector: el menú ⋯ de un renglón', () => {
     expect(rowOf(o).querySelectorAll('button:not(.project-open)')).toHaveLength(2);
     await act(async () => moreOf('Bosque Negro')!.click());
     // «Available offline…» no está: jsdom no tiene Web Locks. La base 9 no tiene color.
-    expect(popItems()).toEqual(['Export project…', 'Rename', 'Archive', 'Delete…']);
+    expect(popItems()).toEqual(['Export project…', 'Rename…', 'Archive', 'Delete…']);
     expect(pop()!.getAttribute('role')).toBe('menu');
     expect(pop()!.querySelectorAll('[role="group"]')).toHaveLength(3);
     expect(document.querySelector('.project-pop [title]')).toBeNull();
@@ -244,7 +254,7 @@ describe('selector: el menú ⋯ de un renglón', () => {
     await act(async () => {
       document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
-    expect(document.activeElement?.textContent).toBe('Rename');
+    expect(document.activeElement?.textContent).toBe('Rename…');
     await act(async () => {
       document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
       document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
@@ -271,7 +281,7 @@ describe('selector: el menú ⋯ de un renglón', () => {
     const { server, owner, o } = await workspace();
     await openFor(owner, server.ownerId);
     await act(async () => moreOf('Bosque Negro')!.click());
-    await act(async () => byText('Rename')!.click());
+    await act(async () => byText('Rename…')!.click());
     expect(pop()).toBeNull();
     expect(document.querySelector<HTMLInputElement>('.project-form input')!.value).toBe('Bosque Negro');
     await act(async () => byText('Back')!.click());
