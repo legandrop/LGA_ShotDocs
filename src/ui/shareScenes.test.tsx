@@ -14,6 +14,7 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { confirmOutsideMove, noticeOutsideCreate, outsideReadersStore } from './outsideReaders';
 import { storeProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { openShareMenu } from '../test/projectRows';
 import { ShareScenesDialog } from './ShareScenesDialog';
 import { Shell } from './Workspace';
 
@@ -787,6 +788,8 @@ describe('Share scenes: las entradas', () => {
     storeProject(services(owner).workspace.config.storage, owner.remote.userId, built.projectId);
     mount(owner, <ProjectSwitcher />);
     await openSwitcher();
+    // *Share* (el pie del selector) abre un menú con compartir el proyecto y compartir sus escenas.
+    act(() => void openShareMenu());
     click(byText('Share scenes of “Serie de prueba”'));
     await until(() => document.querySelector('.share-scenes'), 'la ventana');
     expect(document.querySelector('.share-scenes h2')!.textContent).toBe('Share scenes of “Serie de prueba”');

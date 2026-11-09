@@ -145,7 +145,7 @@ const openSwitcher = async (host: HTMLElement) => {
 };
 const rowOf = (id: string) => document.getElementById(`project-option-${id}`)?.closest('.project-row') ?? null;
 /** "Files by size", al pie de la lista de proyectos. */
-const filesEntry = () => [...document.querySelectorAll<HTMLButtonElement>('.project-menu > button')].find((b) => b.textContent === 'Files by size');
+const filesEntry = () => [...document.querySelectorAll<HTMLButtonElement>('.project-menu .project-foot button')].find((b) => b.textContent === 'Files by size');
 const picker = () => document.querySelector<HTMLSelectElement>('.files-by-size select');
 const items = () => [...document.querySelectorAll<HTMLElement>('.files-by-size .trash-item')];
 const names = () => items().map((li) => li.querySelector('.title')!.textContent);

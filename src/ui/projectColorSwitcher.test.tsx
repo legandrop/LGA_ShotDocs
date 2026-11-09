@@ -8,6 +8,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
+import { rowLabel } from '../test/projectRows';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { IS_MAC } from './shortcuts';
 
@@ -113,7 +114,7 @@ describe('selector: el color del proyecto', () => {
     const { server, owner, o } = await workspace(27);
     await openSwitcher(owner, server.ownerId);
     const before = dotHex(rowDot(o));
-    await act(async () => label('Color of “Bosque Negro”')!.click());
+    await act(async () => rowLabel('Color of “Bosque Negro”')!.click());
     await act(async () => label('#774dcb')!.click());
     await act(async () => byText('OK')!.click());
     await settle();
@@ -133,7 +134,7 @@ describe('selector: el color del proyecto', () => {
     const host = await openSwitcher(owner, server.ownerId);
     const top = host.querySelector<HTMLElement>('.project-button .project-dot')!;
     expect(dotHex(top)).toBe('#2e5a8e');
-    await act(async () => label(`Color of “${owner.tree.project(server.workspaceId)!.name}”`)!.click());
+    await act(async () => rowLabel(`Color of “${owner.tree.project(server.workspaceId)!.name}”`)!.click());
     await act(async () => label('#8e2e5a')!.click());
     // La vista previa ya se ve en el punto de arriba (el proyecto abierto).
     expect(dotHex(top)).toBe('#8e2e5a');
@@ -147,7 +148,7 @@ describe('selector: el color del proyecto', () => {
   it('quien no renombra el proyecto no ve la paleta; tampoco con una base anterior a la 27', async () => {
     const old = await workspace(26);
     await openSwitcher(old.owner, old.server.ownerId);
-    expect(label('Color of “Bosque Negro”')).toBeNull();
+    expect(rowLabel('Color of “Bosque Negro”')).toBeNull();
     // El punto igual está, con el color de fábrica.
     expect(rowDot(old.o)).not.toBeNull();
   });

@@ -56,7 +56,7 @@ las doce observaciones están aplicados en el texto; la tabla está en "Correcci
     Shot Docs** (EX4, EX5, EX8).
     Se arma igual que *Download all* de una carpeta (`Doc_Carpetas.md`, D24): sin comprimir, con Zip64, escrito a
     medida que llega en Chrome y Edge de computadora, en memoria con tope en Safari, Firefox y el teléfono.
-- **Volver (EX6):** *Import Shot Docs archive* en el selector de proyectos crea un **proyecto nuevo** con las
+- **Volver (EX6):** *New ▾ › Import Shot Docs archive* en el selector de proyectos crea un **proyecto nuevo** con las
   páginas, el orden, los formatos de hoja, los bloques tal cual (Script, saltos de hoja, fotos en línea, fotos en las
   celdas, preguntas), los comentarios con su autor y su fecha, y los archivos subidos al Drive del workspace donde se
   importa. Nunca pisa un proyecto que existe. No vuelven el historial, la papelera ni los permisos.
@@ -314,7 +314,7 @@ Reporte_ERSO/
 
 ## 3. Volver a Shot Docs (EX5, EX6)
 
-- **Dónde:** selector de proyectos → *Import Shot Docs archive*, para quien puede crear proyectos (dueño y admins). Se
+- **Dónde:** selector de proyectos → *New ▾ › Import Shot Docs archive*, para quien puede crear proyectos (dueño y admins). Se
   elige **el zip** con un selector de archivo común (anda también en el iPhone, que no elige carpetas enteras), o la
   carpeta descomprimida en Chrome y Edge. El zip se lee por partes (`Blob.slice` sobre el índice del final): no se
   carga entero en memoria.
@@ -536,9 +536,9 @@ de empezar y ofrece el zip liviano (EX12). Un zip grande se arma desde una compu
 ## 7. La interfaz (EX14)
 
 - **Menú de la página** (arriba y en la barra lateral): *Export…* debajo de *Export PDF / Print*, que sigue igual (un
-  clic, Ctrl/⌘+P). **Menú de cada proyecto** en el selector (al lado de *Available offline…*): *Export project…*,
-  también en *Archived projects*. **Selector de proyectos:** *Import Shot Docs archive* (dueño y admins), al lado de
-  *New project*.
+  clic, Ctrl/⌘+P). **Menú ⋯ de cada proyecto** en el selector (con *Available offline…*): *Export project…*,
+  también en *Archived projects*. **Selector de proyectos:** *Import Shot Docs archive* (dueño y admins), en el
+  menú *New ▾* junto al buscador, con *New project*.
 - **La ventana *Export "<título>"*:**
   1. *What*: *This page* / *This page and the pages inside (12)* / (desde el proyecto) *The whole project (240 pages)*.
   2. *Format*: *PDF — to share* / *Zip — to archive*.
@@ -1204,7 +1204,7 @@ de imprimir con originales reales; no se abrió una impresora ni se usó un serv
 ## Cómo quedó la entrega 3 (v0.141: volver a Shot Docs desde el zip)
 
 **Qué ve el usuario.** En el selector de proyectos, **dueño y admins** (los que crean proyectos) tienen *Import Shot
-Docs archive…*, al lado de *New project*. La ventana pide el zip con un selector de archivo común (anda también en el
+Docs archive…* en el menú *New ▾* (junto al buscador), con *New project*. La ventana pide el zip con un selector de archivo común (anda también en el
 iPhone y el iPad) o, en una computadora, *Choose unzipped folder*. Antes de empezar dice qué trae ("“Reporte ERSO”: 240
 pages and 2459 files (5.7 GB). It also has 31 comments."), cuántas fotos vuelven solo con su vista y cuántos archivos
 no están en el zip, el espacio libre del dispositivo (si no entra, lo dice y *Import* queda apagado), "Connect Google

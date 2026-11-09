@@ -14,7 +14,7 @@ comentarios se capturan aparte, con el servidor MCP de Coda (ver "3. Comentarios
    (ver "3. Comentarios"). Sin ese archivo se importa igual, sin comentarios.
 4. **Revisar la carpeta** (`%USERPROFILE%\Coda_Export\<doc>`): cualquier `pages/*.local.html` se abre en el
    navegador con sus fotos, y `manifest.json` lista el árbol y lo que no se pudo bajar.
-5. **Importar**: recargar las pestañas abiertas de la app y, en la app, selector de proyectos → *Import from
+5. **Importar**: recargar las pestañas abiertas de la app y, en la app, selector de proyectos → *New ▾* → *Import from
    Coda…* → la carpeta → un nombre para el proyecto nuevo.
 6. **Esperar la subida**: dejar la app abierta hasta que el estado diga que se subió todo al Drive y que no
    quedan cambios por sincronizar (los comentarios suben con ellos).
@@ -71,7 +71,7 @@ convertir las fotos que faltaban.
 
 ## 2. Importar la carpeta (la app)
 
-Selector de proyectos → **Import from Coda**. Se elige la carpeta y todo entra a un **proyecto nuevo**. El
+Selector de proyectos → **New ▾ › Import from Coda**. Se elige la carpeta y todo entra a un **proyecto nuevo**. El
 código está en `src/import/` y el diálogo en `src/ui/ImportCodaDialog.tsx`.
 
 - **Quién lo ve: solo la cuenta de Lega** (y solo donde puede crear proyectos). Es una herramienta suya, no una

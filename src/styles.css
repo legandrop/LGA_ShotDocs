@@ -17,6 +17,8 @@
   --accent: #0ea5c4;
   --accent-text: #0c6a7d;
   --focus: rgba(14, 165, 196, 0.35);
+  --project-current: rgba(14, 165, 196, 0.1);
+  --project-current-strong: rgba(14, 165, 196, 0.17);
   --ok: #2f6b45;
   --warn: #7a4b00;
   --warn-bg: #fdf6e8;
@@ -77,6 +79,8 @@
   --accent: #22d3ee;
   --accent-text: #5fd4e8;
   --focus: rgba(34, 211, 238, 0.3);
+  --project-current: rgba(34, 211, 238, 0.1);
+  --project-current-strong: rgba(34, 211, 238, 0.17);
   --ok: #7cc496;
   --warn: #f0c35a;
   --warn-bg: #2a2418;
@@ -2829,10 +2833,10 @@ code {
   white-space: nowrap;
 }
 
-/* 520 px: en los renglones sin íconos el nombre y la línea de páginas tienen unos 440 px; en el que los muestra (seis),
-   unos 265 px (230 con OPEN), y lo que no entra termina en «…». */
+/* 560 px (v0.329): la lista es una tabla (nombre, páginas, peso, fecha) y al nombre le quedan unos 220 px; lo que no entra
+   termina en «…». La papelera y los demás paneles del selector miden lo mismo, así el menú no cambia de ancho al navegar. */
 .project-menu {
-  width: 520px;
+  width: 560px;
   max-width: calc(100vw - 16px);
   max-height: min(560px, calc(100vh - 80px));
   overflow-y: auto;
@@ -2887,7 +2891,89 @@ code {
   gap: 2px;
 }
 
-/* Cada renglón (P.14): la zona que abre el proyecto (la opción de la lista) y, al lado, sus íconos. */
+/* El selector de proyectos como tabla (v0.329). Tres bordes en uno: el ícono de buscar, el punto de cada proyecto y los
+   íconos de abajo comparten columna (16 px a 12 px del borde), y los textos arrancan a la misma altura (36 px del borde,
+   la columna más el hueco). Las columnas son las de `--cols`: punto, nombre, páginas, peso y fecha; sin ningún peso que
+   mostrar se saca la columna. A la derecha del renglón, un lugar fijo para la estrella y el ⋯ (28 px cada uno). */
+.menu.project-list-menu {
+  --cols: 16px minmax(0, 1fr) 44px 64px 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.menu.project-list-menu.no-size {
+  --cols: 16px minmax(0, 1fr) 44px 92px;
+}
+
+.project-top {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.project-top .project-search {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  padding: 0 12px;
+  gap: 12px;
+}
+
+.menu .project-top .project-new {
+  flex: none;
+  height: 38px;
+  padding: 0 12px 0 10px;
+  gap: 6px;
+  justify-content: center;
+}
+
+.menu .project-top .project-new svg {
+  color: inherit;
+}
+
+/* Los títulos de las columnas. */
+.project-head {
+  display: grid;
+  grid-template-columns: var(--cols);
+  column-gap: 8px;
+  align-items: center;
+  /* Pegado arriba al bajar por la lista, y adentro de ella: con una barra de desplazamiento clásica (Windows), los títulos
+     siguen alineados con sus columnas. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 28px;
+  margin-top: 4px;
+  padding: 0 68px 0 12px;
+  background: var(--menu-bg);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.project-head span:nth-child(2) {
+  margin-left: 4px;
+}
+
+.project-head span:nth-child(n + 3) {
+  text-align: right;
+}
+
+/* La lista se recorre sola; el buscador, los títulos y el pie se quedan. Sus márgenes llevan la barra de desplazamiento
+   hasta el borde del menú. */
+.project-list-menu .project-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 -8px;
+  padding: 0 8px;
+  overflow-y: auto;
+}
+
+/* Cada renglón (P.14): la zona que abre el proyecto (la opción de la lista) y, al lado, la estrella y el ⋯. */
 .menu .project-row {
   display: flex;
   align-items: center;
@@ -2895,73 +2981,279 @@ code {
   border-radius: var(--radius);
 }
 
-.menu .project-open {
-  flex: 1;
-  min-width: 0;
-  height: 48px;
-  gap: 10px;
-  text-align: left;
-}
-
-.menu .project-open:hover:not(:disabled) {
-  background: transparent;
-}
-
 .menu .project-row.active {
   background: var(--hover);
 }
 
-.menu .project-open[aria-current='true'] .project-label strong {
-  font-weight: 700;
-}
-
-/* Bajar, abrir en tab, color, renombrar, archivar y borrar: al pasar el mouse, con el foco y en el renglón activo de
-   las flechas. Ocultos no ocupan lugar (`display: none`), así en los demás renglones el nombre y la línea de páginas
-   usan todo el ancho; a la vista entran al lado de la marca OPEN y el nombre termina en «…» si no entra. */
-.menu .project-actions {
-  display: none;
-  flex: none;
+.menu .project-line {
   gap: 0;
-  padding-right: 2px;
+  min-height: 44px;
+  padding: 0 8px 0 0;
+  /* Con las flechas, el renglón no queda tapado por los títulos pegados arriba. */
+  scroll-margin-top: 32px;
 }
 
-.menu .project-row:hover .project-actions,
-.menu .project-row:focus-within .project-actions,
-.menu .project-row.active .project-actions {
-  display: flex;
+/* El proyecto abierto lleva su propio fondo, que el hover y las flechas no pisan: se ven las dos cosas a la vez. */
+.menu .project-line.current {
+  background: var(--project-current);
 }
 
-/* La estrella de favorito (projectFavorites.ts): llena y siempre a la vista en un favorito; en los demás, como los
-   íconos, al pasar el mouse, con el foco o en el renglón activo. En el teléfono, siempre. */
-.menu .project-star {
-  display: none;
+.menu .project-line.current.active {
+  background: var(--project-current-strong);
+}
+
+.menu .project-line .project-open {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 0 0 12px;
+  display: grid;
+  grid-template-columns: var(--cols);
+  column-gap: 8px;
+  align-items: center;
+  text-align: left;
+}
+
+.menu .project-line .project-open:hover:not(:disabled) {
+  background: transparent;
+}
+
+.menu .project-line .project-dot,
+.menu .project-dotcell .project-dot {
+  justify-self: center;
+  margin: 0;
+}
+
+/* El punto del renglón de confirmar archivado: misma columna de 16 px que el de los renglones. */
+.project-dotcell {
   flex: none;
+  width: 16px;
+  display: grid;
+  place-items: center;
+}
+
+.project-name {
+  min-width: 0;
+  margin-left: 4px;
+  display: grid;
+}
+
+.project-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* «Abierto» (o «Archivado»), al lado del nombre. */
+.project-badge {
+  flex: none;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-text);
+}
+
+/* La línea de datos de siempre: solo en el teléfono, donde no hay columnas. */
+.project-meta {
+  display: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted-2);
+}
+
+.project-num {
+  text-align: right;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-num.dim {
+  color: var(--muted-2);
+}
+
+/* Sobre el fondo del proyecto abierto el gris de siempre no llega a 4,5:1 en oscuro. */
+.menu .project-line.current .project-num.dim {
   color: var(--muted);
 }
 
-.menu .project-row.favorite .project-star,
-.menu .project-row.touch .project-star,
-.menu .project-row:hover .project-star,
-.menu .project-row:focus-within .project-star,
-.menu .project-row.active .project-star {
-  display: inline-flex;
+/* La estrella y el ⋯ tienen siempre su lugar (el ⋯, aunque no haya nada que ofrecerle a la persona): nada salta al pasar
+   el mouse y la estrella de un favorito queda en la misma columna en todos los renglones. */
+.project-acts {
+  flex: none;
+  display: grid;
+  grid-template-columns: 28px 28px;
+  gap: 4px;
 }
 
-.menu .project-row.favorite .project-star svg {
-  color: var(--accent);
-}
-
-.menu .project-actions .icon-button,
-.menu .project-star,
-.menu .project-more {
-  width: 30px;
-  height: 30px;
+.menu .project-acts .icon-button {
+  width: 28px;
+  height: 28px;
   padding: 0;
   justify-content: center;
 }
 
+/* La estrella de favorito (projectFavorites.ts): llena y siempre a la vista en un favorito; en los demás, al pasar el
+   mouse, con el foco o en el renglón activo de las flechas. En el teléfono, siempre. */
+.menu .project-star {
+  visibility: hidden;
+  color: var(--muted);
+}
+
+.menu .project-line.favorite .project-star,
+.menu .project-line.touch .project-star,
+.menu .project-line:hover .project-star,
+.menu .project-line:focus-within .project-star,
+.menu .project-line.active .project-star,
+.menu .project-line.more-open .project-star {
+  visibility: visible;
+}
+
+.menu .project-line.favorite .project-star svg {
+  color: var(--accent);
+}
+
+/* El ⋯: a la vista con el mouse encima, el foco, las flechas o su menú abierto; en el teléfono, siempre. */
+.menu .project-more {
+  opacity: 0;
+}
+
+.menu .project-line.touch .project-more,
+.menu .project-line:hover .project-more,
+.menu .project-line:focus-within .project-more,
+.menu .project-line.active .project-more,
+.menu .project-line.more-open .project-more {
+  opacity: 1;
+}
+
 .menu .icon-button.danger:not(:disabled):hover svg {
   color: var(--danger);
+}
+
+/* Los menús chicos del selector (el ⋯ de un renglón, *New* y *Share*): fijos a la ventana, con texto y en grupos. */
+.menu .project-pop {
+  position: fixed;
+  z-index: 3;
+  min-width: 232px;
+  display: grid;
+  gap: 0;
+  padding: 6px;
+  border: 1px solid var(--menu-border);
+  border-radius: 10px;
+  background: var(--menu-bg);
+  box-shadow: var(--shadow);
+}
+
+.project-pop-group {
+  display: grid;
+  gap: 1px;
+}
+
+.project-pop-group + .project-pop-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--menu-border);
+}
+
+.menu .project-pop button {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+
+.project-pop-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+/* El pie: lo del proyecto abierto a la izquierda y las vistas a la derecha, en una barra hundida. */
+.project-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px -8px -8px;
+  padding: 8px;
+  border-top: 1px solid var(--menu-border);
+  border-radius: 0 0 11px 11px;
+  background: var(--sidebar-bg);
+}
+
+.project-foot-space {
+  flex: 1;
+}
+
+.menu .project-foot button {
+  height: 32px;
+  padding: 0 10px;
+  gap: 8px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.menu .project-foot .project-share {
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  font-weight: 500;
+  background: var(--menu-bg);
+}
+
+.menu .project-foot .project-share:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.menu .project-foot .project-share span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Lo que sigue a la lista (los archivados, los workspaces): sus íconos caen en la misma columna que los puntos. */
+.project-list-menu .project-scroll > button {
+  padding: 0 12px;
+}
+
+.menu .project-link svg:last-child {
+  margin-left: auto;
+}
+
+.project-empty {
+  margin: 0;
+  padding: 6px 0;
+}
+
+.project-empty p {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.menu .project-create {
+  width: 100%;
+  padding: 0 12px;
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.menu .project-create svg {
+  color: inherit;
 }
 
 /* En el teléfono: un "⋯" siempre visible que despliega las acciones del renglón debajo. */
@@ -2969,13 +3261,13 @@ code {
   flex-basis: 100%;
   display: grid;
   gap: 2px;
-  padding: 0 0 6px 46px;
+  padding: 0 0 6px 48px;
 }
 
 .menu .project-row.confirming {
-  gap: 8px;
-  min-height: 48px;
-  padding: 4px 6px 4px 10px;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 8px 0 12px;
   background: var(--hover);
 }
 
@@ -3386,11 +3678,6 @@ code {
   color: var(--accent-text);
 }
 
-.project-empty {
-  margin: 6px 10px;
-  font-size: 13px;
-}
-
 .project-form {
   display: grid;
   gap: 10px;
@@ -3426,8 +3713,42 @@ code {
     border-radius: 18px 18px 0 0;
   }
 
-  .menu .project-open {
+  /* Sin columnas: nombre y, abajo, la línea de datos de siempre (páginas · peso · fecha). */
+  .menu.project-list-menu,
+  .menu.project-list-menu.no-size {
+    --cols: 16px minmax(0, 1fr);
+  }
+
+  .project-head,
+  .project-num {
+    display: none;
+  }
+
+  .project-meta {
+    display: block;
+  }
+
+  .menu .project-line {
+    min-height: 60px;
+  }
+
+  .menu .project-line .project-open {
     height: 60px;
+  }
+
+  .menu .project-pop {
+    min-width: 0;
+  }
+
+  /* El dedo: la estrella y el ⋯ de 40 px. */
+  .project-acts {
+    grid-template-columns: 40px 40px;
+    gap: 0;
+  }
+
+  .menu .project-acts .icon-button {
+    width: 40px;
+    height: 40px;
   }
 
   /* En el teléfono la ventana de borrar ocupa la pantalla, con los botones abajo (al alcance del dedo). */
@@ -8339,7 +8660,8 @@ ins.replace-new {
   color: var(--warn);
 }
 
-.project-label strong .offline-badge {
+.project-label strong .offline-badge,
+.project-title strong .offline-badge {
   margin-left: 6px;
   vertical-align: -2px;
 }
@@ -9977,4 +10299,11 @@ button.folder-row-main:hover {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 2px;
+}
+
+/* En una pantalla táctil, los renglones de los menús chicos del selector (también en una ventana angosta) miden lo del dedo. */
+@media (pointer: coarse) {
+  .menu .project-pop button {
+    height: 44px;
+  }
 }

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { locale, t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
-import { usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
+import { useOffline, usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
 import { isOnlyActiveProject, nextProjectAfter } from '../sync/projectStates';
 import { PROJECT_COLOR_SCHEMA_VERSION, PROJECT_STATES_SCHEMA_VERSION, SCENE_SHARES_SCHEMA_VERSION } from '../sync/remote';
 import { pagePath } from '../router';
@@ -14,9 +14,10 @@ import { importJobFor } from '../import/importJob';
 import {
   AccountIcon,
   ArchiveIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
+  ChevronRightIcon,
   ExportIcon,
-  ImportIcon,
   MoreIcon,
   OfflineMarkIcon,
   PaletteIcon,
@@ -32,7 +33,7 @@ import {
 } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
-import { editedLabel, lastPageOf, projectStateError, useCurrentProject, useSwitchProject } from './project';
+import { editedLabel, lastPageOf, projectStateError, shortDateLabel, useCurrentProject, useSwitchProject } from './project';
 import { defaultProjectColor, loadRecentColors, previewColor, PROJECT_PRESETS, projectColor, rememberRecentColor, useProjectColor } from './projectColor';
 import { ColorPicker } from './ColorPicker';
 import { useSearchSession } from './projectSearchUi';
@@ -40,7 +41,7 @@ import { adoptDeviceFavorites, favoritesFirst } from './projectFavorites';
 import { tipRows } from './tipRows';
 import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, ShareScenesDialog, TrashPanel } from './lazyDialogs';
 import { Part } from './lazyPart';
-import { OfflineBadge, offlineSupported, openOffline } from './SpaceHost';
+import { OfflineBadge, offlineSupported, offlineTipOf, openOffline } from './SpaceHost';
 import { openExport } from './ExportHost';
 import { LEVEL_VIEW } from '../sync/access';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
@@ -119,6 +120,9 @@ function ProjectColorPanel(props: { id: string; name: string; touch: boolean; on
   );
 }
 
+/** El ancho del selector en el escritorio (`.project-menu` en styles.css): la tabla de proyectos y la papelera. */
+const PROJECT_MENU_WIDTH = 560;
+
 // En pantallas táctiles no se enfoca el buscador al abrir: el teclado taparía la lista.
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
@@ -165,14 +169,14 @@ export function ProjectSwitcher() {
 
   const toggle = () => {
     setStartIn('list');
-    setPosition((open) => (open || !button.current ? null : menuBelow(button.current, 520)));
+    setPosition((open) => (open || !button.current ? null : menuBelow(button.current, PROJECT_MENU_WIDTH)));
   };
 
   useEffect(() => {
     const open = () => {
       if (!button.current) return;
       setStartIn('trash');
-      setPosition(menuBelow(button.current, 520));
+      setPosition(menuBelow(button.current, PROJECT_MENU_WIDTH));
     };
     trashListeners.add(open);
     return () => {
@@ -282,6 +286,127 @@ export function ProjectSwitcher() {
   );
 }
 
+/** Un renglón de un menú flotante del selector (⋯ de un proyecto, *New*, *Share*). */
+interface PopEntry {
+  key: string;
+  label: string;
+  /** El nombre accesible, si dice más que el texto (con el nombre del proyecto). */
+  aria?: string;
+  /** Por qué está apagado (o qué agrega): el tooltip. */
+  tip?: string;
+  disabled?: boolean;
+  danger?: boolean;
+  /** Algo a la derecha del texto (la muestra del color). */
+  right?: ReactNode;
+  run: () => void;
+}
+
+/** Cuál menú flotante está abierto y desde qué botón. */
+type PopKind = { kind: 'row'; id: string } | { kind: 'new' } | { kind: 'share' };
+type Pop = { anchor: HTMLElement } & PopKind;
+
+/** Los renglones de un menú flotante que se pueden elegir. Las flechas recorren todos, también los apagados (su motivo se lee con el foco). */
+const ENABLED = 'button:not([aria-disabled="true"])';
+
+/**
+ * Un menú chico que sale de un botón del selector (el ⋯ de un renglón, *New*, *Share*): con texto y en grupos. Va
+ * adentro del selector (fijo a la ventana) para que tocarlo no cuente como tocar afuera. Escape lo cierra sin cerrar el
+ * selector; tocar afuera o desplazar la lista, también. Las flechas recorren los renglones.
+ */
+function PopMenu(props: {
+  anchor: HTMLElement;
+  label: string;
+  groups: PopEntry[][];
+  align: 'left' | 'right';
+  /** Sale hacia arriba del botón (el pie del selector). */
+  up?: boolean;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const close = useRef(props.onClose);
+  close.current = props.onClose;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const a = props.anchor.getBoundingClientRect();
+    const { width, height } = el.getBoundingClientRect();
+    const left = props.align === 'right' ? a.right - width : a.left;
+    el.style.left = `${Math.max(8, Math.min(left, window.innerWidth - width - 8))}px`;
+    const below = a.bottom + 4;
+    const above = a.top - 4 - height;
+    const fitsBelow = below + height <= window.innerHeight - 8;
+    const top = props.up ? (above >= 8 ? above : below) : fitsBelow || above < 8 ? below : above;
+    el.style.top = `${Math.max(8, Math.min(top, window.innerHeight - 8 - height))}px`;
+    el.querySelector<HTMLElement>(ENABLED)?.focus({ preventScroll: true });
+    return () => {
+      // Si el foco quedó en el menú (o se perdió al desmontarlo), vuelve al botón que lo abrió.
+      const active = document.activeElement;
+      if (props.anchor.isConnected && (!active || active === document.body || el.contains(active))) props.anchor.focus({ preventScroll: true });
+    };
+  }, [props.anchor, props.align, props.up]);
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (!ref.current?.contains(target) && !props.anchor.contains(target)) close.current();
+    };
+    const onResize = () => close.current();
+    document.addEventListener('pointerdown', onDown);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [props.anchor]);
+  return (
+    <div
+      ref={ref}
+      className="project-pop"
+      role="menu"
+      aria-label={props.label}
+      style={{ left: 0, top: 0 }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          close.current();
+        } else if (e.key === 'Tab') {
+          close.current();
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const list = [...(ref.current?.querySelectorAll<HTMLElement>('button') ?? [])];
+          if (!list.length) return;
+          const at = list.indexOf(document.activeElement as HTMLElement);
+          list[(at + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length].focus();
+        }
+      }}
+    >
+      {props.groups.map((group, i) => (
+        <div key={i} className="project-pop-group" role="group">
+          {group.map((entry) => (
+            <button
+              key={entry.key}
+              role="menuitem"
+              className={entry.danger ? 'danger' : undefined}
+              aria-label={entry.aria}
+              data-tip={entry.tip}
+              // Apagado con `aria-disabled` (no `disabled`): sigue recibiendo el mouse y el tooltip explica por qué.
+              aria-disabled={entry.disabled || undefined}
+              onClick={() => {
+                if (entry.disabled) return;
+                close.current();
+                entry.run();
+              }}
+            >
+              {entry.label}
+              {entry.right && <span className="project-pop-right">{entry.right}</span>}
+            </button>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 type Mode =
   | { name: 'list' }
   | { name: 'new' }
@@ -329,8 +454,15 @@ function ProjectMenu(props: {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // El menú flotante abierto (⋯ de un renglón, *New* o *Share*), si hay uno.
+  const [pop, setPop] = useState<Pop | null>(null);
+  const offlineSnapshot = useOffline();
+  // Las flechas del buscador mueven el renglón activo: la lista se desplaza para que se vea (ver abajo).
+  const keyNav = useRef(false);
   const tr = useT();
   useFloating(ref, props.onClose, props.anchor, false, !touch);
+  // Un menú flotante no sobrevive a cambiar de pantalla ni de búsqueda (el renglón puede ya no estar).
+  useEffect(() => setPop(null), [mode.name, query, confirming]);
   // El peso de cada proyecto (P.7): se vuelve a pedir al abrir si pasaron 5 minutos; mientras, lo guardado.
   useEffect(() => void sizeStore.refreshIfStale(), [sizeStore]);
 
@@ -359,6 +491,13 @@ function ProjectMenu(props: {
       ? known
       : [{ id: props.current, name: tr('project.defaultName'), created_at: '' }, ...known];
   const projects = favoritesFirst(all.filter((p) => !needle || p.name.toLowerCase().includes(needle)));
+  // Con las flechas, el renglón activo se desplaza hasta quedar a la vista (la lista tiene su propio scroll).
+  const activeId = projects[Math.min(active, projects.length - 1)]?.id;
+  useEffect(() => {
+    if (!keyNav.current) return;
+    keyNav.current = false;
+    document.getElementById(`project-option-${activeId}`)?.scrollIntoView?.({ block: 'nearest' });
+  }, [active, activeId]);
   const archivedCount = tree.archivedProjects().filter((p) => p.id !== props.current).length;
   const currentName = tree.project(props.current)?.name ?? tr('project.thisProject');
   // El peso que se muestra de un proyecto: solo a quien ve su papelera de archivos (también en el dispositivo: un
@@ -396,6 +535,7 @@ function ProjectMenu(props: {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       if (!projects.length) return;
+      keyNav.current = true;
       setActive((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + projects.length) % projects.length);
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -559,8 +699,11 @@ function ProjectMenu(props: {
     );
   }
 
-  /** Los íconos de un renglón (archivar y borrar solo a quien maneja el proyecto, renombrar con 4 sobre él). */
-  const rowActions = (id: string, name: string, archived: boolean) => {
+  /**
+   * Las acciones de un renglón, en su menú ⋯ (v0.329): sin conexión y exportar; color y renombrar; archivar y borrar.
+   * Archivar y borrar son solo para quien maneja el proyecto; renombrar, con 4 sobre él. Los grupos van separados.
+   */
+  const rowGroups = (id: string, name: string, archived: boolean): PopEntry[][] => {
     const canRename = !archived && perms.canRenameProject(id);
     const canManage = statesReady && perms.canManageProject(id);
     // "Available offline" (P.10): cualquiera que vea el proyecto, si hay base de archivos en el dispositivo.
@@ -568,378 +711,474 @@ function ProjectMenu(props: {
     // "Export project…" (P.22): quien ve el proyecto entero (un invitado con páginas sueltas exporta cada rama).
     const canExport = perms.projectLevel(id) >= LEVEL_VIEW;
     const canColor = canRename && colorReady;
-    if (!canRename && !canManage && !canOffline && !canExport) return null;
     const reason = blockedReason(id, archived);
     const deleteReason = offline ? tr('fileTrash.needsInternet') : archived ? null : reason;
-    return (
-      <span className="project-actions">
-        {canOffline && (
-          <button
-            className="icon-button"
-            aria-label={tr('project.offline')}
-            data-tip={tr('project.offline')}
-            onClick={() => {
-              props.onClose();
-              openOffline('project', id);
-            }}
-          >
-            <OfflineMarkIcon size={16} />
-          </button>
-        )}
-        {canExport && (
-          <button
-            className="icon-button"
-            aria-label={tr('project.export')}
-            data-tip={tr('project.export')}
-            onClick={() => {
-              props.onClose();
-              openExport('project', id);
-            }}
-          >
-            <ExportIcon size={16} />
-          </button>
-        )}
-        {canColor && (
-          <button
-            className="icon-button"
-            aria-label={tr('project.colorNamed', { name })}
-            data-tip={tr('project.colorTip')}
-            onClick={() => setMode({ name: 'color', id })}
-          >
-            <PaletteIcon size={16} />
-          </button>
-        )}
-        {canRename && (
-          <button
-            className="icon-button"
-            aria-label={tr('project.renameNamed', { name })}
-            data-tip={tr('common.rename')}
-            onClick={() => setMode({ name: 'rename', id })}
-          >
-            <RenameIcon size={16} />
-          </button>
-        )}
-        {canManage && (
-          <button
-            className="icon-button"
-            aria-label={tr(archived ? 'project.unarchiveNamed' : 'project.archiveNamed', { name })}
-            data-tip={(archived ? (offline ? tr('fileTrash.needsInternet') : null) : reason) ?? tr(archived ? 'project.unarchiveTip' : 'project.archiveTip')}
-            disabled={busy !== null || (archived ? offline : reason !== null)}
-            onClick={() => (archived ? void setArchived(id, false) : setConfirming(id))}
-          >
-            {archived ? <UnarchiveIcon size={16} /> : <ArchiveIcon size={16} />}
-          </button>
-        )}
-        {canManage && (
-          <button
-            className="icon-button danger"
-            aria-label={tr('project.deleteNamed', { name })}
-            data-tip={deleteReason ?? tr('project.deleteTip')}
-            disabled={busy !== null || deleteReason !== null}
-            onClick={() => {
-              props.onClose();
-              props.onDelete(id, name);
-            }}
-          >
-            <TrashIcon size={16} />
-          </button>
-        )}
-      </span>
-    );
+    const groups: (PopEntry | false)[][] = [
+      [
+        canOffline && {
+          key: 'offline',
+          label: tr('project.offline'),
+          run: () => {
+            props.onClose();
+            openOffline('project', id);
+          },
+        },
+        canExport && {
+          key: 'export',
+          label: tr('project.export'),
+          run: () => {
+            props.onClose();
+            openExport('project', id);
+          },
+        },
+      ],
+      [
+        canColor && {
+          key: 'color',
+          label: tr('project.color'),
+          aria: tr('project.colorNamed', { name }),
+          right: <ProjectDot id={id} size={12} />,
+          run: () => setMode({ name: 'color', id }),
+        },
+        canRename && {
+          key: 'rename',
+          label: tr('common.rename'),
+          aria: tr('project.renameNamed', { name }),
+          run: () => setMode({ name: 'rename', id }),
+        },
+      ],
+      [
+        canManage && {
+          key: 'archive',
+          label: tr(archived ? 'project.unarchive' : 'project.archive'),
+          aria: tr(archived ? 'project.unarchiveNamed' : 'project.archiveNamed', { name }),
+          tip: (archived ? (offline ? tr('fileTrash.needsInternet') : null) : reason) ?? undefined,
+          disabled: busy !== null || (archived ? offline : reason !== null),
+          run: () => (archived ? void setArchived(id, false) : setConfirming(id)),
+        },
+        canManage && {
+          key: 'delete',
+          label: tr('project.delete'),
+          aria: tr('project.deleteNamed', { name }),
+          tip: deleteReason ?? undefined,
+          danger: true,
+          disabled: busy !== null || deleteReason !== null,
+          run: () => {
+            props.onClose();
+            props.onDelete(id, name);
+          },
+        },
+      ],
+    ];
+    return groups.map((g) => g.filter((e): e is PopEntry => !!e)).filter((g) => g.length > 0);
   };
 
+  // Lo que abre el botón *New* de arriba: proyecto vacío y los dos importar. Solo para quien crea proyectos.
+  const newGroups: PopEntry[][] = !perms.canCreateProject || archivedMode
+    ? []
+    : [
+        [{ key: 'new', label: tr('project.new'), run: () => setMode({ name: 'new' }) }],
+        [
+          ...(props.onImportArchive
+            ? [
+                {
+                  key: 'importArchive',
+                  label: tr('importArchive.menu'),
+                  run: () => {
+                    props.onClose();
+                    props.onImportArchive?.();
+                  },
+                },
+              ]
+            : []),
+          ...(props.onImport
+            ? [
+                {
+                  key: 'importCoda',
+                  label: tr('import.menu'),
+                  run: () => {
+                    props.onClose();
+                    props.onImport?.();
+                  },
+                },
+              ]
+            : []),
+        ],
+      ].filter((g) => g.length > 0);
+
+  const newCount = newGroups.flat().length;
+
+  // Lo del proyecto abierto, en el pie: compartirlo y, con las escenas disponibles, compartir solo sus escenas.
+  const canShare = !archivedMode && perms.canShareProject(props.current);
+  const shareGroups: PopEntry[][] = canShare && scenesReady
+    ? [
+        [
+          {
+            key: 'share',
+            label: tr('project.share', { name: currentName }),
+            run: () => {
+              props.onClose();
+              props.onShare(props.current);
+            },
+          },
+          {
+            key: 'shareScenes',
+            label: tr('project.shareScenes', { name: currentName }),
+            run: () => {
+              props.onClose();
+              props.onShareScenes(props.current);
+            },
+          },
+        ],
+      ]
+    : [];
+
+  /** Abre (o cierra, si ya estaba abierto desde ese botón) un menú flotante. */
+  const togglePop = (next: PopKind, anchor: HTMLElement) =>
+    setPop((open) => (open && open.anchor === anchor ? null : ({ ...next, anchor } as Pop)));
+
+  const popGroups = !pop ? [] : pop.kind === 'new' ? newGroups : pop.kind === 'share' ? shareGroups : rowGroups(pop.id, nameOf(pop.id), !!tree.project(pop.id)?.archived_at);
+  // El tamaño de la tabla: el peso solo se muestra si algún proyecto lo tiene (si no, una columna de rayas).
+  const showSize = all.some((p) => weightOf(p.id) > 0);
+
   return (
-    <div ref={ref} className="menu project-menu" role="dialog" aria-label={tr(archivedMode ? 'project.archivedTitle' : 'project.projects')} style={props.position}>
+    <div
+      ref={ref}
+      className={`menu project-menu project-list-menu${showSize ? '' : ' no-size'}`}
+      role="dialog"
+      aria-label={tr(archivedMode ? 'project.archivedTitle' : 'project.projects')}
+      style={props.position}
+    >
       {archivedMode && (
         <button className="project-back" onClick={backToList}>
           <ChevronLeftIcon size={16} />
           {tr('project.archivedTitle')}
         </button>
       )}
-      <label className="project-search">
-        <SearchIcon size={16} />
-        <input
-          role="combobox"
-          aria-expanded="true"
-          aria-controls="project-listbox"
-          aria-autocomplete="list"
-          aria-activedescendant={projects[active] ? `project-option-${projects[active].id}` : undefined}
-          ref={search}
-          autoFocus={returned && !touch}
-          aria-label={tr('project.find')}
-          placeholder={tr(archivedMode ? 'project.findArchived' : 'project.findPlaceholder')}
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setActive(0);
-          }}
-          onKeyDown={onSearchKey}
-        />
-      </label>
-      {!archivedMode && <span className="mono-label project-section">{tr('project.yours')}</span>}
-      <div className="project-list" id="project-listbox" role="listbox" aria-label={tr(archivedMode ? 'project.archivedTitle' : 'project.yours')}>
-        {projects.map((p, i) => {
-          const stats = tree.projectStats(p.id);
-          const archived = !!p.archived_at;
-          // Nunca en cero (ver `weightOf`).
-          const bytes = weightOf(p.id);
-          const actions = rowActions(p.id, p.name, archived);
-          if (confirming === p.id) {
+      <div className="project-top">
+        <label className="project-search">
+          <SearchIcon size={16} />
+          <input
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="project-listbox"
+            aria-autocomplete="list"
+            aria-activedescendant={projects[active] ? `project-option-${projects[active].id}` : undefined}
+            ref={search}
+            autoFocus={returned && !touch}
+            aria-label={tr('project.find')}
+            placeholder={tr(archivedMode ? 'project.findArchived' : 'project.findPlaceholder')}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setActive(0);
+            }}
+            onKeyDown={onSearchKey}
+          />
+        </label>
+        {newGroups.length > 0 && (
+          // Crear y los importar en un solo botón al lado del buscador. Sin importar (nadie lo ofrece), crea directo.
+          <button
+            className="primary project-new"
+            aria-haspopup={newCount > 1 ? 'menu' : undefined}
+            aria-expanded={newCount > 1 ? pop?.kind === 'new' : undefined}
+            onClick={(e) => (newCount > 1 ? togglePop({ kind: 'new' }, e.currentTarget) : setMode({ name: 'new' }))}
+          >
+            <PlusIcon size={16} />
+            {tr(newCount > 1 ? 'project.newMenu' : 'project.new')}
+            {newCount > 1 && <ChevronDownIcon size={14} />}
+          </button>
+        )}
+      </div>
+      <div className="project-scroll" onScroll={() => setPop(null)}>
+        {projects.length > 0 && (
+          // Los títulos de las columnas (no son parte de la lista: cada renglón se lee entero, con su nombre y sus datos).
+          <div className="project-head" aria-hidden="true">
+            <span />
+            <span>{tr('project.colProject')}</span>
+            <span>{tr('project.colPages')}</span>
+            {showSize && <span>{tr('project.colSize')}</span>}
+            <span>{tr(archivedMode ? 'project.colArchived' : 'project.colEdited')}</span>
+          </div>
+        )}
+        <div className="project-list" id="project-listbox" role="listbox" aria-label={tr(archivedMode ? 'project.archivedTitle' : 'project.yours')}>
+          {projects.map((p, i) => {
+            const stats = tree.projectStats(p.id);
+            const archived = !!p.archived_at;
+            // Nunca en cero (ver `weightOf`).
+            const bytes = weightOf(p.id);
+            const groups = rowGroups(p.id, p.name, archived);
+            const hasActions = groups.length > 0;
+            const dateIso = archived && archivedMode && p.archived_at ? p.archived_at : stats.updatedAt;
+            // La línea de datos de siempre: en la tabla va en columnas; en el teléfono, abajo del nombre.
+            const summary = [
+              tr('project.pages', { count: stats.pages }),
+              bytes > 0 ? formatSize(bytes, tr.lang) : null,
+              archived && archivedMode && p.archived_at ? archivedLabel(p.archived_at, tr) : editedLabel(stats.updatedAt, tr),
+            ]
+              .filter(Boolean)
+              .join(' · ');
+            if (confirming === p.id) {
+              return (
+                <div
+                  key={p.id}
+                  className="project-row confirming"
+                  role="presentation"
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Escape') return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setConfirming(null);
+                    search.current?.focus();
+                  }}
+                >
+                  <span className="project-dotcell">
+                    <ProjectDot id={p.id} size={10} />
+                  </span>
+                  <span className="project-confirm-text">{tr('project.archiveConfirm', { name: p.name })}</span>
+                  <button className="primary small" disabled={busy !== null} autoFocus onClick={() => void setArchived(p.id, true)}>
+                    {tr('project.archive')}
+                  </button>
+                  <button className="link" disabled={busy !== null} onClick={() => setConfirming(null)}>
+                    {tr('common.cancel')}
+                  </button>
+                </div>
+              );
+            }
+            const favorite = !!p.favorite;
+            const isCurrent = p.id === props.current;
+            const moreOpen = touch ? opened === p.id : pop?.kind === 'row' && pop.id === p.id;
             return (
               <div
                 key={p.id}
-                className="project-row confirming"
                 role="presentation"
-                onKeyDown={(e) => {
-                  if (e.key !== 'Escape') return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setConfirming(null);
-                  search.current?.focus();
-                }}
+                className={`project-row project-line${i === active ? ' active' : ''}${touch ? ' touch' : ''}${opened === p.id ? ' opened' : ''}${favorite ? ' favorite' : ''}${isCurrent ? ' current' : ''}${moreOpen ? ' more-open' : ''}`}
+                onMouseEnter={() => setActive(i)}
               >
-                <ProjectDot id={p.id} />
-                <span className="project-confirm-text">{tr('project.archiveConfirm', { name: p.name })}</span>
-                <button className="primary small" disabled={busy !== null} autoFocus onClick={() => void setArchived(p.id, true)}>
-                  {tr('project.archive')}
-                </button>
-                <button className="link" disabled={busy !== null} onClick={() => setConfirming(null)}>
-                  {tr('common.cancel')}
-                </button>
-              </div>
-            );
-          }
-          const favorite = !!p.favorite;
-          return (
-            <div
-              key={p.id}
-              role="presentation"
-              className={`project-row${i === active ? ' active' : ''}${touch ? ' touch' : ''}${opened === p.id ? ' opened' : ''}${favorite ? ' favorite' : ''}`}
-              onMouseEnter={() => setActive(i)}
-            >
-              <button
-                id={`project-option-${p.id}`}
-                role="option"
-                aria-selected={i === active}
-                aria-current={p.id === props.current ? 'true' : undefined}
-                className="project-open"
-                tabIndex={-1}
-                onClick={(e) => {
-                  // Ctrl/⌘+clic: en un tab nuevo de fondo, como una página; el selector queda abierto para abrir otros.
-                  if (modPressed(e) && !e.altKey && !e.shiftKey && openProjectInNewTab(p.id)) return;
-                  pick(p.id);
-                }}
-                // La rueda: sin el desplazamiento automático del navegador (Windows), como en el árbol.
-                onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-                onAuxClick={(e) => {
-                  if (e.button !== 1) return;
-                  e.preventDefault();
-                  openProjectInNewTab(p.id);
-                }}
-              >
-                <ProjectDot id={p.id} />
-                <span className="project-label">
-                  <strong>
-                    {p.name}
-                    <OfflineBadge kind="project" id={p.id} />
-                  </strong>
-                  <span>
-                    {/* El peso antes de la fecha: si no entra, el "…" corta la fecha. */}
-                    {tr('project.pages', { count: stats.pages })} · {bytes > 0 && `${formatSize(bytes, tr.lang)} · `}
-                    {archived && archivedMode && p.archived_at
-                      ? archivedLabel(p.archived_at, tr)
-                      : editedLabel(stats.updatedAt, tr)}
-                  </span>
-                </span>
-                {p.id === props.current && (
-                  <span className="current-mark">{archived ? tr('project.archivedMark') : tr('project.open')}</span>
-                )}
-              </button>
-              {/* La estrella: llena y siempre a la vista en un favorito; en los demás, al pasar el mouse (en el
-                  teléfono, siempre). */}
-              <button
-                className="icon-button project-star"
-                aria-label={tr(favorite ? 'project.unfavoriteNamed' : 'project.favoriteNamed', { name: p.name })}
-                aria-pressed={favorite}
-                // En un favorito, la estrella llena ya lo dice: el tooltip solo explica qué hace marcarla.
-                data-tip={touch || favorite ? undefined : tr('project.favoriteTip')}
-                onClick={() => {
-                  // El renglón cambia de lugar: el resaltado (y Enter) lo sigue, no se queda en el que ocupó su lugar.
-                  const next = favoritesFirst(projects.map((q) => (q.id === p.id ? { ...q, favorite: !favorite } : q)));
-                  setActive(Math.max(0, next.findIndex((q) => q.id === p.id)));
-                  toggleFavorite(p.id, !favorite);
-                }}
-              >
-                {favorite ? <StarFilledIcon size={16} /> : <StarIcon size={16} />}
-              </button>
-              {actions && touch && (
                 <button
-                  className="icon-button project-more"
-                  aria-label={tr('project.moreNamed', { name: p.name })}
-                  aria-expanded={opened === p.id}
-                  onClick={() => setOpened((o) => (o === p.id ? null : p.id))}
+                  id={`project-option-${p.id}`}
+                  role="option"
+                  aria-selected={i === active}
+                  aria-current={isCurrent ? 'true' : undefined}
+                  aria-label={[p.name, summary, offlineTipOf(offlineSnapshot, 'project', p.id, tr), isCurrent ? (archived ? tr('project.archivedMark') : tr('project.open')) : null].filter(Boolean).join(', ')}
+                  className="project-open"
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    // Ctrl/⌘+clic: en un tab nuevo de fondo, como una página; el selector queda abierto para abrir otros.
+                    if (modPressed(e) && !e.altKey && !e.shiftKey && openProjectInNewTab(p.id)) return;
+                    pick(p.id);
+                  }}
+                  // La rueda: sin el desplazamiento automático del navegador (Windows), como en el árbol.
+                  onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+                  onAuxClick={(e) => {
+                    if (e.button !== 1) return;
+                    e.preventDefault();
+                    openProjectInNewTab(p.id);
+                  }}
                 >
-                  <MoreIcon size={18} />
+                  <ProjectDot id={p.id} size={10} />
+                  <span className="project-name">
+                    <span className="project-title">
+                      <strong>
+                        {p.name}
+                        <OfflineBadge kind="project" id={p.id} />
+                      </strong>
+                      {isCurrent && <span className="project-badge">{archived ? tr('project.archivedMark') : tr('project.open')}</span>}
+                    </span>
+                    <small className="project-meta">{summary}</small>
+                  </span>
+                  <span className="project-num">{stats.pages}</span>
+                  {showSize && <span className={`project-num${bytes > 0 ? '' : ' dim'}`}>{bytes > 0 ? formatSize(bytes, tr.lang) : '—'}</span>}
+                  <span className="project-num dim">{shortDateLabel(dateIso, tr)}</span>
                 </button>
-              )}
-              {actions && !touch && actions}
-              {actions && touch && opened === p.id && (
-                <span className="project-sheet">
-                  {mediaDb && offlineSupported() && (
+                <span className="project-acts">
+                  {/* La estrella: llena y siempre a la vista en un favorito; en los demás, al pasar el mouse (en el
+                      teléfono, siempre). Su lugar es fijo: no se corre al aparecer el ⋯. */}
+                  <button
+                    className="icon-button project-star"
+                    aria-label={tr(favorite ? 'project.unfavoriteNamed' : 'project.favoriteNamed', { name: p.name })}
+                    aria-pressed={favorite}
+                    // En un favorito, la estrella llena ya lo dice: el tooltip solo explica qué hace marcarla.
+                    data-tip={touch || favorite ? undefined : tr('project.favoriteTip')}
+                    onClick={() => {
+                      // El renglón cambia de lugar: el resaltado (y Enter) lo sigue, no se queda en el que ocupó su lugar.
+                      const next = favoritesFirst(projects.map((q) => (q.id === p.id ? { ...q, favorite: !favorite } : q)));
+                      setActive(Math.max(0, next.findIndex((q) => q.id === p.id)));
+                      toggleFavorite(p.id, !favorite);
+                    }}
+                  >
+                    {favorite ? <StarFilledIcon size={16} /> : <StarIcon size={16} />}
+                  </button>
+                  {hasActions ? (
                     <button
-                      onClick={() => {
-                        props.onClose();
-                        openOffline('project', p.id);
-                      }}
+                      className="icon-button project-more"
+                      aria-label={tr('project.moreNamed', { name: p.name })}
+                      aria-haspopup={touch ? undefined : 'menu'}
+                      aria-expanded={moreOpen}
+                      onClick={(e) => (touch ? setOpened((o) => (o === p.id ? null : p.id)) : togglePop({ kind: 'row', id: p.id }, e.currentTarget))}
                     >
-                      <OfflineMarkIcon size={16} /> {tr('project.offline')}
+                      <MoreIcon size={18} />
                     </button>
+                  ) : (
+                    <span />
                   )}
-                  {perms.projectLevel(p.id) >= LEVEL_VIEW && (
-                    <button
-                      onClick={() => {
-                        props.onClose();
-                        openExport('project', p.id);
-                      }}
-                    >
-                      <ExportIcon size={16} /> {tr('project.export')}
-                    </button>
-                  )}
-                  {perms.canRenameProject(p.id) && !archived && colorReady && (
-                    <button onClick={() => setMode({ name: 'color', id: p.id })}>
-                      <PaletteIcon size={16} /> {tr('project.color')}
-                    </button>
-                  )}
-                  {perms.canRenameProject(p.id) && !archived && (
-                    <button onClick={() => setMode({ name: 'rename', id: p.id })}>
-                      <RenameIcon size={16} /> {tr('common.rename')}
-                    </button>
-                  )}
-                  {perms.canShareProject(p.id) && (
-                    <button
-                      onClick={() => {
-                        props.onClose();
-                        props.onShare(p.id);
-                      }}
-                    >
-                      <ShareIcon size={16} /> {tr('project.share', { name: p.name })}
-                    </button>
-                  )}
-                  {statesReady && perms.canManageProject(p.id) && (
-                    <>
+                </span>
+                {hasActions && touch && opened === p.id && (
+                  <span className="project-sheet">
+                    {mediaDb && offlineSupported() && (
                       <button
-                        disabled={busy !== null || (archived ? offline : blockedReason(p.id, false) !== null)}
-                        onClick={() => (archived ? void setArchived(p.id, false) : setConfirming(p.id))}
-                      >
-                        {archived ? <UnarchiveIcon size={16} /> : <ArchiveIcon size={16} />}
-                        {tr(archived ? 'project.unarchive' : 'project.archive')}
-                      </button>
-                      <button
-                        className="danger"
-                        disabled={busy !== null || offline || (!archived && blockedReason(p.id, false) !== null)}
                         onClick={() => {
                           props.onClose();
-                          props.onDelete(p.id, p.name);
+                          openOffline('project', p.id);
                         }}
                       >
-                        <TrashIcon size={16} /> {tr('project.delete')}
+                        <OfflineMarkIcon size={16} /> {tr('project.offline')}
                       </button>
-                      {!archived && blockedReason(p.id, false) && <span className="muted small">{blockedReason(p.id, false)}</span>}
-                    </>
-                  )}
-                </span>
+                    )}
+                    {perms.projectLevel(p.id) >= LEVEL_VIEW && (
+                      <button
+                        onClick={() => {
+                          props.onClose();
+                          openExport('project', p.id);
+                        }}
+                      >
+                        <ExportIcon size={16} /> {tr('project.export')}
+                      </button>
+                    )}
+                    {perms.canRenameProject(p.id) && !archived && colorReady && (
+                      <button onClick={() => setMode({ name: 'color', id: p.id })}>
+                        <PaletteIcon size={16} /> {tr('project.color')}
+                      </button>
+                    )}
+                    {perms.canRenameProject(p.id) && !archived && (
+                      <button onClick={() => setMode({ name: 'rename', id: p.id })}>
+                        <RenameIcon size={16} /> {tr('common.rename')}
+                      </button>
+                    )}
+                    {perms.canShareProject(p.id) && (
+                      <button
+                        onClick={() => {
+                          props.onClose();
+                          props.onShare(p.id);
+                        }}
+                      >
+                        <ShareIcon size={16} /> {tr('project.share', { name: p.name })}
+                      </button>
+                    )}
+                    {statesReady && perms.canManageProject(p.id) && (
+                      <>
+                        <button
+                          disabled={busy !== null || (archived ? offline : blockedReason(p.id, false) !== null)}
+                          onClick={() => (archived ? void setArchived(p.id, false) : setConfirming(p.id))}
+                        >
+                          {archived ? <UnarchiveIcon size={16} /> : <ArchiveIcon size={16} />}
+                          {tr(archived ? 'project.unarchive' : 'project.archive')}
+                        </button>
+                        <button
+                          className="danger"
+                          disabled={busy !== null || offline || (!archived && blockedReason(p.id, false) !== null)}
+                          onClick={() => {
+                            props.onClose();
+                            props.onDelete(p.id, p.name);
+                          }}
+                        >
+                          <TrashIcon size={16} /> {tr('project.delete')}
+                        </button>
+                        {!archived && blockedReason(p.id, false) && <span className="muted small">{blockedReason(p.id, false)}</span>}
+                      </>
+                    )}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          {projects.length === 0 && (
+            <div className="project-empty">
+              <p className="muted">{tr(archivedMode ? 'project.noArchived' : 'project.noMatch')}</p>
+              {/* Escribir un nombre que no existe ofrece crearlo (Enter también). */}
+              {needle && perms.canCreateProject && !archivedMode && (
+                <button className="project-create" onClick={() => setMode({ name: 'new' })}>
+                  <PlusIcon size={16} />
+                  {tr('project.createNamed', { name: query.trim() })}
+                </button>
               )}
             </div>
-          );
-        })}
-        {projects.length === 0 && (
-          <p className="muted project-empty">{tr(archivedMode ? 'project.noArchived' : 'project.noMatch')}</p>
+          )}
+        </div>
+        {!archivedMode && (
+          <>
+            {/* De la copia del dispositivo: anda sin red y sin saber todavía la versión de la base (sección 7.2).
+                Desarchivar y borrar, adentro, sí piden red y la versión 9. */}
+            {archivedCount > 0 && (
+              <button
+                className="project-link"
+                onClick={() => {
+                  setQuery('');
+                  setActive(0);
+                  setReturned(true);
+                  setMode({ name: 'archived' });
+                  // El buscador no se vuelve a montar al cambiar de lista: `autoFocus` no alcanza (sin esto, el foco
+                  // queda en el fondo de la página y Escape cierra todo el selector).
+                  if (!touch) requestAnimationFrame(() => search.current?.focus());
+                }}
+              >
+                <ArchiveIcon size={16} />
+                {tr('project.archivedList', { count: archivedCount })}
+                <ChevronRightIcon size={16} />
+              </button>
+            )}
+            <WorkspaceSection onClose={props.onClose} onDialog={props.onWorkspaces} onRemove={props.onRemoveWorkspace} />
+          </>
         )}
       </div>
       {!archivedMode && (
-        <>
-          <hr />
-          {perms.canShareProject(props.current) && (
-            <button
-              onClick={() => {
-                props.onClose();
-                props.onShare(props.current);
-              }}
-            >
-              <ShareIcon size={16} />
-              {tr('project.share', { name: currentName })}
-            </button>
-          )}
-          {scenesReady && perms.canShareProject(props.current) && (
-            <button
-              onClick={() => {
-                props.onClose();
-                props.onShareScenes(props.current);
-              }}
-            >
-              <ShareIcon size={16} />
-              {tr('project.shareScenes', { name: currentName })}
-            </button>
-          )}
-          {perms.canCreateProject && (
-            <button onClick={() => setMode({ name: 'new' })}>
-              <PlusIcon size={16} />
-              {needle && projects.length === 0 ? tr('project.newNamed', { name: query.trim() }) : tr('project.new')}
-            </button>
-          )}
-          {perms.canCreateProject && props.onImportArchive && (
-            <button
-              onClick={() => {
-                props.onClose();
-                props.onImportArchive?.();
-              }}
-            >
-              <ImportIcon size={16} />
-              {tr('importArchive.menu')}
-            </button>
-          )}
-          {perms.canCreateProject && props.onImport && (
-            <button
-              onClick={() => {
-                props.onClose();
-                props.onImport?.();
-              }}
-            >
-              <ImportIcon size={16} />
-              {tr('import.menu')}
-            </button>
-          )}
-          {/* De la copia del dispositivo: anda sin red y sin saber todavía la versión de la base (sección 7.2).
-              Desarchivar y borrar, adentro, sí piden red y la versión 9. */}
-          {archivedCount > 0 && (
-            <button
-              onClick={() => {
-                setQuery('');
-                setActive(0);
-                setReturned(true);
-                setMode({ name: 'archived' });
-                // El buscador no se vuelve a montar al cambiar de lista: `autoFocus` no alcanza (sin esto, el foco
-                // queda en el fondo de la página y Escape cierra todo el selector).
-                if (!touch) requestAnimationFrame(() => search.current?.focus());
-              }}
-            >
-              <ArchiveIcon size={16} />
-              {tr('project.archivedList', { count: archivedCount })}
-            </button>
-          )}
+        // El pie: lo del proyecto abierto a la izquierda; las vistas (archivos por peso y la papelera), a la derecha.
+        <div className="project-foot">
+          {canShare &&
+            (shareGroups.length > 0 ? (
+              <button
+                className="project-share"
+                aria-haspopup="menu"
+                aria-expanded={pop?.kind === 'share'}
+                onClick={(e) => togglePop({ kind: 'share' }, e.currentTarget)}
+              >
+                {tr('project.shareMenu')}
+                <ChevronDownIcon size={14} />
+              </button>
+            ) : (
+              <button
+                className="project-share"
+                onClick={() => {
+                  props.onClose();
+                  props.onShare(props.current);
+                }}
+              >
+                <span>{tr('project.share', { name: currentName })}</span>
+              </button>
+            ))}
+          <span className="project-foot-space" />
           {heaviest.length > 0 && (
-            <button onClick={() => setMode({ name: 'files', id: heaviest.includes(props.current) ? props.current : heaviest[0] })}>
+            <button className="project-ghost" onClick={() => setMode({ name: 'files', id: heaviest.includes(props.current) ? props.current : heaviest[0] })}>
               <SizeListIcon size={16} />
               {tr('project.filesBySize')}
             </button>
           )}
           {/* La papelera única (proyectos, páginas y archivos): anda sin red con las páginas del dispositivo. */}
-          <button onClick={() => setMode({ name: 'trash' })}>
+          <button className="project-ghost" onClick={() => setMode({ name: 'trash' })}>
             <TrashIcon size={16} />
             {tr('trash.title')}
           </button>
-          <WorkspaceSection onClose={props.onClose} onDialog={props.onWorkspaces} onRemove={props.onRemoveWorkspace} />
-        </>
+        </div>
+      )}
+      {pop && popGroups.length > 0 && (
+        <PopMenu
+          anchor={pop.anchor}
+          label={pop.kind === 'row' ? tr('project.moreNamed', { name: nameOf(pop.id) }) : tr(pop.kind === 'new' ? 'project.newMenu' : 'project.shareMenu')}
+          groups={popGroups}
+          align={pop.kind === 'share' ? 'left' : 'right'}
+          up={pop.kind === 'share'}
+          onClose={() => setPop(null)}
+        />
       )}
     </div>
   );

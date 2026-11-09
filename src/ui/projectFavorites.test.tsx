@@ -99,7 +99,7 @@ async function workspace(schema: number): Promise<{ server: FakeServer; owner: D
 }
 
 const label = (name: string) => document.querySelector<HTMLElement>(`[aria-label="${name}"]`);
-const order = () => [...document.querySelectorAll<HTMLElement>('.project-row .project-label strong')].map((s) => s.textContent);
+const order = () => [...document.querySelectorAll<HTMLElement>('.project-line .project-title strong')].map((s) => s.textContent);
 
 describe('favoritos: lo que la v0.327 guardó en el dispositivo', () => {
   it('pasa una vez a la base y se borra de ahí (lo de otro usuario queda)', async () => {
@@ -124,7 +124,7 @@ describe('selector: la estrella de favorito', () => {
     await settle();
     expect(order()[0]).toBe('Zeta');
     // El resaltado sigue al renglón que se movió.
-    expect(document.querySelector('.project-row.active .project-label strong')!.textContent).toBe('Zeta');
+    expect(document.querySelector('.project-line.active .project-title strong')!.textContent).toBe('Zeta');
     expect(owner.tree.project(z)?.favorite).toBe(true);
     await act(async () => owner.engine.syncNow());
     expect(server.favorites.has(`${server.ownerId}|${z}`)).toBe(true);
@@ -147,7 +147,8 @@ describe('selector: la estrella de favorito', () => {
   it('las entradas de abajo no terminan en «…»', async () => {
     const { server, owner } = await workspace(27);
     await openSwitcher(owner, server.ownerId);
-    const texts = [...document.querySelectorAll<HTMLButtonElement>('.project-menu > button')].map((b) => b.textContent ?? '');
+    // Lo de abajo de la lista (v0.329): el pie, los archivados y los workspaces.
+    const texts = [...document.querySelectorAll<HTMLButtonElement>('.project-menu .project-foot button, .project-menu .project-scroll > button')].map((b) => b.textContent ?? '');
     expect(texts.some((t) => t.startsWith('Share “'))).toBe(true);
     expect(texts.filter((t) => t.endsWith('…'))).toEqual([]);
   });

@@ -217,20 +217,26 @@ export function OfflineLine() {
   );
 }
 
+/** El estado de «sin conexión» de una página o un proyecto marcado, en palabras; `null` si no está marcado. */
+export function offlineTipOf(snapshot: ReturnType<typeof useOffline>, kind: 'page' | 'project', id: string, tr: ReturnType<typeof useT>): string | null {
+  const mark = snapshot.marks.find((m) => m.kind === kind && m.target === id);
+  if (!mark) return null;
+  return mark.state === 'noSpace'
+    ? tr('sidebar.offlineNoSpace')
+    : mark.state === 'downloading' && mark.total > 0
+      ? tr('space.downloading', { done: mark.done, total: mark.total })
+      : mark.state === 'ready'
+        ? tr('sidebar.offlineReady')
+        : tr('sidebar.offlineWaiting');
+}
+
 /** El ícono de una página o un proyecto marcado, con su estado en el `data-tip`. */
 export function OfflineBadge(props: { kind: 'page' | 'project'; id: string }) {
   const snapshot = useOffline();
   const tr = useT();
   const mark = snapshot.marks.find((m) => m.kind === props.kind && m.target === props.id);
-  if (!mark) return null;
-  const tip =
-    mark.state === 'noSpace'
-      ? tr('sidebar.offlineNoSpace')
-      : mark.state === 'downloading' && mark.total > 0
-        ? tr('space.downloading', { done: mark.done, total: mark.total })
-        : mark.state === 'ready'
-          ? tr('sidebar.offlineReady')
-          : tr('sidebar.offlineWaiting');
+  const tip = offlineTipOf(snapshot, props.kind, props.id, tr);
+  if (!mark || !tip) return null;
   return (
     <span className={`offline-badge ${mark.state}`} data-tip={tip} aria-label={tip} role="img">
       <OfflineMarkIcon size={13} />

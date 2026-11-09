@@ -220,6 +220,23 @@ export function editedLabel(iso: string | null, t: Translate = current): string 
 }
 
 /**
+ * La fecha de la columna «Editado» (o «Archivado») de la tabla del selector, en poco ancho: «hoy», «ayer», «4 nov»
+ * (con el año si no es este) y «—» si no hay fecha.
+ */
+export function shortDateLabel(iso: string | null, t: Translate = current): string {
+  if (!iso) return t('project.dayNone');
+  const date = new Date(iso);
+  const today = new Date();
+  const days = Math.round(
+    (new Date(today.toDateString()).getTime() - new Date(date.toDateString()).getTime()) / 86_400_000,
+  );
+  if (days <= 0) return t('project.dayToday');
+  if (days === 1) return t('project.dayYesterday');
+  const sameYear = date.getFullYear() === today.getFullYear();
+  return date.toLocaleDateString(locale(t.lang), { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
+}
+
+/**
  * El cliente de la carpeta del proyecto en Drive (P.14, entrega 2), con la dirección del portero que ya conoce la
  * sincronización. `null` si el workspace no tiene portero o la base todavía no tiene la migración 10.
  */

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PorteroError } from '../media/portero';
@@ -98,7 +99,21 @@ const open = async (host: HTMLElement) => {
   await act(async () => host.querySelector<HTMLButtonElement>('.project-button')!.click());
   await settle();
 };
-const label = (name: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+/** Abre el menú ⋯ del proyecto `name` (v0.329: las acciones de un renglón están ahí); `null` si ese renglón no tiene ⋯. */
+const openMore = (name: string) => {
+  const more = document.querySelector<HTMLButtonElement>(`button[aria-label="Actions for “${name}”"], button[aria-label="Acciones de “${name}”"]`);
+  // `flushSync`: se llama también adentro de un `act` (por ejemplo `act(async () => label(...)!.click())`).
+  if (more && more.getAttribute('aria-expanded') !== 'true') flushSync(() => more.click());
+  return more;
+};
+/** El botón con ese nombre accesible; si es una acción de un renglón, abre antes el ⋯ de ese proyecto. */
+const label = (name: string) => {
+  const direct = document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+  if (direct) return direct;
+  const who = /“(.+?)”/.exec(name)?.[1];
+  if (!who || !openMore(who)) return null;
+  return document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+};
 const byText = (text: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text);
 const rowIds = () => [...document.querySelectorAll('[role="option"]')].map((b) => b.id.replace('project-option-', ''));
@@ -108,13 +123,13 @@ describe('selector: archivar', () => {
     const { server, owner, p, o, q } = await workspace();
     const host = await open$(owner, server.ownerId);
     expect(rowIds().sort()).toEqual([p, o, q].sort());
-    // Íconos con nombre accesible y tooltip propio, sin `title`.
+    // Las acciones del renglón están en su menú ⋯, con texto y nombre accesible con el del proyecto, sin `title`.
     const archive = label('Archive “Bosque Negro”')!;
-    expect(archive.getAttribute('data-tip')).toBe('Archive');
-    expect(label('Delete “Bosque Negro”…')!.getAttribute('data-tip')).toBe('Delete…');
-    expect(label('Rename “Bosque Negro”')!.getAttribute('data-tip')).toBe('Rename');
+    expect(archive.textContent).toBe('Archive');
+    expect(label('Delete “Bosque Negro”…')!.textContent).toBe('Delete…');
+    expect(label('Rename “Bosque Negro”')!.textContent).toBe('Rename');
     expect(document.querySelector('.project-menu [title]')).toBeNull();
-    // La línea "Rename “X”" ya no está: renombrar es el lápiz del renglón.
+    // La línea "Rename “X”" ya no está: renombrar es un renglón del ⋯.
     expect(byText('Rename “My project”')).toBeUndefined();
 
     await act(async () => archive.click());
@@ -145,10 +160,10 @@ describe('selector: archivar', () => {
     await owner.engine.syncNow();
     await open$(owner, server.ownerId);
     const archive = label('Archive “My project”')!;
-    expect(archive.disabled).toBe(true);
+    expect(archive.getAttribute('aria-disabled')).toBe('true');
     // Con archivados, el motivo dice que se puede desarchivar otro.
     expect(archive.getAttribute('data-tip')).toBe('This is your only active project: create or unarchive another one first');
-    expect(label('Delete “My project”…')!.disabled).toBe(true);
+    expect(label('Delete “My project”…')!.getAttribute('aria-disabled')).toBe('true');
     void p;
   });
 
@@ -268,9 +283,10 @@ describe('selector en el teléfono', () => {
     vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('coarse'), addEventListener() {}, removeEventListener() {} }));
     const { server, owner, o } = await workspace();
     await open$(owner, server.ownerId);
-    // Sin los íconos al pasar el mouse.
-    expect(label('Archive “Bosque Negro”')).toBeNull();
-    const more = label('Actions for “Bosque Negro”')!;
+    // Sin el menú flotante del mouse: en el teléfono, el ⋯ despliega la lista debajo del renglón.
+    expect(document.querySelector('button[aria-label="Archive “Bosque Negro”"]')).toBeNull();
+    expect(document.querySelector('.project-pop')).toBeNull();
+    const more = document.querySelector<HTMLButtonElement>('button[aria-label="Actions for “Bosque Negro”"]')!;
     expect(more.getAttribute('aria-expanded')).toBe('false');
     await act(async () => more.click());
     const sheet = document.querySelector('.project-row.opened .project-sheet')!;

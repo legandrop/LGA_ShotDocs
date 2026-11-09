@@ -34,7 +34,7 @@ está a la vista de afuera (sección 5).
 **Quién:** solo el dueño y los admins del workspace que además pueden compartir el proyecto (`perms.canInvite` y
 `canShareProject` en la app; la base vuelve a pedirlo), con la base en la versión 28.
 
-**Dónde:** en el selector de proyectos, *Share scenes of “<proyecto>”* (debajo de *Share “<proyecto>”*), y en el
+**Dónde:** en el selector de proyectos, *Share scenes of “<proyecto>”* (en el menú *Share* de la barra de abajo, con *Share “<proyecto>”*), y en el
 Panorama, en *Scenes*, *Share scenes…* al lado de *Copy overview* (solo en la lista, no dentro de una escena).
 
 **La ventana** (`src/ui/ShareScenesDialog.tsx`):

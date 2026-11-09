@@ -11,6 +11,7 @@ import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
+import { openNewMenu } from '../test/projectRows';
 import { ImportArchiveDialog } from './ImportArchiveDialog';
 import { ProjectSwitcher } from './ProjectSwitcher';
 
@@ -184,7 +185,11 @@ describe('la entrada del selector de proyectos', () => {
     await act(async () => new Promise((r) => setTimeout(r, 20)));
     await act(async () => host.querySelector<HTMLButtonElement>('.project-button')!.click());
   }
-  const entry = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import Shot Docs archive');
+  // Las entradas de importar están en el menú del botón *New* (v0.329).
+  const entry = () => {
+    openNewMenu();
+    return [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import Shot Docs archive');
+  };
 
   it('el dueño la ve y abre la ventana del archivo (no la de Coda)', async () => {
     const server = new FakeServer();

@@ -96,14 +96,56 @@ del navegador y la página no los recibe; ahí se usan sus pestañas (sección s
   ventana; si ninguno la tiene (se llegó con un link), va uno nuevo al principio.
 - Un link a otro workspace o con la autoridad de un link público no se abre en un tab (`appPath`): se abre como siempre.
 
+## El selector de proyectos como tabla (v0.329, D850)
+
+Pedido de Lega (2026-11-08): el selector tenía «poco cariño». Auditado contra la captura (siete íconos casi iguales por
+renglón, la estrella que saltaba de lugar, el dato cortado en «editad…», tres bordes izquierdos, un pie de siete renglones
+iguales que mezclaba tres trabajos), se hicieron tres propuestas y Lega eligió la **C, la tabla**. Esto reemplaza lo que
+dicen más abajo y en `Doc_Proyectos_Borrar.md` sobre los íconos del renglón.
+
+- **Medidas:** 560 px de ancho en el escritorio (`PROJECT_MENU_WIDTH`; la papelera y los demás paneles miden igual, así el
+  menú no cambia de ancho al navegar), con el nombre unos 220 px. La lista se recorre sola (`.project-scroll`): el
+  buscador, los títulos de las columnas y el pie se quedan.
+- **Columnas:** punto de color, **Proyecto** (nombre, «Open» al lado del abierto, y la marca de sin conexión), **Págs.**,
+  **Peso** y **Editado**, con cifras tabulares alineadas a la derecha (`.project-num`). Peso solo si algún proyecto lo
+  muestra (`.no-size`; cuenta el permiso de `canSeeFileTrash`); un proyecto sin peso lleva «—», nunca «0 KB». La fecha es
+  corta (`shortDateLabel`: «hoy», «ayer», «4 nov», con el año si no es este, «—» sin fecha); en los archivados la columna
+  dice **Archivado** y trae la fecha en que se archivó. Cada renglón se lee entero para un lector de pantalla (`aria-label`
+  con nombre, datos y «Open»). En el teléfono (hasta 760 px) no hay columnas: el renglón vuelve a la línea de siempre
+  («páginas · peso · fecha») debajo del nombre.
+- **El renglón abierto** lleva su propio fondo (`--project-current`), que el hover y las flechas no pisan.
+- **Estrella y ⋯ en lugar fijo:** una columna de 28 + 28 px a la derecha de todos los renglones. La estrella de un favorito
+  queda siempre a la vista y en la misma columna; los demás la muestran con el mouse encima, el foco o las flechas. El ⋯
+  igual, y siempre en el teléfono. Si la persona no tiene nada para el ⋯, su lugar queda vacío (nada se corre).
+- **El ⋯ abre un menú flotante con texto** (`PopMenu`, dentro del selector y fijo a la ventana, así tocarlo no cuenta como
+  tocar afuera), en tres grupos: *Available offline…* y *Export project…*; *Color* (con la muestra a la derecha) y
+  *Rename*; *Archive* / *Unarchive* y *Delete…* (rojo, al final). Las mismas condiciones y permisos de siempre; lo apagado
+  trae su motivo en el tooltip (`data-tip`). Escape lo cierra sin cerrar el selector y el foco vuelve al ⋯; tocar afuera,
+  desplazar la lista, cambiar el ancho de la ventana o volver a tocar el ⋯ también; las flechas recorren los
+  renglones (dan la vuelta). Los nombres accesibles de cada entrada son los de siempre («Archive “X”», «Color of “X”»…). En una pantalla
+  táctil sigue la hoja de renglones debajo del proyecto, que ya traía además *Share*.
+- **Arriba, *New*:** el botón de al lado del buscador reúne *New project*, *Import Shot Docs archive* y, para la cuenta de
+  Lega, *Import from Coda* (menú flotante). Solo lo ve quien crea proyectos. Escribir un nombre que no existe ofrece
+  *Create “nombre”* (o Enter), en el lugar de lo que decía el viejo renglón del pie.
+- **Abajo, una barra hundida:** a la izquierda lo del proyecto abierto, *Share* (con escenas disponibles, un menú con *Share
+  “X”* y *Share scenes of “X”*; sin ellas, un botón *Share “X”* directo); a la derecha, *Files by size* (si algún proyecto
+  muestra un peso) y *Trash*. *Archived projects (N)* y los workspaces (`WorkspaceSection`) siguen al final de la lista,
+  con sus íconos en la misma columna que los puntos de los proyectos.
+- **Un solo borde izquierdo:** el ícono de buscar, el punto de cada proyecto y los íconos de abajo comparten una columna
+  de 16 px a 12 px del borde; los textos arrancan a 36 px.
+- **Íconos que quedan** (se entienden más rápido que su texto): buscar, estrella, ⋯, +, flechas de desplegar y, en el pie,
+  *Files by size* y *Trash*. Lo demás pasó a texto.
+- **Pruebas:** `src/ui/projectTable.test.tsx` y los tests del selector ya existentes, que piden las acciones con
+  `src/test/projectRows.ts` (abre el ⋯, el *New* o el *Share* antes de buscar). Arnés visual: `src/dev/barra-lateral.html?proyectos`.
+
 ## Proyectos favoritos (v0.327; sincronizados desde la v0.328)
 
 Pedido de Lega (2026-11-06): una estrella en cada renglón del selector de proyectos para marcarlo como favorito; los
 favoritos se listan antes que los demás.
 
-- **Dónde se ve:** la estrella (`project-star`, `src/ui/ProjectSwitcher.tsx`) va entre el nombre y los íconos del
-  renglón. En un favorito está llena, con el color de acento, y siempre a la vista; en los demás aparece vacía como los
-  íconos (mouse, foco o renglón de las flechas). En el teléfono, siempre (fuera del ⋯: es un toque).
+- **Dónde se ve:** la estrella (`project-star`, `src/ui/ProjectSwitcher.tsx`) va entre el nombre y el ⋯ del
+  renglón (desde la v0.329, en su lugar fijo). En un favorito está llena, con el color de acento, y siempre a la vista; en
+  los demás aparece vacía como el ⋯ (mouse, foco o renglón de las flechas). En el teléfono, siempre (fuera del ⋯: es un toque).
 - **El orden:** `favoritesFirst` pone los favoritos primero y deja el orden de siempre dentro de cada grupo. Vale también
   con una búsqueda escrita y en la lista de archivados. Las flechas y Enter siguen el orden que se ve.
 - **Dónde se guarda (v0.328, pedido de Lega del mismo día):** en la base, `project_favorites` (una fila por persona y
@@ -133,7 +175,7 @@ en cada tab. Los workspaces siguen con sus dos letras (son otra cosa).
   no pide la columna y no ofrece la paleta.
 - **Sin elegir** (`null`): uno de los ocho colores de fábrica según el id (`defaultProjectColor`,
   `src/ui/projectColor.ts`), el mismo en todos los dispositivos. Elegir justo ese color lo deja sin elegir.
-- **Cómo se cambia:** en la lista de proyectos, el ícono de la paleta del renglón (en el teléfono, en su ⋯) abre el
+- **Cómo se cambia:** en la lista de proyectos, *Color* en el ⋯ del renglón (desde la v0.329; antes era el ícono de la paleta) abre el
   picker dentro del selector (`ProjectColorPanel`). `PageTree.colorProject` lo deja pendiente en el dispositivo (anda sin
   red) y `SyncEngine.pushProjectColors` lo sube después de los cambios del árbol; llega a los otros dispositivos con la
   lista de proyectos. **No va en la cola del árbol** (`ops`): una versión anterior de la app que encuentra en su cola un

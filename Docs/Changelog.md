@@ -1,5 +1,19 @@
 # Changelog — LGA Shot Docs
 
+v0.329 :
+
+Lega pidió rediseñar el selector de proyectos: tenía siete íconos casi iguales por renglón (dos descargas, pincel y lápiz
+para «editar», archivar pegado a borrar), la estrella saltaba de lugar, el dato se cortaba y el pie eran siete renglones
+iguales sin jerarquía. Ahora es una tabla (propuesta C): títulos de columnas (Project, Pages, Size, Edited) y cada
+proyecto en un renglón con su punto de color, su nombre, sus datos alineados a la derecha y, siempre en el mismo lugar,
+la estrella y un ⋯ que abre un menú con texto (*Available offline…*, *Export project…*, *Color…*, *Rename…*, *Archive*,
+*Delete…*, apagados con su motivo en el tooltip cuando no se pueden). Junto al buscador, *New ▾* reúne *New project* y los
+dos importar; el pie queda en *Share ▾* (el proyecto y sus escenas), *Files by size* y *Trash*. Mismos permisos que antes
+en cada entrada. En el teléfono se mantiene la hoja con la línea de datos bajo el nombre. Los títulos van pegados adentro
+de la lista (alineados con una barra de desplazamiento clásica), las flechas del buscador desplazan la lista hasta el
+renglón activo y el menú del ⋯ se maneja con el teclado (flechas, Esc, Tab). Se actualizan la ayuda y los docs.
+Pruebas: `src/ui/projectTable.test.tsx` y las del selector adaptadas. [ v0.329: Selector de proyectos como tabla - datos en columnas, estrella y menú ⋯ con texto, New y Share desplegables ]
+
 v0.328 :
 
 Lega pidió que los proyectos favoritos de la v0.327 se sincronicen entre sus dispositivos: la v0.327 los guardaba solo

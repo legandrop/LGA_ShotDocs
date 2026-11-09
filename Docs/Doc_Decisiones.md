@@ -2895,3 +2895,13 @@ farmacia», «duerme como un tronco»), no se agrega. Cortos: unos 40 caracteres
 229 renombres, solo el título, con el código adelante como antes y ningún « | » dentro del nombre (la barra lateral parte
 el título por ahí); el contenido, el código interno y los links no se
 tocan.
+
+### D850 · El selector de proyectos como tabla (2026-11-08)
+**Pedido de Lega:** rediseñar el menú de proyectos: espacios, íconos, decidir qué es ícono y qué es texto («tiene poco
+cariño»). **Qué pasaba:** siete íconos casi iguales por renglón, la estrella que saltaba de lugar, el dato cortado, tres
+bordes izquierdos y un pie de siete renglones iguales que mezclaba tres trabajos. **Decidido:** de tres propuestas (A
+silenciosa, B con el proyecto abierto arriba, C tabla), **la C**: columnas de páginas, peso y fecha; estrella y ⋯ en un
+lugar fijo; las acciones del renglón en un menú ⋯ con texto; *New* junto al buscador (crear e importar); y una barra de
+abajo con *Share*, *Files by size* y *Trash*. Íconos que quedan: buscar, estrella, ⋯, +, flechas, *Files by size* y
+*Trash*. Detalle: `Doc_Navegacion.md`, «El selector de proyectos como tabla».
+

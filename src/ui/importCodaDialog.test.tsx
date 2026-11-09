@@ -11,6 +11,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { canPickFolders, ImportCodaDialog } from './ImportCodaDialog';
+import { openNewMenu } from '../test/projectRows';
 import { AccountMenu } from './menus';
 import { ProjectSwitcher } from './ProjectSwitcher';
 
@@ -182,7 +183,11 @@ describe('importar de Coda, solo para la cuenta de Lega', () => {
     await act(async () => host.querySelector<HTMLButtonElement>('.project-button')!.click());
   }
 
-  const importEntry = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import from Coda');
+  // Las entradas de importar están en el menú del botón *New* (v0.329).
+  const importEntry = () => {
+    openNewMenu();
+    return [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import from Coda');
+  };
 
   it('con otro correo no aparece la entrada', async () => {
     setCodaOwnerForTests({ hash: sha256('otra-persona@ejemplo.com') });

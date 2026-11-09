@@ -112,6 +112,10 @@ const openSwitcher = async (host: HTMLElement) => {
   await settle();
 };
 const rowText = (id: string) => document.getElementById(`project-option-${id}`)?.textContent ?? '';
+/** La línea de datos de un renglón (la del teléfono): «0 pages · 3.4 GB · edited today». */
+const metaOf = (id: string) => document.getElementById(`project-option-${id}`)?.querySelector('.project-meta')?.textContent ?? '';
+/** Las celdas de la tabla de un renglón: páginas, peso (si hay columna) y fecha. */
+const cellsOf = (id: string) => [...(document.getElementById(`project-option-${id}`)?.querySelectorAll('.project-num') ?? [])].map((c) => c.textContent);
 
 describe('selector de proyectos', () => {
   it('muestra el peso entre las páginas y la fecha, sin peso en cero, y no vuelve a pedir antes de 5 minutos', async () => {
@@ -119,8 +123,11 @@ describe('selector de proyectos', () => {
     expect(server.sizesCalls).toBe(0);
     const host = await mount(services(owner, server.ownerId), <ProjectSwitcher />);
     await openSwitcher(host);
-    await vi.waitFor(() => expect(rowText(server.workspaceId)).toMatch(/My project0 pages · 3\.4 GB · /));
-    expect(rowText(second)).not.toMatch(/KB|MB|GB/);
+    await vi.waitFor(() => expect(metaOf(server.workspaceId)).toMatch(/^0 pages · 3\.4 GB · /));
+    // La tabla: páginas, peso y fecha en columnas; un proyecto sin peso lleva una raya (nunca «0 KB»).
+    expect(cellsOf(server.workspaceId)).toEqual(['0', '3.4 GB', '—']);
+    expect(cellsOf(second)).toEqual(['0', '—', '—']);
+    expect(metaOf(second)).not.toMatch(/KB|MB|GB/);
     expect(server.sizesCalls).toBe(1);
 
     // Cerrar y volver a abrir enseguida no pide de nuevo; muestra lo guardado.
@@ -130,7 +137,8 @@ describe('selector de proyectos', () => {
     expect(server.sizesCalls).toBe(1);
 
     act(() => prefs.set({ language: 'es' }));
-    expect(rowText(server.workspaceId)).toMatch(/0 páginas · 3,4 GB · /);
+    expect(metaOf(server.workspaceId)).toMatch(/^0 páginas · 3,4 GB · /);
+    expect(cellsOf(server.workspaceId)).toEqual(['0', '3,4 GB', '—']);
   });
 
   it('quien no ve la papelera de archivos del proyecto no ve el peso, aunque haya uno guardado', async () => {

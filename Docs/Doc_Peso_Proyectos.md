@@ -17,7 +17,8 @@ borra o la reemplaza." En el roadmap, P.7 y P.8.
 - **Quién lo ve:** quien ya ve la papelera de archivos del proyecto (`private.can_see_file_trash`): el dueño,
   los admins con algún permiso sobre el proyecto entero y quien tiene "Editar y crear páginas" sobre el
   proyecto entero. Ver, Comentar, Editar e invitados, no.
-- **Dónde:** en el renglón de cada proyecto del selector ("12 páginas · 3,4 GB · editado hoy"); en el diálogo de
+- **Dónde:** en el renglón de cada proyecto del selector (desde la v0.329, la columna **Peso** de la tabla; en el teléfono,
+  la línea "12 páginas · 3,4 GB · editado hoy" de siempre); en el diálogo de
   Google Drive (solo el dueño), una sección *Espacio en Drive* con el total, el detalle por proyecto y el
   desglose; y arriba de la pestaña Archivos de la papelera (sumado en el cliente).
 - **Caché:** en la base local (`meta`, clave `projectSizes`), pedido como mucho cada 5 minutos; sin red, el
@@ -257,7 +258,8 @@ más pesado al más liviano, cada uno con su tipo (foto, video, carpeta o archiv
 que lo usan. Solo lectura: no borra ni reemplaza nada.
 
 **Dónde se abre.** En el selector de proyectos, que es donde se ve el peso de cada uno: un renglón *Files by
-size* al pie de la lista, arriba de *Trash*, que aparece si algún proyecto muestra un peso. La lista se abre
+size* al pie de la lista, arriba de *Trash*, que aparece si algún proyecto muestra un peso (desde la v0.329, un botón de la
+barra de abajo del selector, al lado de *Trash*). La lista se abre
 adentro del mismo selector, como la papelera, con la flecha para volver y Escape. Abre el proyecto abierto o, si
 ese no pesa, el más pesado; arriba hay un desplegable para elegir entre los proyectos que muestran un peso, del
 más pesado al más liviano ("MGTZD · 3,4 GB"). Con uno solo, va su nombre sin desplegable.
