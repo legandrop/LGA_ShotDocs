@@ -2961,3 +2961,19 @@ el proyecto; el proyecto puede sacar correos y artistas, pero no reparte las esc
 escena se ven entre sí, como dos vendors. **Decidido en la implementación:** un artista es un vendor hijo en la misma
 tabla (reusa el acceso que se arma solo, las invitaciones y los frenos); quien ya maneja los vendors del proyecto no ve
 las dos entradas del equipo (los ve todos desde *Share scenes…*). Detalle: `Doc_Compartir_Escenas.md`, sección 12.
+
+### D855 · Importar vendors desde una planilla (2026-11-09)
+**Pedido de Lega:** sumar a los vendors la asignación desde un breakdown en Excel (el de ERSO, 839 planos), sacando de
+cada plano solo la escena (del shot name) y el vendor. **Decidido con Lega:** (1) *Net-Fx* y *Net VFX* son el mismo
+vendor; (2) *Wanka* (el estudio de Lega) se crea como vendor; (3) las escenas de la planilla sin página en el proyecto
+(seguramente surgieron en post) se listan durante la importación, aclarando que no tienen reporte, y no se importan;
+(4) una segunda importación suma y, si una escena cambió de vendor, lo reemplaza con confirmación, sin borrar nunca;
+(5) maqueta primero, aprobada con «sí, implementá». **Decidido en la maqueta y aceptado:** la escena sale del shot name
+(`ERSO_1016_0300` → 1016), no de la columna ESC (en ERSO, 533 filas no coinciden); si el proyecto tiene la escena solo
+con letra, la letra sale del clip (`101_16A2-01-06` → 1016A); una celda con dos vendors se parte por la coma; un nombre
+que se escribe casi igual a otro se propone como el mismo; los reemplazos vienen desmarcados; los vendors nuevos nacen
+sin correos; aplicar solo marca en la tabla, y *Save* guarda. **Decidido en la implementación:** sin librería y sin subir
+nada (el .xlsx se lee en el dispositivo, solo el índice del zip y las hojas: la planilla de ERSO pesa 323 MB por las
+miniaturas); en vez de recordar los nombres unidos, cada importación los vuelve a proponer por la escritura parecida (sin
+tabla nueva en la base); un vendor nuevo se crea aunque la planilla no le deje ninguna escena con página. Detalle:
+`Doc_Compartir_Escenas.md`, sección 13.

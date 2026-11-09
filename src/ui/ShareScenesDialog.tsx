@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent } from 'react';
 import { useT, type Key } from '../i18n';
 import '../i18n/lazy/teamDialogs';
+import '../i18n/lazy/importVendors';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { LEVEL_LABELS } from '../sync/access';
 import type { SceneVendor, SceneVendorsList, VendorLevel, VendorOp, VendorTeam } from '../sync/remote';
@@ -13,6 +14,7 @@ import {
   CommentIcon,
   EyeIcon,
   HistoryIcon,
+  ImportIcon,
   InfoIcon,
   LockIcon,
   MailIcon,
@@ -23,6 +25,7 @@ import {
   UndoIcon,
   WarningIcon,
 } from './icons';
+import { ImportVendorsDialog, type ImportResult } from './ImportVendorsDialog';
 import { inviteAndCopy, useInviteLink } from './MembersDialog';
 import { outsideReadersStore } from './outsideReaders';
 import { loadRecentColors, PROJECT_PRESETS, rememberRecentColor } from './projectColor';
@@ -210,6 +213,9 @@ export function ShareScenesDialog({ projectId, onClose, artists = false }: { pro
   const [view, setView] = useState<View>('all');
   const [location, setLocation] = useState('');
   const [set, setSet] = useState('');
+  // *Import from spreadsheet…* (D855): abierta, y lo que dejó marcado (hasta guardar o cerrar el aviso).
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<ImportResult['summary'] | null>(null);
   const anchor = useRef<string | null>(null);
   const headCheck = useRef<HTMLInputElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
@@ -227,12 +233,12 @@ export function ShareScenesDialog({ projectId, onClose, artists = false }: { pro
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (picking) return;
+      if (picking || importing) return;
       onClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, picking]);
+  }, [onClose, picking, importing]);
 
   useEffect(() => {
     let live = true;
@@ -519,6 +525,41 @@ export function ShareScenesDialog({ projectId, onClose, artists = false }: { pro
     });
   }
 
+  /** Si la importación le puede dar una escena a un vendor (`null`: uno nuevo, que nace con el nivel más alto que se da). */
+  function canImport(pageId: string, vendorKey: string | null): boolean {
+    const v = vendorKey ? live.find((x) => x.key === vendorKey) : null;
+    if (v && v.level === 'comment' && cap < 2) return false;
+    return !blockedIds.has(pageId) && !needsMark(pageId);
+  }
+
+  /** Lo que aplica la importación: queda en el borrador, como si se hubiera marcado a mano, hasta *Save*. */
+  function applyImport(r: ImportResult) {
+    const created: WorkVendor[] = r.create.map((c) => ({
+      key: `new:${++counter.current}`,
+      id: null,
+      name: c.name,
+      code: c.code,
+      color: c.color,
+      level: cap >= 2 ? 'comment' : 'view',
+      emails: [],
+      scenes: c.scenes,
+      deleted: false,
+    }));
+    setWork((all) => [
+      ...all.map((v) => {
+        const add = r.add.get(v.key) ?? [];
+        const rm = r.remove.get(v.key) ?? [];
+        if (v.deleted || (add.length === 0 && rm.length === 0)) return v;
+        return { ...v, scenes: [...v.scenes.filter((id) => !rm.includes(id)), ...add.filter((id) => !v.scenes.includes(id))] };
+      }),
+      ...created,
+    ]);
+    setImporting(false);
+    setImported(r.summary);
+    setSel('all');
+    setView('all');
+  }
+
   function deleteVendor() {
     if (!current) return;
     if (!current.id) setWork((all) => all.filter((v) => v.key !== current.key));
@@ -572,6 +613,7 @@ export function ShareScenesDialog({ projectId, onClose, artists = false }: { pro
         if (editor && result.reset.length > 0) gate.after({ pageIds: result.reset }, true, projectName);
         if (!artists) void outsideReadersStore(services)?.invalidate(projectId);
         keepSelected.current = sel.startsWith('new:') ? (result.keys[sel] ?? null) : sel;
+        setImported(null);
         setReload((n) => n + 1);
       } catch (err) {
         if (err === UNSYNCED_BEFORE_SHARE) return;
@@ -793,6 +835,35 @@ export function ShareScenesDialog({ projectId, onClose, artists = false }: { pro
             {tr('scenes.share.cleanOff')}
           </p>
         )}
+        {imported && (
+          <p className="share-vendors-imported" role="status">
+            <ImportIcon size={14} />
+            <span>
+              {tr('scenes.import.applied', {
+                what: [
+                  tr('scenes.import.appliedAdds', { count: imported.adds }),
+                  imported.replaced > 0 ? tr('scenes.import.appliedRm', { count: imported.replaced }) : '',
+                  imported.created > 0 ? tr('scenes.import.newVendors', { count: imported.created }) : '',
+                ]
+                  .filter(Boolean)
+                  .join(', '),
+              })}
+            </span>
+            <button type="button" className="icon-button" aria-label={tr('common.close')} onClick={() => setImported(null)}>
+              <CloseIcon size={14} />
+            </button>
+          </p>
+        )}
+        {importing && (
+          <ImportVendorsDialog
+            projectName={projectName}
+            scenes={tableRows.map((r) => ({ pageId: r.pageId, code: r.code, label: r.label, name: r.name }))}
+            vendors={live.map((v) => ({ key: v.key, name: v.name, code: v.code, color: v.color, scenes: v.scenes }))}
+            canAssign={canImport}
+            onApply={applyImport}
+            onClose={() => setImporting(false)}
+          />
+        )}
 
         <div className="share-vendors-grid">
           <aside className="share-vendors-rail" aria-label={tr(T.list)}>
@@ -814,6 +885,18 @@ export function ShareScenesDialog({ projectId, onClose, artists = false }: { pro
               <PlusIcon size={14} />
               {tr(T.add)}
             </button>
+            {!artists && (
+              <button
+                type="button"
+                className="share-vendors-add share-vendors-import"
+                onClick={() => setImporting(true)}
+                disabled={list === null}
+                data-tip={tr('scenes.import.buttonTip')}
+              >
+                <ImportIcon size={14} />
+                {tr('scenes.import.button')}
+              </button>
+            )}
           </aside>
 
           <div className={`share-vendors-main${current ? '' : ' overview'}`}>

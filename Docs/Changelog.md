@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.335 :
+
+Lega pidió cargar la asignación de vendors desde el breakdown de ERSO en Excel (D855). Ahora la ventana de vendors trae
+*Import from spreadsheet…*, en tres pasos: el archivo (encuentra sola la hoja y las columnas de shot name, vendor y clip,
+aunque haya filas de resumen arriba, con una muestra), los vendors (cada nombre se une, se crea con código y color, o se
+omite; *Net VFX* se propone como *Net-Fx*) y revisar (lo que se suma, lo que cambia de vendor con confirmación, lo que
+resolvió la letra del clip y las escenas sin página, que no se importan). La escena sale del shot name, no de la columna
+ESC. Se lee en el dispositivo y sin librería: del zip, solo el índice y las hojas (la de ERSO pesa 323 MB por las
+miniaturas). Aplicar marca en la tabla; *Save* guarda. La auditoría encontró que con dos episodios que terminan igual
+(101 y 201) se elegía la primera escena: ahora no se adivina y queda para asignar a mano. También el CSV con resumen
+arriba, parecidos sin marca de sugerido y textos. Ayuda, README, docs y pruebas. [ v0.335: Importar vendors desde una planilla - la escena del shot name, reemplazos con confirmación y nada se guarda hasta Save ]
+
 v0.334 :
 
 Lega pidió que un vendor (el productor o el coordinador de post) pueda compartirle todo a otra persona de su equipo y

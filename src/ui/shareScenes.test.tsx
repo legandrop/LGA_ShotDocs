@@ -769,6 +769,97 @@ describe('Share scenes: la ventana con vendors', () => {
     expect(document.querySelector('.share-vendor-hint.err')?.textContent).toContain('up to your own access');
     expect(document.querySelector('.share-vendor-mails')!.textContent).not.toContain('nora@dneg.test');
   });
+
+  it('importar desde una planilla: une y crea vendors, reemplaza solo lo confirmado, y nada se guarda hasta Save', async () => {
+    const { server, owner, built } = await workspace();
+    const { s027, s029, s025 } = built.ids;
+    const s4008 = built.ids.s008;
+    await twoVendors(owner, built);
+    mount(owner, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(() => rows() === 6 && railItem('DNEG'), 'las escenas y los vendors');
+    click(byText('Import from spreadsheet…'));
+    const dialog = () => document.querySelector('.vimport')!;
+    const csv = [
+      'Breakdown,,',
+      'SHOTNAME,VENDOR,NOTAS',
+      'ERSO_4008_0100,Boat,',
+      'ERSO_5027_0100,DNEG,',
+      'ERSO_5029_0100,Net VFX,',
+      'ERSO_5029_0200,Net-Fx,',
+      'ERSO_4009_0100,Net-Fx,',
+      'ERSO_9001_0100,Boat,de post',
+      'ERSO_5025_0100,,',
+    ].join('\n');
+    const input = dialog().querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, 'files', { configurable: true, value: [new File([csv], 'breakdown.csv', { type: 'text/csv' })] });
+    await act(async () => void input.dispatchEvent(new Event('change', { bubbles: true })));
+    await until(() => dialog().textContent?.includes('Header on row 2 · 7 shots'), 'la planilla leída');
+    expect(dialog().querySelector('.vimport-sample')!.textContent).toContain('No page in this project');
+
+    click(byText('Next', dialog()));
+    const mapping = () =>
+      [...dialog().querySelectorAll('.vimport-vm:not(.head)')].map((r) => `${r.querySelector('.vimport-src b')!.textContent}=${r.querySelector('select')!.selectedOptions[0].text}`);
+    expect(mapping()).toEqual(['Boat=Create new vendor', 'Net-Fx=Create new vendor', 'DNEG=Project vendor: DNEG', 'Net VFX=Same as “Net-Fx”']);
+    expect(dialog().textContent).toContain('suggested: spelled almost the same');
+
+    click(byText('Review', dialog()));
+    const cards = () => [...dialog().querySelectorAll('.vimport-card')].map((c) => c.textContent);
+    expect(cards()).toEqual(['+3assignments in 3 scenes', '2scenes change vendor', '0resolved by the clip letter', '1scene with no page: not imported']);
+    // 5027: Framestore ya no figura; 5029: DNEG ya no figura (la planilla dice Net VFX = Net-Fx). Se confirma solo 5027.
+    const change = (code: string) => [...dialog().querySelectorAll('.vimport-li')].find((l) => l.querySelector('.num')?.textContent === code)!;
+    expect(change('5027').textContent).toContain('Also stays in Framestore');
+    click(change('5027').querySelector('input'));
+    expect(change('5027').textContent).toContain('Removed from Framestore');
+    expect(dialog().textContent).toContain('9001');
+    click(byText('Apply to table', dialog()));
+    expect(document.querySelector('.vimport')).toBeNull();
+    expect(document.querySelector('.share-vendors-imported')!.textContent).toContain('+3 assignments, 1 replacement, 2 new vendors');
+    // Nada guardado todavía.
+    expect(server.vendors.map((v) => v.name).sort()).toEqual(['DNEG', 'Framestore']);
+    expect(footer()).toContain('FS−1');
+
+    await act(async () => saveButton().click());
+    await until(() => server.vendors.length === 4, 'los vendors nuevos guardados');
+    const scenesOf = (name: string) => [...server.vendors.find((v) => v.name === name)!.scenes].sort();
+    expect(scenesOf('Boat')).toEqual([s4008]);
+    expect(scenesOf('Net-Fx')).toEqual([built.ids.s009, s029].sort());
+    expect(scenesOf('DNEG')).toEqual([s027, s029].sort());
+    expect(scenesOf('Framestore')).toEqual([]);
+    expect(server.vendors.find((v) => v.name === 'Net-Fx')).toMatchObject({ code: 'NFX', emails: [] });
+    expect(server.vendors.some((v) => v.scenes.includes(s025))).toBe(false);
+    await until(() => !document.querySelector('.share-vendors-imported'), 'el aviso se va al guardar');
+  });
+
+  it('importar sin poder editar: la escena sin marca no se asigna, y Escape cierra solo la importación', async () => {
+    const { server, owner, built } = await workspace();
+    await setPageType(owner.tree, built.ids.s008, 'scene');
+    await owner.engine.syncNow();
+    server.addMember('quinn', 'member', 'quinn@test');
+    server.grant('quinn', { projectId: built.projectId }, 'view');
+    server.grants.find((g) => g.user_id === 'quinn' && g.project_id === built.projectId)!.share_scenes = true;
+    const quinn = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: 'quinn', email: 'quinn@test' });
+    devices.push(quinn);
+    await quinn.engine.syncNow();
+    await quinn.engine.syncNow();
+    mount(quinn, <ShareScenesDialog projectId={built.projectId} onClose={() => undefined} />);
+    await until(loaded, 'las escenas');
+    click(byText('Import from spreadsheet…'));
+    const dialog = () => document.querySelector('.vimport');
+    const csv = ['SHOTNAME,VENDOR', 'ERSO_5027_0100,Boat', 'ERSO_4008_0100,Boat'].join('\n');
+    const input = dialog()!.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, 'files', { configurable: true, value: [new File([csv], 'b.csv', { type: 'text/csv' })] });
+    await act(async () => void input.dispatchEvent(new Event('change', { bubbles: true })));
+    await until(() => dialog()!.textContent?.includes('2 shots'), 'la planilla leída');
+    click(byText('Next', dialog()!));
+    click(byText('Review', dialog()!));
+    // 5027 no tiene la marca de escena y quinn no puede editar: va a «No se pueden asignar», no a lo que se suma.
+    expect(dialog()!.textContent).toContain("Can't be assigned");
+    expect([...dialog()!.querySelectorAll('.vimport-card')][0].textContent).toBe('+1assignments in 1 scene');
+    // Escape: se cierra la importación, la ventana de vendors sigue abierta.
+    await act(async () => void document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(dialog()).toBeNull();
+    expect(document.querySelector('.share-scenes')).not.toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------------------------

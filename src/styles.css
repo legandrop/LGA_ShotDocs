@@ -6648,6 +6648,500 @@ svg.sd-markup text {
   padding: 7px 18px;
 }
 
+/* *Import from spreadsheet…* (Doc_Compartir_Escenas.md, sección 13, D855): el botón bajo *New vendor*, el aviso de lo que
+   dejó marcado, y su ventana en tres pasos (archivo, vendors, revisar), encima de la de vendors. */
+.share-vendors-import {
+  margin-top: -4px;
+}
+.share-vendors-imported {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.share-vendors-imported span {
+  flex: 1;
+}
+.share-vendors-imported svg {
+  flex: none;
+  color: var(--accent-text);
+}
+.vimport-backdrop {
+  z-index: 61;
+}
+.modal.share-scenes.vimport {
+  width: min(980px, 100%);
+}
+.vimport-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.vimport-step-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.vimport-step-sep {
+  width: 18px;
+  height: 1px;
+  background: var(--border);
+}
+.vimport-step {
+  gap: 8px;
+  padding: 4px 12px 4px 6px;
+  border-color: transparent;
+  border-radius: 99px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.vimport-step b {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font: 600 12px var(--mono);
+}
+.vimport-step[aria-current='step'] {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.vimport-step[aria-current='step'] b {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--menu-bg);
+}
+.vimport-step.done b {
+  border-color: color-mix(in srgb, var(--ok) 50%, var(--border));
+  color: var(--ok);
+}
+.vimport-step:disabled {
+  opacity: 0.55;
+}
+.vimport-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.vimport-drop {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px 20px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.vimport-drop p {
+  margin: 0;
+  max-width: 60ch;
+}
+.vimport-drop.over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.vimport-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.vimport-file-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+}
+.vimport-file-text b {
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.vimport-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.vimport-cols-sheet {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+.vimport-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.vimport-field select,
+.vimport-field input {
+  width: 100%;
+}
+.vimport-field input {
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.vimport-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.vimport-label b {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.vimport-why {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--faint);
+}
+.vimport-why.err {
+  color: var(--danger);
+}
+.vimport-why svg {
+  flex: none;
+  margin-top: 1px;
+}
+.vimport-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.vimport-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--faint);
+}
+.vimport-lead {
+  margin: 0;
+}
+.vimport-sample {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.vimport-sample th {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: left;
+}
+.vimport-sample td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-2);
+}
+.vimport-sample td.warn {
+  color: var(--warn);
+}
+.vimport-vmap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.vimport-vm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1.8fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.vimport-vm:last-child {
+  border-bottom: 0;
+}
+.vimport-vm.head {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.vimport-vm.skip .vimport-src {
+  opacity: 0.5;
+}
+.vimport-src {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.vimport-src b {
+  font-size: 13.5px;
+}
+.vimport-dst {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.vimport-dst .vimport-name {
+  flex: 1 1 120px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.vimport-dst .share-vendor-code {
+  width: 64px;
+}
+.vimport-tag {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.vimport-tag.new {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent-text);
+}
+.vimport-tag.merge {
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+  color: var(--warn);
+}
+.vimport-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.vimport-card {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  text-align: left;
+}
+.vimport-card .n {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.vimport-card .l {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.vimport-card.add .n {
+  color: var(--accent-text);
+}
+.vimport-card.change .n {
+  color: var(--warn);
+}
+.vimport-card.skip .n {
+  color: var(--faint);
+}
+.vimport-card[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--project-current);
+}
+.vimport-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+  font-size: 13.5px;
+}
+.vimport-group h3 .n {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--faint);
+}
+.vimport-group h3 svg {
+  color: var(--warn);
+}
+.vimport-group > p {
+  margin: 0 0 10px;
+  max-width: 80ch;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.vimport-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.vimport-allrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.vimport-spacer {
+  margin-left: auto;
+}
+.vimport-li {
+  display: grid;
+  grid-template-columns: 22px 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+.vimport-li:last-child {
+  border-bottom: 0;
+}
+.vimport-li.nocb {
+  grid-template-columns: 130px minmax(0, 1fr) auto;
+  cursor: default;
+}
+.vimport-li.on {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+.vimport-li .num {
+  font-weight: 600;
+}
+.vimport-li .tt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+.vimport-li .tt small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.vimport-flow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+}
+.vimport-flow .ar {
+  color: var(--faint);
+}
+.vimport-byv {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vimport-bv {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.vimport-bv .hd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.vimport-bv .codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.vimport-bv .codes span {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--active);
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.vimport-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vimport-tags > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.vimport-tags .share-vchip {
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10.5px;
+}
+@media (max-width: 760px) {
+  .vimport-step-sep {
+    display: none;
+  }
+  .vimport-cols,
+  .vimport-cols-sheet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vimport-vm {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .vimport-vm.head {
+    display: none;
+  }
+  .vimport-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .vimport-bv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vimport-li {
+    grid-template-columns: 22px 56px minmax(0, 1fr);
+  }
+  .vimport-li.nocb {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+  .vimport-li > .vimport-flow {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+  .vimport-li.nocb > .vimport-flow {
+    grid-column: 1 / -1;
+  }
+  .vimport-sample th:nth-child(3),
+  .vimport-sample td:nth-child(3) {
+    display: none;
+  }
+}
+
 /* En una pantalla mediana: la lista de vendors arriba, en una fila que se desplaza de costado. */
 @media (max-width: 900px) {
   .share-vendors-grid {

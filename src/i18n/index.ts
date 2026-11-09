@@ -13,6 +13,7 @@ import type { filesBySize } from './lazy/filesBySize';
 import type { help } from './lazy/help';
 import type { folders } from './lazy/folders';
 import type { history } from './lazy/history';
+import type { importVendors } from './lazy/importVendors';
 import type { importArchive } from './lazy/importArchive';
 import type { importCoda } from './lazy/importCoda';
 import type { installDialog } from './lazy/install';
@@ -56,6 +57,7 @@ type LazyStrings = typeof annotator &
   typeof help &
   typeof folders &
   typeof history &
+  typeof importVendors &
   typeof importArchive &
   typeof importCoda &
   typeof installDialog &

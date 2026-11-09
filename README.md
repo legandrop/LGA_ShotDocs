@@ -70,6 +70,8 @@ The app runs at **[shotdocs.lega.com.ar](https://shotdocs.lega.com.ar)**. Each t
   An eye in the page tree marks what people outside the team can see.
 - A vendor's team adds people who see all its scenes and splits them among its artists, each seeing only theirs;
   the project sees and can remove everything set up under each vendor.
+- Import the vendor of each scene from a breakdown in Excel or CSV (the scene comes from the shot name), with a
+  review of what changes before anything is saved.
 - *Anyone with the link* for a page and the pages inside: *Can view* (also comments, with a name) or *Can edit*
   once the workspace turns it on; no account needed.
 - Access requests from a file link, a page link or a scene link.

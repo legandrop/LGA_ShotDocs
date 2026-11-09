@@ -15,6 +15,7 @@ import { folders } from '../i18n/lazy/folders';
 import { history } from '../i18n/lazy/history';
 import { importArchive } from '../i18n/lazy/importArchive';
 import { importCoda } from '../i18n/lazy/importCoda';
+import { importVendors } from '../i18n/lazy/importVendors';
 import { installDialog } from '../i18n/lazy/install';
 import { map } from '../i18n/lazy/map';
 import { oauthConsent } from '../i18n/lazy/oauthConsent';
@@ -146,6 +147,7 @@ const DICT = Object.assign(
   history,
   importArchive,
   importCoda,
+  importVendors,
   installDialog,
   map,
   oauthConsent,

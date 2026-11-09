@@ -744,3 +744,85 @@ El dueño ve todo lo que se armó debajo de cada vendor y lo puede sacar. Lega a
   de un vendor se aceptó (D854). Separar los comentarios sigue para otra tanda (sección 11.6).
 - Con la v0.331 a la 0.333 abierta, el proyecto no ve a los artistas (sí el arrastre); `min_app_version` sube a la 0.334
   apenas se publica.
+
+## 13. Importar vendors desde una planilla (v0.335, D855)
+
+Desde la ventana de vendors, *Import from spreadsheet…* (debajo de *New vendor*, solo en la del proyecto) asigna escenas a
+vendors desde un breakdown en Excel o CSV. Lo usan los mismos que manejan los vendors. No hay nada nuevo en la base: la
+importación arma el borrador de la ventana y *Save* lo manda con `save_scene_vendors`, con todas sus reglas.
+
+### 13.1 Leer la planilla (`vendorImport.ts`)
+
+- **En el dispositivo, sin librería.** Un .xlsx es un zip de XML: se leen del archivo solo el final (el directorio
+  central) y las partes que hacen falta (`workbook.xml`, sus relaciones, `sharedStrings.xml` y las hojas), con
+  `Blob.slice`, y se descomprimen con `DecompressionStream('deflate-raw')`. Las imágenes nunca se leen: la planilla de
+  ERSO pesa 323 MB por las miniaturas de cada plano y se lee en 0,3 s. Las hojas ocultas no se ofrecen. Un CSV (hasta
+  50 MB) se parte con comillas y el separador que más aparece en el primer renglón. Un .xls viejo, un .numbers o un zip
+  roto dan «guardalo como .xlsx o .csv»; ZIP64 (más de 4 GB) no se lee.
+- **El encabezado** se busca en las primeras 40 filas: la que tiene una columna de shot (`SHOTNAME`, `Shot name`,
+  `Shot`, `Plano`…) y una de vendor (`VENDOR`, `Proveedor`…); la letra, si hay una de clip (`SUBCLIP`, `Clip`). Se
+  propone la primera hoja que lo tiene. Si no lo encuentra, se elige la fila del encabezado y las columnas a mano.
+
+### 13.2 De cada plano, la escena y sus vendors
+
+- **La escena sale del shot name**: `<prefijo>_<escena>_<plano>` (`ERSO_1016_0300` → 1016, `ERSO_1033A_0100` → 1033A,
+  `PROY_074_010` → 074). Se cruza con la clave de cada escena del proyecto en la misma forma (`101_016A` → 1016A). La
+  columna ESC de una planilla no se usa: en la de ERSO, 533 filas no coinciden (`1001.0`, `101.0` por 1001).
+- **Dos episodios que terminan igual** (101_016 y 201_016 dan los dos 1016): la clave queda sin escena y el plano va a
+  «No se pudo saber cuál», como hace el resto de la app (`episodeOfDigit`): no se adivina. Un episodio sin una sola
+  cifra de post (110) no tiene clave.
+- **La letra, del clip**, solo si el proyecto tiene esa escena con letra y no sin ella: `101_16A2-01-06` → 1016A (el
+  número del clip tiene que ser el de la escena, y si el clip dice el episodio, también: `102_16A…` no es de la 1016).
+  Si el clip no la dice, la escena va a «No se pudo saber cuál».
+- **Los vendors**: la celda se parte por coma, punto y coma o barra.
+- **El CSV**: el separador es el que está en más renglones de los primeros 40 (un renglón de resumen con una coma arriba
+  de un CSV con punto y coma no lo cambia). El Excel se lee también con etiquetas con prefijo (`<x:row>`); una parte
+  que descomprimida pasa los 256 MB se corta con «muy grande».
+- Una fila cuyo shot name no tiene esa forma se saltea y se cuenta.
+
+### 13.3 Los pasos
+
+1. **Archivo**: la hoja, la fila del encabezado, las tres columnas y una muestra de hasta cinco planos distintos (uno
+   exacto, uno con dos vendors, uno resuelto por la letra, uno sin página). *Next* pide que la columna de shot tenga al
+   menos la mitad de shot names y que haya algún vendor.
+2. **Vendors**: cada nombre de la planilla, con cuántos planos y escenas, se une a un vendor del proyecto, se crea (código
+   propuesto: `Wanka` → WAN, `Boat` → BOAT, `Many-Worlds` → MW, `Net-Fx` → NFX; el primer color libre de la paleta de
+   proyectos), se une a otro nombre de la planilla o se omite. Se propone unir a un vendor del proyecto que se escribe igual
+   o a una letra (`similarNames`), y si no, a otro nombre más usado (o, empatados, el primero) que se escribe casi igual.
+   Todo lo que no es el mismo nombre o código (`sameVendor`) lleva «sugerido», también un vendor del proyecto parecido
+   (`Wanko` → *Wanka*), y la marca sigue al volver al paso. Una unión va siempre al nombre final, nunca en cadena. El código
+   propuesto no repite el de otro vendor (`WAN` → `WAN2`). Cambiar la columna del plano o de la letra no borra lo elegido;
+   la de vendor, sí. Cada vendor nuevo necesita nombre.
+3. **Revisar**: cuatro números que filtran la lista (lo que se suma, lo que cambia de vendor, lo resuelto por la letra,
+   lo que no tiene página) y el detalle: se suman (por vendor); cambian de vendor (la escena está en un vendor que la
+   planilla ya no le da: marcada, se le saca; sin marcar, se queda y el nuevo se suma; vienen desmarcadas); resueltas por
+   la letra; no se pudo saber cuál; no se pueden asignar (bloqueadas, sin la marca de escena y quien importa no edita, o un
+   vendor en Comentar con quien importa en Ver); sin página («seguramente surgieron en post: no se importan»); sin vendor.
+   Las escenas de la planilla son las únicas que se miran: las demás no se tocan, y ningún vendor se borra. Si el total pasa los
+   1000 cambios de escenas de un *Save*, no deja aplicar y lo dice.
+
+**Aplicar** cierra la ventana y deja todo en el borrador de la de vendors, como si se hubiera marcado a mano (los vendors
+nuevos, sin correos, con el nivel más alto que da quien importa), con un aviso arriba de lo que se marcó, que se va al
+guardar. Escape cierra solo la importación.
+
+### 13.4 Pruebas
+
+- `vendorImport.test.ts`: el zip (comprimido y guardado tal cual) con una hoja oculta, texto compartido, en línea y con
+  formato; el CSV; los errores; el encabezado con filas de resumen arriba; la escena y la letra; los nombres parecidos y
+  el empate; lo propuesto; el análisis con todos los casos; lo que cambia contra lo asignado.
+- `vendorImport.test.ts`, «lo que encontró la auditoría»: 101 y 201, el episodio 110 y el del clip, el CSV con resumen
+  arriba y comillas con espacio, `sameVendor`, sin cadenas de uniones, códigos sin repetir, entidades fuera de rango, `<t/>`
+  vacío y etiquetas con prefijo.
+- `shareScenes.test.tsx`, «importar desde una planilla»: de punta a punta contra el servidor en memoria (une, crea,
+  reemplaza solo lo confirmado, nada se guarda hasta *Save*); e «importar sin poder editar»: la escena sin marca va a «No se
+  pueden asignar», y Escape cierra solo la importación.
+- Contra la planilla real de ERSO, a mano: 19 hojas visibles, `BREAKDOWN_SHOTS` elegida sola, 839 planos, 124
+  asignaciones en 99 escenas, 1016 y 1038 por la letra, 27 escenas sin página.
+
+### 13.5 Lo que queda
+
+- **Sin paso en los recorridos**: hace falta una planilla de planos y la base 31; la ayuda (*Import vendors from a
+  spreadsheet*) lo explica.
+- No recuerda los nombres unidos de una importación a la otra: los vuelve a proponer por la escritura. Si un nombre no se
+  parece (por ejemplo «NFX» para *Net-Fx* sin código NFX), hay que unirlo a mano.
+- No crea páginas de escenas para las que no tienen: se listan y se importan de nuevo cuando existan.

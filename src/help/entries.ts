@@ -1073,6 +1073,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     // Sin `when`: la lee quien recibe escenas de un vendor (un invitado) y quien maneja los vendors.
     since: '0.334',
   },
+  // Importar vendors desde una planilla (Doc_Compartir_Escenas.md, sección 13, D855).
+  {
+    id: 'vendorImport',
+    section: 'sharing',
+    title: 'help.vendorImport.title',
+    text: 'help.vendorImport.text',
+    words: ['import', 'importar', 'spreadsheet', 'planilla', 'excel', 'xlsx', 'csv', 'breakdown', 'vendor', 'shot name', 'shotname', 'plano'],
+    since: '0.335',
+  },
   // Pedir una escena desde su link (Doc_Compartir_Escenas.md, B-2).
   {
     id: 'sceneRequests',
