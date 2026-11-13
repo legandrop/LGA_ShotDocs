@@ -1,5 +1,14 @@
 # Changelog — LGA Shot Docs
 
+v0.336 :
+
+Lega pidió que buscar en todo el proyecto esté a la vista (D856). El buscador existía (Ctrl/⌘+K, la lupa chica de
+*Pages*), pero el campo visible, arriba del selector de proyectos, solo filtraba nombres de proyecto. Ahora ese campo
+dice «Search in <proyecto>…» y la primera letra abre el panel del proyecto con lo escrito (los proyectos que coinciden
+siguen saliendo ahí). La barra de buscar en la página y el panel traen el par *Page | Project*, que pasa la búsqueda de
+uno al otro con el texto, también antes de escribir; sin resultados en la página aparece *Search the whole project*. En
+el teléfono el par va en su renglón. La auditoría pidió que el foco vuelva a la página al cerrar, precargar el panel (se perdían letras) y que Ctrl/⌘+K y Ctrl/⌘+F hagan lo que dicen los tooltips. Ayuda, recorrido, README, docs y pruebas. [ v0.336: Buscar en todo el proyecto - el campo del selector busca en el proyecto y Page | Project en las dos búsquedas ]
+
 v0.335 :
 
 Lega pidió cargar la asignación de vendors desde el breakdown de ERSO en Excel (D855). Ahora la ventana de vendors trae

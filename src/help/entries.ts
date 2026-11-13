@@ -213,8 +213,6 @@ const ANNOTATE_COPY = '0.132';
 const ASSISTANT_SYNC = '0.138';
 /** La clave sincronizada, entrega S2 (cambiar la frase, computadora prestada, varios workspaces). El número lo pone quien publica. */
 const ASSISTANT_SYNC_S2 = '0.143';
-/** Buscar en la página abre las secciones colapsadas que esconden coincidencias (D11). */
-const FIND_COLLAPSED = '0.130';
 /** Deshacer en el orden en que editaste, con anotar una foto como un paso (P.26, entrega 3). */
 const UNDO_ORDER = '0.152';
 /** El título de hasta 500 caracteres, lo que sobra va a la página (v0.152). */
@@ -1006,7 +1004,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.findPage.text',
     keys: { find: 'find', next: 'findNext', prev: 'findPrev', close: 'findClose' },
     showMe: 'find',
-    since: FIND_COLLAPSED,
+    // Page | Project (D856).
+    since: '0.336',
   },
   {
     id: 'findProject',
@@ -1016,7 +1015,8 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { search: 'search' },
     more: ['listPick', 'listClose'],
     showMe: 'project-switcher',
-    since: BEFORE_HELP,
+    // El campo del selector busca en el proyecto y Page | Project (D856).
+    since: '0.336',
   },
   {
     id: 'replaceProject',

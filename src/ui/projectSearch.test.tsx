@@ -516,13 +516,60 @@ describe('el panel (después de la auditoría)', () => {
     expect(editor.contains(document.activeElement) || document.activeElement === editor).toBe(true);
   });
 
+  it('*Page | Project*: ida y vuelta con la barra de la página, llevándose lo escrito', async () => {
+    const { host } = await app();
+    await openWithKeys();
+    await search('cámara');
+    const scope = () => [...panel()!.querySelectorAll<HTMLButtonElement>('.search-scope-option')];
+    expect(scope().map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+    // *Aa* como estaba en la barra.
+    act(() => updateFindUi({ matchCase: true }));
+    act(() => scope()[0].click());
+    expect(panel()).toBeNull();
+    expect(getFindUi()).toMatchObject({ open: true, query: 'cámara', matchCase: true });
+    await until(() => host.querySelector('.find-bar .find-input'), 'la barra de la página');
+    const findInput = () => host.querySelector<HTMLInputElement>('.find-bar .find-input')!;
+    expect(findInput().value).toBe('cámara');
+    await until(() => document.activeElement === findInput(), 'el foco en la barra');
+    // Y de vuelta al proyecto desde la barra: el panel arranca con lo mismo, con el cursor al final.
+    act(() => host.querySelectorAll<HTMLButtonElement>('.find-bar .search-scope-option')[1].click());
+    await until(panel, 'el panel otra vez');
+    expect(getFindUi().open).toBe(false);
+    expect(input().value).toBe('cámara');
+    expect(input().selectionStart).toBe('cámara'.length);
+    // Esc: el foco vuelve a la página (la barra ya no existe), no queda en el aire.
+    key(input(), { key: 'Escape' });
+    expect(panel()).toBeNull();
+    expect(document.activeElement?.closest('.bn-editor')).not.toBeNull();
+    act(() => updateFindUi({ matchCase: false }));
+  });
+
+  it('los atajos de *Page | Project*: Ctrl+F en el panel va a la página, Ctrl+K en la barra va al proyecto', async () => {
+    const { host } = await app();
+    await openWithKeys();
+    type(input(), 'uno');
+    key(input(), { key: 'f', ctrlKey: true });
+    expect(panel()).toBeNull();
+    expect(getFindUi()).toMatchObject({ open: true, query: 'uno' });
+    await until(() => host.querySelector('.find-bar .find-input'), 'la barra');
+    key(host.querySelector('.find-bar .find-input')!, { key: 'k', ctrlKey: true });
+    await until(panel, 'el panel');
+    expect(getFindUi().open).toBe(false);
+    expect(input().value).toBe('uno');
+  });
+
   it('el panel es modal: Tab no sale, Esc cierra con el foco en cualquier lado y el foco vuelve adonde estaba', async () => {
     const { host } = await app();
     const title = host.querySelector<HTMLTextAreaElement>('.page-title')!;
     act(() => title.focus());
     await openWithKeys(title);
     const close = panel()!.querySelector<HTMLButtonElement>('.search-close')!;
+    // Tab: el campo, *Page* (el elegido, *Project*, no hace nada y se saltea), cerrar, y de vuelta al campo.
+    const page = panel()!.querySelector<HTMLButtonElement>('.search-scope-option')!;
+    expect(page.textContent).toBe('Page');
     key(input(), { key: 'Tab' });
+    expect(document.activeElement).toBe(page);
+    key(page, { key: 'Tab' });
     expect(document.activeElement).toBe(close);
     key(close, { key: 'Tab' });
     expect(document.activeElement).toBe(input());

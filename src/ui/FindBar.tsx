@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useReducer, useRef, type KeyboardEvent } from 'react';
+import { useContext, useEffect, useLayoutEffect, useReducer, useRef, type KeyboardEvent } from 'react';
 import type { EditorView } from '@tiptap/pm/view';
 import { useT } from '../i18n';
 import '../i18n/lazy/editor';
@@ -25,6 +25,10 @@ import { onCollapseChange } from './collapseEditor';
 import { scrollParent, stopKeepingInView } from './findScroll';
 import { ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon } from './icons';
 import { asAction, tipRows } from './tipRows';
+import { ServicesContext } from '../services';
+import { isSearchShortcut, searchSession } from './projectSearchUi';
+import { ProjectSearch } from './lazyDialogs';
+import { SearchScope } from './SearchScope';
 
 // La barra de buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6). Como la del navegador,
 // pero busca en el documento: también en lo que está en secciones colapsadas, en los pies de las fotos y en
@@ -46,14 +50,22 @@ export function FindBar({
   editable,
   complete = true,
   pageId,
+  projectScope = false,
 }: {
   editor: FindEditor | null;
   editable: boolean;
   complete?: boolean;
   /** La página: solo se va a una coincidencia pedida para ella (un resultado de la búsqueda del proyecto). */
   pageId?: string;
+  /**
+   * El selector *Page | Project* (Docs/Doc_Buscar.md, «Buscar en la página o en el proyecto»): solo en las páginas de un
+   * proyecto (no en el documento de práctica del tutorial). Elegir *Project* abre el panel de Ctrl/⌘+K con lo escrito.
+   */
+  projectScope?: boolean;
 }) {
   const ui = useFindUi();
+  // Sin servicios (el documento de práctica fuera de un workspace) no hay proyecto donde buscar.
+  const services = useContext(ServicesContext);
   const tr = useT();
   const view = editor?.prosemirrorView;
   const input = useRef<HTMLInputElement>(null);
@@ -172,6 +184,12 @@ export function FindBar({
     if (getFindUi().status) updateFindUi({ status: null });
   }, [ui.query, ui.matchCase, ui.wholeWord]);
 
+  // El panel del proyecto se baja aparte: con la barra abierta se pide de antemano, así pasar a *Project* no pierde
+  // las letras que se siguen escribiendo mientras llega.
+  useEffect(() => {
+    if (ui.open && projectScope && services) ProjectSearch.preload();
+  }, [ui.open, projectScope, services]);
+
   if (!ui.open) return null;
 
   const state = view ? getFindState(view.state) : null;
@@ -193,6 +211,18 @@ export function FindBar({
     editor?.focus();
   };
 
+  // Pasar a buscar en todo el proyecto con lo escrito: la barra se cierra (sin dos búsquedas a la vez) y el panel
+  // del proyecto arranca con ese texto. La selección del editor no cambia (no se elige la coincidencia).
+  const toProject = () => {
+    const query = ui.query;
+    // El foco pasa antes al editor: el panel recuerda dónde estaba y vuelve ahí al cerrarse (la barra ya no existe).
+    editor?.focus();
+    closeFindBar();
+    if (view && !view.isDestroyed) closeFind(view, { select: false });
+    if (services) searchSession(services).openWith(query);
+  };
+  const noMatches = !!state?.query.trim() && total === 0;
+
   const step = (dir: 1 | -1) => {
     if (view) stepFind(view, dir);
   };
@@ -209,6 +239,12 @@ export function FindBar({
   const onFindKey = (e: KeyboardEvent<HTMLInputElement>) => {
     // Escribiendo con un IME (japonés, chino, acentos): Enter y Esc son de la composición.
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    // Ctrl/⌘+K desde la barra hace lo mismo que *Project*: se lleva lo escrito.
+    if (projectScope && services && isSearchShortcut(e)) {
+      e.preventDefault();
+      toProject();
+      return;
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       step(e.shiftKey ? -1 : 1);
@@ -236,6 +272,7 @@ export function FindBar({
     <div ref={anchor} className="find-anchor">
       <div className={`find-bar${editable && ui.expanded ? ' expanded' : ''}`} role="search" aria-label={tr('find.label')}>
         <div className="find-row">
+          {projectScope && services && <SearchScope value="page" onChange={toProject} />}
           {editable && (
             <button
               className="find-button find-toggle"
@@ -327,9 +364,15 @@ export function FindBar({
             </button>
           </div>
         )}
-        {(where || opened > 0 || hidden.sections > 0 || hidden.toggles > 0 || status) && (
+        {(where || opened > 0 || hidden.sections > 0 || hidden.toggles > 0 || status || (projectScope && noMatches)) && (
           <div className="find-status" role="status">
             {[where, opened > 0 ? tr('find.opened', { count: opened }) : '', hidden.sections > 0 ? tr('find.hidden', { count: hidden.sections }) : '', hidden.toggles > 0 ? tr('find.hiddenToggles', { count: hidden.toggles }) : '', status?.text ?? ''].filter(Boolean).join(' · ')}
+            {/* Sin resultados en la página: seguir buscando lo mismo en todo el proyecto. */}
+            {projectScope && services && noMatches && !status && (
+              <button className="link find-try-project" onMouseDown={keepFocus} onClick={toProject}>
+                {tr('scope.tryProject')}
+              </button>
+            )}
             {status?.undoItem !== undefined && canUndoReplace(view, status.undoItem) && (
               <>
                 {' '}

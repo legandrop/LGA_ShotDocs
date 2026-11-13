@@ -419,13 +419,13 @@ describe('correcciones de la auditoría del código', () => {
     });
     expect(document.querySelector('.project-menu')).not.toBeNull();
     expect(document.querySelector('.project-row.confirming')).toBeNull();
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Find a project');
+    expect(document.activeElement?.closest('.project-search')).not.toBeNull();
 
     await act(async () => label('Archive “Bosque Negro”')!.click());
     await act(async () => byText('Archive')!.click());
     await settle();
     expect(server.projects.get(o)?.archived_at).toBeTruthy();
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Find a project');
+    expect(document.activeElement?.closest('.project-search')).not.toBeNull();
 
     // En la lista de archivados, Escape vuelve a la principal (el selector sigue abierto).
     await act(async () => byText('Archived projects (1)')!.click());

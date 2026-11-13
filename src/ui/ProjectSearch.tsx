@@ -11,6 +11,8 @@ import { usePermissions, useServices, useSyncStatus, useTree } from '../services
 import type { ProjectRow } from '../sync/types';
 import { CloseIcon, ExpandIcon, PageIcon, PlusIcon, SearchIcon } from './icons';
 import { notify } from './notice';
+import { getFindUi, isFindShortcut, openFindBarAt } from './findUi';
+import { SearchScope } from './SearchScope';
 import { useCurrentProject, useSwitchProject } from './project';
 import { ProjectDot } from './ProjectSwitcher';
 import { ReplaceResults } from './ProjectReplace';
@@ -87,7 +89,8 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     const kind = kinds.kindOf(id).kind;
     return kind === 'location' ? ' loc' : kind === 'set' ? ' set' : '';
   };
-  const [query, setQuery] = useState('');
+  // Lo escrito en el selector de proyectos o en la barra de la página, si se llegó desde ahí.
+  const [query, setQuery] = useState(() => session.takeInitialQuery());
   const [searched, setSearched] = useState('');
   const [limit, setLimit] = useState(PAGE_LIMIT);
   const [active, setActive] = useState(0);
@@ -117,7 +120,10 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
   const replacing = canReplace && replaceUi.open;
 
   useEffect(() => {
-    input.current?.focus();
+    const el = input.current;
+    el?.focus();
+    // Con texto traído, el cursor al final (se sigue escribiendo).
+    el?.setSelectionRange(el.value.length, el.value.length);
     return () => {
       // Se cerró el panel: la lectura en curso se corta (sigue la próxima vez) y el foco vuelve.
       index.cancel();
@@ -298,8 +304,24 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
 
   // En todo el panel: Esc cierra (con el foco donde sea) y Tab no sale del panel (es modal). Recién reemplazado, y hasta
   // que se escriba en un campo del panel, ⌘Z deshace el reemplazo y ⌘⇧Z lo rehace (DH9, Docs/Doc_Deshacer.md).
+  // Volver a buscar en la página abierta con lo escrito: el foco lo toma la barra de la página.
+  const toPage = () => {
+    going.current = true;
+    const text = query;
+    onClose();
+    const { matchCase, wholeWord } = getFindUi();
+    openFindBarAt(text, null, { matchCase, wholeWord });
+  };
+
   const onPanelKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    // Ctrl/⌘+F en el panel hace lo mismo que *Page* (con una página abierta); si no, queda para el navegador.
+    if (openPage && isFindShortcut(e.nativeEvent)) {
+      e.preventDefault();
+      e.stopPropagation();
+      toPage();
+      return;
+    }
     const undoKind = isUndoShortcut(e) ? 'undo' : isRedoShortcut(e) ? 'redo' : null;
     const armed = undoKind ? replace.armedFor(undoKind) : null;
     if (undoKind && armed) {
@@ -312,7 +334,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
       e.preventDefault();
       onClose();
     } else if (e.key === 'Tab' && panel.current) {
-      const focusable = [...panel.current.querySelectorAll<HTMLElement>('input, button:not([disabled])')];
+      const focusable = [...panel.current.querySelectorAll<HTMLElement>('input, button:not([disabled]):not([tabindex="-1"])')];
       if (focusable.length === 0) return;
       const at = focusable.indexOf(document.activeElement as HTMLElement);
       const next = e.shiftKey ? (at <= 0 ? focusable.length - 1 : at - 1) : at < 0 || at === focusable.length - 1 ? 0 : at + 1;
@@ -395,6 +417,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
             }}
             onKeyDown={onInputKey}
           />
+          <SearchScope value="project" pageAvailable={!!openPage} onChange={toPage} />
           <button className="icon-button search-close" aria-label={tr('common.close')} onClick={onClose}>
             <CloseIcon size={16} />
           </button>

@@ -137,6 +137,13 @@ export const shell = {
   'shell.navForward': { en: "Forward", es: "Adelante" },
   'shell.navigation': { en: "Page history", es: "Historial de páginas" },
   'shell.findInPage': { en: "Find in page", es: "Buscar en la página" },
+  // Dónde se busca, en la barra de la página y en el panel del proyecto (SearchScope.tsx).
+  'scope.label': { en: "Search in", es: "Buscar en" },
+  'scope.page': { en: "Page", es: "Página" },
+  'scope.project': { en: "Project", es: "Proyecto" },
+  'scope.pageTip': { en: "Find in this page", es: "Buscar en esta página" },
+  'scope.projectTip': { en: "Search the whole project", es: "Buscar en todo el proyecto" },
+  'scope.tryProject': { en: "Search the whole project", es: "Buscar en todo el proyecto" },
   // *Dictate to report* (Docs/Doc_Dictado.md): el botón de la barra y el redondo del teléfono.
   'shell.dictate': { en: "Dictate to report", es: "Dictar al reporte" },
   'shell.dictateSaved': {

@@ -56,7 +56,8 @@ The app runs at **[shotdocs.lega.com.ar](https://shotdocs.lega.com.ar)**. Each t
 
 **Search and comments**
 - Find and replace in the page, and search titles and text across the project (offline too), with replace
-  across the whole project and an undo for it.
+  across the whole project and an undo for it. One switch moves a search between the page and the project, and the
+  field at the top of the project switcher searches the whole project.
 - Comments on any block or page, with replies, mentions and resolve; *Question* paragraphs answered in their
   thread, so a guest who can only comment can still answer.
 

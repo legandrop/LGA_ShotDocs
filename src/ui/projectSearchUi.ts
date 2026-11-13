@@ -36,6 +36,8 @@ export const REQUEST_TTL_MS = 60_000;
 export class SearchSession {
   private indexInstance: ProjectIndex | null = null;
   private open = false;
+  /** Lo que ya estaba escrito al pasar al panel (el selector de proyectos o la barra de la página): lo toma el panel al abrir. */
+  private initialQuery = '';
   private pending: (ResultRequest & { at: number }) | null = null;
   private readonly listeners = new Set<() => void>();
   private version = 0;
@@ -86,8 +88,24 @@ export class SearchSession {
 
   setOpen(open: boolean): void {
     if (open === this.open) return;
+    if (!open) this.initialQuery = '';
     this.open = open;
     this.changed();
+  }
+
+  /** Abre el panel buscando `query` (desde el campo del selector de proyectos o desde la barra de buscar en la página). */
+  openWith(query: string): void {
+    this.initialQuery = query;
+    if (this.open) return;
+    this.open = true;
+    this.changed();
+  }
+
+  /** Lo escrito antes de abrir el panel (y lo borra): el panel arranca con eso. */
+  takeInitialQuery(): string {
+    const query = this.initialQuery;
+    this.initialQuery = '';
+    return query;
   }
 
   /** Guarda el pedido de ir a un resultado; lo toma el editor de esa página cuando está listo (o ya). */

@@ -391,7 +391,7 @@ describe('la recorrida', () => {
     await until(() => count() === PLACES[1], 'el paso 2');
     press('ArrowRight');
     await until(() => count() === PLACES[2], 'el paso 3');
-    expect(bubble()!.textContent).toContain('Ctrl+K finds pages and projects');
+    expect(bubble()!.textContent).toContain('The field at the top searches every page of the open project (Ctrl+K)');
     press('ArrowLeft');
     await until(() => count() === PLACES[1], 'atrás');
     click(button('Back'));

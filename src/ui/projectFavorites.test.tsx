@@ -131,14 +131,6 @@ describe('selector: la estrella de favorito', () => {
     const star = label('Remove “Zeta” from favorites')!;
     expect(star.getAttribute('aria-pressed')).toBe('true');
     expect(star.closest('.project-row')!.classList.contains('favorite')).toBe(true);
-    // Con una búsqueda, también primero.
-    const input = document.querySelector<HTMLInputElement>('.project-search input')!;
-    await act(async () => {
-      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-      set.call(input, 'e');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    expect(order()[0]).toBe('Zeta');
     await act(async () => label('Remove “Zeta” from favorites')!.click());
     await settle();
     expect(owner.tree.project(z)?.favorite).toBe(false);

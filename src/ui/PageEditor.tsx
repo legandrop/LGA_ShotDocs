@@ -314,7 +314,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   if (opening.state === 'loading') {
     return (
       <>
-        <FindBar editor={null} editable={false} pageId={pageId} />
+        <FindBar editor={null} editable={false} pageId={pageId} projectScope />
         <div className="editor-placeholder" />
       </>
     );
@@ -322,7 +322,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   if (opening.state === 'unsupported') return <UnsupportedPage />;
   return (
     <>
-      <FindBar editor={findEditor} editable={opening.complete && canEdit} complete={opening.complete} pageId={pageId} />
+      <FindBar editor={findEditor} editable={opening.complete && canEdit} complete={opening.complete} pageId={pageId} projectScope />
       <RemovedWritingBanner docs={docs} pageId={pageId} />
       {!opening.complete && (
         <p className="muted editor-missing">

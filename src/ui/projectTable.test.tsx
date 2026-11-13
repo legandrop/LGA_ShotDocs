@@ -9,6 +9,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { searchSession } from './projectSearchUi';
 
 // El selector de proyectos (v0.329, sin columnas desde la v0.333): la línea de datos abajo del nombre, el ⋯ de cada renglón (menú flotante con texto), el botón *New*
 // de arriba, el pie, los archivados y la estrella en su lugar fijo. Contra el servidor en memoria.
@@ -339,21 +340,49 @@ describe('selector: el botón New, el pie y los archivados', () => {
     expect(document.querySelector('.project-new')).toBeNull();
   });
 
-  it('con una búsqueda sin resultados se ofrece crear ese nombre, con el botón o con Enter', async () => {
+  it('el campo de arriba busca en todo el proyecto: escribir abre el panel de Ctrl/⌘+K con lo escrito y cierra el selector', async () => {
     const { server, owner } = await workspace();
     await openFor(owner, server.ownerId);
     const input = document.querySelector<HTMLInputElement>('.project-search input')!;
+    expect(input.placeholder).toMatch(/^Search in .+…$/);
+    // Vacío, las flechas siguen recorriendo los proyectos.
+    expect(rows().length).toBeGreaterThan(0);
     await act(async () => {
       const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
       set.call(input, 'Zzz');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
+    await settle();
+    const session = searchSession(owner);
+    expect(session.isOpen()).toBe(true);
+    expect(session.takeInitialQuery()).toBe('Zzz');
+    expect(document.querySelector('.project-menu')).toBeNull();
+    act(() => session.setOpen(false));
+  });
+
+  it('solo espacios no abre el panel; en los archivados el campo sigue filtrando por nombre y no abre el panel', async () => {
+    const { server, owner, o } = await workspace();
+    await owner.remote.setProjectArchived(o, true);
+    await owner.engine.syncNow();
+    await openFor(owner, server.ownerId);
+    const session = searchSession(owner);
+    const write = async (value: string) => {
+      const input = document.querySelector<HTMLInputElement>('.project-search input')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await settle();
+    };
+    await write('   ');
+    expect(session.isOpen()).toBe(false);
+    await act(async () => byText('Archived projects (1)')!.click());
+    await write('bosque');
+    expect(session.isOpen()).toBe(false);
+    expect(rows()).toHaveLength(1);
+    await write('zzz');
     expect(rows()).toHaveLength(0);
-    expect(document.querySelector('.project-empty')!.textContent).toContain('No project with that name.');
-    const create = document.querySelector<HTMLButtonElement>('.project-create')!;
-    expect(create.textContent).toBe('Create “Zzz”');
-    await act(async () => create.click());
-    expect(document.querySelector<HTMLInputElement>('.project-form input')!.value).toBe('Zzz');
+    expect(document.querySelector('.project-empty')!.textContent).toBe('No archived project with that name.');
   });
 
   it('el pie: archivos por peso y papelera (compartir está en el ⋯ de cada proyecto)', async () => {

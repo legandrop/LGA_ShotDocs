@@ -37,10 +37,10 @@ import { notify } from './notice';
 import { editedLabel, lastPageOf, projectStateError, useCurrentProject, useSwitchProject } from './project';
 import { defaultProjectColor, loadRecentColors, previewColor, PROJECT_PRESETS, projectColor, rememberRecentColor, useProjectColor } from './projectColor';
 import { ColorPicker } from './ColorPicker';
-import { useSearchSession } from './projectSearchUi';
+import { searchSession, useSearchSession } from './projectSearchUi';
 import { adoptDeviceFavorites, favoritesFirst } from './projectFavorites';
 import { tipRows } from './tipRows';
-import { DeleteProjectDialog, FilesBySizePanel, ShareDialog, ShareScenesDialog, TrashPanel, VendorTeamDialog } from './lazyDialogs';
+import { DeleteProjectDialog, FilesBySizePanel, ProjectSearch, ShareDialog, ShareScenesDialog, TrashPanel, VendorTeamDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { OfflineBadge, offlineSupported, offlineTipOf, openOffline } from './SpaceHost';
 import { openExport } from './ExportHost';
@@ -528,6 +528,21 @@ function ProjectMenu(props: {
     .filter((id) => weightOf(id) > 0)
     .sort((a, b) => weightOf(b) - weightOf(a));
   const nameOf = (id: string) => tree.project(id)?.name ?? tr('project.thisProject');
+  // El campo de arriba busca en todo el proyecto abierto (Docs/Doc_Buscar.md, «Buscar en la página o en el proyecto»,
+  // pedido de Lega): la primera letra abre el panel de Ctrl/⌘+K con lo escrito y el selector se cierra. Los otros
+  // proyectos cuyo nombre coincide salen en ese panel. Los archivados siguen filtrándose acá por nombre.
+  const allServices = useServices();
+  const searchesProject = !archivedMode;
+  // El panel se baja aparte: se pide al abrir el selector, así la primera letra no espera y no se pierden las otras.
+  useEffect(() => {
+    ProjectSearch.preload();
+  }, []);
+  /** Pasa lo escrito al panel del proyecto. El foco va antes al botón del selector: el panel vuelve ahí al cerrarse. */
+  const searchProject = (value: string) => {
+    setQuery('');
+    props.anchor?.focus();
+    searchSession(allServices).openWith(value);
+  };
 
   /**
    * Abre el proyecto en un tab nuevo de fondo (Ctrl/⌘+clic o la rueda): en su última página, si la hay; si no, en su
@@ -559,7 +574,6 @@ function ProjectMenu(props: {
       e.preventDefault();
       const target = projects[Math.min(active, projects.length - 1)];
       if (target) pick(target.id);
-      else if (needle && perms.canCreateProject && !archivedMode) setMode({ name: 'new' });
     } else if (e.key === 'Escape' && mode.name !== 'list') {
       e.preventDefault();
       e.stopPropagation();
@@ -616,7 +630,7 @@ function ProjectMenu(props: {
       <div ref={ref} className="menu project-menu" role="dialog" aria-label={renaming ? tr('project.rename') : tr('project.new')} style={props.position}>
         <NameForm
           label={renaming ? tr('project.name') : tr('project.newName')}
-          initial={renaming ? nameOf(mode.id) : query.trim()}
+          initial={renaming ? nameOf(mode.id) : ''}
           submit={renaming ? tr('common.rename') : tr('common.create')}
           onCancel={backToList}
           onSubmit={async (name) => {
@@ -910,12 +924,24 @@ function ProjectMenu(props: {
             aria-activedescendant={projects[active] ? `project-option-${projects[active].id}` : undefined}
             ref={search}
             autoFocus={returned && !touch}
-            aria-label={tr('project.find')}
-            placeholder={tr(archivedMode ? 'project.findArchived' : 'project.findPlaceholder')}
+            aria-label={searchesProject ? tr('project.searchIn', { name: nameOf(props.current) }).replace(/…$/, '') : tr('project.find')}
+            placeholder={searchesProject ? tr('project.searchIn', { name: nameOf(props.current) }) : tr('project.findArchived')}
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value);
+              const value = e.target.value;
+              // Escribiendo con un IME, se espera a que termine la composición.
+              const composing = (e.nativeEvent as InputEvent).isComposing;
+              if (searchesProject && value.trim() && !composing) {
+                searchProject(value);
+                return;
+              }
+              setQuery(value);
               setActive(0);
+            }}
+            onCompositionEnd={(e) => {
+              const value = e.currentTarget.value;
+              if (!searchesProject || !value.trim()) return;
+              searchProject(value);
             }}
             onKeyDown={onSearchKey}
           />
@@ -1080,16 +1106,10 @@ function ProjectMenu(props: {
               </div>
             );
           })}
-          {projects.length === 0 && (
+          {/* Solo en archivados se filtra por nombre (la lista principal busca en el proyecto, con el panel). */}
+          {projects.length === 0 && archivedMode && (
             <div className="project-empty">
-              <p className="muted">{tr(archivedMode ? 'project.noArchived' : 'project.noMatch')}</p>
-              {/* Escribir un nombre que no existe ofrece crearlo (Enter también). */}
-              {needle && perms.canCreateProject && !archivedMode && (
-                <button className="project-create" onClick={() => setMode({ name: 'new' })}>
-                  <PlusIcon size={16} />
-                  {tr('project.createNamed', { name: query.trim() })}
-                </button>
-              )}
+              <p className="muted">{tr('project.noArchived')}</p>
             </div>
           )}
         </div>

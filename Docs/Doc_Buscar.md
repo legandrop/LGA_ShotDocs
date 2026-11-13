@@ -1,5 +1,28 @@
 # Buscar en el proyecto y en la página (P.12)
 
+## Buscar en la página o en el proyecto (v0.336, D856)
+
+Pedido de Lega: buscar en todo el proyecto es lo principal, y el campo que estaba a la vista (arriba del selector de
+proyectos) solo filtraba nombres de proyecto. Cómo quedó:
+
+- **El campo de arriba del selector busca en el proyecto abierto** («Search in <proyecto>…»). La primera letra abre el
+  panel de Ctrl/⌘+K con lo escrito y cierra el selector (`SearchSession.openWith`, `takeInitialQuery`); los otros
+  proyectos cuyo nombre coincide ya salen en ese panel. Vacío, las flechas y Enter siguen recorriendo la lista. En la
+  pantalla de archivados el campo sigue filtrando por nombre. Con un IME se espera a que termine la composición.
+- **Página | Proyecto** (`SearchScope.tsx`), a la izquierda de la barra de la página y al lado del campo del panel. El
+  de la otra búsqueda se lleva lo escrito: *Project* cierra la barra (sin dos búsquedas a la vez) y abre el panel;
+  *Page* cierra el panel y abre la barra con el texto y con *Aa* y palabra entera como estaban. Se puede elegir antes de
+  escribir. Sin una página abierta, *Page* está apagado. En el teléfono el par va en su propio renglón.
+- **Sin resultados en la página**, la línea de estado ofrece *Search the whole project* (lo mismo que *Project*).
+- **Atajos:** Ctrl/⌘+K en el campo de la barra hace lo mismo que *Project*; Ctrl/⌘+F en el panel, con una página
+  abierta, lo mismo que *Page*. El elegido del par sale del Tab; *Page* apagado no lleva tooltip.
+- **Foco y carga:** antes de pasar al panel, el foco va al editor (o al botón del selector), así el panel vuelve ahí al
+  cerrarse. El panel se precarga al abrir la barra o el selector, para no perder las letras que siguen.
+- Sin hacer: una página que no se puede abrir con esta versión no dibuja la barra, y *Page* desde el panel no muestra nada.
+- El documento de práctica del tutorial no tiene el par: corre con servicios en memoria, aparte del panel del proyecto.
+- Pruebas: `findBar.test.tsx` («Page | Project»), `projectSearch.test.tsx` (ida y vuelta) y `projectTable.test.tsx`
+  (el campo del selector abre el panel).
+
 ## Texto de anotaciones en el proyecto (P.20/E5 parcial, v0.187)
 
 Ctrl/⌘+K también encuentra el texto completo que el lector de anotaciones acepta, aunque la caja lo recorte al dibujarlo. El fragmento **Annotation / Anotación** abre la página y esa misma foto en el Carrete, incluidas fotos en línea y en celdas. No inicia Annotate ni señala una forma individual. Funciona con las páginas y originales disponibles en el dispositivo, también sin red y con permiso de solo ver.

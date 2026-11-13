@@ -288,7 +288,7 @@ describe('las novedades en la ayuda', () => {
     expect(versions).toEqual([...versions].sort((a, b) => b - a));
     // También marcadas en su sección, y nada viejo marcado.
     expect(dialog()!.querySelector('[data-help-section="writing"] [data-help-id="dictationShot"] .help-new')?.textContent).toBe('New');
-    expect(dialog()!.querySelector('[data-help-id="findProject"] .help-new')).toBeNull();
+    expect(dialog()!.querySelector('[data-help-id="pagesArrange"] .help-new')).toBeNull();
     // Con novedades abre en *Topics*, con un punto en la pestaña.
     expect(dialog()!.querySelector('[data-help-tab="topics"] .help-tab-dot')).not.toBeNull();
     // Al abrirla quedaron vistas: el punto se fue (en el "?" y en el botón de menú).

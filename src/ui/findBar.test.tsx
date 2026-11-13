@@ -13,6 +13,8 @@ import { settled } from '../test/settle';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { schema } from './editorSchema';
 import { FindBar } from './FindBar';
+import { SearchScope } from './SearchScope';
+import { searchSession } from './projectSearchUi';
 import { findExtension, getFindState, landOnOccurrence, setFind } from './findEditor';
 import { isKeepingInView, stopKeepingInView } from './findScroll';
 import { closeFindBar, getFindUi, hasFindTarget, isFindShortcut, isStepShortcut, openFindBar, openFindBarAt, takesFindShortcut, takesStepShortcut, updateFindUi } from './findUi';
@@ -170,6 +172,70 @@ describe('el atajo', () => {
     modal.remove();
     expect(takesStepShortcut(barInput)).toBe(true);
     expect(takesStepShortcut(title)).toBe(false);
+  });
+});
+
+describe('Page | Project (buscar en la página o en el proyecto)', () => {
+  // Lo justo para la sesión de búsqueda: el índice se arma recién al abrir el panel, que acá no se monta.
+  const fakeServices = () => ({ tree: {}, docs: {} }) as unknown as Services;
+
+  it('sin resultados ofrece buscar en todo el proyecto; elegirlo cierra la barra y abre el panel con lo escrito', async () => {
+    const editor = mountEditor(['uno dos']);
+    const services = fakeServices();
+    act(() => openFindBar());
+    const host = render(
+      <ServicesContext.Provider value={services}>
+        <FindBar editor={editor} editable projectScope />
+      </ServicesContext.Provider>,
+    );
+    const scope = [...host.querySelectorAll<HTMLButtonElement>('.search-scope-option')];
+    expect(scope.map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['Page', 'true'], ['Project', 'false']]);
+    const input = host.querySelector<HTMLInputElement>('.find-input')!;
+    type(input, 'uno');
+    await wait(150);
+    expect(host.querySelector('.find-try-project')).toBeNull();
+    type(input, 'cámara');
+    await wait(150);
+    const tryProject = host.querySelector<HTMLButtonElement>('.find-try-project')!;
+    expect(tryProject.textContent).toBe('Search the whole project');
+    act(() => tryProject.click());
+    expect(getFindUi().open).toBe(false);
+    expect(editor.prosemirrorView!.dom.querySelectorAll('.sd-find-hit').length).toBe(0);
+    const session = searchSession(services);
+    expect(session.isOpen()).toBe(true);
+    expect(session.takeInitialQuery()).toBe('cámara');
+    act(() => session.setOpen(false));
+  });
+
+  it('*Project* se puede elegir antes de escribir (abre el panel vacío); sin el prop no hay selector', () => {
+    const editor = mountEditor(['uno']);
+    const services = fakeServices();
+    act(() => openFindBar());
+    const host = render(
+      <ServicesContext.Provider value={services}>
+        <FindBar editor={editor} editable projectScope />
+      </ServicesContext.Provider>,
+    );
+    act(() => host.querySelectorAll<HTMLButtonElement>('.search-scope-option')[1].click());
+    const session = searchSession(services);
+    expect(session.isOpen()).toBe(true);
+    expect(session.takeInitialQuery()).toBe('');
+    act(() => session.setOpen(false));
+    act(() => openFindBar());
+    const plain = render(<FindBar editor={editor} editable />);
+    expect(plain.querySelector('.search-scope')).toBeNull();
+  });
+});
+
+describe('SearchScope', () => {
+  it('sin una página abierta *Page* está apagado y sin tooltip; el elegido no tiene tooltip y sale del Tab', () => {
+    const host = render(<SearchScope value="project" pageAvailable={false} onChange={() => undefined} />);
+    const [page, project] = [...host.querySelectorAll<HTMLButtonElement>('.search-scope-option')];
+    expect(page.disabled).toBe(true);
+    expect(page.hasAttribute('data-tip')).toBe(false);
+    expect(project.getAttribute('aria-pressed')).toBe('true');
+    expect(project.tabIndex).toBe(-1);
+    expect(project.hasAttribute('data-tip')).toBe(false);
   });
 });
 

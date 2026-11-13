@@ -70,12 +70,12 @@ export const tutorial = {
   },
   'tour.projects.title': { en: "Projects", es: "Proyectos" },
   'tour.projects.text': {
-    en: "A workspace has several projects. Switch or create one here; the Trash is here too. Each project has its color dot, and its ⋯ shares, exports or renames it. {search} finds pages and projects.",
-    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera. Cada proyecto tiene su punto de color, y su ⋯ lo comparte, lo exporta o lo renombra. {search} busca páginas y proyectos.",
+    en: "A workspace has several projects. Switch or create one here; the Trash is here too. Each project has its color dot, and its ⋯ shares, exports or renames it. The field at the top searches every page of the open project ({search}).",
+    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera. Cada proyecto tiene su punto de color, y su ⋯ lo comparte, lo exporta o lo renombra. El campo de arriba busca en todas las páginas del proyecto abierto ({search}).",
   },
   'tour.projects.textPhone': {
-    en: "A workspace has several projects. Switch or create one here; the Trash is here too. Each project's ⋯ shares, exports or renames it.",
-    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera. El ⋯ de cada proyecto lo comparte, lo exporta o lo renombra.",
+    en: "A workspace has several projects. Switch or create one here; the Trash is here too. Each project's ⋯ shares, exports or renames it. The field at the top searches every page of the open project.",
+    es: "Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno, y está la papelera. El ⋯ de cada proyecto lo comparte, lo exporta o lo renombra. El campo de arriba busca en todas las páginas del proyecto abierto.",
   },
   'tour.slash.title': { en: "The / menu", es: "El menú /" },
   'tour.slash.text': {
@@ -106,9 +106,9 @@ export const tutorial = {
     es: "Comentá cualquier bloque y acá ves todos los hilos. Con @ mencionás a alguien. Una pregunta, como la del ejemplo, la puede contestar quien solo comenta.",
   },
   'tour.find.title': { en: "Find", es: "Buscar" },
-  'tour.find.text': { en: "Find and replace in the page ({find}).", es: "Buscá y reemplazá en la página ({find})." },
+  'tour.find.text': { en: "Find and replace in the page ({find}). In a project's pages, Page | Project takes what you typed to the whole project.", es: "Buscá y reemplazá en la página ({find}). En las páginas de un proyecto, Página | Proyecto lleva lo que escribiste a todo el proyecto." },
   // Solo lo usa "Mostrame" en el teléfono (la recorrida entera no tiene este paso ahí): sin atajo.
-  'tour.find.textPhone': { en: "Find and replace in the page.", es: "Buscá y reemplazá en la página." },
+  'tour.find.textPhone': { en: "Find and replace in the page. In a project's pages, Page | Project takes what you typed to the whole project.", es: "Buscá y reemplazá en la página. En las páginas de un proyecto, Página | Proyecto lleva lo que escribiste a todo el proyecto." },
   'tour.pageMenu.title': { en: "The page", es: "La página" },
   'tour.pageMenu.text': {
     en: "Share, move, page size, Save as template and Export PDF ({print}).",

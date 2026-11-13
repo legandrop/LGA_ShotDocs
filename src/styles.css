@@ -3179,17 +3179,6 @@ code {
   font-size: 13px;
 }
 
-.menu .project-create {
-  width: 100%;
-  padding: 0 12px;
-  color: var(--accent-text);
-  font-weight: 500;
-}
-
-.menu .project-create svg {
-  color: inherit;
-}
-
 /* En el teléfono: un "⋯" siempre visible que despliega las acciones del renglón debajo. */
 .menu .project-sheet {
   flex-basis: 100%;
@@ -9079,7 +9068,7 @@ button.primary.danger:hover:not(:disabled) {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: min(460px, 100%);
+  width: min(540px, 100%);
   padding: 6px;
   background: var(--menu-bg);
   border: 1px solid var(--menu-border);
@@ -9173,6 +9162,53 @@ button.primary.danger:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+/* Dónde se busca: *Page | Project* (SearchScope.tsx), en la barra de la página y en el panel del proyecto. Chico y
+   con el mismo dibujo que los demás segmentados de la app. */
+.search-scope {
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  margin-right: 4px;
+  border-radius: 8px;
+  background: var(--seg-bg);
+  border: 1px solid var(--border);
+}
+
+.search-scope-option {
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 8px;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.search-scope-option.on {
+  background: var(--seg-active);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--seg-active-border);
+}
+
+:root[data-theme='dark'] .search-scope-option.on {
+  color: var(--accent-text);
+}
+
+.search-scope-option:disabled {
+  opacity: 0.45;
+}
+
+.search-field .search-scope {
+  margin-right: 0;
+}
+
+.find-try-project {
+  margin-left: 2px;
+}
+
 .find-status {
   padding: 0 6px 2px;
   color: var(--muted-2);
@@ -9203,6 +9239,25 @@ button.primary.danger:hover:not(:disabled) {
 
   .find-replace-row .find-input {
     flex-basis: 100%;
+  }
+
+  /* *Page | Project* en su propio renglón, a todo el ancho: al lado del campo lo dejaba sin lugar. */
+  .find-row:has(> .search-scope) {
+    flex-wrap: wrap;
+  }
+
+  .find-bar .search-scope {
+    flex-basis: 100%;
+    margin: 0 0 4px;
+  }
+
+  .find-bar .search-scope-option {
+    flex: 1;
+  }
+
+  /* Para el dedo. */
+  .search-scope-option {
+    min-height: 36px;
   }
 }
 

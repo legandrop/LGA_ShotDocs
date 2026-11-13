@@ -2962,6 +2962,14 @@ escena se ven entre sí, como dos vendors. **Decidido en la implementación:** u
 tabla (reusa el acceso que se arma solo, las invitaciones y los frenos); quien ya maneja los vendors del proyecto no ve
 las dos entradas del equipo (los ve todos desde *Share scenes…*). Detalle: `Doc_Compartir_Escenas.md`, sección 12.
 
+### D856 · Buscar en todo el proyecto, a la vista y doble (2026-11-13)
+**Pedido de Lega:** el campo de arriba del selector de proyectos, que solo buscaba nombres de proyecto, pasa a buscar en
+todo el proyecto; y la búsqueda de la página es doble: un botón para seguir en todo el proyecto, también elegible antes
+de escribir. **Decidido en la implementación:** el campo abre el panel de Ctrl/⌘+K con lo escrito (que ya lista los
+proyectos que coinciden y ofrece crear uno), en vez de un buscador nuevo; el par *Page | Project* está en las dos
+búsquedas y se lleva el texto; sin resultados en la página se ofrece *Search the whole project*; los archivados siguen
+filtrándose por nombre. Detalle: `Doc_Buscar.md`, «Buscar en la página o en el proyecto».
+
 ### D855 · Importar vendors desde una planilla (2026-11-09)
 **Pedido de Lega:** sumar a los vendors la asignación desde un breakdown en Excel (el de ERSO, 839 planos), sacando de
 cada plano solo la escena (del shot name) y el vendor. **Decidido con Lega:** (1) *Net-Fx* y *Net VFX* son el mismo
